@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=TiHA
+GenericName=Tahta İmaj Hazırlık Aracı
+Comment=Etkileşimli tahtayı imaj alınmaya hazırlar
+Exec=/opt/tiha/bin/tiha
+Icon=preferences-system
+Terminal=false
+Type=Application
+Categories=System;Settings;
+Keywords=imaj;klon;pardus;etap;tahta;
+StartupNotify=true

@@ -1,0 +1,152 @@
+/* TiHA — Modern, dokunmatik-dostu stil. GTK3 CSS. */
+
+window.tiha {
+    background-color: #0f172a;   /* slate-900 */
+    color: #e2e8f0;
+}
+
+.tiha-sidebar {
+    background-color: #111827;   /* gray-900 */
+    padding: 16px 8px;
+    min-width: 320px;
+}
+
+.tiha-sidebar-title {
+    color: #93c5fd;
+    font-size: 22px;
+    font-weight: 700;
+    padding: 12px 14px 4px 14px;
+}
+
+.tiha-sidebar-subtitle {
+    color: #64748b;
+    font-size: 12px;
+    padding: 0 14px 14px 14px;
+}
+
+.tiha-step {
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin: 4px 8px;
+    color: #cbd5e1;
+    font-size: 16px;
+}
+
+.tiha-step-active {
+    background-color: #1e293b;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.tiha-step-done {
+    color: #34d399;
+}
+
+.tiha-step-failed {
+    color: #f87171;
+}
+
+.tiha-content {
+    background-color: #0f172a;
+    padding: 32px 40px;
+}
+
+.tiha-heading {
+    font-size: 28px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+}
+
+.tiha-rationale {
+    color: #94a3b8;
+    font-size: 15px;
+    margin-bottom: 24px;
+}
+
+.tiha-preview {
+    background-color: #1e293b;
+    border-radius: 12px;
+    padding: 16px;
+    color: #cbd5e1;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.tiha-result-ok {
+    background-color: #064e3b;
+    border-radius: 12px;
+    padding: 16px;
+    color: #a7f3d0;
+}
+
+.tiha-result-fail {
+    background-color: #7f1d1d;
+    border-radius: 12px;
+    padding: 16px;
+    color: #fecaca;
+}
+
+.tiha-actions {
+    padding: 16px 40px;
+    background-color: #0b1220;
+    border-top: 1px solid #1e293b;
+}
+
+button.tiha-primary {
+    background: linear-gradient(180deg, #3b82f6, #2563eb);
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+}
+
+button.tiha-primary:hover {
+    background: linear-gradient(180deg, #60a5fa, #3b82f6);
+}
+
+button.tiha-secondary {
+    background-color: #1e293b;
+    color: #e2e8f0;
+    font-size: 15px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+}
+
+button.tiha-danger {
+    background-color: #7f1d1d;
+    color: #fecaca;
+    font-size: 15px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: none;
+}
+
+entry, textview text {
+    background-color: #1e293b;
+    color: #f1f5f9;
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #334155;
+    font-size: 15px;
+}
+
+.tiha-board-card {
+    background-color: #1e293b;
+    border-radius: 14px;
+    padding: 20px 24px;
+}
+
+.tiha-board-key {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.tiha-board-value {
+    color: #f1f5f9;
+    font-size: 16px;
+    font-weight: 600;
+}

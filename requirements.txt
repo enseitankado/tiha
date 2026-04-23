@@ -1,0 +1,5 @@
+# TiHA çalışma zamanı bağımlılıkları
+# Bunların tamamı Pardus ETAP 23 üzerinde apt paketi olarak da mevcuttur;
+# install.sh dağıtım paketlerini tercih eder, böylece sisteme pip bulaşmaz.
+pyotp>=2.6.0
+PyGObject>=3.42

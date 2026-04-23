@@ -1,0 +1,37 @@
+#!/bin/bash
+# TiHA fırlatıcı — uygulamayı kök yetkisiyle (pkexec tercihli) başlatır.
+# Amaç: etapadmin kullanıcısı menüden veya terminalden 'tiha' yazarak
+# uygulamayı açabilsin; yükseltilme işlemi kullanıcıya şeffaf olsun.
+
+set -euo pipefail
+
+TIHA_HOME="${TIHA_HOME:-/opt/tiha}"
+
+if [[ ! -d "$TIHA_HOME" ]]; then
+    echo "TiHA kurulum dizini bulunamadı: $TIHA_HOME" >&2
+    exit 1
+fi
+
+# Halihazırda root isek doğrudan çalıştır
+if [[ "$EUID" -eq 0 ]]; then
+    exec python3 -m tiha
+fi
+
+# pkexec ile yetki yükselt (grafiksel parola sorusu)
+if command -v pkexec >/dev/null 2>&1; then
+    exec pkexec env PYTHONPATH="$TIHA_HOME" \
+        DISPLAY="${DISPLAY:-}" \
+        XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" \
+        WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+        XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
+        SUDO_USER="${USER:-$LOGNAME}" \
+        python3 -m tiha "$@"
+fi
+
+# pkexec yoksa sudo'ya düş
+if command -v sudo >/dev/null 2>&1; then
+    exec sudo -E env PYTHONPATH="$TIHA_HOME" python3 -m tiha "$@"
+fi
+
+echo "Ne pkexec ne de sudo bulundu; TiHA kök yetkisi gerektirir." >&2
+exit 1

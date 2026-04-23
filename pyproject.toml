@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tiha"
+version = "0.1.0"
+description = "Tahta İmaj Hazırlık Aracı — Pardus ETAP etkileşimli tahtaları imaj alınmaya hazırlar"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Özgür Koca", email = "ozgurkoca@gmail.com" }]
+keywords = ["pardus", "etap", "imaj", "akilli-tahta", "meb", "fatih"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Installation/Setup",
+    "Natural Language :: Turkish",
+]
+dependencies = [
+    "pyotp>=2.6.0",
+    "PyGObject>=3.42",
+]
+
+[project.scripts]
+tiha = "tiha.app:main"
+
+[project.urls]
+Homepage = "https://github.com/ozgurkoca/tiha"
+Issues = "https://github.com/ozgurkoca/tiha/issues"
+
+[tool.setuptools.packages.find]
+include = ["tiha*"]
+
+[tool.setuptools.package-data]
+tiha = ["data/*.css", "data/*.svg"]

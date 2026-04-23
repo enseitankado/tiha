@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+.venv/
+venv/
+
+# Claude / yapay zekâ araçları — asla deposuna itilmez
+.claude/
+.claude.json
+.claude/**
+claude/
+CLAUDE.md
+/.memory/
+.anthropic/
+
+# Editör ve IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
+.Trash-*
+
+# Çalışma anı durum ve hassas veri (asla commit etme)
+state/
+logs/
+*.log
+secrets/
+otp-secrets*.json
+*.secrets
+credentials
+.credentials
+*.key
+*.pem
+
+# Geçici
+/tmp/
+*.bak
+*.tmp
+*.orig
