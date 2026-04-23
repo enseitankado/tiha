@@ -1,4 +1,4 @@
-"""Modül 9 — İmaj için sanitizasyon (son adım).
+"""Modül 10 — İmaj için sanitizasyon (son adım).
 
 **Ne yapar?**
 İmajlanan tahtanın her hedef makinede temiz çalışması için şunları siler:
@@ -90,7 +90,7 @@ def _rm(path: Path) -> bool:
 
 
 class ImageSanitizeModule(Module):
-    id = "m09_image_sanitize"
+    id = "m10_image_sanitize"
     title = "İmaj için sanitize"
     rationale = (
         "İmaj alınmadan önce çalıştırılır. Tüm tahtalarda aynı kalırsa sorun "

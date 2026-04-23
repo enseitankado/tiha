@@ -1,11 +1,18 @@
-"""Sihirbaz sayfa sınıfları: Karşılama, Modül, Özet."""
+"""Sihirbaz sayfa sınıfları: Karşılama, Modül, Özet.
+
+Uzun süren modüller (``streams_output = True``) için ``apply`` ayrı bir
+thread'de çalıştırılır ve ``GLib.idle_add`` ile ana thread'e satır satır
+ilerleme gönderilir. Böylece GUI bloklanmaz, kullanıcı canlı çıktıyı görür.
+"""
 
 from __future__ import annotations
+
+import threading
 
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # noqa: E402
+from gi.repository import GLib, Gtk  # noqa: E402
 
 from ..core.board import BoardInfo
 from ..core.logger import get_logger
@@ -56,20 +63,20 @@ class WelcomePage(Gtk.Box):
             card.attach(k, 0, i, 1, 1)
             card.attach(v, 1, i, 1, 1)
 
+        self.pack_start(card, False, False, 0)
+
         if board_info.is_vm:
             warning = Gtk.Label(
                 label=(
                     "⚠ Sanal makine tespit edildi. TiHA burada çalışır; fakat "
-                    "ETA Kayıt (eta-register) sanal makinede çalışmayı reddeder. "
-                    "İmaj alındıktan sonra fiziksel tahtada kayıt işlemi yapılacaktır."
+                    "eta-register sanal makinede çalışmayı reddeder. İmaj "
+                    "sahaya inmeden önce fiziksel bir tahtada doğrulama yapın."
                 ),
                 xalign=0,
             )
             warning.set_line_wrap(True)
             warning.get_style_context().add_class("tiha-rationale")
             self.pack_start(warning, False, False, 0)
-
-        self.pack_start(card, False, False, 0)
 
 
 # =========================================================================
@@ -78,7 +85,7 @@ class WelcomePage(Gtk.Box):
 
 
 class ModulePage(Gtk.Box):
-    """Bir modülün ekran gösterimi — açıklama, form, sonuç."""
+    """Bir modülün ekran gösterimi — açıklama, form, (gerekirse canlı) sonuç."""
 
     def __init__(self, module: Module, journal: Journal) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -90,7 +97,13 @@ class ModulePage(Gtk.Box):
         self.set_margin_start(40)
         self.set_margin_end(40)
         self._fields: dict[str, Gtk.Widget] = {}
+        self._stream_buffer: Gtk.TextBuffer | None = None
+        self._applying: bool = False
         self._build()
+
+    # ------------------------------------------------------------------
+    # UI kurulumu
+    # ------------------------------------------------------------------
 
     def _build(self) -> None:
         heading = Gtk.Label(label=self.module.title, xalign=0)
@@ -102,7 +115,6 @@ class ModulePage(Gtk.Box):
         rationale.set_line_wrap(True)
         self.pack_start(rationale, False, False, 0)
 
-        # Önizleme
         preview_text = ""
         try:
             preview_text = self.module.preview() or ""
@@ -114,30 +126,44 @@ class ModulePage(Gtk.Box):
             preview.set_line_wrap(True)
             self.pack_start(preview, False, False, 0)
 
-        # Form alanları
         schema = params_schema.get(self.module.id)
         if schema:
             form = self._build_form(schema)
             self.pack_start(form, False, False, 0)
 
-        # Sonuç yeri
+        # Canlı akış alanı (başlangıçta gizli)
+        self.stream_scroll = Gtk.ScrolledWindow()
+        self.stream_scroll.set_size_request(-1, 240)
+        self.stream_view = Gtk.TextView()
+        self.stream_view.set_editable(False)
+        self.stream_view.set_cursor_visible(False)
+        self.stream_view.set_monospace(True)
+        self._stream_buffer = self.stream_view.get_buffer()
+        self.stream_scroll.add(self.stream_view)
+        self.stream_scroll.set_no_show_all(True)   # show_all gösterdiğinde otomatik açılmasın
+        self.pack_start(self.stream_scroll, True, True, 0)
+
+        # Sonuç kutusu
         self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.pack_start(self.result_holder, True, True, 0)
+        self.pack_start(self.result_holder, False, False, 0)
 
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
         grid = Gtk.Grid(column_spacing=16, row_spacing=10)
-        for row, field in enumerate(schema):
+        row_idx = 0
+        for field in schema:
             label = Gtk.Label(label=field["label"], xalign=0)
-            grid.attach(label, 0, row, 1, 1)
+            grid.attach(label, 0, row_idx, 1, 1)
             widget = self._make_field(field)
             widget.set_hexpand(True)
-            grid.attach(widget, 1, row, 1, 1)
+            grid.attach(widget, 1, row_idx, 1, 1)
             self._fields[field["key"]] = widget
+            row_idx += 1
             if field.get("help"):
                 help_lbl = Gtk.Label(label=field["help"], xalign=0)
                 help_lbl.get_style_context().add_class("tiha-rationale")
                 help_lbl.set_line_wrap(True)
-                grid.attach(help_lbl, 1, row + 1, 1, 1)
+                grid.attach(help_lbl, 1, row_idx, 1, 1)
+                row_idx += 1
         return grid
 
     def _make_field(self, field: dict) -> Gtk.Widget:
@@ -150,7 +176,6 @@ class ModulePage(Gtk.Box):
             scroller = Gtk.ScrolledWindow()
             scroller.add(tv)
             scroller.set_size_request(-1, 120)
-            # Değeri okurken TextView üzerinden ulaşılacak
             scroller._textview = tv  # type: ignore[attr-defined]
             return scroller
         if kind == "select":
@@ -194,41 +219,94 @@ class ModulePage(Gtk.Box):
             params[key] = value
         return params, missing
 
+    # ------------------------------------------------------------------
+    # Apply akışı — thread'li + canlı çıktı
+    # ------------------------------------------------------------------
+
     def run_apply(self) -> None:
+        if self._applying:
+            return   # çift tıklama koruması
         params, missing = self._collect_params()
         if missing:
             self._show_result(ApplyResult(False, "Eksik alanlar: " + ", ".join(missing)))
             return
+
+        self._applying = True
+        # Sonuç kutusunu temizle, gerektiğinde akış alanını aç
+        for child in self.result_holder.get_children():
+            self.result_holder.remove(child)
+        if self.module.streams_output:
+            self._stream_buffer.set_text("")
+            self.stream_scroll.set_no_show_all(False)
+            self.stream_scroll.show_all()
+
+        thread = threading.Thread(
+            target=self._apply_thread_body,
+            args=(params,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _apply_thread_body(self, params: dict) -> None:
+        """Ayrı thread'de modülü çalıştırır, sonuçları ana thread'e iletir."""
+        def progress(line: str) -> None:
+            GLib.idle_add(self._append_stream_line, line)
+
+        progress_cb = progress if self.module.streams_output else None
         try:
-            result = self.module.apply(params)
-        except Exception as exc:  # savunmacı: beklenmeyen hata
+            if progress_cb is not None:
+                result = self.module.apply(params, progress=progress_cb)
+            else:
+                result = self.module.apply(params)
+        except Exception as exc:  # savunmacı
             log.exception("Modül uygulanamadı: %s", self.module.id)
             result = ApplyResult(False, f"Beklenmeyen hata: {exc}")
 
-        # Günce
+        GLib.idle_add(self._apply_thread_done, result)
+
+    def _append_stream_line(self, line: str) -> bool:
+        """GLib.idle_add geri çağrısı — thread-güvenli ekran güncellemesi."""
+        if self._stream_buffer is None:
+            return False
+        end = self._stream_buffer.get_end_iter()
+        self._stream_buffer.insert(end, line + "\n")
+        # otomatik kaydır
+        mark = self._stream_buffer.get_insert()
+        self.stream_view.scroll_mark_onscreen(mark)
+        return False   # idle_add'de False dönmek kaydı tek seferlik yapar
+
+    def _apply_thread_done(self, result: ApplyResult) -> bool:
+        self._applying = False
         entry = JournalEntry.new(self.module.id, self.module.title)
         entry.summary = result.summary
         entry.status = "applied" if result.success else "failed"
         self.journal.record(entry)
-
         self._show_result(result)
+        return False
+
+    # ------------------------------------------------------------------
+    # Sonuç gösterimi
+    # ------------------------------------------------------------------
 
     def _show_result(self, result: ApplyResult) -> None:
-        # Eski sonucu temizle
         for child in self.result_holder.get_children():
             self.result_holder.remove(child)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        box.get_style_context().add_class("tiha-result-ok" if result.success else "tiha-result-fail")
+        box.get_style_context().add_class(
+            "tiha-result-ok" if result.success else "tiha-result-fail"
+        )
         lbl = Gtk.Label(label=result.summary, xalign=0)
         lbl.set_line_wrap(True)
         lbl.set_selectable(True)
         box.pack_start(lbl, False, False, 0)
+
         if result.details:
             d = Gtk.Label(label=result.details, xalign=0)
             d.set_line_wrap(True)
             d.set_selectable(True)
             box.pack_start(d, False, False, 0)
+
         if result.copyable:
             scroller = Gtk.ScrolledWindow()
             scroller.set_size_request(-1, 160)
@@ -250,7 +328,6 @@ class ModulePage(Gtk.Box):
             copy_btn.connect("clicked", _copy)
             box.pack_start(copy_btn, False, False, 0)
 
-        # Undo butonu
         if result.success and self.module.undo_supported:
             undo_btn = Gtk.Button(label="Bu adımı geri al")
             undo_btn.get_style_context().add_class("tiha-danger")

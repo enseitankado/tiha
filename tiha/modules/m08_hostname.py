@@ -1,4 +1,4 @@
-"""Modül 7 — Benzersiz bilgisayar adı (hostname) stratejisi.
+"""Modül 8 — Benzersiz bilgisayar adı (hostname) stratejisi.
 
 **Ne yapar?**
 Ağa dağıtılan imajlı tahtaların aynı hostname ile çakışmaması için iki
@@ -84,7 +84,7 @@ WantedBy=multi-user.target
 
 
 class HostnameModule(Module):
-    id = "m07_hostname"
+    id = "m08_hostname"
     title = "Benzersiz hostname stratejisi"
     rationale = (
         "Aynı imajdan çıkan tahtalar aynı hostname'e sahip olursa ağda isim "

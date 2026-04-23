@@ -7,7 +7,9 @@ temsil eder ve şu arayüzü uygular:
 - :attr:`title`       — Kullanıcıya görünen başlık (Türkçe, kısa)
 - :attr:`rationale`   — "Neden gerekli" açıklaması (Türkçe, 2-4 cümle)
 - :meth:`preview`     — Uygulamadan önce ekran özeti üretir
-- :meth:`apply`       — İşlemi uygular ve :class:`ApplyResult` döndürür
+- :meth:`apply`       — İşlemi uygular ve :class:`ApplyResult` döndürür;
+                        uzun süren modüller ``progress`` geri-çağrısıyla
+                        canlı ilerleme satırı yayınlayabilir
 - :meth:`undo`        — İşlemi geri alır (destekleniyorsa)
 
 Modüller, kendi "önce yedek al" davranışını kurmak için
@@ -16,19 +18,20 @@ Modüller, kendi "önce yedek al" davranışını kurmak için
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from .paths import STATE_DIR
 
 
+# Uzun işlemlerde satır-bazlı ilerleme iletmek için kullanılan tip.
+ProgressCallback = Callable[[str], None]
+
+
 @dataclass
 class ApplyResult:
-    """Modül uygulanma sonucu.
-
-    UI bu nesneyi doğrudan ekrana basar; dolayısıyla alanlar kullanıcının
-    anlayabileceği, sade Türkçe ifadeler içermelidir.
-    """
+    """Modül uygulanma sonucu. UI bu nesneyi doğrudan ekrana basar."""
 
     success: bool
     summary: str                     # Tek satır genel sonuç
@@ -44,8 +47,10 @@ class Module:
     title: str = ""
     rationale: str = ""
     undo_supported: bool = True
+    # ``True`` ise UI uygula sırasında canlı çıktı alanı açar.
+    streams_output: bool = False
 
-    # --- Yaşam döngüsü ----------------------------------------------------
+    # --- Yardımcılar ------------------------------------------------------
 
     @property
     def state_dir(self) -> Path:
@@ -59,20 +64,21 @@ class Module:
     # --- Arayüz -----------------------------------------------------------
 
     def preview(self) -> str:
-        """Uygulamadan önce durumu özetleyen kısa metin.
-
-        Varsayılan uygulama boş döner; alt sınıflar gerekirse doldurur.
-        """
+        """Uygulamadan önce durumu özetleyen kısa metin."""
         return ""
 
-    def apply(self, params: dict | None = None) -> ApplyResult:
-        """İşlemi uygular. Alt sınıfta uygulanmalıdır."""
+    def apply(
+        self,
+        params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
+        """İşlemi uygular. Alt sınıfta uygulanmalıdır.
+
+        ``progress`` verilmişse uzun süren alt-işlemlerin çıktılarını
+        satır satır bu fonksiyona geçmek gerekir.
+        """
         raise NotImplementedError
 
     def undo(self, data: dict) -> ApplyResult:
-        """Daha önce uygulanan işlemi geri alır.
-
-        :param data: Önceki :class:`ApplyResult` yazıldığında kaydedilmiş
-            kurulum verisi (ör. atanmış parola, kurulmuş paket listesi).
-        """
+        """Daha önce uygulanan işlemi geri alır."""
         raise NotImplementedError

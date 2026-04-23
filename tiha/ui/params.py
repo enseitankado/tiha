@@ -1,18 +1,10 @@
 """Modül başına kullanıcıdan alınacak parametre şemaları.
 
-Şema ile arayüz dağıtıcısı (``module_page.build_params_form``) uyum
-içindedir. Her alan şu yapıyı taklit eder:
-
-``{"key": "root_password", "label": "Root parolası", "type": "password",
-   "required": True, "default": "", "help": "En az 12 karakter."}``
-
-Alan tipleri: ``text``, ``password``, ``password_confirm``, ``number``,
-``textarea``, ``select``.
+Alan tipleri: ``text``, ``password``, ``number``, ``textarea``, ``select``.
 """
 
 from __future__ import annotations
 
-# Modül id → form şeması
 PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m01_initial_passwords": [
         {
@@ -86,7 +78,31 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "options": ["udp", "tcp"],
         },
     ],
-    "m07_hostname": [
+    "m07_time_sync": [
+        {
+            "key": "ntp_servers",
+            "label": "NTP sunucuları (boşlukla ayırın)",
+            "type": "text",
+            "required": False,
+            "default": "time.meb.gov.tr",
+            "help": "Okul/ilçe MEB iç NTP sunucusunu tercih edin.",
+        },
+        {
+            "key": "ntp_fallback",
+            "label": "Yedek NTP sunucuları",
+            "type": "text",
+            "required": False,
+            "default": "0.tr.pool.ntp.org 1.tr.pool.ntp.org",
+        },
+        {
+            "key": "timezone",
+            "label": "Saat dilimi",
+            "type": "text",
+            "required": False,
+            "default": "Europe/Istanbul",
+        },
+    ],
+    "m08_hostname": [
         {
             "key": "template",
             "label": "İmaj şablon hostname",
