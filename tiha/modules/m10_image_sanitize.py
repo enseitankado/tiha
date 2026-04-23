@@ -6,7 +6,12 @@
 - ``/etc/machine-id`` ve ``/var/lib/dbus/machine-id`` (ilk açılışta yeniden
   üretilmesi için boşaltılır)
 - SSH sunucusunun host anahtarları (``/etc/ssh/ssh_host_*``)
-- NetworkManager kalıcı bağlantı dosyaları
+- ``/etc/NetworkManager/system-connections/`` altındaki tüm ağ bağlantı
+  profilleri. Bu klasörde WiFi SSID + parolası, Ethernet için statik IP/
+  DNS/gateway ayarları, her bağlantının benzersiz UUID'si ve varsa MAC
+  filtreleri tutulur. İmajla aynen kopyalanırsa tüm tahtalarda aynı UUID
+  yüzünden NetworkManager karışır, bir tahtanın WiFi parolası diğerlerine
+  sızar ve yanlış ağ ayarları devralınır.
 - eta-register ve ahenk önbellek/log'ları
 - Sistem günlük dosyalarının içeriği
 - ``/home/etapadmin`` altında kabuk geçmişi

@@ -1,8 +1,10 @@
 """TiHA ana penceresi.
 
-Soldaki adım listesi ve sağdaki içerik panelinden oluşur. Sayfalar bir
-``Gtk.Stack`` içinde yer alır: önce karşılama ekranı, ardından her modül
-için bir sayfa, en sonunda özet sayfası.
+Solda tıklanabilir adım listesi, sağda kaydırılabilir içerik alanı ve
+altta aksiyon çubuğu bulunur. Her sayfa ``Gtk.Stack`` içinde yer alır;
+Stack ise bir ``Gtk.ScrolledWindow`` içindedir, böylece uzun içerikte
+pencere şişmez, kullanıcı sayfayı kaydırabilir ve aksiyon çubuğu ekran
+altında sabit kalır.
 """
 
 from __future__ import annotations
@@ -27,13 +29,22 @@ CSS_PATH = Path(__file__).resolve().parents[2] / "data" / "styles.css"
 
 
 class TiHAWindow(Gtk.Window):
-    """Ana pencere."""
+    """Ana pencere — eta stilinde kompakt ve dokunmatik-uyumlu."""
+
+    # Pardus ETAP ekranları genellikle 1920x1080 dokunmatik paneller;
+    # pencere onun %60'ı kadar açılır, kullanıcı isterse büyütür.
+    DEFAULT_WIDTH = 1100
+    DEFAULT_HEIGHT = 720
+    MIN_WIDTH = 840
+    MIN_HEIGHT = 560
 
     def __init__(self) -> None:
         super().__init__(title="TiHA — Tahta İmaj Hazırlık Aracı")
         self.get_style_context().add_class("tiha")
-        self.set_default_size(1280, 800)
+        self.set_default_size(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
+        self.set_size_request(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_icon_name("preferences-system")
 
         self._load_css()
 
@@ -41,13 +52,13 @@ class TiHAWindow(Gtk.Window):
         self.board_info = board.detect()
         self.modules = all_modules()
         self.pages: list[Gtk.Widget] = []
+        self.current_index: int = 0
 
         self._build_layout()
         self._build_welcome()
         self._build_module_pages()
         self._build_summary()
 
-        # Başlangıç
         self._show_page_index(0)
 
     # ---- Kurulum yardımcıları -------------------------------------------
@@ -69,111 +80,140 @@ class TiHAWindow(Gtk.Window):
         )
 
     def _build_layout(self) -> None:
-        outer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.add(outer)
+        paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self.add(paned)
 
-        # --- Sol: kenar çubuğu ---
-        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        sidebar.get_style_context().add_class("tiha-sidebar")
-        title = Gtk.Label(label="TiHA")
+        # --- Sol: adım listesi (kaydırılabilir, tıklanabilir) ---
+        sidebar_outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        sidebar_outer.get_style_context().add_class("tiha-sidebar")
+        sidebar_outer.set_size_request(240, -1)
+
+        title = Gtk.Label(label="TiHA", xalign=0)
         title.get_style_context().add_class("tiha-sidebar-title")
-        title.set_xalign(0)
-        subtitle = Gtk.Label(label="Tahta İmaj Hazırlık Aracı")
+        subtitle = Gtk.Label(label="Tahta İmaj Hazırlık Aracı", xalign=0)
         subtitle.get_style_context().add_class("tiha-sidebar-subtitle")
-        subtitle.set_xalign(0)
-        sidebar.pack_start(title, False, False, 0)
-        sidebar.pack_start(subtitle, False, False, 0)
+        sidebar_outer.pack_start(title, False, False, 0)
+        sidebar_outer.pack_start(subtitle, False, False, 0)
 
-        self.sidebar_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        sidebar.pack_start(self.sidebar_list, True, True, 0)
-        outer.pack_start(sidebar, False, False, 0)
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.sidebar_list = Gtk.ListBox()
+        self.sidebar_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.sidebar_list.connect("row-activated", self._on_sidebar_row_activated)
+        sidebar_scroll.add(self.sidebar_list)
+        sidebar_outer.pack_start(sidebar_scroll, True, True, 0)
 
-        # --- Sağ: içerik + aksiyon çubuğu ---
+        paned.pack1(sidebar_outer, resize=False, shrink=False)
+
+        # --- Sağ: Stack (ScrolledWindow içinde) + aksiyon çubuğu ---
         right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        outer.pack_start(right, True, True, 0)
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
-        self.stack.set_transition_duration(200)
-        right.pack_start(self.stack, True, True, 0)
+        self.stack.set_transition_duration(180)
+
+        self.content_scroll = Gtk.ScrolledWindow()
+        self.content_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.content_scroll.add(self.stack)
+        right.pack_start(self.content_scroll, True, True, 0)
 
         # Aksiyon çubuğu
-        self.action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.action_bar.get_style_context().add_class("tiha-actions")
 
-        self.btn_back = Gtk.Button(label="Geri")
-        self.btn_back.get_style_context().add_class("tiha-secondary")
+        self.btn_back = Gtk.Button(label="◀  Geri")
         self.btn_back.connect("clicked", self._on_back)
         self.action_bar.pack_start(self.btn_back, False, False, 0)
 
         spacer = Gtk.Box()
         self.action_bar.pack_start(spacer, True, True, 0)
 
-        self.btn_skip = Gtk.Button(label="Atla")
-        self.btn_skip.get_style_context().add_class("tiha-secondary")
-        self.btn_skip.connect("clicked", self._on_next)
-        self.action_bar.pack_start(self.btn_skip, False, False, 0)
-
         self.btn_apply = Gtk.Button(label="Uygula")
-        self.btn_apply.get_style_context().add_class("tiha-primary")
+        self.btn_apply.get_style_context().add_class("suggested-action")
         self.btn_apply.connect("clicked", self._on_apply)
         self.action_bar.pack_start(self.btn_apply, False, False, 0)
 
-        self.btn_next = Gtk.Button(label="İleri")
-        self.btn_next.get_style_context().add_class("tiha-primary")
+        self.btn_next = Gtk.Button(label="İleri  ▶")
         self.btn_next.connect("clicked", self._on_next)
         self.action_bar.pack_start(self.btn_next, False, False, 0)
 
         right.pack_start(self.action_bar, False, False, 0)
 
+        paned.pack2(right, resize=True, shrink=False)
+        paned.set_position(240)
+
     def _build_welcome(self) -> None:
         page = WelcomePage(self.board_info)
         self.pages.append(page)
         self.stack.add_named(page, "welcome")
-        self._add_sidebar_entry("Başlangıç")
+        self._add_sidebar_entry("0. Hoş geldiniz")
 
     def _build_module_pages(self) -> None:
-        for module in self.modules:
+        for idx, module in enumerate(self.modules, start=1):
             page = ModulePage(module, self.journal)
             self.pages.append(page)
             self.stack.add_named(page, module.id)
-            self._add_sidebar_entry(module.title)
+            # m00 olarak gelen precheck "1." yerine hala adım sırasında olduğu
+            # için sayıyı modül id'sinden çıkarıyoruz (daha tutarlı):
+            try:
+                num = int(module.id[1:3])
+            except ValueError:
+                num = idx
+            self._add_sidebar_entry(f"{num:>2}. {module.title}")
 
     def _build_summary(self) -> None:
         page = SummaryPage(self.journal, self.modules)
         self.pages.append(page)
         self.stack.add_named(page, "summary")
-        self._add_sidebar_entry("Özet")
+        self._add_sidebar_entry("✓  Özet")
 
     def _add_sidebar_entry(self, label: str) -> None:
+        row = Gtk.ListBoxRow()
+        row.get_style_context().add_class("tiha-step")
         lbl = Gtk.Label(label=label, xalign=0)
-        lbl.get_style_context().add_class("tiha-step")
-        self.sidebar_list.pack_start(lbl, False, False, 0)
+        lbl.set_ellipsize(3)  # Pango.EllipsizeMode.END
+        row.add(lbl)
+        row.show_all()
+        self.sidebar_list.add(row)
 
     # ---- Navigasyon ------------------------------------------------------
 
-    def _show_page_index(self, index: int) -> None:
+    def _on_sidebar_row_activated(self, _lb: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
+        if row is None:
+            return
+        self._show_page_index(row.get_index(), sync_sidebar=False)
+
+    def _show_page_index(self, index: int, *, sync_sidebar: bool = True) -> None:
         index = max(0, min(index, len(self.pages) - 1))
         self.current_index = index
         self.stack.set_visible_child(self.pages[index])
-        # Kenar çubuğu işaretleri
-        children = self.sidebar_list.get_children()
-        for i, child in enumerate(children):
-            ctx = child.get_style_context()
-            for cls in ("tiha-step-active", "tiha-step-done", "tiha-step-failed"):
-                ctx.remove_class(cls)
-            if i == index:
-                ctx.add_class("tiha-step-active")
+
+        # İçerik scroll'u en başa çek
+        adj = self.content_scroll.get_vadjustment()
+        if adj:
+            adj.set_value(0)
+
+        # Özet sayfası her açılışta güncellensin
+        page = self.pages[index]
+        if isinstance(page, SummaryPage):
+            page.refresh()
+
+        if sync_sidebar:
+            row = self.sidebar_list.get_row_at_index(index)
+            if row is not None:
+                self.sidebar_list.select_row(row)
 
         # Aksiyon çubuğu görünürlüğü
-        page = self.pages[index]
         is_module = isinstance(page, ModulePage)
         self.btn_apply.set_visible(is_module)
-        self.btn_skip.set_visible(is_module)
-        self.btn_next.set_visible(not is_module or False)
-        self.btn_next.set_visible(True)
+
+        # Özet sayfasında "Bitir" gösterelim
+        is_last = index >= len(self.pages) - 1
+        self.btn_next.set_label("Bitir" if is_last else "İleri  ▶")
 
     def _on_back(self, _btn: Gtk.Button) -> None:
+        if self.current_index == 0:
+            return
         self._show_page_index(self.current_index - 1)
 
     def _on_next(self, _btn: Gtk.Button) -> None:
@@ -184,6 +224,5 @@ class TiHAWindow(Gtk.Window):
 
     def _on_apply(self, _btn: Gtk.Button) -> None:
         page = self.pages[self.current_index]
-        if not isinstance(page, ModulePage):
-            return
-        page.run_apply()
+        if isinstance(page, ModulePage):
+            page.run_apply()

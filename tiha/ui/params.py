@@ -84,15 +84,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "NTP sunucuları (boşlukla ayırın)",
             "type": "text",
             "required": False,
-            "default": "time.meb.gov.tr",
-            "help": "Okul/ilçe MEB iç NTP sunucusunu tercih edin.",
+            "default": "0.tr.pool.ntp.org 1.tr.pool.ntp.org",
+            "help": (
+                "MEB iç NTP adresini biliyorsanız buraya yazın "
+                "(ör. time.meb.gov.tr veya okul sunucu IP'si). Varsayılan: "
+                "Türkiye NTP havuzu."
+            ),
         },
         {
             "key": "ntp_fallback",
             "label": "Yedek NTP sunucuları",
             "type": "text",
             "required": False,
-            "default": "0.tr.pool.ntp.org 1.tr.pool.ntp.org",
+            "default": "time.cloudflare.com pool.ntp.org",
         },
         {
             "key": "timezone",

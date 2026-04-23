@@ -1,152 +1,101 @@
-/* TiHA — Modern, dokunmatik-dostu stil. GTK3 CSS. */
+/* TiHA — Sistem temasına (Pardus ETAP 'eta' + Ubuntu 11) saygılı hafif stil.
+   Renk, font ve boyutlar sistem temasından gelir; burada yalnızca TiHA'ya
+   özel birkaç aksan ve yardımcı sınıf tanımlıdır. */
 
-window.tiha {
-    background-color: #0f172a;   /* slate-900 */
-    color: #e2e8f0;
-}
-
+/* Kenar çubuğu — hafif, sistem teması içinde çok az belirgin */
 .tiha-sidebar {
-    background-color: #111827;   /* gray-900 */
-    padding: 16px 8px;
-    min-width: 320px;
+    background: alpha(@theme_fg_color, 0.04);
+    padding: 6px 0;
 }
 
 .tiha-sidebar-title {
-    color: #93c5fd;
-    font-size: 22px;
+    font-size: 13pt;
     font-weight: 700;
-    padding: 12px 14px 4px 14px;
+    padding: 8px 12px 2px 12px;
 }
 
 .tiha-sidebar-subtitle {
-    color: #64748b;
-    font-size: 12px;
-    padding: 0 14px 14px 14px;
+    opacity: 0.6;
+    font-size: 9pt;
+    padding: 0 12px 10px 12px;
 }
 
-.tiha-step {
-    padding: 14px 16px;
-    border-radius: 10px;
-    margin: 4px 8px;
-    color: #cbd5e1;
-    font-size: 16px;
+/* Kenar çubuğu adımı (ListBoxRow üzerine uygulanır) */
+row.tiha-step {
+    padding: 6px 10px;
+    margin: 2px 6px;
+    border-radius: 6px;
 }
 
-.tiha-step-active {
-    background-color: #1e293b;
-    color: #ffffff;
-    font-weight: 600;
+row.tiha-step:hover {
+    background: alpha(@theme_fg_color, 0.06);
 }
 
-.tiha-step-done {
-    color: #34d399;
+row.tiha-step-done {
+    color: #1b8a3a;
 }
 
-.tiha-step-failed {
-    color: #f87171;
+row.tiha-step-failed {
+    color: #a12525;
 }
 
-.tiha-content {
-    background-color: #0f172a;
-    padding: 32px 40px;
-}
-
+/* İçerik alanı */
 .tiha-heading {
-    font-size: 28px;
+    font-size: 14pt;
     font-weight: 700;
-    color: #f1f5f9;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .tiha-rationale {
-    color: #94a3b8;
-    font-size: 15px;
-    margin-bottom: 24px;
+    font-size: 10pt;
+    opacity: 0.75;
+    margin-bottom: 8px;
 }
 
 .tiha-preview {
-    background-color: #1e293b;
-    border-radius: 12px;
-    padding: 16px;
-    color: #cbd5e1;
+    background: alpha(@theme_fg_color, 0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
     font-family: monospace;
-    font-size: 13px;
+    font-size: 9pt;
 }
 
 .tiha-result-ok {
-    background-color: #064e3b;
-    border-radius: 12px;
-    padding: 16px;
-    color: #a7f3d0;
+    background: alpha(#1b8a3a, 0.12);
+    border-radius: 6px;
+    padding: 8px 10px;
 }
 
 .tiha-result-fail {
-    background-color: #7f1d1d;
-    border-radius: 12px;
-    padding: 16px;
-    color: #fecaca;
-}
-
-.tiha-actions {
-    padding: 16px 40px;
-    background-color: #0b1220;
-    border-top: 1px solid #1e293b;
-}
-
-button.tiha-primary {
-    background: linear-gradient(180deg, #3b82f6, #2563eb);
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 600;
-    padding: 12px 24px;
-    border-radius: 10px;
-    border: none;
-}
-
-button.tiha-primary:hover {
-    background: linear-gradient(180deg, #60a5fa, #3b82f6);
-}
-
-button.tiha-secondary {
-    background-color: #1e293b;
-    color: #e2e8f0;
-    font-size: 15px;
-    padding: 12px 20px;
-    border-radius: 10px;
-    border: 1px solid #334155;
-}
-
-button.tiha-danger {
-    background-color: #7f1d1d;
-    color: #fecaca;
-    font-size: 15px;
-    padding: 12px 20px;
-    border-radius: 10px;
-    border: none;
-}
-
-entry, textview text {
-    background-color: #1e293b;
-    color: #f1f5f9;
-    border-radius: 8px;
-    padding: 10px;
-    border: 1px solid #334155;
-    font-size: 15px;
+    background: alpha(#a12525, 0.12);
+    border-radius: 6px;
+    padding: 8px 10px;
 }
 
 .tiha-board-card {
-    background-color: #1e293b;
-    border-radius: 14px;
-    padding: 20px 24px;
+    background: alpha(@theme_fg_color, 0.05);
+    border-radius: 6px;
+    padding: 10px 14px;
 }
 
 .tiha-board-key {
-    color: #64748b;
-    font-size: 13px;
+    opacity: 0.6;
+    font-size: 9pt;
 }
 
 .tiha-board-value {
-    color: #f1f5f9;
-    font-size: 16px;
+    font-size: 10pt;
     font-weight: 600;
+}
+
+/* Aksiyon çubuğu */
+.tiha-actions {
+    padding: 10px 16px;
+    border-top: 1px solid alpha(@theme_fg_color, 0.12);
+}
+
+/* Akış metin alanı */
+.tiha-stream {
+    font-family: monospace;
+    font-size: 9pt;
 }

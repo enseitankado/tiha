@@ -43,9 +43,13 @@ class TimeSyncModule(Module):
     id = "m07_time_sync"
     title = "Zaman senkronizasyonu (NTP)"
     rationale = (
-        "Tahta saatinin doğru olmasını sağlar. Yanlış saat, sertifika/TLS "
-        "doğrulamalarını, OTP kodlarını ve merkezi log zaman damgalarını "
-        "bozar. Okul ağında dış NTP portu kısıtlıysa iç sunucuyu tanımlarız."
+        "Tahta saatinin doğru olmasını sağlar. TOTP (öğretmen OTP kodları) "
+        "zaman tabanlıdır: tahtanın saati sunucu saatinden 30 saniyeden fazla "
+        "kayarsa ÜRETTİĞİNİZ HER OTP KODU GEÇERSİZ SAYILIR, öğretmen tahtaya "
+        "giremez. Aynı neden sertifika/TLS ve merkezi log zaman damgaları "
+        "için de geçerlidir. Bu adım atlanırsa sahadaki tahtalarda saat "
+        "kayması yaşanabilir. Okul ağı dış NTP'ye (udp/123) izin vermiyorsa "
+        "MEB iç NTP sunucusu kullanılmalıdır."
     )
 
     def preview(self) -> str:

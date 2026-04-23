@@ -1,8 +1,9 @@
 """Sihirbaz sayfa sınıfları: Karşılama, Modül, Özet.
 
-Uzun süren modüller (``streams_output = True``) için ``apply`` ayrı bir
-thread'de çalıştırılır ve ``GLib.idle_add`` ile ana thread'e satır satır
-ilerleme gönderilir. Böylece GUI bloklanmaz, kullanıcı canlı çıktıyı görür.
+Tüm sayfalar ana pencerenin ``Gtk.ScrolledWindow``'u içinde çalışır;
+dolayısıyla içerik uzadığında aksiyon çubuğuna taşmaz, kullanıcı
+kaydırabilir. Uzun metinler (OTP listesi, apt çıktısı, ayrıntılı sonuç)
+yine kendi ``ScrolledWindow``'larında sabit yükseklikte verilir.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk  # noqa: E402
+from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
 from ..core.board import BoardInfo
 from ..core.logger import get_logger
@@ -23,60 +24,129 @@ from . import params as params_schema
 log = get_logger(__name__)
 
 
+# Yardımcı: içerik sayfasının ortak çerçeve marjları (kompakt)
+_PAGE_MARGIN = 16
+_ROW_SPACING = 8
+_LONG_TEXT_HEIGHT = 180  # uzun metin kutularının sabit yüksekliği
+
+
+def _compact_page() -> Gtk.Box:
+    """Her sayfanın dış kutusu — sabit, nispeten dar marjlı."""
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
+    box.set_margin_top(_PAGE_MARGIN)
+    box.set_margin_bottom(_PAGE_MARGIN)
+    box.set_margin_start(_PAGE_MARGIN + 4)
+    box.set_margin_end(_PAGE_MARGIN + 4)
+    return box
+
+
+def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = False) -> Gtk.Label:
+    lbl = Gtk.Label(label=text, xalign=0)
+    lbl.set_line_wrap(True)
+    lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+    lbl.set_selectable(selectable)
+    if klass:
+        lbl.get_style_context().add_class(klass)
+    return lbl
+
+
+def _scrolled_textview(text: str, *, monospace: bool = False,
+                       editable: bool = False, height: int = _LONG_TEXT_HEIGHT,
+                       css_class: str | None = None) -> Gtk.ScrolledWindow:
+    """Kaydırma çubuklu, salt-okunur metin kutusu."""
+    tv = Gtk.TextView()
+    tv.set_editable(editable)
+    tv.set_cursor_visible(editable)
+    if monospace:
+        tv.set_monospace(True)
+    if css_class:
+        tv.get_style_context().add_class(css_class)
+    tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+    tv.get_buffer().set_text(text)
+    scroller = Gtk.ScrolledWindow()
+    scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+    scroller.set_min_content_height(height)
+    scroller.set_max_content_height(height)
+    scroller.add(tv)
+    scroller._textview = tv  # type: ignore[attr-defined]
+    return scroller
+
+
 # =========================================================================
 # Karşılama sayfası
 # =========================================================================
 
 
+_WELCOME_BODY = (
+    "Bu sihirbaz, sınıfta kullanacağınız Pardus ETAP etkileşimli tahtayı "
+    "imaj (disk klonu) alınmaya hazır hâle getirir. Aynı imajdan onlarca "
+    "tahtaya kurulum yapılacağı senaryo için tasarlanmıştır.\n\n"
+    "Neden ihtiyaç var?\n"
+    "  • 65\" dokunmatik ekranda kullanıcı parolası yazılırken, sınıftaki "
+    "öğrenciler ekrana baktığından parola ifşa olabiliyor. Bu tahtada "
+    "öğretmenin öğrenci olmayan bir ortamda parola oluşturması "
+    "senaryosunu kabul etmiyoruz.\n"
+    "  • Aynı imajdan çıkan tahtaların merkezi kayıt, hostname, SSH "
+    "anahtarı ve NetworkManager profili gibi tekil bilgileri çakışırsa "
+    "ciddi sorunlar oluşuyor (ör. eta-register kayıt çakışması).\n\n"
+    "TiHA ne yapacak?\n"
+    "  1. Donanımın imajlamaya uygunluğunu denetler.\n"
+    "  2. Parolaları güvenli rastgele değerle kilitler; root/etapadmin "
+    "için sizin tanımlayacağınız güçlü parolaları uygular.\n"
+    "  3. Her açılışta genel kullanıcı parolalarını temizleyen bir sistem "
+    "servisi kurar (ifşayı etkisizleştirir).\n"
+    "  4. Öğretmenler için OTP (6 haneli kod) anahtarları üretir.\n"
+    "  5. SSH, Samba, merkezi log iletimi, NTP ve benzersiz hostname "
+    "yapılandırır.\n"
+    "  6. Sistemi günceller.\n"
+    "  7. Son adımda imaj için hijyen (machine-id, SSH host anahtarları, "
+    "NetworkManager profilleri, loglar ve önbellekler) uygular.\n\n"
+    "Her adımda ne yaptığımızı ve neden yaptığımızı göreceksiniz; "
+    "onayınızı aldıktan sonra uygularız ve sonucu ekranda paylaşırız. "
+    "Gerektiğinde adımları geri de alabilirsiniz."
+)
+
+
 class WelcomePage(Gtk.Box):
     def __init__(self, board_info: BoardInfo) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=20)
-        self.get_style_context().add_class("tiha-content")
-        self.set_margin_top(24)
-        self.set_margin_bottom(24)
-        self.set_margin_start(40)
-        self.set_margin_end(40)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
+        self.set_margin_top(_PAGE_MARGIN)
+        self.set_margin_bottom(_PAGE_MARGIN)
+        self.set_margin_start(_PAGE_MARGIN + 4)
+        self.set_margin_end(_PAGE_MARGIN + 4)
 
-        heading = Gtk.Label(label="Hoş geldiniz", xalign=0)
-        heading.get_style_context().add_class("tiha-heading")
+        heading = _wrapping_label("Hoş geldiniz", klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
-        subtitle = Gtk.Label(
-            label=(
-                "Aşağıda tespit edilen tahta özeti yer almaktadır. Doğruluğundan "
-                "emin olduktan sonra 'İleri' ile adımlara geçin."
-            ),
-            xalign=0,
-        )
-        subtitle.get_style_context().add_class("tiha-rationale")
-        subtitle.set_line_wrap(True)
-        self.pack_start(subtitle, False, False, 0)
+        # Açıklama metni (kompakt)
+        desc = _wrapping_label(_WELCOME_BODY)
+        desc.set_max_width_chars(100)
+        self.pack_start(desc, False, False, 0)
 
-        card = Gtk.Grid(column_spacing=24, row_spacing=12)
+        # Ayırıcı
+        self.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 6)
+
+        # Tahta bilgisi kartı
+        card_title = _wrapping_label("Tespit edilen tahta", klass="tiha-heading")
+        self.pack_start(card_title, False, False, 0)
+
+        card = Gtk.Grid(column_spacing=18, row_spacing=4)
         card.get_style_context().add_class("tiha-board-card")
         for i, (key, value) in enumerate(board_info.as_rows()):
-            k = Gtk.Label(label=key, xalign=0)
-            k.get_style_context().add_class("tiha-board-key")
-            v = Gtk.Label(label=value, xalign=0)
-            v.get_style_context().add_class("tiha-board-value")
-            v.set_selectable(True)
+            k = _wrapping_label(key, klass="tiha-board-key")
+            v = _wrapping_label(value, klass="tiha-board-value", selectable=True)
             card.attach(k, 0, i, 1, 1)
             card.attach(v, 1, i, 1, 1)
-
         self.pack_start(card, False, False, 0)
 
         if board_info.is_vm:
-            warning = Gtk.Label(
-                label=(
-                    "⚠ Sanal makine tespit edildi. TiHA burada çalışır; fakat "
-                    "eta-register sanal makinede çalışmayı reddeder. İmaj "
-                    "sahaya inmeden önce fiziksel bir tahtada doğrulama yapın."
-                ),
-                xalign=0,
+            warn = _wrapping_label(
+                "⚠ Sanal makine tespit edildi. TiHA burada çalışır; fakat "
+                "eta-register sanal makinede çalışmayı reddeder. İmaj sahaya "
+                "inmeden önce bir fiziksel tahtada mutlaka test edin.",
+                klass="tiha-rationale",
             )
-            warning.set_line_wrap(True)
-            warning.get_style_context().add_class("tiha-rationale")
-            self.pack_start(warning, False, False, 0)
+            self.pack_start(warn, False, False, 0)
 
 
 # =========================================================================
@@ -88,14 +158,13 @@ class ModulePage(Gtk.Box):
     """Bir modülün ekran gösterimi — açıklama, form, (gerekirse canlı) sonuç."""
 
     def __init__(self, module: Module, journal: Journal) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
         self.module = module
         self.journal = journal
-        self.get_style_context().add_class("tiha-content")
-        self.set_margin_top(24)
-        self.set_margin_bottom(24)
-        self.set_margin_start(40)
-        self.set_margin_end(40)
+        self.set_margin_top(_PAGE_MARGIN)
+        self.set_margin_bottom(_PAGE_MARGIN)
+        self.set_margin_start(_PAGE_MARGIN + 4)
+        self.set_margin_end(_PAGE_MARGIN + 4)
         self._fields: dict[str, Gtk.Widget] = {}
         self._stream_buffer: Gtk.TextBuffer | None = None
         self._applying: bool = False
@@ -106,13 +175,10 @@ class ModulePage(Gtk.Box):
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        heading = Gtk.Label(label=self.module.title, xalign=0)
-        heading.get_style_context().add_class("tiha-heading")
+        heading = _wrapping_label(self.module.title, klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
-        rationale = Gtk.Label(label=self.module.rationale, xalign=0)
-        rationale.get_style_context().add_class("tiha-rationale")
-        rationale.set_line_wrap(True)
+        rationale = _wrapping_label(self.module.rationale, klass="tiha-rationale")
         self.pack_start(rationale, False, False, 0)
 
         preview_text = ""
@@ -121,10 +187,14 @@ class ModulePage(Gtk.Box):
         except Exception as exc:
             log.warning("preview başarısız %s: %s", self.module.id, exc)
         if preview_text:
-            preview = Gtk.Label(label=preview_text, xalign=0)
-            preview.get_style_context().add_class("tiha-preview")
-            preview.set_line_wrap(True)
-            self.pack_start(preview, False, False, 0)
+            # Uzun önizleme → scroll'lu metin kutusu; kısa önizleme → label
+            if preview_text.count("\n") > 6 or len(preview_text) > 500:
+                self.pack_start(_scrolled_textview(preview_text, monospace=True,
+                                                   height=120, css_class="tiha-preview"),
+                                False, False, 0)
+            else:
+                p = _wrapping_label(preview_text, klass="tiha-preview", selectable=True)
+                self.pack_start(p, False, False, 0)
 
         schema = params_schema.get(self.module.id)
         if schema:
@@ -133,25 +203,28 @@ class ModulePage(Gtk.Box):
 
         # Canlı akış alanı (başlangıçta gizli)
         self.stream_scroll = Gtk.ScrolledWindow()
-        self.stream_scroll.set_size_request(-1, 240)
+        self.stream_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self.stream_scroll.set_min_content_height(220)
+        self.stream_scroll.set_max_content_height(240)
         self.stream_view = Gtk.TextView()
         self.stream_view.set_editable(False)
         self.stream_view.set_cursor_visible(False)
         self.stream_view.set_monospace(True)
+        self.stream_view.get_style_context().add_class("tiha-stream")
         self._stream_buffer = self.stream_view.get_buffer()
         self.stream_scroll.add(self.stream_view)
-        self.stream_scroll.set_no_show_all(True)   # show_all gösterdiğinde otomatik açılmasın
-        self.pack_start(self.stream_scroll, True, True, 0)
+        self.stream_scroll.set_no_show_all(True)
+        self.pack_start(self.stream_scroll, False, False, 0)
 
         # Sonuç kutusu
-        self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.pack_start(self.result_holder, False, False, 0)
 
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
-        grid = Gtk.Grid(column_spacing=16, row_spacing=10)
+        grid = Gtk.Grid(column_spacing=12, row_spacing=6)
         row_idx = 0
         for field in schema:
-            label = Gtk.Label(label=field["label"], xalign=0)
+            label = _wrapping_label(field["label"])
             grid.attach(label, 0, row_idx, 1, 1)
             widget = self._make_field(field)
             widget.set_hexpand(True)
@@ -159,9 +232,7 @@ class ModulePage(Gtk.Box):
             self._fields[field["key"]] = widget
             row_idx += 1
             if field.get("help"):
-                help_lbl = Gtk.Label(label=field["help"], xalign=0)
-                help_lbl.get_style_context().add_class("tiha-rationale")
-                help_lbl.set_line_wrap(True)
+                help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
                 grid.attach(help_lbl, 1, row_idx, 1, 1)
                 row_idx += 1
         return grid
@@ -171,11 +242,13 @@ class ModulePage(Gtk.Box):
         default = field.get("default", "")
         if kind == "textarea":
             tv = Gtk.TextView()
-            tv.set_size_request(-1, 120)
+            tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
             tv.get_buffer().set_text(default)
             scroller = Gtk.ScrolledWindow()
             scroller.add(tv)
-            scroller.set_size_request(-1, 120)
+            scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+            scroller.set_min_content_height(100)
+            scroller.set_max_content_height(140)
             scroller._textview = tv  # type: ignore[attr-defined]
             return scroller
         if kind == "select":
@@ -225,16 +298,16 @@ class ModulePage(Gtk.Box):
 
     def run_apply(self) -> None:
         if self._applying:
-            return   # çift tıklama koruması
+            return
         params, missing = self._collect_params()
         if missing:
             self._show_result(ApplyResult(False, "Eksik alanlar: " + ", ".join(missing)))
             return
 
         self._applying = True
-        # Sonuç kutusunu temizle, gerektiğinde akış alanını aç
         for child in self.result_holder.get_children():
             self.result_holder.remove(child)
+
         if self.module.streams_output:
             self._stream_buffer.set_text("")
             self.stream_scroll.set_no_show_all(False)
@@ -248,7 +321,6 @@ class ModulePage(Gtk.Box):
         thread.start()
 
     def _apply_thread_body(self, params: dict) -> None:
-        """Ayrı thread'de modülü çalıştırır, sonuçları ana thread'e iletir."""
         def progress(line: str) -> None:
             GLib.idle_add(self._append_stream_line, line)
 
@@ -258,22 +330,20 @@ class ModulePage(Gtk.Box):
                 result = self.module.apply(params, progress=progress_cb)
             else:
                 result = self.module.apply(params)
-        except Exception as exc:  # savunmacı
+        except Exception as exc:
             log.exception("Modül uygulanamadı: %s", self.module.id)
             result = ApplyResult(False, f"Beklenmeyen hata: {exc}")
 
         GLib.idle_add(self._apply_thread_done, result)
 
     def _append_stream_line(self, line: str) -> bool:
-        """GLib.idle_add geri çağrısı — thread-güvenli ekran güncellemesi."""
         if self._stream_buffer is None:
             return False
         end = self._stream_buffer.get_end_iter()
         self._stream_buffer.insert(end, line + "\n")
-        # otomatik kaydır
         mark = self._stream_buffer.get_insert()
         self.stream_view.scroll_mark_onscreen(mark)
-        return False   # idle_add'de False dönmek kaydı tek seferlik yapar
+        return False
 
     def _apply_thread_done(self, result: ApplyResult) -> bool:
         self._applying = False
@@ -292,64 +362,57 @@ class ModulePage(Gtk.Box):
         for child in self.result_holder.get_children():
             self.result_holder.remove(child)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.get_style_context().add_class(
             "tiha-result-ok" if result.success else "tiha-result-fail"
         )
-        lbl = Gtk.Label(label=result.summary, xalign=0)
-        lbl.set_line_wrap(True)
-        lbl.set_selectable(True)
-        box.pack_start(lbl, False, False, 0)
+        box.pack_start(_wrapping_label(result.summary, selectable=True), False, False, 0)
 
         if result.details:
-            d = Gtk.Label(label=result.details, xalign=0)
-            d.set_line_wrap(True)
-            d.set_selectable(True)
-            box.pack_start(d, False, False, 0)
+            # Uzun ayrıntı → scroll'lu kutu
+            if result.details.count("\n") > 6 or len(result.details) > 500:
+                box.pack_start(
+                    _scrolled_textview(result.details, height=160),
+                    False, False, 0,
+                )
+            else:
+                box.pack_start(_wrapping_label(result.details, selectable=True), False, False, 0)
 
         if result.copyable:
-            scroller = Gtk.ScrolledWindow()
-            scroller.set_size_request(-1, 160)
-            tv = Gtk.TextView()
-            tv.set_editable(False)
-            tv.set_monospace(True)
-            tv.get_buffer().set_text(result.copyable)
-            scroller.add(tv)
-            box.pack_start(scroller, True, True, 0)
-
+            box.pack_start(
+                _scrolled_textview(result.copyable, monospace=True, height=160),
+                False, False, 0,
+            )
             copy_btn = Gtk.Button(label="Panoya kopyala")
-            copy_btn.get_style_context().add_class("tiha-secondary")
-
-            def _copy(_btn: Gtk.Button) -> None:
-                from gi.repository import Gdk
-                clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-                clip.set_text(result.copyable or "", -1)
-
-            copy_btn.connect("clicked", _copy)
+            copy_btn.connect("clicked", lambda *_: self._copy_to_clipboard(result.copyable or ""))
             box.pack_start(copy_btn, False, False, 0)
 
         if result.success and self.module.undo_supported:
             undo_btn = Gtk.Button(label="Bu adımı geri al")
-            undo_btn.get_style_context().add_class("tiha-danger")
-
-            def _undo(_btn: Gtk.Button) -> None:
-                entry = self.journal.last_applied(self.module.id)
-                if not entry:
-                    self._show_result(ApplyResult(False, "Geri alınacak kayıt bulunamadı."))
-                    return
-                try:
-                    u_result = self.module.undo(entry.data)
-                except Exception as exc:
-                    u_result = ApplyResult(False, f"Geri alma sırasında hata: {exc}")
-                if u_result.success:
-                    self.journal.mark_undone(self.module.id)
-                self._show_result(u_result)
-
-            undo_btn.connect("clicked", _undo)
+            undo_btn.get_style_context().add_class("destructive-action")
+            undo_btn.connect("clicked", lambda *_: self._undo_clicked())
             box.pack_start(undo_btn, False, False, 0)
 
         self.result_holder.pack_start(box, False, False, 0)
         self.result_holder.show_all()
+
+    def _copy_to_clipboard(self, text: str) -> None:
+        from gi.repository import Gdk
+        clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clip.set_text(text, -1)
+
+    def _undo_clicked(self) -> None:
+        entry = self.journal.last_applied(self.module.id)
+        if not entry:
+            self._show_result(ApplyResult(False, "Geri alınacak kayıt bulunamadı."))
+            return
+        try:
+            u_result = self.module.undo(entry.data)
+        except Exception as exc:
+            u_result = ApplyResult(False, f"Geri alma sırasında hata: {exc}")
+        if u_result.success:
+            self.journal.mark_undone(self.module.id)
+        self._show_result(u_result)
 
 
 # =========================================================================
@@ -359,79 +422,68 @@ class ModulePage(Gtk.Box):
 
 class SummaryPage(Gtk.Box):
     def __init__(self, journal: Journal, modules: list[Module]) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
         self.journal = journal
         self.modules = {m.id: m for m in modules}
-        self.get_style_context().add_class("tiha-content")
-        self.set_margin_top(24)
-        self.set_margin_bottom(24)
-        self.set_margin_start(40)
-        self.set_margin_end(40)
+        self.set_margin_top(_PAGE_MARGIN)
+        self.set_margin_bottom(_PAGE_MARGIN)
+        self.set_margin_start(_PAGE_MARGIN + 4)
+        self.set_margin_end(_PAGE_MARGIN + 4)
 
-        heading = Gtk.Label(label="Özet", xalign=0)
-        heading.get_style_context().add_class("tiha-heading")
+        heading = _wrapping_label("Özet", klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
-        info = Gtk.Label(
-            label=(
-                "Aşağıda bu oturumda uygulanmış adımlar listelenmiştir. "
-                "Herhangi birini geri almak isterseniz 'Geri Al' düğmesini "
-                "kullanabilirsiniz. Listenin altındaki 'Bitir' düğmesiyle "
-                "uygulamayı kapatabilirsiniz."
-            ),
-            xalign=0,
+        info = _wrapping_label(
+            "Bu oturumda uygulanan adımlar aşağıda listelenmiştir. "
+            "Herhangi birini geri almak isterseniz sağ taraftaki düğmeyi "
+            "kullanın. Alttaki 'Bitir' düğmesi uygulamayı kapatır.",
+            klass="tiha-rationale",
         )
-        info.set_line_wrap(True)
-        info.get_style_context().add_class("tiha-rationale")
         self.pack_start(info, False, False, 0)
 
-        self.container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.pack_start(self.container, True, True, 0)
+        self.entries_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.pack_start(self.entries_box, False, False, 0)
 
         refresh = Gtk.Button(label="Listeyi yenile")
-        refresh.get_style_context().add_class("tiha-secondary")
         refresh.connect("clicked", lambda *_: self.refresh())
         self.pack_start(refresh, False, False, 0)
 
         self.refresh()
 
     def refresh(self) -> None:
-        for child in self.container.get_children():
-            self.container.remove(child)
+        for child in self.entries_box.get_children():
+            self.entries_box.remove(child)
 
         entries = self.journal.all()
         if not entries:
-            empty = Gtk.Label(label="Henüz uygulanmış bir adım yok.", xalign=0)
-            empty.get_style_context().add_class("tiha-rationale")
-            self.container.pack_start(empty, False, False, 0)
-            self.container.show_all()
+            empty = _wrapping_label("Henüz uygulanmış bir adım yok.", klass="tiha-rationale")
+            self.entries_box.pack_start(empty, False, False, 0)
+            self.entries_box.show_all()
             return
 
         for entry in entries:
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-            lbl = Gtk.Label(
-                label=f"[{entry.status}] {entry.title}  —  {entry.summary}",
-                xalign=0,
-            )
-            lbl.set_line_wrap(True)
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            status_sym = {"applied": "✓", "failed": "✗", "undone": "↶"}.get(entry.status, "?")
+            lbl = _wrapping_label(f"{status_sym}  {entry.title}  —  {entry.summary}")
             row.pack_start(lbl, True, True, 0)
 
             module = self.modules.get(entry.module_id)
             if entry.status == "applied" and module and module.undo_supported:
                 btn = Gtk.Button(label="Geri al")
-                btn.get_style_context().add_class("tiha-danger")
-
-                def _undo(_b: Gtk.Button, m: Module = module, e = entry) -> None:
-                    try:
-                        result = m.undo(e.data)
-                    except Exception as exc:
-                        result = ApplyResult(False, f"Hata: {exc}")
-                    if result.success:
-                        self.journal.mark_undone(m.id)
-                    self.refresh()
-
-                btn.connect("clicked", _undo)
+                btn.get_style_context().add_class("destructive-action")
+                btn.connect("clicked", self._make_undo_handler(module, entry))
                 row.pack_start(btn, False, False, 0)
 
-            self.container.pack_start(row, False, False, 0)
-        self.container.show_all()
+            self.entries_box.pack_start(row, False, False, 0)
+        self.entries_box.show_all()
+
+    def _make_undo_handler(self, module: Module, entry: JournalEntry):
+        def _handler(_btn: Gtk.Button) -> None:
+            try:
+                result = module.undo(entry.data)
+            except Exception as exc:
+                result = ApplyResult(False, f"Hata: {exc}")
+            if result.success:
+                self.journal.mark_undone(module.id)
+            self.refresh()
+        return _handler
