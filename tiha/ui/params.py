@@ -28,16 +28,28 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Öğretmen ad soyad listesi (her satıra bir kişi)",
             "type": "textarea",
             "required": False,
-            "default": "",
-            "help": "Boş bırakılabilir. Yalnızca yedek hesap üretmek de mümkündür.",
+            "placeholder": (
+                "AYŞE YILMAZ\n"
+                "MEHMET DEMİR\n"
+                "FATMA ÖZTÜRK\n"
+                "AHMET KARA"
+            ),
+            "help": (
+                "İsimleri BÜYÜK HARFLERLE girin, her satıra bir kişi. Boş "
+                "bırakılabilir; yalnızca yedek hesap üretmek de mümkündür. "
+                "Örnek satırlar tıklayıp yazmaya başladığınızda silinir."
+            ),
         },
         {
             "key": "reserve_count",
             "label": "Yedek hesap sayısı",
-            "type": "number",
+            "type": "spin",
             "required": False,
             "default": "0",
-            "help": "Sonradan okula atanacak öğretmenler için ogretmen01, ogretmen02 şeklinde boş hesap.",
+            "min": 0,
+            "max": 50,
+            "step": 1,
+            "help": "Sonradan okula atanacak öğretmenler için ogretmen01, ogretmen02 … biçiminde boş hesap.",
         },
     ],
     "m05_samba_share": [

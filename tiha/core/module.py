@@ -19,7 +19,7 @@ Modüller, kendi "önce yedek al" davranışını kurmak için
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .paths import STATE_DIR
@@ -37,6 +37,7 @@ class ApplyResult:
     summary: str                     # Tek satır genel sonuç
     details: str = ""                # Çok satırlı ayrıntı (opsiyonel)
     copyable: str | None = None      # UI'da "Kopyala" butonu ile sunulacak metin
+    data: dict = field(default_factory=dict)  # undo için modülün sakladığı durum
 
 
 class Module:

@@ -146,26 +146,21 @@ class TiHAWindow(Gtk.Window):
         page = WelcomePage(self.board_info)
         self.pages.append(page)
         self.stack.add_named(page, "welcome")
-        self._add_sidebar_entry("0. Hoş geldiniz")
+        self._add_sidebar_entry("Hoş geldiniz")
 
     def _build_module_pages(self) -> None:
+        # Karşılama bir adım değildir; modüller 1'den başlayarak numaralandırılır.
         for idx, module in enumerate(self.modules, start=1):
             page = ModulePage(module, self.journal)
             self.pages.append(page)
             self.stack.add_named(page, module.id)
-            # m00 olarak gelen precheck "1." yerine hala adım sırasında olduğu
-            # için sayıyı modül id'sinden çıkarıyoruz (daha tutarlı):
-            try:
-                num = int(module.id[1:3])
-            except ValueError:
-                num = idx
-            self._add_sidebar_entry(f"{num:>2}. {module.title}")
+            self._add_sidebar_entry(f"{idx}. {module.title}")
 
     def _build_summary(self) -> None:
         page = SummaryPage(self.journal, self.modules)
         self.pages.append(page)
         self.stack.add_named(page, "summary")
-        self._add_sidebar_entry("✓  Özet")
+        self._add_sidebar_entry("Özet")
 
     def _add_sidebar_entry(self, label: str) -> None:
         row = Gtk.ListBoxRow()

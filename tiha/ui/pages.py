@@ -240,17 +240,61 @@ class ModulePage(Gtk.Box):
     def _make_field(self, field: dict) -> Gtk.Widget:
         kind = field.get("type", "text")
         default = field.get("default", "")
+
         if kind == "textarea":
             tv = Gtk.TextView()
             tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-            tv.get_buffer().set_text(default)
+            buf = tv.get_buffer()
+            placeholder = field.get("placeholder")
+            if placeholder:
+                # Placeholder metnini yerleştir, CSS ile soluk göster.
+                # Odaklanıldığında (ve metin hâlâ placeholder ise) temizle;
+                # boşsa odak kaybında geri koy.
+                buf.set_text(placeholder)
+                tv.get_style_context().add_class("tiha-placeholder")
+
+                def on_focus_in(_widget, _event, _ph=placeholder):
+                    start, end = buf.get_bounds()
+                    if buf.get_text(start, end, True) == _ph:
+                        buf.set_text("")
+                        tv.get_style_context().remove_class("tiha-placeholder")
+                    return False
+
+                def on_focus_out(_widget, _event, _ph=placeholder):
+                    start, end = buf.get_bounds()
+                    if not buf.get_text(start, end, True).strip():
+                        buf.set_text(_ph)
+                        tv.get_style_context().add_class("tiha-placeholder")
+                    return False
+
+                tv.connect("focus-in-event", on_focus_in)
+                tv.connect("focus-out-event", on_focus_out)
+            elif default:
+                buf.set_text(default)
+
             scroller = Gtk.ScrolledWindow()
             scroller.add(tv)
             scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-            scroller.set_min_content_height(100)
-            scroller.set_max_content_height(140)
+            scroller.set_min_content_height(110)
+            scroller.set_max_content_height(150)
             scroller._textview = tv  # type: ignore[attr-defined]
             return scroller
+
+        if kind == "spin":
+            lower = float(field.get("min", 0))
+            upper = float(field.get("max", 100))
+            step = float(field.get("step", 1))
+            value = float(default or lower)
+            adj = Gtk.Adjustment(
+                value=value, lower=lower, upper=upper,
+                step_increment=step, page_increment=step * 5,
+            )
+            spin = Gtk.SpinButton()
+            spin.set_adjustment(adj)
+            spin.set_numeric(True)
+            spin.set_digits(0)
+            return spin
+
         if kind == "select":
             combo = Gtk.ComboBoxText()
             for opt in field.get("options", []):
@@ -260,6 +304,7 @@ class ModulePage(Gtk.Box):
                 idx = field["options"].index(default)
             combo.set_active(idx)
             return combo
+
         entry = Gtk.Entry()
         entry.set_text(default)
         if kind == "password":
@@ -273,9 +318,15 @@ class ModulePage(Gtk.Box):
         widget = self._fields[key]
         kind = field.get("type", "text")
         if kind == "textarea":
-            buf = widget._textview.get_buffer()  # type: ignore[attr-defined]
+            tv = widget._textview  # type: ignore[attr-defined]
+            # Placeholder hâlâ etkin mi?
+            if tv.get_style_context().has_class("tiha-placeholder"):
+                return ""
+            buf = tv.get_buffer()
             start, end = buf.get_bounds()
             return buf.get_text(start, end, True)
+        if kind == "spin":
+            return str(int(widget.get_value()))
         if kind == "select":
             return widget.get_active_text() or ""
         return widget.get_text()
@@ -307,6 +358,18 @@ class ModulePage(Gtk.Box):
         self._applying = True
         for child in self.result_holder.get_children():
             self.result_holder.remove(child)
+
+        # Kullanıcıya "çalışıyor" geri bildirimi: spinner + metin.
+        self._working_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        spinner = Gtk.Spinner()
+        spinner.start()
+        self._working_row.pack_start(spinner, False, False, 0)
+        self._working_row.pack_start(
+            _wrapping_label("Uygulanıyor… Bu adım tamamlanana kadar lütfen bekleyin."),
+            False, False, 0,
+        )
+        self.result_holder.pack_start(self._working_row, False, False, 0)
+        self.result_holder.show_all()
 
         if self.module.streams_output:
             self._stream_buffer.set_text("")
@@ -347,9 +410,12 @@ class ModulePage(Gtk.Box):
 
     def _apply_thread_done(self, result: ApplyResult) -> bool:
         self._applying = False
+        # "Çalışıyor" göstergesini kaldır (result_holder temizlenecek)
         entry = JournalEntry.new(self.module.id, self.module.title)
         entry.summary = result.summary
         entry.status = "applied" if result.success else "failed"
+        # Modülün bıraktığı undo verisini günceye taşı
+        entry.data = dict(result.data) if isinstance(result.data, dict) else {}
         self.journal.record(entry)
         self._show_result(result)
         return False
