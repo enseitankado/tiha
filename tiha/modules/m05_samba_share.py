@@ -24,7 +24,7 @@ from pathlib import Path
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
-from ..core.paths import SAMBA_DROPIN, SAMBA_SMB_CONF
+from ..core.paths import SAMBA_SHARE_CONF, SAMBA_SMB_CONF
 from ..core.utils import run_cmd, run_cmd_stream
 
 log = get_logger(__name__)
@@ -83,7 +83,7 @@ class SambaShareModule(Module):
             return ApplyResult(False, "Samba parolası verilmeli.")
 
         was_installed_before = _is_package_installed("samba")
-        dropin_existed_before = SAMBA_DROPIN.exists()
+        conf_existed_before = SAMBA_SHARE_CONF.exists()
 
         if progress:
             progress(f"Başlangıç: samba {'kurulu' if was_installed_before else 'kurulu değil'}")
@@ -109,18 +109,18 @@ class SambaShareModule(Module):
                 return ApplyResult(False, "samba kurulamadı.",
                                    data={"was_installed_before": was_installed_before})
 
-        # Paylaşım drop-in
+        # Paylaşım ek yapılandırma dosyası
         try:
-            SAMBA_DROPIN.parent.mkdir(parents=True, exist_ok=True)
-            SAMBA_DROPIN.write_text(_render_share(username), encoding="utf-8")
-            SAMBA_DROPIN.chmod(0o644)
+            SAMBA_SHARE_CONF.parent.mkdir(parents=True, exist_ok=True)
+            SAMBA_SHARE_CONF.write_text(_render_share(username), encoding="utf-8")
+            SAMBA_SHARE_CONF.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"Samba drop-in yazılamadı: {exc}",
+            return ApplyResult(False, f"Samba ek yapılandırma dosyası yazılamadı: {exc}",
                                data={"was_installed_before": was_installed_before,
-                                     "dropin_existed_before": dropin_existed_before})
+                                     "conf_existed_before": conf_existed_before})
 
         # smb.conf içine include satırı ekle (yalnızca yoksa)
-        include_line = f"include = {SAMBA_DROPIN}"
+        include_line = f"include = {SAMBA_SHARE_CONF}"
         try:
             content = SAMBA_SMB_CONF.read_text(encoding="utf-8") if SAMBA_SMB_CONF.exists() else ""
             include_was_absent = include_line not in content
@@ -132,7 +132,7 @@ class SambaShareModule(Module):
         except OSError as exc:
             return ApplyResult(False, f"smb.conf güncellenemedi: {exc}",
                                data={"was_installed_before": was_installed_before,
-                                     "dropin_existed_before": dropin_existed_before})
+                                     "conf_existed_before": conf_existed_before})
 
         # smbpasswd
         smbpw = run_cmd(
@@ -142,7 +142,7 @@ class SambaShareModule(Module):
         if not smbpw.ok:
             return ApplyResult(False, "smbpasswd başarısız.", details=smbpw.stderr,
                                data={"was_installed_before": was_installed_before,
-                                     "dropin_existed_before": dropin_existed_before})
+                                     "conf_existed_before": conf_existed_before})
         run_cmd(["smbpasswd", "-e", username])
 
         run_cmd(["systemctl", "enable", "--now", "smbd"])
@@ -154,13 +154,13 @@ class SambaShareModule(Module):
             True,
             f"Samba paylaşımı '//<tahta-ip>/{SHARE_NAME}' olarak hazır ({username} kullanıcısıyla).",
             details=(
-                f"Drop-in: {SAMBA_DROPIN}\n"
+                f"Ek yapılandırma dosyası: {SAMBA_SHARE_CONF}\n"
                 f"Kullanıcı: {username}\n"
                 f"İstemciden örnek: smbclient //<tahta-ip>/{SHARE_NAME} -U {username}"
             ),
             data={
                 "was_installed_before": was_installed_before,
-                "dropin_existed_before": dropin_existed_before,
+                "conf_existed_before": conf_existed_before,
                 "include_was_absent": include_was_absent,
                 "samba_user": username,
             },
@@ -169,14 +169,14 @@ class SambaShareModule(Module):
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
         was_installed_before = bool(data.get("was_installed_before", True))
-        dropin_existed_before = bool(data.get("dropin_existed_before", False))
+        conf_existed_before = bool(data.get("conf_existed_before", False))
         include_was_absent = bool(data.get("include_was_absent", False))
         username = data.get("samba_user", "root")
 
-        # 1) Drop-in'i temizle (yalnızca biz eklemişsek)
-        if not dropin_existed_before:
+        # 1) Ek yapılandırma dosyasını temizle (yalnızca biz eklemişsek)
+        if not conf_existed_before:
             try:
-                SAMBA_DROPIN.unlink(missing_ok=True)
+                SAMBA_SHARE_CONF.unlink(missing_ok=True)
             except OSError:
                 pass
 
@@ -186,7 +186,7 @@ class SambaShareModule(Module):
                 content = SAMBA_SMB_CONF.read_text(encoding="utf-8")
                 lines = [
                     ln for ln in content.splitlines()
-                    if f"include = {SAMBA_DROPIN}" not in ln and ln.strip() != "# TiHA include"
+                    if f"include = {SAMBA_SHARE_CONF}" not in ln and ln.strip() != "# TiHA include"
                 ]
                 SAMBA_SMB_CONF.write_text("\n".join(lines) + "\n", encoding="utf-8")
             except OSError:

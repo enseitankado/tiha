@@ -1,7 +1,7 @@
 """Modül 7 — Zaman senkronizasyonu (systemd-timesyncd).
 
 **Ne yapar?**
-``/etc/systemd/timesyncd.conf.d/tiha.conf`` adında bir drop-in dosyası
+``/etc/systemd/timesyncd.conf.d/tiha.conf`` adında ek bir yapılandırma dosyası
 yazar; ``NTP=`` ve ``FallbackNTP=`` yönergelerini kullanıcı tercihine
 göre doldurur. ``timedatectl set-ntp true`` ile NTP istemcisini
 etkinleştirir ve ``systemd-timesyncd``'yi yeniden başlatır. Opsiyonel
@@ -13,7 +13,7 @@ Yanlış saat, sertifika doğrulamasını, Kerberos/TLS oturumlarını, TOTP
 Ağa göre dış internete NTP (UDP 123) çıkışı kısıtlı olabileceğinden
 okulun iç NTP sunucusu (ör. ``time.meb.gov.tr``) tercih edilebilir.
 
-**Geri al.** Yalnızca TiHA'nın eklediği drop-in kaldırılır, servis
+**Geri al.** Yalnızca TiHA'nın eklediği ek yapılandırma dosyası kaldırılır, servis
 yeniden başlatılır; Debian varsayılan davranışına dönülür.
 """
 
@@ -27,7 +27,7 @@ from ..core.utils import run_cmd
 
 log = get_logger(__name__)
 
-DROPIN = Path("/etc/systemd/timesyncd.conf.d/tiha.conf")
+TIMESYNCD_CONF = Path("/etc/systemd/timesyncd.conf.d/tiha.conf")
 
 
 def _render(ntp: str, fallback: str) -> str:
@@ -53,12 +53,12 @@ class TimeSyncModule(Module):
     )
 
     def preview(self) -> str:
-        if DROPIN.exists():
-            return f"Mevcut TiHA NTP ayarı ({DROPIN}):\n\n{DROPIN.read_text(encoding='utf-8')}"
+        if TIMESYNCD_CONF.exists():
+            return f"Mevcut TiHA NTP ayarı ({TIMESYNCD_CONF}):\n\n{TIMESYNCD_CONF.read_text(encoding='utf-8')}"
         # Dosya yoksa kullanıcıyı şaşırtacak "(yok)" yerine ne yapılacağı anlatılır.
         return (
             "TiHA özel NTP yapılandırması henüz yok. Bu adım şunları yapar:\n"
-            f"  • {DROPIN} içerisine NTP=... ve FallbackNTP=... yazar\n"
+            f"  • {TIMESYNCD_CONF} içerisine NTP=... ve FallbackNTP=... yazar\n"
             "  • saat dilimini Europe/Istanbul (varsayılan) olarak ayarlar\n"
             "  • timedatectl set-ntp true + systemd-timesyncd restart"
         )
@@ -77,13 +77,13 @@ class TimeSyncModule(Module):
         if not tz_res.ok:
             log.warning("timezone atanamadı: %s", tz_res.stderr.strip())
 
-        # Drop-in yaz
+        # Ek yapılandırma dosyası yaz
         try:
-            DROPIN.parent.mkdir(parents=True, exist_ok=True)
-            DROPIN.write_text(_render(ntp, fallback), encoding="utf-8")
-            DROPIN.chmod(0o644)
+            TIMESYNCD_CONF.parent.mkdir(parents=True, exist_ok=True)
+            TIMESYNCD_CONF.write_text(_render(ntp, fallback), encoding="utf-8")
+            TIMESYNCD_CONF.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"Drop-in yazılamadı: {exc}")
+            return ApplyResult(False, f"Ek yapılandırma dosyası yazılamadı: {exc}")
 
         run_cmd(["timedatectl", "set-ntp", "true"])
         restart = run_cmd(["systemctl", "restart", "systemd-timesyncd"])
@@ -96,12 +96,12 @@ class TimeSyncModule(Module):
         return ApplyResult(
             True,
             f"Zaman senkronu ayarlandı (saat dilimi: {tz}).",
-            details=f"Dosya: {DROPIN}\n\n{status}",
+            details=f"Dosya: {TIMESYNCD_CONF}\n\n{status}",
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         try:
-            DROPIN.unlink(missing_ok=True)
+            TIMESYNCD_CONF.unlink(missing_ok=True)
         except OSError:
             pass
         run_cmd(["systemctl", "restart", "systemd-timesyncd"])

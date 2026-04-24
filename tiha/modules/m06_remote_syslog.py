@@ -5,17 +5,17 @@ Tahtadaki tüm sistem günlüklerinin (``syslog``: oturum açma, servis
 hataları, cron, ağ, güvenlik olayları vb.) ağdaki merkezi bir
 ``rsyslog`` sunucusuna iletilmesi için gereken yapılandırmayı kurar.
 
-**"Drop-in" nedir?**
+**"Ek yapılandırma dosyası" nedir?**
 Debian'da sistem servislerinin ayarları genellikle iki yerden gelir:
 
 * **Ana yapılandırma** — ör. ``/etc/rsyslog.conf``. Paketin kendisiyle
   birlikte gelir, paket güncellendiğinde üstüne yazılabilir.
-* **Drop-in** — ör. ``/etc/rsyslog.d/XX-ad.conf``. Bir alt klasöre
+* **Ek yapılandırma dosyası** — ör. ``/etc/rsyslog.d/XX-ad.conf``. Bir alt klasöre
   bırakılan bağımsız parça dosyalar. Ana yapılandırma bu klasörü
   otomatik okur. Yerel özelleştirmeler paket güncellemelerinden
   etkilenmez, ayrı dosya olduğu için geri alması da kolaydır.
 
-Bu adım ``/etc/rsyslog.d/90-tiha-remote.conf`` adıyla bir drop-in
+Bu adım ``/etc/rsyslog.d/90-tiha-remote.conf`` adıyla ek bir yapılandırma dosyası
 oluşturur; içeriğinde tek bir kural vardır:
 
     *.*  @host:port              (UDP için)  ya da
@@ -34,14 +34,14 @@ rsyslog sunucusu yoksa bu adım atlanabilir; ancak bir kere rsyslog
 sunucusu kurulduğunda tüm tahtalara ayrı ayrı gitmek zorunda kalmamak
 için bu adım imaj öncesi tavsiye edilir.
 
-**Geri al.** Drop-in dosyası silinir, ``rsyslog`` yeniden başlatılır.
+**Geri al.** Ek yapılandırma dosyası silinir, ``rsyslog`` yeniden başlatılır.
 """
 
 from __future__ import annotations
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
-from ..core.paths import RSYSLOG_DROPIN
+from ..core.paths import RSYSLOG_CONF
 from ..core.utils import run_cmd
 
 log = get_logger(__name__)
@@ -51,7 +51,7 @@ def _render(host: str, port: int, proto: str) -> str:
     # UDP için `@`, TCP için `@@` önekleri rsyslog standardıdır.
     prefix = "@@" if proto.lower() == "tcp" else "@"
     return (
-        "# TiHA — merkezi log sunucusuna iletim (drop-in yapılandırma).\n"
+        "# TiHA — merkezi log sunucusuna iletim (ek yapılandırma dosyası).\n"
         "# *.* = her kategori+seviyedeki tüm loglar\n"
         "# @host  → UDP ile ilet\n"
         "# @@host → TCP ile ilet\n"
@@ -68,20 +68,20 @@ class RemoteSyslogModule(Module):
         "sunucusuna gönderir. Böylece 50 tahtalı bir okulun loglarını "
         "tek bir arayüzden izleyebilir, olay/arıza taramasını saniyeler "
         "içinde yapabilirsiniz. Bunun için /etc/rsyslog.d/ altına yalnızca "
-        "TiHA'ya ait bir 'drop-in' dosyası yazılır — paket güncellemesi "
+        "TiHA'ya ait bir 'ek yapılandırma dosyası' yazılır — paket güncellemesi "
         "gelirse yapılandırmanız korunur, geri almak da o tek dosyayı "
         "silmek kadar kolaydır."
     )
 
     def preview(self) -> str:
-        if RSYSLOG_DROPIN.exists():
+        if RSYSLOG_CONF.exists():
             return (
-                f"Mevcut TiHA yapılandırması: {RSYSLOG_DROPIN}\n\n"
-                + RSYSLOG_DROPIN.read_text(encoding="utf-8")
+                f"Mevcut TiHA yapılandırması: {RSYSLOG_CONF}\n\n"
+                + RSYSLOG_CONF.read_text(encoding="utf-8")
             )
         return (
-            "Drop-in henüz yok. Bu adımda aşağıdaki içerikli dosya yazılacak:\n"
-            f"  {RSYSLOG_DROPIN}\n\n"
+            "Henüz TiHA'ya ait bir yapılandırma yok. Bu adımda aşağıdaki içerikli dosya yazılacak:\n"
+            f"  {RSYSLOG_CONF}\n\n"
             "  *.*  @<host>:<port>   (UDP varsayılan)\n"
             "  *.*  @@<host>:<port>  (TCP seçilirse)\n\n"
             "Ardından 'systemctl restart rsyslog' çalıştırılacak."
@@ -103,10 +103,10 @@ class RemoteSyslogModule(Module):
         del install  # susturucu
 
         try:
-            RSYSLOG_DROPIN.write_text(_render(host, port, proto), encoding="utf-8")
-            RSYSLOG_DROPIN.chmod(0o644)
+            RSYSLOG_CONF.write_text(_render(host, port, proto), encoding="utf-8")
+            RSYSLOG_CONF.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"rsyslog drop-in yazılamadı: {exc}")
+            return ApplyResult(False, f"rsyslog ek yapılandırma dosyası yazılamadı: {exc}")
 
         restart = run_cmd(["systemctl", "restart", "rsyslog"])
         if not restart.ok:
@@ -117,7 +117,7 @@ class RemoteSyslogModule(Module):
             True,
             f"Loglar {host}:{port}/{proto.upper()} adresine iletilecek.",
             details=(
-                f"Yazılan drop-in dosyası: {RSYSLOG_DROPIN}\n"
+                f"Yazılan ek yapılandırma dosyası: {RSYSLOG_CONF}\n"
                 f"Kural: *.* {'@@' if proto == 'tcp' else '@'}{host}:{port}\n"
                 "Test: sunucu tarafında 'tcpdump -n -i any port {port}' ya da "
                 "rsyslog sunucusunda gelen kayıtlara bakabilirsiniz."
@@ -126,8 +126,8 @@ class RemoteSyslogModule(Module):
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         try:
-            RSYSLOG_DROPIN.unlink(missing_ok=True)
+            RSYSLOG_CONF.unlink(missing_ok=True)
         except OSError:
             pass
         run_cmd(["systemctl", "restart", "rsyslog"])
-        return ApplyResult(True, "Merkezi log iletimi drop-in'i kaldırıldı.")
+        return ApplyResult(True, "Merkezi log iletimi için eklenen yapılandırma dosyası kaldırıldı.")

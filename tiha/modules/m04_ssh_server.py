@@ -3,14 +3,14 @@
 **Ne yapar?**
 ``openssh-server`` paketini (yoksa) kurar; ``/etc/ssh/sshd_config.d/``
 altına ``PermitRootLogin yes`` ve ``PasswordAuthentication yes`` ayarlarını
-içeren bir drop-in bırakır; ``ssh`` servisini etkinleştirir.
+içeren ek bir yapılandırma dosyası bırakır; ``ssh`` servisini etkinleştirir.
 
 **Neden gerekir?**
 Dağıtılmış tahtalarda uzaktan teknik destek/bakım için root erişimi
 gereklidir.
 
 **Geri al (tam restore).**
-- Drop-in dosyası silinir.
+- Ek yapılandırma dosyası silinir.
 - Eğer TiHA `openssh-server`'ı *kurduysa* (daha önce kurulu değildi),
   paket ``apt-get purge`` ile kaldırılır — başlangıçtaki temiz duruma
   dönülür. Daha önce zaten kuruluysa paket korunur.
@@ -30,9 +30,9 @@ from ..core.utils import run_cmd, run_cmd_stream
 
 log = get_logger(__name__)
 
-DROPIN = Path("/etc/ssh/sshd_config.d/99-tiha.conf")
+SSH_CONF = Path("/etc/ssh/sshd_config.d/99-tiha.conf")
 
-DROPIN_CONTENT = """# TiHA tarafından yazılmıştır.
+SSH_CONF_CONTENT = """# TiHA tarafından yazılmıştır.
 PermitRootLogin yes
 PasswordAuthentication yes
 """
@@ -65,17 +65,17 @@ class SSHServerModule(Module):
         return (
             "openssh-server zaten kurulu — yalnızca yapılandırma eklenecek."
             if installed
-            else "openssh-server kurulacak ve yapılandırma drop-in'i eklenecek."
+            else "openssh-server kurulacak ve yapılandırma ek bir yapılandırma dosyası yazılacak."
         )
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         # Başlangıç durumu (undo için saklanacak)
         was_installed_before = _is_package_installed("openssh-server")
-        dropin_existed_before = DROPIN.exists()
+        conf_existed_before = SSH_CONF.exists()
 
         if progress:
             progress(f"Başlangıç: openssh-server {'kurulu' if was_installed_before else 'kurulu değil'}")
-            progress(f"Başlangıç: drop-in {'var' if dropin_existed_before else 'yok'}")
+            progress(f"Başlangıç: ek yapılandırma dosyası {'var' if conf_existed_before else 'yok'}")
 
         # Kurulum
         if not was_installed_before:
@@ -98,19 +98,19 @@ class SSHServerModule(Module):
                 return ApplyResult(False, "openssh-server kurulamadı.",
                                    data={"was_installed_before": was_installed_before})
 
-        # Drop-in yaz
+        # Ek yapılandırma dosyası yaz
         try:
-            DROPIN.parent.mkdir(parents=True, exist_ok=True)
-            DROPIN.write_text(DROPIN_CONTENT, encoding="utf-8")
-            DROPIN.chmod(0o644)
+            SSH_CONF.parent.mkdir(parents=True, exist_ok=True)
+            SSH_CONF.write_text(SSH_CONF_CONTENT, encoding="utf-8")
+            SSH_CONF.chmod(0o644)
         except OSError as exc:
             return ApplyResult(
-                False, f"SSH drop-in yazılamadı: {exc}",
+                False, f"SSH ek yapılandırma dosyası yazılamadı: {exc}",
                 data={"was_installed_before": was_installed_before,
-                      "dropin_existed_before": dropin_existed_before},
+                      "conf_existed_before": conf_existed_before},
             )
         if progress:
-            progress(f"Drop-in yazıldı: {DROPIN}")
+            progress(f"Ek yapılandırma dosyası yazıldı: {SSH_CONF}")
 
         # Servis
         en = run_cmd(["systemctl", "enable", "--now", "ssh"])
@@ -121,24 +121,24 @@ class SSHServerModule(Module):
         return ApplyResult(
             True,
             "SSH sunucusu kuruldu, root girişine izin verildi.",
-            details=f"Yapılandırma: {DROPIN}\nServis: ssh (etkin)",
+            details=f"Yapılandırma: {SSH_CONF}\nServis: ssh (etkin)",
             data={
                 "was_installed_before": was_installed_before,
-                "dropin_existed_before": dropin_existed_before,
+                "conf_existed_before": conf_existed_before,
             },
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
         was_installed_before = bool(data.get("was_installed_before", True))
-        dropin_existed_before = bool(data.get("dropin_existed_before", False))
+        conf_existed_before = bool(data.get("conf_existed_before", False))
 
-        # 1) Drop-in'i temizle (yalnızca biz eklemişsek)
-        if not dropin_existed_before:
+        # 1) Ek yapılandırma dosyasını temizle (yalnızca biz eklemişsek)
+        if not conf_existed_before:
             try:
-                DROPIN.unlink(missing_ok=True)
+                SSH_CONF.unlink(missing_ok=True)
             except OSError as exc:
-                log.warning("Drop-in silinemedi: %s", exc)
+                log.warning("Ek yapılandırma dosyası silinemedi: %s", exc)
         run_cmd(["systemctl", "reload", "ssh"])
 
         # 2) Paket başlangıçta kurulu değilse kaldır — tam temiz duruma dön

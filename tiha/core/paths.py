@@ -22,8 +22,8 @@ LOG_FILE = LOG_ROOT / "tiha.log"         # Ana uygulama log dosyası
 BOOT_WIPE_SERVICE = Path("/etc/systemd/system/tiha-boot-password-wipe.service")
 BOOT_WIPE_SCRIPT = Path("/usr/local/sbin/tiha-boot-password-wipe.sh")
 OTP_SECRETS_FILE = Path("/etc/otp-secrets.json")  # eta-otp-lock ile bire bir uyumlu
-RSYSLOG_DROPIN = Path("/etc/rsyslog.d/90-tiha-remote.conf")
-SAMBA_DROPIN = Path("/etc/samba/smb.conf.d/tiha-root-share.conf")
+RSYSLOG_CONF = Path("/etc/rsyslog.d/90-tiha-remote.conf")
+SAMBA_SHARE_CONF = Path("/etc/samba/smb.conf.d/tiha-root-share.conf")
 SAMBA_SMB_CONF = Path("/etc/samba/smb.conf")
 
 # Yardımcı: dizinleri garanti altına al
