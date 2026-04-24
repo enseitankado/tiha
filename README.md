@@ -96,6 +96,17 @@ tiha/
     └── ui/                      GTK3 arayüzü
 ```
 
+## Dayandığı projeler
+
+TiHA, Modül 4'te (Öğretmen PIN anahtarları) aşağıdaki açık kaynaklı aracı indirip doğrudan kullanır:
+
+- **[enseitankado/eta-otp-cli](https://github.com/enseitankado/etap/tree/main/arastirmalarim/eta-otp-cli)** — Pardus ETAP'ın `/etc/otp-secrets.json` dosyasıyla bire bir uyumlu, terminal tabanlı TOTP/PIN yönetim aracı. TiHA özellikle `toplu-kullanici-olustur.py` betiğini çağırır; bu betik:
+  - Öğretmen listesinden Linux kullanıcılarını doğru gruplarla (cdrom, audio, video, plugdev, bluetooth, scanner, netdev, dip, lpadmin) oluşturur,
+  - Her hesap için BASE32 PIN anahtarı üretip `/etc/otp-secrets.json` dosyasına yazar,
+  - AccountsService cache'ini günceller — yeni hesaplar LightDM login ekranında görünür olur.
+
+Araç `bootstrap.sh` tarafından otomatik indirilir (`/tmp/tiha.XXXX/eta-otp-cli/`). İndirme başarısız olsa bile TiHA dahili `pyotp` yedek yoluyla (aynı dosya, aynı format) çalışmaya devam eder. Yazara ve projeye teşekkürler — bu iş akışını öğretmen hesaplarının toplu kurulumu açısından oldukça basitleştirdi.
+
 ## Katkı ve destek
 
 - 🐛 Hata bildirimi ve öneri: [GitHub Issues](https://github.com/enseitankado/tiha/issues)
