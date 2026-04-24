@@ -8,14 +8,14 @@ TiHA'ya katkılarınız için teşekkürler! Bu kısa doküman, projeye sağlık
 - **Dil:** Python 3.11+, GTK 3.
 - **Yerelde çalıştırma:**
   ```bash
-  git clone https://github.com/ozgurkoca/tiha.git
+  git clone https://github.com/enseitankado/tiha.git
   cd tiha
   sudo -E PYTHONPATH=. python3 -m tiha
   ```
 
 ## Pull Request akışı
 
-1. Önce bir [issue](https://github.com/ozgurkoca/tiha/issues) açın — yapmak istediğinizi birkaç cümleyle anlatın.
+1. Önce bir [issue](https://github.com/enseitankado/tiha/issues) açın — yapmak istediğinizi birkaç cümleyle anlatın.
 2. Kendi branch'inizde çalışın: `feat/...`, `fix/...`, `docs/...` ön eklerini tercih edin.
 3. Küçük, odaklı commitler atın. Commit mesajları **Türkçe** yazılabilir.
 4. PR açmadan önce sözdizim denetimi:

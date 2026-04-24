@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-REPO_TARBALL="${TIHA_TARBALL:-https://codeload.github.com/ozgurkoca/tiha/tar.gz/refs/heads/main}"
+REPO_TARBALL="${TIHA_TARBALL:-https://codeload.github.com/enseitankado/tiha/tar.gz/refs/heads/main}"
 WORKDIR="$(mktemp -d /tmp/tiha.XXXXXX)"
 
 cleanup() { rm -rf "$WORKDIR"; }

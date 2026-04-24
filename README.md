@@ -198,8 +198,8 @@ Bu bağımlılıklar `bootstrap.sh` içinde eksikse otomatik kurulur.
 
 ## Katkı ve destek
 
-- 🐛 Hata bildirimi: [GitHub Issues](https://github.com/ozgurkoca/tiha/issues)
-- 💬 Soru/tartışma: [GitHub Discussions](https://github.com/ozgurkoca/tiha/discussions)
+- 🐛 Hata bildirimi: [GitHub Issues](https://github.com/enseitankado/tiha/issues)
+- 💬 Soru/tartışma: [GitHub Discussions](https://github.com/enseitankado/tiha/discussions)
 - 🤝 Pull request'ler hoş karşılanır — tercihen önce bir issue açıp yaklaşımı konuşalım.
 
 **Yazım kuralları:** Kullanıcıya görünen metinler Türkçe, kod kimlikleri İngilizce (PEP-8), kod içi yorumlar Türkçe ve anlamlı. Modül başlıkları tutarlı ve `neden gerekli` açıklaması birinci sınıf vatandaş.

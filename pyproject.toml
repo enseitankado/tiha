@@ -29,8 +29,8 @@ dependencies = [
 tiha = "tiha.app:main"
 
 [project.urls]
-Homepage = "https://github.com/ozgurkoca/tiha"
-Issues = "https://github.com/ozgurkoca/tiha/issues"
+Homepage = "https://github.com/enseitankado/tiha"
+Issues = "https://github.com/enseitankado/tiha/issues"
 
 [tool.setuptools.packages.find]
 include = ["tiha*"]
