@@ -80,6 +80,25 @@ class Module:
         """
         raise NotImplementedError
 
-    def undo(self, data: dict) -> ApplyResult:
-        """Daha önce uygulanan işlemi geri alır."""
+    def pre_undo_prompt(self, data: dict) -> dict | None:
+        """Geri alma öncesi UI'a sorulacak bir onay olup olmadığını söyler.
+
+        ``None`` döndürülürse UI doğrudan :meth:`undo` çağırır. Bir sözlük
+        döndürülürse UI bir evet/hayır diyaloğu gösterir ve sonucuna göre
+        ``undo(params=...)``'ı çağırır. Beklenen anahtarlar:
+
+        ``title``, ``message``          — Diyalog metni.
+        ``yes_params``, ``no_params``   — Kullanıcının verdiği yanıtın
+                                          modüle hangi ``params`` olarak
+                                          geçeceği.
+        """
+        return None
+
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
+        """Daha önce uygulanan işlemi geri alır.
+
+        ``params``, geri alma sırasında kullanıcıdan ek bir tercih alındıysa
+        (ör. "bu kullanıcıları sil mi?") UI tarafından geçirilir. Modüller
+        gerekmiyorsa bu argümanı görmezden gelir.
+        """
         raise NotImplementedError

@@ -53,8 +53,15 @@ class TimeSyncModule(Module):
     )
 
     def preview(self) -> str:
-        existing = DROPIN.read_text(encoding="utf-8") if DROPIN.exists() else "(yok)"
-        return f"Mevcut TiHA NTP ayarı:\n{existing}"
+        if DROPIN.exists():
+            return f"Mevcut TiHA NTP ayarı ({DROPIN}):\n\n{DROPIN.read_text(encoding='utf-8')}"
+        # Dosya yoksa kullanıcıyı şaşırtacak "(yok)" yerine ne yapılacağı anlatılır.
+        return (
+            "TiHA özel NTP yapılandırması henüz yok. Bu adım şunları yapar:\n"
+            f"  • {DROPIN} içerisine NTP=... ve FallbackNTP=... yazar\n"
+            "  • saat dilimini Europe/Istanbul (varsayılan) olarak ayarlar\n"
+            "  • timedatectl set-ntp true + systemd-timesyncd restart"
+        )
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
@@ -92,7 +99,7 @@ class TimeSyncModule(Module):
             details=f"Dosya: {DROPIN}\n\n{status}",
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         try:
             DROPIN.unlink(missing_ok=True)
         except OSError:

@@ -1,22 +1,40 @@
-"""Modül 2 — Her açılışta parola temizliği.
+"""Modül 2 (wizard 3. adım) — Her açılışta parola temizliği.
 
 **Ne yapar?**
-Tahta her açıldığında, ``etapadmin`` **dışındaki** tüm gerçek kullanıcıların
-parolalarını rastgele yeni bir değere çeviren bir *systemd* servisi kurar.
+Tahta her açıldığında, ``etapadmin`` dışındaki **tüm** gerçek kullanıcıların
+(standart olarak ``ogretmen`` ve ``ogrenci``, ve varsa TiHA Modül 4'ün
+oluşturduğu tek tek öğretmen/yedek hesapları) parolalarını kriptografik
+olarak güvenli rastgele bir değere çeviren bir *systemd oneshot* servisi
+kurar. Servis her sistem açılışında bir kez çalışır.
 
 **Neden gerekir?**
-İmajlanmış tahta okula dağıtıldıktan sonra dahi, bir kullanıcı ekrana
-parola yazarak oturum açmaya çalışırsa, bu parola sınıftaki öğrenciler
-tarafından görülüp öğrenilebilir. Her açılışta parolayı bozarak bu yol
-kapatılır — kullanıcılar yalnızca OTP/QR/USB gibi parolasız yollarla
-oturum açabilir.
+Sınıfın 65" dokunmatik ekranında öğretmenin parolayı parmağıyla yazdığı
+her an, arkadaki öğrenciler parolayı görür. Hatta ilk tanımlama anında
+EBA-QR akışı kullanıcıdan parola isteyince bu ifşa mutlaka yaşanır.
+TiHA bu yüzden **hiçbir parolanın kalıcı olmasına izin vermez**:
 
-**Geri al.** Servis devre dışı bırakılır, ilgili dosyalar kaldırılır.
-Daha önce atanmış rastgele parolalar KENDİLİĞİNDEN eski hâline dönmez;
-gerekirse yeni parola manuel atanmalıdır.
+- ``ogretmen`` (standart ortak öğretmen hesabı) parolası her açılışta
+  rastgele bir değerle ezilir — öğretmen bu parolayı bilmez, bilemez,
+  dolayısıyla tahtaya yalnızca EBA-QR, OTP veya USB bellek ile girer.
+- ``ogrenci`` (standart ortak öğrenci hesabı) için de aynı kural geçerli:
+  parolalı giriş imkânsız.
+- Modül 4'te **her öğretmene özel** hesaplar oluşturulursa (ör.
+  ``ayse.yilmaz``, ``ogretmen01`` …) onlar da aynı temizliğe dahil edilir;
+  girişleri yalnızca OTP kodu ile olur.
+- ``etapadmin`` bu işlemin DIŞINDADIR; yönetici bakım erişimi korunur.
+
+**Geri al (tam restore).**
+- Açılış servisi ve script dosyası silinir.
+- *Ek olarak*, TiHA oturumları sırasında sistemde **standart dışı**
+  (``etapadmin``/``ogretmen``/``ogrenci`` dışında kalan) kullanıcı hesabı
+  varsa bunlar listelenip **kullanıcıdan onay alınarak** ``userdel -r`` ile
+  sistemden silinir — ev dizinleri ve posta kuyruklarıyla birlikte.
+  Böylece açılış temizlik servisi kapatıldığında atıl hesap bırakılmaz.
 """
 
 from __future__ import annotations
+
+import pwd
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
@@ -25,11 +43,20 @@ from ..core.utils import run_cmd
 
 log = get_logger(__name__)
 
+# Kalıcı ayrıcalıklı kullanıcılar — silmeye ASLA dahil edilmez.
+PROTECTED_USERS = {"etapadmin", "root"}
+# "Standart" dağıtım hesapları — bilerek dokunmayız.
+STANDARD_USERS = {"ogretmen", "ogrenci"}
+
 
 SCRIPT_CONTENT = """#!/bin/bash
 # TiHA — her açılışta genel kullanıcıların parolalarını rastgele atar.
-# Öğrencilerin ekrana parola yazarak oturum açmasını engellemek içindir.
-# Yalnızca UID 1000-59999 aralığı ve etapadmin hariç.
+# Sınıfta öğrencinin ekrana bakarak parola öğrenmesini engellemek için.
+# Kurallar:
+#  * etapadmin (yerel yönetici) ASLA değişmez.
+#  * UID 1000-59999 aralığındaki diğer tüm kullanıcılar rastgele parola
+#    alır ve hesap kilitlenir (-L). Oturum açmak için yalnızca
+#    EBA-QR / OTP / USB yolları açıktır.
 set -euo pipefail
 log() { logger -t tiha-boot-wipe "$*"; }
 while IFS=: read -r user _ uid _ _ _ _; do
@@ -58,25 +85,48 @@ WantedBy=multi-user.target
 """
 
 
+def _human_users() -> list[str]:
+    return [p.pw_name for p in pwd.getpwall() if 1000 <= p.pw_uid < 60000]
+
+
+def extra_users() -> list[str]:
+    """Standart dağıtım dışı (etapadmin/ogretmen/ogrenci harici) kullanıcılar."""
+    keep = PROTECTED_USERS | STANDARD_USERS
+    return sorted(u for u in _human_users() if u not in keep)
+
+
 class BootPasswordWipeModule(Module):
     id = "m02_boot_password_wipe"
     title = "Her açılışta parola temizliği"
     rationale = (
-        "Tahta her yeniden başladığında, etapadmin dışındaki tüm hesapların "
-        "parolalarını rastgele bir değere çevirecek bir sistem servisi kurar. "
-        "Bu sayede ekranda görülen bir parola bir sonraki açılışta geçersiz "
-        "hâle gelir ve öğrenciler tarafından öğrenilen parolalar kullanılamaz."
+        "Tahta her yeniden başladığında, etapadmin dışındaki hesapların "
+        "(standart ogretmen ve ogrenci hesapları + Modül 4'te oluşturulan "
+        "kişisel öğretmen hesapları) parolalarını otomatik olarak "
+        "rastgele değere çeviren sistem servisi kurar. Böylece ekranda "
+        "görülen ya da sızdırılan hiçbir parola bir sonraki açılışta "
+        "işe yaramaz; öğretmen yalnızca EBA-QR, OTP ya da USB bellek ile "
+        "oturum açabilir."
     )
 
     def preview(self) -> str:
         existing = BOOT_WIPE_SERVICE.exists()
-        return (
-            "Kurulum zaten mevcut; yeniden uygulamak güncelleme yapar."
-            if existing
-            else "Script ve systemd servis dosyası kurulacak, servis etkinleştirilecek."
+        extras = extra_users()
+        lines = [
+            "Bu adım ekleyeceği servis her boot'ta parolaları şu şekilde atar:",
+            "  • ogretmen  → rastgele 40 karakter (kilitli)",
+            "  • ogrenci   → rastgele 40 karakter (kilitli)",
+            "  • etapadmin → dokunulmaz (yönetici erişimi korunur)",
+        ]
+        if extras:
+            lines.append(f"  • Ayrıca şu ek hesaplar da dahil: {', '.join(extras)}")
+        lines.append("")
+        lines.append(
+            "Durum: " + ("servis zaten kurulu — yeniden yazılacak." if existing
+                         else "servis kurulacak ve etkinleştirilecek.")
         )
+        return "\n".join(lines)
 
-    def apply(self, params: dict | None = None) -> ApplyResult:
+    def apply(self, params=None, progress=None) -> ApplyResult:
         try:
             BOOT_WIPE_SCRIPT.write_text(SCRIPT_CONTENT, encoding="utf-8")
             BOOT_WIPE_SCRIPT.chmod(0o750)
@@ -94,11 +144,36 @@ class BootPasswordWipeModule(Module):
             "Açılışta parola temizleme servisi kuruldu ve etkinleştirildi.",
             details=(
                 f"Script: {BOOT_WIPE_SCRIPT}\nServis: {BOOT_WIPE_SERVICE}\n"
-                "Bir sonraki açılıştan itibaren aktif olacaktır."
+                "Servis bir sonraki açılıştan itibaren her boot'ta bir kez çalışır."
             ),
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def pre_undo_prompt(self, data: dict) -> dict | None:
+        """Eğer sistemde standart dışı kullanıcı varsa UI'dan onay iste."""
+        extras = extra_users()
+        if not extras:
+            return None
+        lines = "\n".join(f"    • {u}" for u in extras)
+        return {
+            "title": "Ek kullanıcı hesapları da silinsin mi?",
+            "message": (
+                "Sistemde etapadmin/ogretmen/ogrenci dışında şu kullanıcı "
+                "hesapları var:\n\n"
+                f"{lines}\n\n"
+                "Açılış parola temizleme servisi kaldırılacak. Ek hesaplar "
+                "sistemde kalırsa yerel parolayla girilemediği için atıl "
+                "kalır. Bu ek hesapları ev dizinleri ve kayıtlarıyla "
+                "birlikte tamamen silmemi ister misiniz?\n\n"
+                "• EVET → hesaplar 'userdel -r' ile silinir (geri alınamaz).\n"
+                "• HAYIR → yalnızca açılış servisi kaldırılır, hesaplar kalır."
+            ),
+            "yes_params": {"remove_extras": True, "extras": extras},
+            "no_params": {"remove_extras": False},
+        }
+
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
+        """Servisi kaldırır; ``params['remove_extras']`` ise listede verilen
+        ek hesapları (standart dışı) tamamen siler."""
         run_cmd(["systemctl", "disable", "--now", BOOT_WIPE_SERVICE.name])
         for path in (BOOT_WIPE_SERVICE, BOOT_WIPE_SCRIPT):
             try:
@@ -106,4 +181,20 @@ class BootPasswordWipeModule(Module):
             except OSError as exc:
                 log.warning("Silinemedi %s: %s", path, exc)
         run_cmd(["systemctl", "daemon-reload"])
-        return ApplyResult(True, "Açılış parola temizleme servisi kaldırıldı.")
+
+        params = params or {}
+        removed: list[str] = []
+        if params.get("remove_extras"):
+            for user in params.get("extras", []) or extra_users():
+                if user in (PROTECTED_USERS | STANDARD_USERS):
+                    continue
+                res = run_cmd(["userdel", "-r", "-f", user])
+                if res.ok:
+                    removed.append(user)
+                else:
+                    log.warning("userdel başarısız %s: %s", user, res.stderr.strip())
+
+        msg = "Açılış parola temizleme servisi kaldırıldı."
+        if removed:
+            msg += f" Ayrıca şu ek hesaplar ve ev dizinleri silindi: {', '.join(removed)}."
+        return ApplyResult(True, msg)

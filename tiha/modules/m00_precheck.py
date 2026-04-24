@@ -142,5 +142,5 @@ class PrecheckModule(Module):
         log.info("Ön kontrol: %s", summary)
         return ApplyResult(success=success, summary=summary, details=details)
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         return ApplyResult(True, "Bu adım yalnızca okur; geri alma gerekmez.")

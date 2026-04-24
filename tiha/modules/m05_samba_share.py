@@ -57,9 +57,16 @@ class SambaShareModule(Module):
     title = "Samba dosya paylaşımı"
     streams_output = True
     rationale = (
-        "Teknik bakım ekibinin SMB protokolüyle tahtadaki dosyalara "
-        f"ulaşabilmesi için Samba kurar ve tahtanın kök dizinini (/) [{SHARE_NAME}] "
-        "adıyla tam yetkili bir paylaşım olarak sunar."
+        "SSH ile komut satırı üzerinden dosya aktarmak pratik değildir — "
+        "özellikle grafiksel bir dosya gezgininden sürükle-bırak yapmak "
+        "istediğinizde. Bu adım Samba kurar ve tahtanın kök dizinini (/) "
+        f"[{SHARE_NAME}] adıyla, tam yetkili bir paylaşım olarak sunar. "
+        "Windows'tan \\\\<tahta-ip>\\root, Linux/Nautilus'tan "
+        f"smb://<tahta-ip>/{SHARE_NAME} yazarak içerisindeki dosyalara "
+        "kolayca erişir, güncelleme dosyalarınızı yerleştirir veya "
+        "günlükleri alabilirsiniz. SSH'ın yaptığını tamamlayıcı bir dosya "
+        "erişim kanalıdır; yine ağ güvenliği (VLAN/güvenlik duvarı) ile "
+        "yönetim istasyonlarına sınırlanmalıdır."
     )
 
     def preview(self) -> str:
@@ -159,7 +166,7 @@ class SambaShareModule(Module):
             },
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
         was_installed_before = bool(data.get("was_installed_before", True))
         dropin_existed_before = bool(data.get("dropin_existed_before", False))

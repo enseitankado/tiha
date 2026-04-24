@@ -49,9 +49,15 @@ class SSHServerModule(Module):
     title = "SSH sunucusu (root girişi)"
     streams_output = True
     rationale = (
-        "Teknik bakım ekibi tahtaya uzaktan erişebilsin diye SSH sunucusunu "
-        "kurar ve root kullanıcısının uzaktan oturum açabilmesine izin verir. "
-        "Apt çıktısı aşağıda canlı olarak görünür."
+        "Tahta sınıfa indikten sonra her bir cihazın başına gidip fiziksel "
+        "erişimle bakım yapmak pratik değildir. Bu adım, teknik destek "
+        "ekibinin ağdaki bir yönetim istasyonundan komut satırıyla tahtaya "
+        "bağlanıp sorun giderme, yapılandırma güncelleme ve günlük "
+        "inceleme yapabilmesi için SSH sunucusunu kurar. Root girişi, "
+        "sistemin her yerine dokunabilen bir bakım hesabı gerektiği için "
+        "açık bırakılır — erişim, ağ tarafından (güvenlik duvarı, VLAN) "
+        "yönetim istasyonlarıyla sınırlanmalıdır. Apt çıktısı aşağıda "
+        "canlı olarak akar."
     )
 
     def preview(self) -> str:
@@ -122,7 +128,7 @@ class SSHServerModule(Module):
             },
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
         was_installed_before = bool(data.get("was_installed_before", True))
         dropin_existed_before = bool(data.get("dropin_existed_before", False))

@@ -149,20 +149,39 @@ class HostnameModule(Module):
     id = "m08_hostname"
     title = "Benzersiz hostname stratejisi"
     rationale = (
-        "Aynı imajdan çıkan tahtalar aynı hostname'e sahip olursa ağda isim "
-        "çakışması yaşanır. Bu adım, imaj hostname'ini şablon bir değerle "
-        "(varsayılan 'etap-image') sabitler, /etc/hosts'u da eşitler "
-        "(aksi hâlde sudo/pkexec her çağrıda ~10 sn gecikir) ve her "
-        "tahtanın ilk açılışında kablolu MAC'inden otomatik benzersiz "
-        "isim üreten bir servis kurar."
+        "Her tahtaya ağda benzersiz bir isim (hostname) lâzım. Aynı imajdan "
+        "çıkan onlarca tahta aynı isimle ağa katılırsa DHCP/DNS, merkezi "
+        "log sunucusu ve Ahenk/yönetim araçları karışır; kim kimdir ayırt "
+        "edilemez. Bu adım iki katmanlı bir strateji kurar:\n\n"
+        "1) İMAJ AŞAMASINDA: hostname geçici olarak 'etap-image' (ya da "
+        "sizin seçtiğiniz şablon) yapılır; /etc/hosts da eşzamanlı "
+        "güncellenir (aksi hâlde 'sudo' her çağrıda ~10 sn DNS timeout'una "
+        "takılır, sistem sürünür).\n\n"
+        "2) HER KLON AÇILDIĞINDA: ilk boot'ta çalışan bir 'oneshot' "
+        "servisi, kablolu NIC'in MAC adresinin son 6 hanesinden üreterek "
+        "'etap-ab12cd' gibi tahtaya özgü bir hostname atar, /etc/hosts'u "
+        "da yeni isme eşitler. Servis bir işaret dosyası bırakarak bir "
+        "daha çalışmaz."
     )
 
     def preview(self) -> str:
-        return (
-            f"Mevcut hostname: {_current_hostname()}\n"
-            "Bu adım: hostname'i şablona çevirir + /etc/hosts'u eşitler + "
-            "first-boot servisi kurar."
-        )
+        current = _current_hostname()
+        service_exists = FIRST_BOOT_SERVICE.exists()
+        lines = [
+            f"Mevcut hostname          : {current}",
+            f"First-boot servisi       : {'kurulu' if service_exists else 'yok'}",
+            "",
+            "Bu adım uygulandığında:",
+            "  1) Hostname 'etap-image' (ya da sizin girdiğiniz şablon) olur.",
+            "  2) /etc/hosts içindeki 127.0.1.1 satırı yeni isme eşitlenir.",
+            "  3) tiha-first-boot-hostname.service kurulur ve etkinleştirilir.",
+            "",
+            "Klonlanmış tahta açıldığında:",
+            "  • Servis çalışır, MAC'ten 'etap-XXXXXX' üretir.",
+            "  • hostname ve /etc/hosts yeni isme göre ayarlanır.",
+            "  • Servis bir daha çalışmaz (sentinel dosyasıyla kilitlenir).",
+        ]
+        return "\n".join(lines)
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
@@ -210,7 +229,7 @@ class HostnameModule(Module):
             data={"previous_hostname": previous_hostname},
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
         previous = data.get("previous_hostname", "")
 

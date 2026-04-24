@@ -361,6 +361,27 @@ class ModulePage(Gtk.Box):
         if kind == "password":
             entry.set_visibility(False)
             entry.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+            if field.get("show_toggle", True):
+                # Entry sağına göz düğmesi: tıklanınca parolayı göster/gizle.
+                entry.set_icon_from_icon_name(
+                    Gtk.EntryIconPosition.SECONDARY,
+                    "view-reveal-symbolic",
+                )
+                entry.set_icon_tooltip_text(
+                    Gtk.EntryIconPosition.SECONDARY,
+                    "Parolayı göster / gizle",
+                )
+                entry.set_icon_activatable(Gtk.EntryIconPosition.SECONDARY, True)
+
+                def on_icon_press(_entry, _pos, _event, e=entry):
+                    visible = not e.get_visibility()
+                    e.set_visibility(visible)
+                    e.set_icon_from_icon_name(
+                        Gtk.EntryIconPosition.SECONDARY,
+                        "view-conceal-symbolic" if visible else "view-reveal-symbolic",
+                    )
+
+                entry.connect("icon-press", on_icon_press)
         if kind == "number":
             entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
         return entry
@@ -523,8 +544,31 @@ class ModulePage(Gtk.Box):
         if not entry:
             self._show_result(ApplyResult(False, "Geri alınacak kayıt bulunamadı."))
             return
+
+        # Modül geri alma öncesi bir onay istiyor mu?
+        undo_params: dict | None = None
+        prompt = self.module.pre_undo_prompt(entry.data)
+        if prompt:
+            dlg = Gtk.MessageDialog(
+                transient_for=self.get_toplevel(),
+                modal=True,
+                destroy_with_parent=True,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text=prompt.get("title", "Onay"),
+            )
+            dlg.format_secondary_text(prompt.get("message", ""))
+            response = dlg.run()
+            dlg.destroy()
+            if response == Gtk.ResponseType.YES:
+                undo_params = prompt.get("yes_params", {})
+            elif response == Gtk.ResponseType.NO:
+                undo_params = prompt.get("no_params", {})
+            else:
+                return  # İptal
+
         try:
-            u_result = self.module.undo(entry.data)
+            u_result = self.module.undo(entry.data, undo_params)
         except Exception as exc:
             u_result = ApplyResult(False, f"Geri alma sırasında hata: {exc}")
         if u_result.success:

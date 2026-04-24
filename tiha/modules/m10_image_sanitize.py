@@ -1,35 +1,48 @@
-"""Modül 10 — İmaj için sanitizasyon (son adım).
+"""Modül 10 (wizard 11. adım) — İmaj için sanitizasyon (son adım).
 
-**Ne yapar?**
-İmajlanan tahtanın her hedef makinede temiz çalışması için şunları siler:
+**İş akışındaki yeri**
 
-- ``/etc/machine-id`` ve ``/var/lib/dbus/machine-id`` (ilk açılışta yeniden
-  üretilmesi için boşaltılır)
-- SSH sunucusunun host anahtarları (``/etc/ssh/ssh_host_*``)
-- ``/etc/NetworkManager/system-connections/`` altındaki tüm ağ bağlantı
-  profilleri. Bu klasörde WiFi SSID + parolası, Ethernet için statik IP/
-  DNS/gateway ayarları, her bağlantının benzersiz UUID'si ve varsa MAC
-  filtreleri tutulur. İmajla aynen kopyalanırsa tüm tahtalarda aynı UUID
-  yüzünden NetworkManager karışır, bir tahtanın WiFi parolası diğerlerine
-  sızar ve yanlış ağ ayarları devralınır.
-- eta-register ve ahenk önbellek/log'ları
-- Sistem günlük dosyalarının içeriği
-- ``/home/etapadmin`` altında kabuk geçmişi
-- ``/root`` ve ``/home/etapadmin`` altındaki önbellek dizinleri
-- ``/var/tmp`` ve ``/tmp`` içerikleri
+Normal iş akışımız şöyledir:
 
-Ayrıca SSH host anahtarlarını ilk açılışta yeniden üretecek bir oneshot
-servis kurar.
+    1. Boş tahtaya Pardus ETAP temiz kurulum yapılır.
+    2. etapadmin'e geçilir, TiHA bu komutla başlatılır.
+    3. 1–10 arası adımlar sırasıyla uygulanır.
+    4. Tahta bir kez yeniden başlatılır (servisler test edilir).
+    5. İmaj alma aracıyla (Clonezilla vb.) diskin imajı alınır.
+    6. Bu imaj diğer tahtalara uygulanır.
 
-**Neden gerekir?**
-Bu adım çalıştırılmadan alınan imajda tüm klonlarda aynı ``machine-id``,
-aynı SSH host key'i, aynı NetworkManager UUID'si olur — hem gizlilik hem de
-ağ kararlılığı açısından ciddi sorunlar çıkarır. ``eta-register`` özelinde
-ise: bu modül, kayıt işlemi yapılmış bir imajın yeni tahtada *temiz* olarak
-yeniden kayıt olmasını mümkün kılar.
+**Neden bu adıma ihtiyaç var?**
+1. ve 4. adımlar arasında sistemde tekil kalması gereken çok sayıda
+**benzersiz kimlik** oluşur:
 
-**Geri al.** Bu işlemin pratik olarak geri alınması anlamlı değildir;
-modül ``undo_supported = False`` olarak işaretlenmiştir.
+* ``/etc/machine-id`` — kurulum anında üretilir; systemd, journald,
+  gnome-keyring, Cinnamon oturum yönetimi, Ahenk gibi bileşenler buna
+  bağlıdır. İmajla aynen kopyalanırsa **tüm klonlar aynı machine-id'ye**
+  sahip olur; journald logları karışır, bazı servisler yanlış davranır.
+* ``/etc/ssh/ssh_host_*`` — ``sshd`` ilk başlayışında üretilmiş olan
+  ed25519/rsa/ecdsa host anahtarları. İmaj klonlarında aynıysa ağdaki
+  istemciler "hey, bu 50 farklı tahta aslında aynı sunucu mu?" diye
+  şüphelenip bağlantıyı reddeder (known_hosts çakışması). Ayrıca bir
+  tahtanın özel anahtarı ele geçirilirse 50 tahta birden ifşa olur.
+* ``/etc/NetworkManager/system-connections/*`` — kurulum sırasında test
+  için WiFi parolası girdiyseniz burada düz yazılı kalır. Her klona
+  aynı parola gider. Ayrıca her bağlantının UUID'si de aynıdır.
+* ``/var/log/**`` — kurulum günleri, TiHA'nın kendi çalıştırma logları,
+  başarısız sudo denemeleri; **gizlilik** açısından silinmeli.
+* ``~etapadmin/.bash_history`` — TiHA bootstrap komutunuz, elle yazdığınız
+  komutlar; klonlarda kalmamalı.
+* ``/tmp``, ``/var/tmp`` — geçici indirme/açma artıkları.
+
+**Sonuç:** Bu adım olmadan alınan bir imaj **fonksiyonel** çalışır
+gibi görünür ama gerçek operasyonda adlandırma, güvenlik, SSH ve
+NetworkManager çakışmaları yaratır. İmaj öncesi son adım olarak zorunludur.
+
+Bu adım ayrıca SSH host anahtarlarını bir sonraki açılışta **her klonun
+kendi anahtar setini** üretmesi için bir oneshot servis bırakır.
+
+**Geri al.** Sanitizasyonun geri alınması anlamlı değildir (silinen
+benzersiz kimliği üretemeyiz). Modül ``undo_supported = False``
+olarak işaretlenmiştir.
 """
 
 from __future__ import annotations
@@ -98,24 +111,34 @@ class ImageSanitizeModule(Module):
     id = "m10_image_sanitize"
     title = "İmaj için sanitize"
     rationale = (
-        "İmaj alınmadan önce çalıştırılır. Tüm tahtalarda aynı kalırsa sorun "
-        "çıkaracak tekil bilgileri (machine-id, SSH host anahtarları, "
-        "NetworkManager bağlantı dosyaları, log içerikleri, kabuk geçmişi, "
-        "önbellekler) temizler ve ilk açılışta SSH anahtarlarının yeniden "
-        "üretilmesini sağlayan bir servis kurar."
+        "İmaj almadan önce çalıştırılan ZORUNLU son adım. Aksi hâlde "
+        "imajdan çıkan bütün tahtalarda aynı machine-id, aynı SSH host "
+        "anahtarı, aynı NetworkManager UUID'si ve aynı kabuk geçmişi "
+        "olur — bu bir işe yaramaz mı? Yarar — ama funcationel görünse de "
+        "journald'ın dağınık davranışı, ssh bağlantılarının 'host key "
+        "değişti' uyarısı, WiFi parolasının 50 tahtaya aynen sızması "
+        "gibi sonuçlar doğar. TiHA burada tüm bu tekil kimlikleri "
+        "temizler, ilk boot'ta kendi benzersiz SSH anahtarını üreten bir "
+        "servis bırakır; ve tahtanın artık imaj alınmaya hazır olmasını "
+        "sağlar. Geri alma anlamlı değildir — silinen kimliği üretemeyiz."
     )
     undo_supported = False
 
     def preview(self) -> str:
         return (
-            "Aşağıdakiler temizlenecek:\n"
+            "Bu SON adımdır. Uygulandıktan sonra tahta imaj alınmaya hazırdır.\n"
+            "Aşağıdakiler temizlenecek (geri alınamaz):\n\n"
             "  • /etc/machine-id ve /var/lib/dbus/machine-id\n"
+            "      → ilk boot'ta systemd yeniden üretir\n"
             "  • /etc/ssh/ssh_host_*\n"
-            "  • /etc/NetworkManager/system-connections/*\n"
-            "  • /var/log/** dosya içerikleri (dosya adları korunur)\n"
-            "  • ~etapadmin/.bash_history, önbellekler\n"
+            "      → first-boot servisi her tahtaya özel anahtar üretir\n"
+            "  • /etc/NetworkManager/system-connections/* (WiFi parolaları dahil)\n"
+            "  • /var/log/** içerikleri (dosya adları korunur, sadece boşaltılır)\n"
+            "  • ~etapadmin/.bash_history ve önbellek klasörleri\n"
             "  • eta-register / ahenk cache'leri\n"
-            "  • /tmp ve /var/tmp içerikleri"
+            "  • /tmp ve /var/tmp içerikleri\n\n"
+            "Uyguladıktan sonra: tahtayı bir kez yeniden başlatmanıza gerek yok; "
+            "doğrudan imaj alma aracınızı (Clonezilla vb.) çalıştırabilirsiniz."
         )
 
     def apply(self, params: dict | None = None) -> ApplyResult:
@@ -179,5 +202,5 @@ class ImageSanitizeModule(Module):
             details="\n".join(f"• {o}" for o in ops),
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         return ApplyResult(False, "Bu işlem geri alınamaz.")

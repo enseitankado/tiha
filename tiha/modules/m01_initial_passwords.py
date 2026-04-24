@@ -73,16 +73,26 @@ class InitialPasswordsModule(Module):
             return "Kilitlenecek ek kullanıcı bulunamadı."
         return "Rastgele parolanacak ve kilitlenecek kullanıcılar:\n  • " + "\n  • ".join(users)
 
-    def apply(self, params: dict | None = None) -> ApplyResult:
+    def apply(self, params: dict | None = None, progress=None) -> ApplyResult:
         params = params or {}
-        root_pw = params.get("root_password")
-        admin_pw = params.get("admin_password")
+        root_pw = params.get("root_password", "")
+        root_pw_conf = params.get("root_password_confirm", "")
+        admin_pw = params.get("admin_password", "")
+        admin_pw_conf = params.get("admin_password_confirm", "")
 
         if not root_pw or not admin_pw:
             return ApplyResult(
                 success=False,
                 summary="Eksik giriş: root ve etapadmin parolaları girilmeli.",
             )
+
+        # Çift onay doğrulaması
+        if root_pw != root_pw_conf:
+            return ApplyResult(False, "root parolası ile doğrulaması eşleşmiyor.")
+        if admin_pw != admin_pw_conf:
+            return ApplyResult(False, "etapadmin parolası ile doğrulaması eşleşmiyor.")
+        if len(root_pw) < 8 or len(admin_pw) < 8:
+            return ApplyResult(False, "Her iki parola da en az 8 karakter olmalıdır.")
 
         state = self.ensure_state_dir()
         # Önce /etc/shadow yedeği al — undo için tek başına yeterli.
@@ -122,7 +132,7 @@ class InitialPasswordsModule(Module):
             details="\n".join(details_lines),
         )
 
-    def undo(self, data: dict) -> ApplyResult:
+    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         state = self.state_dir
         backup = state / "shadow"
         if not backup.exists():
