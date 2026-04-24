@@ -42,6 +42,9 @@ def _render(ntp: str, fallback: str) -> str:
 class TimeSyncModule(Module):
     id = "m07_time_sync"
     title = "Zaman senkronizasyonu (NTP)"
+    apply_hint = (
+        "NTP sunucuları ve saat dilimi ayarlanır."
+    )
     rationale = (
         "Tahta saatinin doğru olmasını sağlar. TOTP (öğretmen OTP kodları) "
         "zaman tabanlıdır: tahtanın saati sunucu saatinden 30 saniyeden fazla "

@@ -69,6 +69,10 @@ def _wired_mac() -> str | None:
 class PrecheckModule(Module):
     id = "m00_precheck"
     title = "Donanım ön kontrol"
+    auto_apply = True
+    apply_hint = (
+        "Kontroller salt-okunurdur; sistemde değişiklik yapılmaz."
+    )
     undo_supported = False
     streams_output = False
     rationale = (

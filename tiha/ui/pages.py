@@ -24,9 +24,9 @@ from . import params as params_schema
 log = get_logger(__name__)
 
 
-# Yardımcı: içerik sayfasının ortak çerçeve marjları (kompakt)
-_PAGE_MARGIN = 16
-_ROW_SPACING = 8
+# Yardımcı: içerik sayfasının ortak çerçeve marjları (kompakt ama nefes alan)
+_PAGE_MARGIN = 18
+_ROW_SPACING = 14
 _LONG_TEXT_HEIGHT = 180  # uzun metin kutularının sabit yüksekliği
 
 
@@ -52,8 +52,13 @@ def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = F
 
 def _scrolled_textview(text: str, *, monospace: bool = False,
                        editable: bool = False, height: int = _LONG_TEXT_HEIGHT,
-                       css_class: str | None = None) -> Gtk.ScrolledWindow:
-    """Kaydırma çubuklu, salt-okunur metin kutusu."""
+                       css_class: str | None = None,
+                       wrap: bool = True) -> Gtk.ScrolledWindow:
+    """Kaydırma çubuklu, salt-okunur metin kutusu.
+
+    ``wrap=False`` tablo benzeri hizalanmış (monospace) içerik için
+    yatay kaydırmaya izin verir; sütunlar hizalı kalır.
+    """
     tv = Gtk.TextView()
     tv.set_editable(editable)
     tv.set_cursor_visible(editable)
@@ -61,7 +66,9 @@ def _scrolled_textview(text: str, *, monospace: bool = False,
         tv.set_monospace(True)
     if css_class:
         tv.get_style_context().add_class(css_class)
-    tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+    tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR if wrap else Gtk.WrapMode.NONE)
+    tv.set_pixels_above_lines(2)
+    tv.set_pixels_below_lines(2)
     tv.get_buffer().set_text(text)
     scroller = Gtk.ScrolledWindow()
     scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
@@ -219,7 +226,10 @@ class ModulePage(Gtk.Box):
         self._fields: dict[str, Gtk.Widget] = {}
         self._stream_buffer: Gtk.TextBuffer | None = None
         self._applying: bool = False
+        self._auto_applied: bool = False
         self._build()
+        # Önceki oturumda uygulanmış mı? Varsa "geri al" banner'ı göster.
+        self._show_previous_apply_banner()
 
     # ------------------------------------------------------------------
     # UI kurulumu
@@ -238,11 +248,19 @@ class ModulePage(Gtk.Box):
         except Exception as exc:
             log.warning("preview başarısız %s: %s", self.module.id, exc)
         if preview_text:
-            # Uzun önizleme → scroll'lu metin kutusu; kısa önizleme → label
+            # Uzun önizleme → scroll'lu metin kutusu; kısa önizleme → label.
+            # Tablo görünümlü (çok satırlı, hizalanmış) önizlemelerde
+            # satır kırmıyoruz; yatay kaydırma çubuğu alsın.
+            is_tabular = "  ─" in preview_text or "KULLANICI" in preview_text
             if preview_text.count("\n") > 6 or len(preview_text) > 500:
-                self.pack_start(_scrolled_textview(preview_text, monospace=True,
-                                                   height=120, css_class="tiha-preview"),
-                                False, False, 0)
+                self.pack_start(
+                    _scrolled_textview(
+                        preview_text, monospace=True,
+                        height=180, css_class="tiha-preview",
+                        wrap=not is_tabular,
+                    ),
+                    False, False, 0,
+                )
             else:
                 p = _wrapping_label(preview_text, klass="tiha-preview", selectable=True)
                 self.pack_start(p, False, False, 0)
@@ -268,8 +286,44 @@ class ModulePage(Gtk.Box):
         self.pack_start(self.stream_scroll, False, False, 0)
 
         # Sonuç kutusu
-        self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.pack_start(self.result_holder, False, False, 0)
+
+    def _show_previous_apply_banner(self) -> None:
+        """Journal'da önceki bir oturumdan kalma 'applied' kayıt varsa
+        bilgilendirme + 'Bu adımı geri al' düğmesi göster. Sihirbaz'ın
+        mevcut oturumunda yeni bir uygulama yapılınca result_holder
+        temizlenip bu banner gider."""
+        entry = self.journal.last_applied(self.module.id)
+        if entry is None:
+            return
+        # Mevcut oturumda eklenmişse banner gösterme — normal akış zaten
+        # _show_result üzerinden yönetiliyor.
+        if entry.timestamp >= self.journal.session_start:
+            return
+
+        from datetime import datetime
+        try:
+            when = datetime.fromisoformat(entry.timestamp).strftime("%d.%m.%Y %H:%M")
+        except (TypeError, ValueError):
+            when = entry.timestamp
+
+        banner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        banner.get_style_context().add_class("tiha-prev-banner")
+        banner.pack_start(
+            _wrapping_label(
+                f"ℹ Bu adım daha önce ({when}) bir TiHA oturumunda uygulanmış.\n"
+                f"Son durum: {entry.summary}",
+                selectable=True,
+            ),
+            False, False, 0,
+        )
+        if self.module.undo_supported:
+            undo_btn = Gtk.Button(label="Bu adımı geri al")
+            undo_btn.get_style_context().add_class("destructive-action")
+            undo_btn.connect("clicked", lambda *_: self._undo_clicked())
+            banner.pack_start(undo_btn, False, False, 0)
+        self.result_holder.pack_start(banner, False, False, 0)
 
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
         grid = Gtk.Grid(column_spacing=12, row_spacing=6)
@@ -612,12 +666,26 @@ class SummaryPage(Gtk.Box):
         self.refresh()
 
     def refresh(self) -> None:
+        """Yalnızca mevcut oturumun kayıtlarını, her modül için tek kart
+        olarak listeler. ``undone`` kayıtlar net-sıfır etki oldukları için
+        gösterilmez; ``applied`` için Geri al, ``failed`` için ayırt edici
+        renk gösterilir."""
         for child in self.entries_box.get_children():
             self.entries_box.remove(child)
 
-        entries = self.journal.all()
+        latest = self.journal.latest_per_module_in_session()
+        # Modülün sihirbaz içindeki sırasıyla dizelim
+        order = {m.id: idx for idx, m in enumerate(self.modules.values())}
+        entries = sorted(
+            (e for e in latest.values() if e.status != "undone"),
+            key=lambda e: order.get(e.module_id, 99),
+        )
+
         if not entries:
-            empty = _wrapping_label("Henüz uygulanmış bir adım yok.", klass="tiha-rationale")
+            empty = _wrapping_label(
+                "Bu oturumda henüz uygulanmış (ya da geri alınmamış) bir adım yok.",
+                klass="tiha-rationale",
+            )
             self.entries_box.pack_start(empty, False, False, 0)
             self.entries_box.show_all()
             return
@@ -625,20 +693,18 @@ class SummaryPage(Gtk.Box):
         status_map = {
             "applied": ("✓", "tiha-summary-ok"),
             "failed":  ("✗", "tiha-summary-fail"),
-            "undone":  ("↶", "tiha-summary-undone"),
         }
 
         for entry in entries:
             sym, css = status_map.get(entry.status, ("?", ""))
 
-            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             card.get_style_context().add_class("tiha-summary-card")
             if css:
                 card.get_style_context().add_class(css)
-            card.set_margin_bottom(2)
+            card.set_margin_bottom(4)
 
-            # Üst satır: [sembol]  [başlık]  ........  [Geri al]
-            head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
 
             sym_lbl = Gtk.Label(label=sym, xalign=0)
             sym_lbl.get_style_context().add_class("tiha-summary-sym")
@@ -659,11 +725,10 @@ class SummaryPage(Gtk.Box):
 
             card.pack_start(head, False, False, 0)
 
-            # Alt satır: girintili özet metni (uzarsa düzgün kırılır)
             if entry.summary:
                 desc = _wrapping_label(entry.summary, klass="tiha-summary-desc")
-                desc.set_margin_start(32)   # sembol sütununun altından girinti
-                desc.set_margin_end(4)
+                desc.set_margin_start(34)
+                desc.set_margin_end(6)
                 card.pack_start(desc, False, False, 0)
 
             self.entries_box.pack_start(card, False, False, 0)

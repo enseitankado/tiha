@@ -15,7 +15,7 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from ..core import board
 from ..core.logger import get_logger
@@ -118,18 +118,24 @@ class TiHAWindow(Gtk.Window):
         right.pack_start(self.content_scroll, True, True, 0)
 
         # Aksiyon çubuğu
-        self.action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.action_bar.get_style_context().add_class("tiha-actions")
 
         self.btn_back = Gtk.Button(label="◀  Geri")
         self.btn_back.connect("clicked", self._on_back)
         self.action_bar.pack_start(self.btn_back, False, False, 0)
 
-        spacer = Gtk.Box()
-        self.action_bar.pack_start(spacer, True, True, 0)
+        # Apply öncesi ne olacağını anlatan ipucu
+        self.lbl_apply_hint = Gtk.Label(label="", xalign=1)
+        self.lbl_apply_hint.set_line_wrap(True)
+        self.lbl_apply_hint.set_max_width_chars(80)
+        self.lbl_apply_hint.set_no_show_all(True)
+        self.lbl_apply_hint.get_style_context().add_class("tiha-apply-hint")
+        self.action_bar.pack_start(self.lbl_apply_hint, True, True, 0)
 
         self.btn_apply = Gtk.Button(label="Uygula")
         self.btn_apply.get_style_context().add_class("suggested-action")
+        self.btn_apply.set_no_show_all(True)
         self.btn_apply.connect("clicked", self._on_apply)
         self.action_bar.pack_start(self.btn_apply, False, False, 0)
 
@@ -181,7 +187,8 @@ class TiHAWindow(Gtk.Window):
     def _show_page_index(self, index: int, *, sync_sidebar: bool = True) -> None:
         index = max(0, min(index, len(self.pages) - 1))
         self.current_index = index
-        self.stack.set_visible_child(self.pages[index])
+        page = self.pages[index]
+        self.stack.set_visible_child(page)
 
         # İçerik scroll'u en başa çek
         adj = self.content_scroll.get_vadjustment()
@@ -189,7 +196,6 @@ class TiHAWindow(Gtk.Window):
             adj.set_value(0)
 
         # Özet sayfası her açılışta güncellensin
-        page = self.pages[index]
         if isinstance(page, SummaryPage):
             page.refresh()
 
@@ -198,9 +204,18 @@ class TiHAWindow(Gtk.Window):
             if row is not None:
                 self.sidebar_list.select_row(row)
 
-        # Aksiyon çubuğu görünürlüğü
+        # Aksiyon çubuğu görünürlüğü (Apply ve ipucu yalnızca manuel modüllerde)
         is_module = isinstance(page, ModulePage)
-        self.btn_apply.set_visible(is_module)
+        show_apply = is_module and not page.module.auto_apply
+        self.btn_apply.set_visible(show_apply)
+        hint = page.module.apply_hint if is_module else ""
+        self.lbl_apply_hint.set_text(f"Uygulandığında: {hint}" if (show_apply and hint) else "")
+        self.lbl_apply_hint.set_visible(bool(show_apply and hint))
+
+        # Auto-apply modüllerini (salt-okunur) bir kez kendi tetikle
+        if is_module and page.module.auto_apply and not page._auto_applied:
+            page._auto_applied = True
+            GLib.idle_add(page.run_apply)
 
         # Özet sayfasında "Bitir" gösterelim
         is_last = index >= len(self.pages) - 1

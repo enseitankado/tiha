@@ -50,6 +50,12 @@ class Module:
     undo_supported: bool = True
     # ``True`` ise UI uygula sırasında canlı çıktı alanı açar.
     streams_output: bool = False
+    # ``True`` ise UI sayfaya gelindiğinde Apply'ı otomatik tetikler ve
+    # Apply düğmesini gizler (salt-okuma modüller için uygundur).
+    auto_apply: bool = False
+    # Apply düğmesinin yanında gösterilecek tek cümlelik ipucu metni
+    # ("Uygulandığında: ..." şeklinde okunur). Boşsa ipucu gizlenir.
+    apply_hint: str = ""
 
     # --- Yardımcılar ------------------------------------------------------
 

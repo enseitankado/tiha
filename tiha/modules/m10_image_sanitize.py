@@ -110,6 +110,9 @@ def _rm(path: Path) -> bool:
 class ImageSanitizeModule(Module):
     id = "m10_image_sanitize"
     title = "İmaj için sanitize"
+    apply_hint = (
+        "Son adım: tekil kimlikler ve izler temizlenir — imaj alınabilir."
+    )
     rationale = (
         "İmaj almadan önce çalıştırılan ZORUNLU son adım. Aksi hâlde "
         "imajdan çıkan bütün tahtalarda aynı machine-id, aynı SSH host "

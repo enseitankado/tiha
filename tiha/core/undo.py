@@ -47,6 +47,9 @@ class Journal:
 
     def __init__(self, path: Path = JOURNAL_FILE) -> None:
         self.path = path
+        # Oturum başlangıç zamanı — özet/UI'da "yalnızca mevcut oturum"
+        # filtresi için kullanılır. Dosya kalıcıdır, oturum RAM'de tutulur.
+        self.session_start = datetime.now(timezone.utc).isoformat()
         self._entries: list[JournalEntry] = []
         self._load()
 
@@ -97,3 +100,14 @@ class Journal:
 
     def all(self) -> list[JournalEntry]:
         return list(self._entries)
+
+    def current_session_entries(self) -> list[JournalEntry]:
+        """Yalnızca bu uygulama oturumunda eklenmiş kayıtları döndürür."""
+        return [e for e in self._entries if e.timestamp >= self.session_start]
+
+    def latest_per_module_in_session(self) -> dict[str, JournalEntry]:
+        """Mevcut oturumda her modül id'si için en son kaydı döndürür."""
+        latest: dict[str, JournalEntry] = {}
+        for entry in self.current_session_entries():
+            latest[entry.module_id] = entry
+        return latest

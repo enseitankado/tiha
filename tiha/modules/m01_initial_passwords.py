@@ -60,6 +60,9 @@ def _unlock_user(user: str) -> bool:
 class InitialPasswordsModule(Module):
     id = "m01_initial_passwords"
     title = "Başlangıç parolaları"
+    apply_hint = (
+        "Belirlenen root/etapadmin parolaları uygulanır; diğer hesaplar kilitlenir."
+    )
     rationale = (
         "Sınıf ortamında dokunmatik ekrana parola yazmanın ifşa riski nedeniyle "
         "genel kullanıcıların (ogrenci, ogretmen vb.) parolalarını güvenli "

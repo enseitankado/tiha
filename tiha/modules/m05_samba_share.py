@@ -55,6 +55,9 @@ def _is_package_installed(name: str) -> bool:
 class SambaShareModule(Module):
     id = "m05_samba_share"
     title = "Samba dosya paylaşımı"
+    apply_hint = (
+        "Samba kurulur, kök '/' paylaşımı açılır."
+    )
     streams_output = True
     rationale = (
         "SSH ile komut satırı üzerinden dosya aktarmak pratik değildir — "

@@ -155,3 +155,24 @@ textview.tiha-placeholder text selection {
     opacity: 0.75;
     font-size: 9pt;
 }
+
+/* Apply düğmesi yanındaki ipucu */
+.tiha-apply-hint {
+    opacity: 0.7;
+    font-size: 9pt;
+    font-style: italic;
+    padding-right: 8px;
+}
+
+/* "Daha önce uygulandı" banner'ı */
+.tiha-prev-banner {
+    background: alpha(#0d6efd, 0.10);
+    border-left: 3px solid alpha(#0d6efd, 0.70);
+    border-radius: 4px;
+    padding: 10px 12px;
+}
+
+/* Açıklama etiketlerinde satır arası boşluk */
+label.tiha-rationale {
+    margin-bottom: 4px;
+}

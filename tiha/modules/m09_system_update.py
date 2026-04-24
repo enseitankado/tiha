@@ -25,6 +25,9 @@ log = get_logger(__name__)
 class SystemUpdateModule(Module):
     id = "m09_system_update"
     title = "Sistem güncellemesi (apt)"
+    apply_hint = (
+        "apt update + full-upgrade + temizlik çalışır (uzun sürer)."
+    )
     rationale = (
         "Tahtadaki paketleri en güncel sürüme çıkarır. Güvenlik yamaları ve "
         "kararlılık düzeltmeleri için imaj öncesi tavsiye edilir. Çıktı "

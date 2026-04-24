@@ -118,6 +118,9 @@ def _user_exists(username: str) -> bool:
 class BootPasswordWipeModule(Module):
     id = "m02_boot_password_wipe"
     title = "Her açılışta parola temizliği"
+    apply_hint = (
+        "Açılışta parola temizleme servisi kurulur ve etkinleştirilir."
+    )
     rationale = (
         "Tahta her yeniden başladığında, etapadmin dışındaki hesapların "
         "(standart ogretmen ve ogrenci hesapları + Modül 4'te oluşturulan "
@@ -133,54 +136,55 @@ class BootPasswordWipeModule(Module):
         otp_users = _otp_registered_users()
         extras = extra_users()
 
-        lines: list[str] = []
-        lines.append("Bu servis her sistem açılışında parolaları şöyle atar:")
-        lines.append("  • etapadmin → DOKUNULMAZ (yönetici erişimi korunur).")
-        lines.append("")
-        lines.append("Etkilenecek kullanıcılar (UID ≥ 1000, etapadmin hariç):")
+        # Tablo: KULLANICI | TÜR | OTP | NOT
+        rows: list[tuple[str, str, str, str]] = []
+        rows.append(("etapadmin", "yönetici", "—", "DOKUNULMAZ (bakım erişimi korunur)"))
 
-        # Standart ortak hesaplar — kişisel kullanım için DEĞİLdir;
-        # EBA-QR ile giriş yapan öğretmen kendi kişisel hesabını yaratır.
-        # Bu iki hesaba OTP atanmaması olağandır.
         for u in ("ogretmen", "ogrenci"):
             if _user_exists(u):
-                lines.append(
-                    f"  •  {u:<20} [standart ortak hesap] — "
-                    "parolayla girişi kapatılır; bu hesap zaten kişisel "
-                    "kullanım için değildir (EBA-QR yeni kişisel hesap yaratır)."
-                )
+                rows.append((u, "ortak", "—", "parolasız kalır (kişisel kullanım için değil)"))
 
-        # Kişisel / ek hesaplar — bunların OTP'si olmak ZORUNDA
-        personal_missing_otp: list[str] = []
+        missing: list[str] = []
         for u in extras:
             if u in otp_users:
-                lines.append(
-                    f"  ✓  {u:<20} [kişisel] — "
-                    "OTP anahtarı var, giriş EBA-QR / OTP / USB ile mümkün."
-                )
+                rows.append((u, "kişisel", "✓ var", "EBA-QR / OTP / USB ile girer"))
             else:
-                lines.append(
-                    f"  ⚠  {u:<20} [kişisel] — "
-                    "OTP anahtarı YOK! Bu servis aktifken tahtaya giremez."
-                )
-                personal_missing_otp.append(u)
+                rows.append((u, "kişisel", "⚠ yok", "bu servis aktifken tahtaya GİREMEZ"))
+                missing.append(u)
 
-        if personal_missing_otp:
-            lines.append("")
-            lines.append(
-                f"⚠ DİKKAT: {len(personal_missing_otp)} kişisel hesabın OTP "
-                f"anahtarı yok ({', '.join(personal_missing_otp)}). "
-                "Bu servisi etkinleştirmeden ÖNCE (ya da hemen sonra) "
-                "Modül 4'te bu kullanıcılar için OTP üretin — yoksa "
-                "tahtaya hiçbir şekilde giremezler."
+        # Kolon genişliklerini dinamik hesapla
+        user_w = max(10, max(len(r[0]) for r in rows) + 1)
+        kind_w = 10
+        otp_w  = 8
+
+        def fmt(u: str, k: str, o: str, n: str) -> str:
+            return f"  {u:<{user_w}} {k:<{kind_w}} {o:<{otp_w}} {n}"
+
+        out: list[str] = []
+        out.append("Bu servis her açılışta, etapadmin dışındaki hesapların parolasını rastgele değere çevirir.")
+        out.append("")
+        out.append(fmt("KULLANICI", "TÜR", "OTP", "DURUM / NOT"))
+        out.append("  " + "─" * (user_w + kind_w + otp_w + 32))
+        for r in rows:
+            out.append(fmt(*r))
+
+        if missing:
+            out.append("")
+            out.append(
+                f"⚠ DİKKAT — {len(missing)} kişisel hesabın OTP anahtarı yok: "
+                + ", ".join(missing)
+            )
+            out.append(
+                "   Bu servisi etkinleştirdikten sonra tahtaya GİREMEZLER. "
+                "Modül 4'e gidip onlar için de OTP üretin."
             )
 
-        lines.append("")
-        lines.append(
-            "Durum: " + ("servis zaten kurulu — yeniden yazılacak."
+        out.append("")
+        out.append(
+            "Durum: " + ("servis zaten kurulu, yeniden yazılacak."
                          if existing else "servis kurulacak ve etkinleştirilecek.")
         )
-        return "\n".join(lines)
+        return "\n".join(out)
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         try:

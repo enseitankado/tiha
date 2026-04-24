@@ -148,6 +148,9 @@ WantedBy=multi-user.target
 class HostnameModule(Module):
     id = "m08_hostname"
     title = "Benzersiz hostname stratejisi"
+    apply_hint = (
+        "İmaj hostname'i uygulanır; ilk-açılış servisi kurulur."
+    )
     rationale = (
         "Her tahtaya ağda benzersiz bir isim (hostname) lâzım. Aynı imajdan "
         "çıkan onlarca tahta aynı isimle ağa katılırsa DHCP/DNS, merkezi "

@@ -62,6 +62,9 @@ def _render(host: str, port: int, proto: str) -> str:
 class RemoteSyslogModule(Module):
     id = "m06_remote_syslog"
     title = "Merkezi log iletimi"
+    apply_hint = (
+        "Merkezi sunucuya log iletimi etkinleştirilir."
+    )
     rationale = (
         "Tahtanın tüm sistem günlüklerini (oturum açma denemeleri, servis "
         "hataları, cron, ağ olayları) ağdaki merkezi bir rsyslog "

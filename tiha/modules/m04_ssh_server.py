@@ -47,6 +47,9 @@ def _is_package_installed(name: str) -> bool:
 class SSHServerModule(Module):
     id = "m04_ssh_server"
     title = "SSH sunucusu (root girişi)"
+    apply_hint = (
+        "openssh-server kurulur, uzak root girişi açılır."
+    )
     streams_output = True
     rationale = (
         "Tahta sınıfa indikten sonra her bir cihazın başına gidip fiziksel "

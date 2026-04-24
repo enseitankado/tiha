@@ -109,6 +109,9 @@ def otpauth_url(username: str, secret: str) -> str:
 class OTPSecretsModule(Module):
     id = "m03_otp_secrets"
     title = "Öğretmen OTP anahtarları"
+    apply_hint = (
+        "Listedeki ve yedek hesaplar için OTP anahtarları üretilir."
+    )
     rationale = (
         "Her öğretmen için 6 haneli tek kullanımlık kod (TOTP) üreten "
         "güvenlik anahtarı oluşturur. Öğretmen bu anahtarı kendi "
