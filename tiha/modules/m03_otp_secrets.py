@@ -11,7 +11,7 @@ hesap (``ogretmen01``, ``ogretmen02`` …) oluşturur.
 
 **enseitankado/eta-otp-cli entegrasyonu**
 Üretim, yerleşim ve JSON formatı `enseitankado/eta-otp-cli
-<https://github.com/enseitankado/etap/tree/main/arastirmalarim/eta-otp-cli>`_
+<https://github.com/enseitankado/etap/tree/main/eta-otp-cli>`_
 aracıyla bire bir uyumludur. ``bootstrap.sh`` aracın dosyalarını
 (``otp-cli.py``, ``toplu-kullanici-olustur.py``) indirir ve
 ``TIHA_ETA_OTP_CLI_DIR`` ortam değişkeninde açar. Bu adım varsayılan
