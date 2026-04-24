@@ -77,33 +77,51 @@ def _scrolled_textview(text: str, *, monospace: bool = False,
 # =========================================================================
 
 
-_WELCOME_BODY = (
-    "Bu sihirbaz, sınıfta kullanacağınız Pardus ETAP etkileşimli tahtayı "
-    "imaj (disk klonu) alınmaya hazır hâle getirir. Aynı imajdan onlarca "
-    "tahtaya kurulum yapılacağı senaryo için tasarlanmıştır.\n\n"
-    "Neden ihtiyaç var?\n"
-    "  • 65\" dokunmatik ekranda kullanıcı parolası yazılırken, sınıftaki "
-    "öğrenciler ekrana baktığından parola ifşa olabiliyor. Bu tahtada "
-    "öğretmenin öğrenci olmayan bir ortamda parola oluşturması "
-    "senaryosunu kabul etmiyoruz.\n"
-    "  • Aynı imajdan çıkan tahtaların merkezi kayıt, hostname, SSH "
-    "anahtarı ve NetworkManager profili gibi tekil bilgileri çakışırsa "
-    "ciddi sorunlar oluşuyor (ör. eta-register kayıt çakışması).\n\n"
-    "TiHA ne yapacak?\n"
-    "  1. Donanımın imajlamaya uygunluğunu denetler.\n"
-    "  2. Parolaları güvenli rastgele değerle kilitler; root/etapadmin "
-    "için sizin tanımlayacağınız güçlü parolaları uygular.\n"
-    "  3. Her açılışta genel kullanıcı parolalarını temizleyen bir sistem "
-    "servisi kurar (ifşayı etkisizleştirir).\n"
-    "  4. Öğretmenler için OTP (6 haneli kod) anahtarları üretir.\n"
-    "  5. SSH, Samba, merkezi log iletimi, NTP ve benzersiz hostname "
-    "yapılandırır.\n"
-    "  6. Sistemi günceller.\n"
-    "  7. Son adımda imaj için hijyen (machine-id, SSH host anahtarları, "
-    "NetworkManager profilleri, loglar ve önbellekler) uygular.\n\n"
-    "Her adımda ne yaptığımızı ve neden yaptığımızı göreceksiniz; "
-    "onayınızı aldıktan sonra uygularız ve sonucu ekranda paylaşırız. "
-    "Gerektiğinde adımları geri de alabilirsiniz."
+_WELCOME_INTRO = (
+    "TiHA, Pardus ETAP etkileşimli tahtanızı imaj alınmaya hazırlayan bir "
+    "sihirbazdır. Asıl amacı, sınıf ortamında öğretmenin parolasının "
+    "öğrencilere ifşa olmasını tamamen ortadan kaldırmak ve imajdan "
+    "dağıtılan onlarca tahtanın sahada sağlıklı çalışmasını sağlamaktır."
+)
+
+_WELCOME_SCENARIO = (
+    "Sorun şu: Öğretmen tahtada ilk kez EBA-QR ile oturum açtığında sistem "
+    "kendisinden yerel bir parola tanımlamasını ister. Öğretmen bu parolayı "
+    "65 inç dokunmatik ekranda parmağıyla yazmak zorundadır. Sınıfta "
+    "arkadaki sıralarda oturan öğrenciler ekranda basılan tuşları rahatça "
+    "görür, parolayı ezberler ve sonraki derslerde öğretmen hesabıyla "
+    "tahtayı açıp yetkisiz işlemler yapabilir. Öğretmenin okul saatleri "
+    "dışında, öğrencisiz bir ortamda parola oluşturmasını şart koşmak "
+    "pratik değildir ve sürdürülebilir bir çözüm değildir. Bu senaryo "
+    "kesin olarak reddedilmiştir."
+)
+
+_WELCOME_SOLUTION = (
+    "Çözüm: TiHA, öğretmenin parolasını ekrandan yazmak zorunda kaldığı "
+    "TÜM yolları kapatır. İmaj uygulandıktan sonra öğretmen, yerel "
+    "parolayla giriş yapamaz — her açılışta parolalar otomatik olarak "
+    "rastgele bir değere çevrilir ve kullanılamaz hâle gelir.\n\n"
+    "Öğretmenin oturum açmak için artık yalnızca üç yolu vardır:\n"
+    "  1.  EBA-QR  — Telefonundaki EBA uygulamasından kare kodu "
+    "okutarak (sunucu provizyonlu kimlik doğrulama).\n"
+    "  2.  OTP (6 haneli PIN kodu)  — Google Authenticator benzeri bir "
+    "uygulamadan üretilen, 30 saniyede bir değişen kod.\n"
+    "  3.  USB bellek  — Öğretmene özel hazırlanmış kişisel USB anahtarı."
+)
+
+_WELCOME_EXTRAS = (
+    "Bu asıl amacın yanında, imajdan dağıtılan tahtaların ağda sorun "
+    "çıkarmaması için birkaç hazırlık daha yapılır: eta-register tekil "
+    "kimlik çakışması önlemi, benzersiz hostname üretimi, NTP "
+    "senkronizasyonu (OTP kodlarının doğrulanabilmesi için saat kritik "
+    "önemdedir), SSH ve Samba ile uzaktan bakım erişimi, merkezi log "
+    "iletimi, sistem güncellemesi ve imaj alınmadan önce gerekli hijyen."
+)
+
+_WELCOME_FLOW = (
+    "Sihirbaz 11 adımdan oluşur. Her adımda ne yapıldığı ve neden "
+    "gerektiği size açıklanır, onayınız alınır, sonuç ekranda paylaşılır "
+    "ve gerektiğinde adımlar geri alınabilir."
 )
 
 
@@ -115,21 +133,54 @@ class WelcomePage(Gtk.Box):
         self.set_margin_start(_PAGE_MARGIN + 4)
         self.set_margin_end(_PAGE_MARGIN + 4)
 
+        def add_section_title(text: str) -> None:
+            lbl = _wrapping_label(text, klass="tiha-section-title")
+            self.pack_start(lbl, False, False, 0)
+
+        def add_paragraph(text: str) -> None:
+            lbl = _wrapping_label(text)
+            lbl.set_max_width_chars(110)
+            self.pack_start(lbl, False, False, 0)
+
+        def add_separator() -> None:
+            self.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL),
+                            False, False, 6)
+
+        # Başlık
         heading = _wrapping_label("Hoş geldiniz", klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
-        # Açıklama metni (kompakt)
-        desc = _wrapping_label(_WELCOME_BODY)
-        desc.set_max_width_chars(100)
-        self.pack_start(desc, False, False, 0)
+        # Tanıtım
+        add_paragraph(_WELCOME_INTRO)
+        add_separator()
 
-        # Ayırıcı
-        self.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 6)
+        # Asıl senaryo — kutu içinde vurgulu
+        add_section_title("Neden ihtiyaç var?")
+        scenario_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        scenario_box.get_style_context().add_class("tiha-scenario")
+        scenario_lbl = _wrapping_label(_WELCOME_SCENARIO)
+        scenario_lbl.set_max_width_chars(110)
+        scenario_box.pack_start(scenario_lbl, False, False, 0)
+        self.pack_start(scenario_box, False, False, 0)
+
+        # Çözüm
+        add_section_title("TiHA'nın asıl çözümü")
+        solution_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        solution_box.get_style_context().add_class("tiha-solution")
+        solution_lbl = _wrapping_label(_WELCOME_SOLUTION)
+        solution_lbl.set_max_width_chars(110)
+        solution_box.pack_start(solution_lbl, False, False, 0)
+        self.pack_start(solution_box, False, False, 0)
+
+        # Ek hazırlıklar
+        add_section_title("Yan hazırlıklar")
+        add_paragraph(_WELCOME_EXTRAS)
+
+        add_paragraph(_WELCOME_FLOW)
+        add_separator()
 
         # Tahta bilgisi kartı
-        card_title = _wrapping_label("Tespit edilen tahta", klass="tiha-heading")
-        self.pack_start(card_title, False, False, 0)
-
+        add_section_title("Tespit edilen tahta")
         card = Gtk.Grid(column_spacing=18, row_spacing=4)
         card.get_style_context().add_class("tiha-board-card")
         for i, (key, value) in enumerate(board_info.as_rows()):
@@ -527,20 +578,52 @@ class SummaryPage(Gtk.Box):
             self.entries_box.show_all()
             return
 
+        status_map = {
+            "applied": ("✓", "tiha-summary-ok"),
+            "failed":  ("✗", "tiha-summary-fail"),
+            "undone":  ("↶", "tiha-summary-undone"),
+        }
+
         for entry in entries:
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            status_sym = {"applied": "✓", "failed": "✗", "undone": "↶"}.get(entry.status, "?")
-            lbl = _wrapping_label(f"{status_sym}  {entry.title}  —  {entry.summary}")
-            row.pack_start(lbl, True, True, 0)
+            sym, css = status_map.get(entry.status, ("?", ""))
+
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            card.get_style_context().add_class("tiha-summary-card")
+            if css:
+                card.get_style_context().add_class(css)
+            card.set_margin_bottom(2)
+
+            # Üst satır: [sembol]  [başlık]  ........  [Geri al]
+            head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+            sym_lbl = Gtk.Label(label=sym, xalign=0)
+            sym_lbl.get_style_context().add_class("tiha-summary-sym")
+            sym_lbl.set_size_request(24, -1)
+            head.pack_start(sym_lbl, False, False, 0)
+
+            title_lbl = _wrapping_label(entry.title)
+            title_lbl.get_style_context().add_class("tiha-summary-title")
+            head.pack_start(title_lbl, True, True, 0)
 
             module = self.modules.get(entry.module_id)
             if entry.status == "applied" and module and module.undo_supported:
                 btn = Gtk.Button(label="Geri al")
                 btn.get_style_context().add_class("destructive-action")
+                btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._make_undo_handler(module, entry))
-                row.pack_start(btn, False, False, 0)
+                head.pack_end(btn, False, False, 0)
 
-            self.entries_box.pack_start(row, False, False, 0)
+            card.pack_start(head, False, False, 0)
+
+            # Alt satır: girintili özet metni (uzarsa düzgün kırılır)
+            if entry.summary:
+                desc = _wrapping_label(entry.summary, klass="tiha-summary-desc")
+                desc.set_margin_start(32)   # sembol sütununun altından girinti
+                desc.set_margin_end(4)
+                card.pack_start(desc, False, False, 0)
+
+            self.entries_box.pack_start(card, False, False, 0)
+
         self.entries_box.show_all()
 
     def _make_undo_handler(self, module: Module, entry: JournalEntry):
