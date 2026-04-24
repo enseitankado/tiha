@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import sys
 
+from . import __version__
+from .core import console
 from .core.logger import get_logger
 from .core.paths import ensure_runtime_dirs
 from .core.privilege import require_root_and_admin
@@ -19,13 +21,19 @@ def main() -> int:
     ok, reason = require_root_and_admin()
     if not ok:
         _emergency_dialog(reason)
+        # Terminale de sade bir hata bas (debug değil)
+        print(f"\n  HATA: {reason}\n", file=sys.stderr)
         return 2
 
     try:
         ensure_runtime_dirs()
     except OSError as exc:
         _emergency_dialog(f"Çalışma dizini oluşturulamadı: {exc}")
+        print(f"\n  HATA: {exc}\n", file=sys.stderr)
         return 3
+
+    console.banner_open("TiHA — Tahta İmaj Hazırlık Aracı", f"v{__version__}")
+    console.info("Sihirbaz penceresi açılıyor…")
 
     # GTK yüklemeleri main fonksiyonun içinde — import sırasında ekran
     # (DISPLAY) yoksa uygulamanın çökmemesi için.
@@ -39,6 +47,8 @@ def main() -> int:
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
     Gtk.main()
+
+    console.banner_close("Sihirbaz kapatıldı.")
     return 0
 
 

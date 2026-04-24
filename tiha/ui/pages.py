@@ -15,6 +15,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
+from ..core import console
 from ..core.board import BoardInfo
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
@@ -482,6 +483,8 @@ class ModulePage(Gtk.Box):
             return
 
         self._applying = True
+        # Terminale profesyonel satır (son kullanıcı içindir)
+        console.step(self.module.title)
         for child in self.result_holder.get_children():
             self.result_holder.remove(child)
 
@@ -543,6 +546,11 @@ class ModulePage(Gtk.Box):
         # Modülün bıraktığı undo verisini günceye taşı
         entry.data = dict(result.data) if isinstance(result.data, dict) else {}
         self.journal.record(entry)
+        # Terminale profesyonel sonuç satırı
+        if result.success:
+            console.ok(result.summary)
+        else:
+            console.fail(result.summary)
         self._show_result(result)
         return False
 
@@ -627,6 +635,9 @@ class ModulePage(Gtk.Box):
             u_result = ApplyResult(False, f"Geri alma sırasında hata: {exc}")
         if u_result.success:
             self.journal.mark_undone(self.module.id)
+            console.undone(self.module.title)
+        else:
+            console.fail(u_result.summary)
         self._show_result(u_result)
 
 
