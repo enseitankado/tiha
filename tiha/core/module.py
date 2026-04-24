@@ -56,6 +56,9 @@ class Module:
     # Apply düğmesinin yanında gösterilecek tek cümlelik ipucu metni
     # ("Uygulandığında: ..." şeklinde okunur). Boşsa ipucu gizlenir.
     apply_hint: str = ""
+    # "Dosyaya kaydet" butonuna tıklandığında önerilen varsayılan dosya adı.
+    # Boş bırakılırsa UI ``tiha-<id>.txt`` gibi teknik bir ad üretir.
+    save_filename: str = ""
 
     # --- Yardımcılar ------------------------------------------------------
 

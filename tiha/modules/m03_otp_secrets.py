@@ -112,6 +112,7 @@ class OTPSecretsModule(Module):
     apply_hint = (
         "Listedeki ve yedek hesaplar için PIN anahtarları üretilir."
     )
+    save_filename = "ogretmen-pin-anahtarlari.txt"
     rationale = (
         "Her öğretmen için 6 haneli PIN kodu üreten güvenlik anahtarını "
         "imaj öncesinde toplu olarak oluşturur. Öğretmen anahtarı "

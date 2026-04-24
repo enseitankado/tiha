@@ -60,8 +60,8 @@ Sihirbaz bu adımları sırasıyla uygular. Her biri isteğe bağlıdır; ancak 
 | 2  | **Başlangıç parolaları**         | `root` ve `etapadmin` parolalarını ayarlar; genel hesapları rastgele parolayla kilitler. |
 | 3  | **Her açılışta parola temizliği**| Genel öğretmen/öğrenci hesaplarının parolasını her açılışta rastgele değere çeviren sistem servisini kurar. Yönetici `etapadmin` hesabına **dokunulmaz**; teknik erişim korunur. |
 | 4  | **Öğretmen PIN anahtarları**     | Öğretmen listenizden 6 haneli PIN kodu üreten güvenlik anahtarlarını imaj öncesinde toplu üretir. Bu adım şart, çünkü Pardus ETAP'ın kendi PIN üretici uygulaması kullanıcının yerel parolasını ister; TiHA bu parolaları sıfırladığı için öğretmen sahada kendi başına PIN kuramaz. |
-| 5  | **SSH sunucusu**                 | Tahtayla aynı ağa (`10.x.x.x`) bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. |
-| 6  | **Samba dosya paylaşımı**        | Tahtanın diskine, aynı ağdaki (`10.x.x.x`) bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. |
+| 5  | **SSH sunucusu**                 | Tahtayla aynı ağa bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. (Tahtalar ve kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır.) |
+| 6  | **Samba dosya paylaşımı**        | Tahtanın diskine aynı ağdaki bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. (Tahtalar ve AP'ler `10.x.x.x` aralığındadır.) |
 | 7  | **Merkezi log iletimi**          | Tahtanın günlüklerini ağdaki merkezi log sunucusuna iletir. |
 | 8  | **Zaman senkronizasyonu (NTP)**  | Saat dilimini ve yedek zaman sunucularını yapılandırır. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. |
 | 9  | **Benzersiz hostname stratejisi**| Her klonun ilk açılışta kendine özgü bir hostname almasını sağlar. |

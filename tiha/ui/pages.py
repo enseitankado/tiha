@@ -590,10 +590,10 @@ class ModulePage(Gtk.Box):
             btn_row.pack_start(copy_btn, False, False, 0)
 
             save_btn = Gtk.Button(label="Dosyaya kaydet…")
+            default_name = self.module.save_filename or f"tiha-{self.module.id}.txt"
             save_btn.connect(
                 "clicked",
-                lambda *_: self._save_to_file(result.copyable or "",
-                                              f"tiha-{self.module.id}.txt"),
+                lambda *_: self._save_to_file(result.copyable or "", default_name),
             )
             btn_row.pack_start(save_btn, False, False, 0)
             box.pack_start(btn_row, False, False, 0)
