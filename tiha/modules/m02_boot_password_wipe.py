@@ -34,11 +34,12 @@ TiHA bu yüzden **hiçbir parolanın kalıcı olmasına izin vermez**:
 
 from __future__ import annotations
 
+import json
 import pwd
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
-from ..core.paths import BOOT_WIPE_SCRIPT, BOOT_WIPE_SERVICE
+from ..core.paths import BOOT_WIPE_SCRIPT, BOOT_WIPE_SERVICE, OTP_SECRETS_FILE
 from ..core.utils import run_cmd
 
 log = get_logger(__name__)
@@ -47,6 +48,17 @@ log = get_logger(__name__)
 PROTECTED_USERS = {"etapadmin", "root"}
 # "Standart" dağıtım hesapları — bilerek dokunmayız.
 STANDARD_USERS = {"ogretmen", "ogrenci"}
+
+
+def _otp_registered_users() -> set[str]:
+    """``/etc/otp-secrets.json`` içinde OTP anahtarı kayıtlı olan kullanıcılar."""
+    if not OTP_SECRETS_FILE.exists():
+        return set()
+    try:
+        data = json.loads(OTP_SECRETS_FILE.read_text(encoding="utf-8"))
+        return set(data.keys()) if isinstance(data, dict) else set()
+    except (OSError, json.JSONDecodeError):
+        return set()
 
 
 SCRIPT_CONTENT = """#!/bin/bash
@@ -95,6 +107,14 @@ def extra_users() -> list[str]:
     return sorted(u for u in _human_users() if u not in keep)
 
 
+def _user_exists(username: str) -> bool:
+    try:
+        pwd.getpwnam(username)
+        return True
+    except KeyError:
+        return False
+
+
 class BootPasswordWipeModule(Module):
     id = "m02_boot_password_wipe"
     title = "Her açılışta parola temizliği"
@@ -110,19 +130,55 @@ class BootPasswordWipeModule(Module):
 
     def preview(self) -> str:
         existing = BOOT_WIPE_SERVICE.exists()
+        otp_users = _otp_registered_users()
         extras = extra_users()
-        lines = [
-            "Bu adım ekleyeceği servis her boot'ta parolaları şu şekilde atar:",
-            "  • ogretmen  → rastgele 40 karakter (kilitli)",
-            "  • ogrenci   → rastgele 40 karakter (kilitli)",
-            "  • etapadmin → dokunulmaz (yönetici erişimi korunur)",
-        ]
-        if extras:
-            lines.append(f"  • Ayrıca şu ek hesaplar da dahil: {', '.join(extras)}")
+
+        lines: list[str] = []
+        lines.append("Bu servis her sistem açılışında parolaları şöyle atar:")
+        lines.append("  • etapadmin → DOKUNULMAZ (yönetici erişimi korunur).")
+        lines.append("")
+        lines.append("Etkilenecek kullanıcılar (UID ≥ 1000, etapadmin hariç):")
+
+        # Standart ortak hesaplar — kişisel kullanım için DEĞİLdir;
+        # EBA-QR ile giriş yapan öğretmen kendi kişisel hesabını yaratır.
+        # Bu iki hesaba OTP atanmaması olağandır.
+        for u in ("ogretmen", "ogrenci"):
+            if _user_exists(u):
+                lines.append(
+                    f"  •  {u:<20} [standart ortak hesap] — "
+                    "parolayla girişi kapatılır; bu hesap zaten kişisel "
+                    "kullanım için değildir (EBA-QR yeni kişisel hesap yaratır)."
+                )
+
+        # Kişisel / ek hesaplar — bunların OTP'si olmak ZORUNDA
+        personal_missing_otp: list[str] = []
+        for u in extras:
+            if u in otp_users:
+                lines.append(
+                    f"  ✓  {u:<20} [kişisel] — "
+                    "OTP anahtarı var, giriş EBA-QR / OTP / USB ile mümkün."
+                )
+            else:
+                lines.append(
+                    f"  ⚠  {u:<20} [kişisel] — "
+                    "OTP anahtarı YOK! Bu servis aktifken tahtaya giremez."
+                )
+                personal_missing_otp.append(u)
+
+        if personal_missing_otp:
+            lines.append("")
+            lines.append(
+                f"⚠ DİKKAT: {len(personal_missing_otp)} kişisel hesabın OTP "
+                f"anahtarı yok ({', '.join(personal_missing_otp)}). "
+                "Bu servisi etkinleştirmeden ÖNCE (ya da hemen sonra) "
+                "Modül 4'te bu kullanıcılar için OTP üretin — yoksa "
+                "tahtaya hiçbir şekilde giremezler."
+            )
+
         lines.append("")
         lines.append(
-            "Durum: " + ("servis zaten kurulu — yeniden yazılacak." if existing
-                         else "servis kurulacak ve etkinleştirilecek.")
+            "Durum: " + ("servis zaten kurulu — yeniden yazılacak."
+                         if existing else "servis kurulacak ve etkinleştirilecek.")
         )
         return "\n".join(lines)
 

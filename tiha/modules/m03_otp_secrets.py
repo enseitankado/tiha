@@ -120,13 +120,53 @@ class OTPSecretsModule(Module):
     )
 
     def preview(self) -> str:
+        import pwd as _pwd
+
         existing = load_secrets()
-        if not existing:
-            return "Henüz kayıtlı OTP anahtarı yok — bu adım ilk defa çalışacak."
-        return (
-            "Hâlihazırda kayıtlı kullanıcılar (bu adım listeyi genişletir):\n  • "
-            + "\n  • ".join(sorted(existing))
+        # Sistemdeki kişisel hesaplar: UID 1000+, etapadmin/ogretmen/ogrenci hariç.
+        # ogretmen ve ogrenci standart ortak hesaplardır; onlara OTP üretmek
+        # genellikle anlamsızdır (kişisel kullanım için değiller).
+        standard_or_admin = {"etapadmin", "ogretmen", "ogrenci"}
+        personal_users = sorted(
+            p.pw_name for p in _pwd.getpwall()
+            if 1000 <= p.pw_uid < 60000 and p.pw_name not in standard_or_admin
         )
+        has_otp = [u for u in personal_users if u in existing]
+        missing_otp = [u for u in personal_users if u not in existing]
+        orphan_secrets = sorted(
+            u for u in existing
+            if u not in personal_users and u not in standard_or_admin
+        )
+
+        lines: list[str] = []
+        if has_otp:
+            lines.append("✓ OTP anahtarı KURULU kişisel hesaplar:")
+            lines.extend(f"    • {u}" for u in has_otp)
+        else:
+            lines.append("Henüz kişisel OTP anahtarı kayıtlı değil.")
+
+        if missing_otp:
+            lines.append("")
+            lines.append(
+                "⚠ Kişisel hesabı olan ama OTP anahtarı OLMAYAN kullanıcılar:"
+            )
+            lines.extend(f"    • {u}" for u in missing_otp)
+            lines.append("")
+            lines.append(
+                "Bu hesaplar Modül 3 aktifken tahtaya hiç giremeyecekler. "
+                "Anahtar üretmek için aşağıdaki metin kutusuna kullanıcı "
+                "adlarını (her satıra bir tane) veya AD SOYAD biçiminde "
+                "tam isimleri yazın."
+            )
+
+        if orphan_secrets:
+            lines.append("")
+            lines.append(
+                "ℹ Sistemde hesabı olmayan OTP kayıtları "
+                f"(hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
+            )
+
+        return "\n".join(lines) if lines else "Henüz hiç kişisel hesap yok."
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
