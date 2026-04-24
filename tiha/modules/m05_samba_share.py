@@ -60,16 +60,21 @@ class SambaShareModule(Module):
     )
     streams_output = True
     rationale = (
-        "SSH ile komut satırı üzerinden dosya aktarmak pratik değildir — "
-        "özellikle grafiksel bir dosya gezgininden sürükle-bırak yapmak "
-        "istediğinizde. Bu adım Samba kurar ve tahtanın kök dizinini (/) "
-        f"[{SHARE_NAME}] adıyla, tam yetkili bir paylaşım olarak sunar. "
-        "Windows'tan \\\\<tahta-ip>\\root, Linux/Nautilus'tan "
-        f"smb://<tahta-ip>/{SHARE_NAME} yazarak içerisindeki dosyalara "
-        "kolayca erişir, güncelleme dosyalarınızı yerleştirir veya "
-        "günlükleri alabilirsiniz. SSH'ın yaptığını tamamlayıcı bir dosya "
-        "erişim kanalıdır; yine ağ güvenliği (VLAN/güvenlik duvarı) ile "
-        "yönetim istasyonlarına sınırlanmalıdır."
+        "Bu adım, tahtanın tüm diskine ağ üzerinden dosya gezgininden "
+        "ulaşmanızı sağlar. Windows bilgisayarda \"Bilgisayarım\" "
+        "penceresinin adres çubuğuna yazmanız yeterlidir — sürükle-bırak "
+        "ile dosya taşırsınız.\n\n"
+        "Kısacası: bu tahtaya, başına gitmeden ya da USB belleğe dosya "
+        "yüklemek zorunda kalmadan; uzaktaki bilgisayarınızdan erişirsiniz. "
+        "Güncelleme dosyası bırakmak, öğrenci çalışmalarını almak, hata "
+        "günlüklerini kopyalamak için kullanışlıdır.\n\n"
+        "🌐 Tahtayla aynı ağda olmanız gerekir (genellikle `10.x.x.x` "
+        "MEB ağı). Farklı ağdan ulaşılamaz; bu bilinçli bir güvenlik "
+        "kısıtıdır.\n\n"
+        "Nasıl ulaşılır?\n"
+        "  • Windows Dosya Gezgini adres çubuğuna:  `\\\\<tahta-ip>\\root`\n"
+        f"  • Linux Dosya Gezgini adres çubuğuna:  `smb://<tahta-ip>/{SHARE_NAME}`\n"
+        "  • Ardından belirlediğiniz kullanıcı adı ve parolayı girin."
     )
 
     def preview(self) -> str:

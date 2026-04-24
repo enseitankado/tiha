@@ -65,7 +65,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "required": False,
             "default": "0",
             "min": 0,
-            "max": 50,
+            "max": 999,
             "step": 1,
             "help": "Sonradan okula atanacak öğretmenler için ogretmen01, ogretmen02 … biçiminde boş hesap.",
         },

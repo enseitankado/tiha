@@ -1,9 +1,9 @@
-"""Modül 3 (wizard 4. adım) — Öğretmen OTP anahtarlarını toplu hazırla.
+"""Modül 3 (wizard 4. adım) — Öğretmen PIN anahtarlarını toplu hazırla.
 
 **Ne yapar?**
 Girdiğiniz öğretmen ad-soyad listesinden her öğretmen için bir kullanıcı
 hesabı oluşturur (zaten varsa geçer), her hesaba kriptografik olarak
-güvenli bir TOTP (Time-based One-Time Password) ``BASE32`` anahtarı
+güvenli bir PIN kodu (zaman tabanlı TOTP) ``BASE32`` anahtarı
 atar ve bu anahtarları Pardus ETAP'ın PAM modülünün okuduğu
 ``/etc/otp-secrets.json`` dosyasına yazar. Ayrıca isteğe bağlı olarak,
 sonradan okula atanacak öğretmenler için belirlediğiniz sayıda yedek
@@ -16,11 +16,11 @@ dosya konumu ve şema (``{"kullanici":"BASE32"}``). İsterseniz
 görüntüleyebilirsiniz.
 
 **Neden gerekir?**
-Normalde öğretmen TOTP anahtarını tahtadaki ``eta-otp-lock`` uygulamasıyla
+Normalde öğretmen PIN anahtarını tahtadaki ``eta-otp-lock`` uygulamasıyla
 kendisi üretir; ancak uygulama açılmadan önce kullanıcının mevcut yerel
 parolasını girmesini ister. TiHA'nın 2. ve 3. adımları (parola kilidi +
 açılışta parola temizliği) bu yerel parolayı kasıtlı olarak geçersiz
-kıldığı için öğretmen, tahtadaki OTP üreticisini açamaz. Bu yüzden
+kıldığı için öğretmen, tahtadaki PIN üreticisini açamaz. Bu yüzden
 anahtarları imaj öncesinde merkezî olarak üretir, her öğretmene
 özel olarak teslim ederiz. Öğretmen anahtarını Google Authenticator
 (veya benzeri) uygulamaya eklediği andan itibaren dağıtılmış tüm
@@ -71,7 +71,7 @@ def create_user(username: str) -> bool:
     result = run_cmd(["useradd", "--create-home", "--shell", "/bin/bash", username])
     if not result.ok:
         log.error("Kullanıcı eklenemedi '%s': %s", username, result.stderr.strip())
-    # Parolayı rastgele yapıp hesap kilitlenir (OTP ile girilecek)
+    # Parolayı rastgele yapıp hesap kilitlenir (PIN kodu girilecek)
     run_cmd(["usermod", "-L", username])
     return result.ok
 
@@ -108,18 +108,27 @@ def otpauth_url(username: str, secret: str) -> str:
 
 class OTPSecretsModule(Module):
     id = "m03_otp_secrets"
-    title = "Öğretmen OTP anahtarları"
+    title = "Öğretmen PIN anahtarları"
     apply_hint = (
-        "Listedeki ve yedek hesaplar için OTP anahtarları üretilir."
+        "Listedeki ve yedek hesaplar için PIN anahtarları üretilir."
     )
     rationale = (
-        "Her öğretmen için 6 haneli tek kullanımlık kod (TOTP) üreten "
-        "güvenlik anahtarı oluşturur. Öğretmen bu anahtarı kendi "
+        "Her öğretmen için 6 haneli PIN kodu üreten güvenlik anahtarını "
+        "imaj öncesinde toplu olarak oluşturur. Öğretmen anahtarı "
         "Google Authenticator / Microsoft Authenticator / Authy benzeri "
-        "uygulamasına (QR okutarak ya da elle girerek) ekler ve bundan "
-        "böyle dağıtılmış tüm tahtalarda 6 haneli kodla oturum açar. "
-        "Dosya formatı ve secret üretimi enseitankado/eta-otp-cli ile "
-        "bire bir uyumludur."
+        "bir uygulamaya ekler ve tüm tahtalarda 30 saniyede bir değişen "
+        "6 haneli kodla giriş yapar.\n\n"
+        "Bu adım neden imaj öncesinde yapılıyor? Pardus ETAP'ın kendi "
+        "PIN üretici uygulaması, açılmadan önce kullanıcının yerel "
+        "parolasını ister. TiHA ise bir önceki adımda (her açılışta "
+        "parola temizliği) tüm yerel parolaları kasıtlı olarak rastgele "
+        "hâle getirir — bu, güvenlik için çok değerli ama öğretmenin "
+        "kendi PIN üreticisini sahada açmasını imkânsız kılar. Bu yüzden "
+        "anahtarları burada, imaj öncesinde üretip her öğretmene özel "
+        "olarak güvenli bir yolla (şifreli mesaj, gizli dağıtım listesi) "
+        "iletiyoruz.\n\n"
+        "Dosya formatı ve anahtar üretimi enseitankado/eta-otp-cli ile "
+        "birebir uyumludur."
     )
 
     def preview(self) -> str:
@@ -127,7 +136,7 @@ class OTPSecretsModule(Module):
 
         existing = load_secrets()
         # Sistemdeki kişisel hesaplar: UID 1000+, etapadmin/ogretmen/ogrenci hariç.
-        # ogretmen ve ogrenci standart ortak hesaplardır; onlara OTP üretmek
+        # ogretmen ve ogrenci standart ortak hesaplardır; onlara PIN üretmek
         # genellikle anlamsızdır (kişisel kullanım için değiller).
         standard_or_admin = {"etapadmin", "ogretmen", "ogrenci"}
         personal_users = sorted(
@@ -143,15 +152,15 @@ class OTPSecretsModule(Module):
 
         lines: list[str] = []
         if has_otp:
-            lines.append("✓ OTP anahtarı KURULU kişisel hesaplar:")
+            lines.append("✓ PIN anahtarı KURULU kişisel hesaplar:")
             lines.extend(f"    • {u}" for u in has_otp)
         else:
-            lines.append("Henüz kişisel OTP anahtarı kayıtlı değil.")
+            lines.append("Henüz kişisel PIN anahtarı kayıtlı değil.")
 
         if missing_otp:
             lines.append("")
             lines.append(
-                "⚠ Kişisel hesabı olan ama OTP anahtarı OLMAYAN kullanıcılar:"
+                "⚠ Kişisel hesabı olan ama PIN anahtarı OLMAYAN kullanıcılar:"
             )
             lines.extend(f"    • {u}" for u in missing_otp)
             lines.append("")
@@ -165,7 +174,7 @@ class OTPSecretsModule(Module):
         if orphan_secrets:
             lines.append("")
             lines.append(
-                "ℹ Sistemde hesabı olmayan OTP kayıtları "
+                "ℹ Sistemde hesabı olmayan PIN kayıtları "
                 f"(hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
             )
 
@@ -214,7 +223,7 @@ class OTPSecretsModule(Module):
         # Rapor — dokunmatik ekranda okunabilir ve panoya kopyalanabilir biçim
         report_lines = []
         report_lines.append("─" * 76)
-        report_lines.append(f"  {len(created)} öğretmen/yedek hesap için OTP anahtarı üretildi.")
+        report_lines.append(f"  {len(created)} öğretmen/yedek hesap için PIN anahtarı üretildi.")
         report_lines.append(f"  Dosya: {OTP_SECRETS_FILE}")
         report_lines.append(f"  Üretici: Issuer = \"{OTP_ISSUER}\", 6 hane, 30 sn periyot.")
         report_lines.append("─" * 76)
@@ -223,7 +232,7 @@ class OTPSecretsModule(Module):
             report_lines.append("")
             report_lines.append(f"[{idx:02d}]  {display}")
             report_lines.append(f"     Kullanıcı adı : {user}")
-            report_lines.append(f"     OTP anahtarı  : {secret}")
+            report_lines.append(f"     PIN anahtarı  : {secret}")
             report_lines.append(f"     otpauth URL   : {url}")
         report_lines.append("")
         report_lines.append("─" * 76)
@@ -241,7 +250,7 @@ class OTPSecretsModule(Module):
         )
         return ApplyResult(
             success=True,
-            summary=f"{len(created)} OTP anahtarı üretildi ve {OTP_SECRETS_FILE} dosyasına yazıldı.",
+            summary=f"{len(created)} PIN anahtarı üretildi ve {OTP_SECRETS_FILE} dosyasına yazıldı.",
             details=details,
             copyable=copyable,
         )

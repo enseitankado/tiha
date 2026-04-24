@@ -8,7 +8,7 @@
 
 ## TiHA nedir?
 
-Bir sınıfta veya bir okulun tüm tahtalarında aynı hazırlıkları tek tek yapmak çok yorucu. TiHA, **bir tahtaya** bir kez hazırlık yaptırıp, o tahtanın imajını diğer tahtalara uygulamanızı kolaylaştırır.
+TiHA, öğretmenin tahtaya dokunarak parola girdiği tüm senaryoları ortadan kaldırır. Böylece öğretmen parolasının ifşa olmasına bağlı izin verilmeyen öğrenci kullanımlarının önüne geçilir.
 
 Pardus ETAP 23 kurulu tahtada **tek bir komutla** çalışır — **bilgisayara yüklenmez**, geçici olarak açılıp kapanır. Görsel bir sihirbaz her adımın **ne yaptığını** ve **neden yaptığını** size açıklar, onayınızı alır, sonucu gösterir ve gerektiğinde **geri alır**.
 
@@ -21,40 +21,18 @@ Sınıfta öğretmen, tahtada **EBA-QR ile ilk kez oturum açarken** sistem kend
 | Yol | Açıklama |
 |-----|----------|
 | 🔳 **EBA-QR** | Telefondaki EBA uygulamasından ekrandaki kare kodu okutarak |
-| 🔢 **OTP (PIN)** | Google Authenticator gibi bir uygulamadan üretilen 6 haneli kod |
+| 🔢 **PIN kodu** | Google Authenticator gibi bir uygulamadan üretilen, 30 saniyede bir değişen 6 haneli kod |
 | 🗝️ **USB anahtar** | Öğretmene özel hazırlanmış kişisel USB bellek |
 
 ## Nasıl çalışır?
 
-Aşağıdaki akış, TiHA'nın yerini ve iş akışını özetler:
-
-```mermaid
-flowchart TD
-    A([Bir tahtaya Pardus ETAP kurulur])
-    B[Etapadmin terminaline tek komut yapıştırılır]
-    C[Sihirbaz açılır]
-    D[Her adım: açıklama → onay → uygula → sonuç → gerekirse geri al]
-    E[Tahta yeniden başlatılır - test]
-    F[Clonezilla / dd ile imaj alınır]
-    G([İmaj diğer onlarca tahtaya uygulanır])
-    H[Her tahta ilk açılışta kendi benzersiz kimliğini üretir:<br/>hostname, SSH anahtarları, machine-id]
-    I([Sınıfta kullanıma hazır tahtalar])
-
-    A --> B --> C --> D --> E --> F --> G --> H --> I
-
-    classDef green fill:#d4edda,stroke:#28a745,color:#155724
-    classDef blue fill:#cce5ff,stroke:#0d6efd,color:#084298
-    class A,I green
-    class G,H blue
-```
-
-İmaj uygulandıktan sonra her tahtaya açılan öğretmen şu üç yoldan biriyle girer — **yerel parolayla giriş yoktur**:
+İmaj uygulandıktan sonra her öğretmen şu üç yoldan biriyle oturum açabilir — **dikkat**, yerel parolayla giriş yoktur:
 
 ```mermaid
 flowchart LR
     T((Tahta<br/>açıldı))
     T --> A[🔳 EBA-QR okut]
-    T --> B[🔢 OTP PIN gir]
+    T --> B[🔢 PIN kodu gir]
     T --> C[🗝️ USB anahtar tak]
     A --> S((Oturum<br/>açıldı))
     B --> S
@@ -69,7 +47,7 @@ flowchart LR
 - ❌ **İmaj alma aracı değildir.** İmajı siz Clonezilla, dd veya benzer bir araçla alırsınız. TiHA yalnızca imaj alınmadan **önceki** hazırlığı yapar.
 - ❌ **Pardus ETAP dağıtım medyası değildir.** İşletim sistemini siz temiz kurulum olarak kurarsınız.
 - ❌ **Uzaktan yönetim aracı değildir.** Lider-Ahenk bu işe bakar; TiHA Ahenk kurulumuna karışmaz.
-- ❌ **OTP doğrulayıcı değildir.** Standart `eta-otp-lock` + PAM akışı kullanılır; TiHA yalnızca anahtarları toplu üretip yerlerine yazar.
+- ❌ **PIN doğrulayıcı değildir.** Standart Pardus ETAP PIN/PAM akışı kullanılır; TiHA yalnızca anahtarları toplu üretip yerlerine yazar.
 - ❌ **Sisteme kurulmaz.** Çalışır, iş biter, iz bırakmadan silinir.
 
 ## Neler yapar?
@@ -80,12 +58,12 @@ Sihirbaz bu adımları sırasıyla uygular. Her biri isteğe bağlıdır; ancak 
 |---|------|----------------|
 | 1  | **Donanım ön kontrol**          | Tahta imajlanmaya uygun mu? SMBIOS, MAC, `machine-id` kontrolü. |
 | 2  | **Başlangıç parolaları**         | `root` ve `etapadmin` parolalarını ayarlar; genel hesapları rastgele parolayla kilitler. |
-| 3  | **Her açılışta parola temizliği**| Her boot'ta genel hesapların parolalarını otomatik olarak rastgele değere çeviren sistem servisini kurar. |
-| 4  | **Öğretmen OTP anahtarları**     | Öğretmen listenizden TOTP anahtarları üretir, her hesap için `otpauth://` URL'si sunar. |
-| 5  | **SSH sunucusu**                 | Teknik bakım için uzaktan SSH erişimini kurar. |
-| 6  | **Samba dosya paylaşımı**        | Tahtaya SMB ile uzaktan dosya erişimi sağlar. |
+| 3  | **Her açılışta parola temizliği**| Genel öğretmen/öğrenci hesaplarının parolasını her açılışta rastgele değere çeviren sistem servisini kurar. Yönetici `etapadmin` hesabına **dokunulmaz**; teknik erişim korunur. |
+| 4  | **Öğretmen PIN anahtarları**     | Öğretmen listenizden 6 haneli PIN kodu üreten güvenlik anahtarlarını imaj öncesinde toplu üretir. Bu adım şart, çünkü Pardus ETAP'ın kendi PIN üretici uygulaması kullanıcının yerel parolasını ister; TiHA bu parolaları sıfırladığı için öğretmen sahada kendi başına PIN kuramaz. |
+| 5  | **SSH sunucusu**                 | Tahtayla aynı ağa (`10.x.x.x`) bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. |
+| 6  | **Samba dosya paylaşımı**        | Tahtanın diskine, aynı ağdaki (`10.x.x.x`) bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. |
 | 7  | **Merkezi log iletimi**          | Tahtanın günlüklerini ağdaki merkezi log sunucusuna iletir. |
-| 8  | **Zaman senkronizasyonu (NTP)**  | Saat dilimi ve NTP sunucusunu ayarlar. OTP'nin çalışması için şarttır. |
+| 8  | **Zaman senkronizasyonu (NTP)**  | Saat dilimini ve yedek zaman sunucularını yapılandırır. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. |
 | 9  | **Benzersiz hostname stratejisi**| Her klonun ilk açılışta kendine özgü bir hostname almasını sağlar. |
 | 10 | **Sistem güncellemesi (apt)**    | `apt update` + `full-upgrade` + temizlik. |
 | 11 | **İmaj için sanitizasyon**       | Son adım: tekil kimlikleri (SSH anahtarları, `machine-id`, NetworkManager vb.) temizler. |

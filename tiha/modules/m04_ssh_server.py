@@ -52,15 +52,18 @@ class SSHServerModule(Module):
     )
     streams_output = True
     rationale = (
-        "Tahta sınıfa indikten sonra her bir cihazın başına gidip fiziksel "
-        "erişimle bakım yapmak pratik değildir. Bu adım, teknik destek "
-        "ekibinin ağdaki bir yönetim istasyonundan komut satırıyla tahtaya "
-        "bağlanıp sorun giderme, yapılandırma güncelleme ve günlük "
-        "inceleme yapabilmesi için SSH sunucusunu kurar. Root girişi, "
-        "sistemin her yerine dokunabilen bir bakım hesabı gerektiği için "
-        "açık bırakılır — erişim, ağ tarafından (güvenlik duvarı, VLAN) "
-        "yönetim istasyonlarıyla sınırlanmalıdır. Apt çıktısı aşağıda "
-        "canlı olarak akar."
+        "Tahta sınıfa indikten sonra her birinin başına fiziksel olarak "
+        "gidip bakım yapmak pratik değildir. Bu adım, uzak terminalle "
+        "bağlanıp sorun giderme, ayar değişikliği ve günlük inceleme "
+        "yapabilmeniz için SSH sunucusunu kurar ve root kullanıcısının "
+        "uzak oturum açmasına izin verir.\n\n"
+        "🌐 Uzaktan bağlanmak için tahtayla aynı ağda (genellikle "
+        "`10.x.x.x` MEB ağı) bir bilgisayardan `ssh root@<tahta-ip>` "
+        "komutunu kullanırsınız. Farklı bir ağdan ulaşılamaz; bu bilinçli "
+        "bir güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile "
+        "erişimi yalnızca yönetim istasyonlarıyla sınırlamanız tavsiye "
+        "edilir.\n\n"
+        "Apt çıktısı aşağıda canlı olarak akar."
     )
 
     def preview(self) -> str:

@@ -8,8 +8,8 @@ etkinleştirir ve ``systemd-timesyncd``'yi yeniden başlatır. Opsiyonel
 olarak saat dilimini de (``Europe/Istanbul`` varsayılan) ayarlar.
 
 **Neden gerekir?**
-Yanlış saat, sertifika doğrulamasını, Kerberos/TLS oturumlarını, TOTP
-(6 haneli OTP) doğrulamasını ve merkezi log zaman damgalarını bozar.
+Yanlış saat, sertifika doğrulamasını, Kerberos/TLS oturumlarını, 6 haneli
+PIN kodu (TOTP) doğrulamasını ve merkezi log zaman damgalarını bozar.
 Ağa göre dış internete NTP (UDP 123) çıkışı kısıtlı olabileceğinden
 okulun iç NTP sunucusu (ör. ``time.meb.gov.tr``) tercih edilebilir.
 
@@ -46,13 +46,15 @@ class TimeSyncModule(Module):
         "NTP sunucuları ve saat dilimi ayarlanır."
     )
     rationale = (
-        "Tahta saatinin doğru olmasını sağlar. TOTP (öğretmen OTP kodları) "
-        "zaman tabanlıdır: tahtanın saati sunucu saatinden 30 saniyeden fazla "
-        "kayarsa ÜRETTİĞİNİZ HER OTP KODU GEÇERSİZ SAYILIR, öğretmen tahtaya "
-        "giremez. Aynı neden sertifika/TLS ve merkezi log zaman damgaları "
-        "için de geçerlidir. Bu adım atlanırsa sahadaki tahtalarda saat "
-        "kayması yaşanabilir. Okul ağı dış NTP'ye (udp/123) izin vermiyorsa "
-        "MEB iç NTP sunucusu kullanılmalıdır."
+        "Tahtanın saatini doğru tutmak için birincil ve yedek zaman "
+        "(NTP) sunucularını tanımlar. Bu adım atlanırsa sahada "
+        "tahtaların saati kayabilir.\n\n"
+        "Neden bu kadar kritik? PIN kodları **zaman tabanlıdır** — "
+        "her 30 saniyede bir değişir. Tahtanın saati, PIN doğrulayan "
+        "sunucudan 30 saniyeden fazla saparsa üretilen HER PIN kodu "
+        "geçersiz sayılır ve öğretmen tahtaya giremez. Bu yüzden "
+        "NTP'yi bilinen bir sunucuya sabitliyoruz; dış NTP'ye (udp/123) "
+        "kapalı bir okul ağı varsa MEB iç NTP sunucusu kullanılır."
     )
 
     def preview(self) -> str:

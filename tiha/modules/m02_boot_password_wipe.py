@@ -15,12 +15,12 @@ TiHA bu yüzden **hiçbir parolanın kalıcı olmasına izin vermez**:
 
 - ``ogretmen`` (standart ortak öğretmen hesabı) parolası her açılışta
   rastgele bir değerle ezilir — öğretmen bu parolayı bilmez, bilemez,
-  dolayısıyla tahtaya yalnızca EBA-QR, OTP veya USB bellek ile girer.
+  dolayısıyla tahtaya yalnızca EBA-QR, PIN veya USB bellek ile girer.
 - ``ogrenci`` (standart ortak öğrenci hesabı) için de aynı kural geçerli:
   parolalı giriş imkânsız.
 - Modül 4'te **her öğretmene özel** hesaplar oluşturulursa (ör.
   ``ayse.yilmaz``, ``ogretmen01`` …) onlar da aynı temizliğe dahil edilir;
-  girişleri yalnızca OTP kodu ile olur.
+  girişleri yalnızca PIN kodu ile olur.
 - ``etapadmin`` bu işlemin DIŞINDADIR; yönetici bakım erişimi korunur.
 
 **Geri al (tam restore).**
@@ -51,7 +51,7 @@ STANDARD_USERS = {"ogretmen", "ogrenci"}
 
 
 def _otp_registered_users() -> set[str]:
-    """``/etc/otp-secrets.json`` içinde OTP anahtarı kayıtlı olan kullanıcılar."""
+    """``/etc/otp-secrets.json`` içinde PIN anahtarı kayıtlı olan kullanıcılar."""
     if not OTP_SECRETS_FILE.exists():
         return set()
     try:
@@ -68,7 +68,7 @@ SCRIPT_CONTENT = """#!/bin/bash
 #  * etapadmin (yerel yönetici) ASLA değişmez.
 #  * UID 1000-59999 aralığındaki diğer tüm kullanıcılar rastgele parola
 #    alır ve hesap kilitlenir (-L). Oturum açmak için yalnızca
-#    EBA-QR / OTP / USB yolları açıktır.
+#    EBA-QR / PIN / USB yolları açıktır.
 set -euo pipefail
 log() { logger -t tiha-boot-wipe "$*"; }
 while IFS=: read -r user _ uid _ _ _ _; do
@@ -122,13 +122,15 @@ class BootPasswordWipeModule(Module):
         "Açılışta parola temizleme servisi kurulur ve etkinleştirilir."
     )
     rationale = (
-        "Tahta her yeniden başladığında, etapadmin dışındaki hesapların "
-        "(standart ogretmen ve ogrenci hesapları + Modül 4'te oluşturulan "
-        "kişisel öğretmen hesapları) parolalarını otomatik olarak "
-        "rastgele değere çeviren sistem servisi kurar. Böylece ekranda "
-        "görülen ya da sızdırılan hiçbir parola bir sonraki açılışta "
-        "işe yaramaz; öğretmen yalnızca EBA-QR, OTP ya da USB bellek ile "
-        "oturum açabilir."
+        "Tahta her yeniden başladığında; standart `ogretmen`, `ogrenci` "
+        "ortak hesaplarının ve Modül 4'te oluşturulan kişisel öğretmen "
+        "hesaplarının parolasını otomatik olarak rastgele bir değere "
+        "çeviren sistem servisi kurar. Böylece ekranda görülen ya da "
+        "sızdırılan hiçbir parola bir sonraki açılışta işe yaramaz; "
+        "öğretmen yalnızca EBA-QR, PIN kodu ya da USB bellek ile "
+        "oturum açabilir.\n\n"
+        "⚠ Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
+        "Teknik bakım erişimi (yerel yönetim, SSH) her zaman korunur."
     )
 
     def preview(self) -> str:
@@ -136,7 +138,7 @@ class BootPasswordWipeModule(Module):
         otp_users = _otp_registered_users()
         extras = extra_users()
 
-        # Tablo: KULLANICI | TÜR | OTP | NOT
+        # Tablo: KULLANICI | TÜR | PIN | NOT
         rows: list[tuple[str, str, str, str]] = []
         rows.append(("etapadmin", "yönetici", "—", "DOKUNULMAZ (bakım erişimi korunur)"))
 
@@ -147,7 +149,7 @@ class BootPasswordWipeModule(Module):
         missing: list[str] = []
         for u in extras:
             if u in otp_users:
-                rows.append((u, "kişisel", "✓ var", "EBA-QR / OTP / USB ile girer"))
+                rows.append((u, "kişisel", "✓ var", "EBA-QR / PIN / USB ile girer"))
             else:
                 rows.append((u, "kişisel", "⚠ yok", "bu servis aktifken tahtaya GİREMEZ"))
                 missing.append(u)
@@ -163,7 +165,7 @@ class BootPasswordWipeModule(Module):
         out: list[str] = []
         out.append("Bu servis her açılışta, etapadmin dışındaki hesapların parolasını rastgele değere çevirir.")
         out.append("")
-        out.append(fmt("KULLANICI", "TÜR", "OTP", "DURUM / NOT"))
+        out.append(fmt("KULLANICI", "TÜR", "PIN", "DURUM / NOT"))
         out.append("  " + "─" * (user_w + kind_w + otp_w + 32))
         for r in rows:
             out.append(fmt(*r))
@@ -171,12 +173,12 @@ class BootPasswordWipeModule(Module):
         if missing:
             out.append("")
             out.append(
-                f"⚠ DİKKAT — {len(missing)} kişisel hesabın OTP anahtarı yok: "
+                f"⚠ DİKKAT — {len(missing)} kişisel hesabın PIN anahtarı yok: "
                 + ", ".join(missing)
             )
             out.append(
                 "   Bu servisi etkinleştirdikten sonra tahtaya GİREMEZLER. "
-                "Modül 4'e gidip onlar için de OTP üretin."
+                "Modül 4'e gidip onlar için de PIN anahtarı üretin."
             )
 
         out.append("")

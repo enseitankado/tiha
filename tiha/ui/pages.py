@@ -2,7 +2,7 @@
 
 Tüm sayfalar ana pencerenin ``Gtk.ScrolledWindow``'u içinde çalışır;
 dolayısıyla içerik uzadığında aksiyon çubuğuna taşmaz, kullanıcı
-kaydırabilir. Uzun metinler (OTP listesi, apt çıktısı, ayrıntılı sonuç)
+kaydırabilir. Uzun metinler (PIN anahtarı listesi, apt çıktısı, ayrıntı)
 yine kendi ``ScrolledWindow``'larında sabit yükseklikte verilir.
 """
 
@@ -112,7 +112,7 @@ _WELCOME_SOLUTION = (
     "Öğretmenin oturum açmak için artık yalnızca üç yolu vardır:\n"
     "  1.  EBA-QR  — Telefonundaki EBA uygulamasından kare kodu "
     "okutarak (sunucu provizyonlu kimlik doğrulama).\n"
-    "  2.  OTP (6 haneli PIN kodu)  — Google Authenticator benzeri bir "
+    "  2.  PIN (6 haneli PIN kodu)  — Google Authenticator benzeri bir "
     "uygulamadan üretilen, 30 saniyede bir değişen kod.\n"
     "  3.  USB bellek  — Öğretmene özel hazırlanmış kişisel USB anahtarı."
 )
@@ -121,7 +121,7 @@ _WELCOME_EXTRAS = (
     "Bu asıl amacın yanında, imajdan dağıtılan tahtaların ağda sorun "
     "çıkarmaması için birkaç hazırlık daha yapılır: eta-register tekil "
     "kimlik çakışması önlemi, benzersiz hostname üretimi, NTP "
-    "senkronizasyonu (OTP kodlarının doğrulanabilmesi için saat kritik "
+    "senkronizasyonu (PIN kodlarının doğrulanabilmesi için saat kritik "
     "önemdedir), SSH ve Samba ile uzaktan bakım erişimi, merkezi log "
     "iletimi, sistem güncellemesi ve imaj alınmadan önce gerekli hijyen."
 )
@@ -583,9 +583,20 @@ class ModulePage(Gtk.Box):
                 _scrolled_textview(result.copyable, monospace=True, height=160),
                 False, False, 0,
             )
+            # Buton satırı: panoya kopyala + dosyaya kaydet
+            btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             copy_btn = Gtk.Button(label="Panoya kopyala")
             copy_btn.connect("clicked", lambda *_: self._copy_to_clipboard(result.copyable or ""))
-            box.pack_start(copy_btn, False, False, 0)
+            btn_row.pack_start(copy_btn, False, False, 0)
+
+            save_btn = Gtk.Button(label="Dosyaya kaydet…")
+            save_btn.connect(
+                "clicked",
+                lambda *_: self._save_to_file(result.copyable or "",
+                                              f"tiha-{self.module.id}.txt"),
+            )
+            btn_row.pack_start(save_btn, False, False, 0)
+            box.pack_start(btn_row, False, False, 0)
 
         if result.success and self.module.undo_supported:
             undo_btn = Gtk.Button(label="Bu adımı geri al")
@@ -600,6 +611,71 @@ class ModulePage(Gtk.Box):
         from gi.repository import Gdk
         clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         clip.set_text(text, -1)
+
+    def _save_to_file(self, text: str, default_name: str) -> None:
+        """Sonuç içeriğini kullanıcının seçtiği bir dosyaya yazar.
+
+        Varsayılan olarak etapadmin'in ev dizinindeki 'Masaüstü' (ya
+        da yoksa ev dizini) açılır. Root olarak yazılan dosya sonra
+        etapadmin'e chown'lanır ki kullanıcı açabilsin.
+        """
+        import os
+        import pwd as _pwd
+        from pathlib import Path
+
+        dlg = Gtk.FileChooserDialog(
+            title="Dosyaya kaydet",
+            transient_for=self.get_toplevel(),
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dlg.add_buttons(
+            "İptal", Gtk.ResponseType.CANCEL,
+            "Kaydet", Gtk.ResponseType.ACCEPT,
+        )
+        dlg.set_current_name(default_name)
+        dlg.set_do_overwrite_confirmation(True)
+
+        # Etapadmin ev dizinini varsayılan konum yap
+        try:
+            etap_home = _pwd.getpwnam("etapadmin").pw_dir
+            for candidate in ("Masaüstü", "Desktop", ""):
+                folder = os.path.join(etap_home, candidate) if candidate else etap_home
+                if os.path.isdir(folder):
+                    dlg.set_current_folder(folder)
+                    break
+        except KeyError:
+            pass
+
+        response = dlg.run()
+        if response == Gtk.ResponseType.ACCEPT:
+            path = dlg.get_filename()
+            try:
+                Path(path).write_text(text, encoding="utf-8")
+                # Dosya root tarafından yazıldı; etapadmin ev dizinindeyse
+                # sahipliği etapadmin'e çevir ki kullanıcı kolayca açabilsin.
+                try:
+                    etap_pw = _pwd.getpwnam("etapadmin")
+                    if path.startswith(etap_pw.pw_dir):
+                        os.chown(path, etap_pw.pw_uid, etap_pw.pw_gid)
+                except (KeyError, OSError):
+                    pass
+                self._toast(f"Dosyaya kaydedildi: {path}")
+            except OSError as exc:
+                self._toast(f"Dosya yazılamadı: {exc}", error=True)
+        dlg.destroy()
+
+    def _toast(self, message: str, error: bool = False) -> None:
+        """Küçük bir bilgi diyaloğu göster."""
+        dlg = Gtk.MessageDialog(
+            transient_for=self.get_toplevel(),
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.ERROR if error else Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text=message,
+        )
+        dlg.run()
+        dlg.destroy()
 
     def _undo_clicked(self) -> None:
         entry = self.journal.last_applied(self.module.id)
