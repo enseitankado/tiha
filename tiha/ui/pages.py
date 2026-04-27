@@ -411,6 +411,22 @@ class ModulePage(Gtk.Box):
             combo.set_active(idx)
             return combo
 
+        if kind == "button":
+            btn = Gtk.Button(label=field.get("label", "Button"))
+            if field.get("style") == "destructive":
+                btn.get_style_context().add_class("destructive-action")
+
+            def on_button_clicked(_btn, action=field.get("action")):
+                if action and hasattr(self.module, action):
+                    try:
+                        result = getattr(self.module, action)()
+                        self._show_result(result)
+                    except Exception as e:
+                        log.error("Button action failed: %s", e)
+
+            btn.connect("clicked", on_button_clicked)
+            return btn
+
         entry = Gtk.Entry()
         entry.set_text(default)
         if kind == "password":
@@ -456,6 +472,8 @@ class ModulePage(Gtk.Box):
             return str(int(widget.get_value()))
         if kind == "select":
             return widget.get_active_text() or ""
+        if kind == "button":
+            return ""  # Buttons don't have values
         return widget.get_text()
 
     def _collect_params(self) -> tuple[dict, list[str]]:

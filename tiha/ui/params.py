@@ -31,6 +31,14 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "required": False,
             "help": "Öğretmen hesabı varsa, bu hesap için parola belirleyebilirsiniz. Boş bırakılabilir.",
         },
+        {
+            "key": "remove_student",
+            "label": "Öğrenci Hesabını Sil",
+            "type": "button",
+            "action": "remove_student_user_action",
+            "style": "destructive",
+            "help": "Öğrenci hesabı güvenlik riski oluşturur. Bu buton ile güvenli şekilde silebilirsiniz.",
+        },
     ],
     "m03_otp_secrets": [
         {
