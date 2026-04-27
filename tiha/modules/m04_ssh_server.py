@@ -1,22 +1,22 @@
 """Modül 4 — SSH sunucusu kur ve root uzak bağlantısına izin ver.
 
-**Ne yapar?**
-``openssh-server`` paketini (yoksa) kurar; ``/etc/ssh/sshd_config.d/``
-altına ``PermitRootLogin yes`` ve ``PasswordAuthentication yes`` ayarlarını
-içeren ek bir yapılandırma dosyası bırakır; ``ssh`` servisini etkinleştirir.
+Ne yapar?
+openssh-server paketini (yoksa) kurar; /etc/ssh/sshd_config.d/
+altına PermitRootLogin yes ve PasswordAuthentication yes ayarlarını
+içeren ek bir yapılandırma dosyası bırakır; ssh servisini etkinleştirir.
 
-**Neden gerekir?**
+Neden gerekir?
 Dağıtılmış tahtalarda uzaktan teknik destek/bakım için root erişimi
 gereklidir.
 
-**Geri al (tam restore).**
+Geri al (tam restore).
 - Ek yapılandırma dosyası silinir.
-- Eğer TiHA `openssh-server`'ı *kurduysa* (daha önce kurulu değildi),
-  paket ``apt-get purge`` ile kaldırılır — başlangıçtaki temiz duruma
+- Eğer TiHA openssh-server'ı KURDUYSA (daha önce kurulu değildi),
+  paket apt-get purge ile kaldırılır — başlangıçtaki temiz duruma
   dönülür. Daha önce zaten kuruluysa paket korunur.
 - Servis durumu uygun şekilde ayarlanır.
 
-Apply sırasında apt çıktısı **canlı olarak** ekrana akar; kullanıcı
+Apply sırasında apt çıktısı CANLI OLARAK ekrana akar; kullanıcı
 bekliyor gibi hissetmez.
 """
 

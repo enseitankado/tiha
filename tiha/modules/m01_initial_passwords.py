@@ -1,19 +1,19 @@
 """Modül 1 — Başlangıç parolaları.
 
-**Ne yapar?**
-- Sistemdeki gerçek kullanıcıların (UID ≥ 1000) ``etapadmin`` dışındaki
+Ne yapar?
+- Sistemdeki gerçek kullanıcıların (UID ≥ 1000) etapadmin dışındaki
   hepsine kriptografik olarak güvenli rastgele parola atar ve bu hesapları
-  ``usermod -L`` ile kilitler.
-- Kullanıcının belirlediği yeni ``root`` ve ``etapadmin`` parolalarını
+  usermod -L ile kilitler.
+- Kullanıcının belirlediği yeni root ve etapadmin parolalarını
   uygular.
 
-**Neden gerekir?**
+Neden gerekir?
 Sınıftaki 65" dokunmatik ekranda öğrencilerin izlediği ortamda kişisel
 parola tanımlamak, parolanın görsel olarak ifşa olmasına yol açar. Bu adım
 imaj alınmadan önce tüm genel hesapları kilitleyerek, tahta dağıtıldığında
 öğrencilerin bu hesaplarla ekrana parola yazmasının yolunu kapatır.
 
-**Geri al.** Önceki /etc/shadow yedeği geri yüklenir.
+Geri al. Önceki /etc/shadow yedeği geri yüklenir.
 """
 
 from __future__ import annotations
