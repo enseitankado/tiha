@@ -304,10 +304,6 @@ def get_extra_users() -> list[str]:
     return sorted(extra_users)
 
 
-def guest_user_exists() -> bool:
-    """ogrenci (misafir) kullanıcısının var olup olmadığını kontrol eder."""
-    return user_exists("ogrenci")
-
 
 def reset_to_default_users() -> tuple[bool, list[str]]:
     """Varsayılan kullanıcılar dışındaki tüm kullanıcıları siler."""
@@ -344,35 +340,6 @@ def reset_to_default_users() -> tuple[bool, list[str]]:
     return len(removed_users) == len(extra_users), removed_users
 
 
-def remove_guest_user() -> bool:
-    """ogrenci (misafir) kullanıcısını siler."""
-    if not guest_user_exists():
-        return True
-
-    log.info("Misafir kullanıcı siliniyor: ogrenci")
-    result = run_cmd(["deluser", "--remove-home", "ogrenci"])
-
-    if result.ok:
-        log.info("Misafir kullanıcı başarıyla silindi: ogrenci")
-
-        # OTP secrets'tan kaldır
-        try:
-            secrets = load_secrets()
-            if "ogrenci" in secrets:
-                del secrets["ogrenci"]
-                save_secrets(secrets)
-        except Exception as exc:
-            log.error("OTP secrets'tan ogrenci kaldırılamadı: %s", exc)
-
-        # Greeter cache'i güncelle
-        if GREETER_SCRIPT_PATH.exists():
-            run_greeter_script_once()
-            log.info("Greeter cache güncellendi")
-
-        return True
-    else:
-        log.error("Misafir kullanıcı silinemedi: %s", result.stderr)
-        return False
 
 
 class OTPSecretsModule(Module):
@@ -465,9 +432,8 @@ class OTPSecretsModule(Module):
                 f"(hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
             )
 
-        # Geri alma ve misafir kullanıcı durumu
+        # Geri alma durumu
         extra_users = get_extra_users()
-        guest_exists = guest_user_exists()
 
         lines.append("")
         lines.append("─" * 50)
@@ -483,15 +449,6 @@ class OTPSecretsModule(Module):
             lines.append("→ 'Geri Al' düğmesi ile bunlar silinip başlangıç durumuna dönülebilir")
         else:
             lines.append("✓ Sadece varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)")
-
-        if guest_exists:
-            lines.append("")
-            lines.append("⚠ Misafir kullanıcı (ogrenci) mevcut")
-            lines.append("  Bu kullanıcı greeter'da güvensiz misafir girişine sebep olur")
-            lines.append("→ 'Misafir Kullanıcı Sil' ile kaldırabilirsiniz")
-        else:
-            lines.append("")
-            lines.append("✓ Misafir kullanıcı (ogrenci) yok")
 
         return "\n".join(lines) if lines else "Henüz hiç kişisel hesap yok."
 
@@ -767,9 +724,6 @@ class OTPSecretsModule(Module):
         """Geri alma düğmesinin aktif olup olmayacağını belirler."""
         return bool(get_extra_users())
 
-    def can_remove_guest(self) -> bool:
-        """Misafir kullanıcı silme düğmesinin aktif olup olmayacağını belirler."""
-        return guest_user_exists()
 
     def reset_users_to_default(self, params: dict | None = None) -> ApplyResult:
         """Tüm fazladan kullanıcıları siler, sistemi başlangıç durumuna getirir."""
@@ -801,25 +755,3 @@ class OTPSecretsModule(Module):
                        "Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
             )
 
-    def remove_guest_user_action(self, params: dict | None = None) -> ApplyResult:
-        """Misafir kullanıcısını (ogrenci) siler."""
-        if not guest_user_exists():
-            return ApplyResult(
-                False,
-                "Misafir kullanıcı (ogrenci) bulunamadı.",
-                details="Kullanıcı zaten silinmiş olabilir."
-            )
-
-        if remove_guest_user():
-            return ApplyResult(
-                True,
-                "Misafir kullanıcı (ogrenci) başarıyla silindi.",
-                details="Güvensiz misafir girişi engellenmiştir.\n"
-                       "Greeter cache güncellendi."
-            )
-        else:
-            return ApplyResult(
-                False,
-                "Misafir kullanıcı silinemedi.",
-                details="Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
-            )
