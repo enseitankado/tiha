@@ -441,12 +441,14 @@ class OTPSecretsModule(Module):
         lines.append("─" * 50)
 
         if extra_users:
-            lines.append(f"⚠ Varsayılan kullanıcılar dışında {len(extra_users)} hesap var:")
+            lines.append(f"🗑️ Fazladan Kullanıcı Hesapları ({len(extra_users)} adet):")
             lines.extend(f"    • {user}" for user in extra_users[:10])
             if len(extra_users) > 10:
                 lines.append(f"    • ... ve {len(extra_users) - 10} tane daha")
             lines.append("")
-            lines.append("→ 'Geri Al' düğmesi ile bunlar silinip başlangıç durumuna dönülebilir")
+            lines.append("⚠️ Bu hesaplar varsayılan sistem kullanıcıları değil!")
+            lines.append("→ 'Fazladan Hesapları Sil' (onaylı) butonu ile kaldırabilirsiniz")
+            lines.append("   Sistem yalnızca etapadmin, ogrenci, ogretmen hesaplarıyla kalacak")
         else:
             lines.append("✓ Sadece varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)")
 
@@ -720,30 +722,33 @@ class OTPSecretsModule(Module):
     # Ek Kullanıcı Yönetimi Fonksiyonları
     # -----------------------------------------------------------------
 
-    def can_reset_users(self) -> bool:
-        """Geri alma düğmesinin aktif olup olmayacağını belirler."""
+    def can_remove_extra_users(self) -> bool:
+        """Fazladan hesapları sil düğmesinin aktif olup olmayacağını belirler."""
         return bool(get_extra_users())
 
-
-    def reset_users_to_default(self, params: dict | None = None) -> ApplyResult:
-        """Tüm fazladan kullanıcıları siler, sistemi başlangıç durumuna getirir."""
+    def remove_extra_users_action(self, params: dict | None = None) -> ApplyResult:
+        """Varsayılan hesaplar dışındaki tüm fazladan kullanıcıları siler (onay gerektirir)."""
         extra_users = get_extra_users()
 
         if not extra_users:
             return ApplyResult(
                 False,
                 "Silinecek fazladan kullanıcı bulunamadı.",
-                details="Sistemde sadece varsayılan kullanıcılar mevcut."
+                details="Sistemde sadece varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) mevcut."
             )
 
-        # Kullanıcıya onay sor (UI tarafından handle edilecek)
+        # ONAYLIDIR: Bu işlem geri alınamaz, tüm fazladan kullanıcıları siler
         success, removed = reset_to_default_users()
 
         if success:
             return ApplyResult(
                 True,
-                f"{len(removed)} kullanıcı silindi, sistem başlangıç durumuna getirildi.",
+                f"{len(removed)} fazladan kullanıcı silindi, sistem varsayılan durumuna getirildi.",
                 details=f"Silinen kullanıcılar: {', '.join(removed)}\n"
+                       "Sistem artık sadece varsayılan hesapları içeriyor:\n"
+                       "  • etapadmin (yönetici)\n"
+                       "  • ogrenci (ortak hesap)\n"
+                       "  • ogretmen (ortak hesap)\n\n"
                        "Greeter cache güncellendi."
             )
         else:
