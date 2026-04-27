@@ -153,7 +153,7 @@ class InitialPasswordsModule(Module):
         "Gereksiz hesapları (ogrenci, ogretmen) tamamen silme seçeneği sunar. "
         "Root, etapadmin ve isteğe bağlı olarak ogretmen hesabı için güçlü "
         "parolalar belirleyebilirsiniz. Parolalar ekranda görülebilir formatta "
-        "girilebilir ve onay kutuları ile doğrulanır."
+        "girilebilir."
     )
 
     def preview(self) -> str:
@@ -178,21 +178,24 @@ class InitialPasswordsModule(Module):
 
         lines.append("")
         lines.append("🔒 Parola Belirleme:")
-        lines.append("    • root parolası")
-        lines.append("    • etapadmin parolası")
+        lines.append("    • root parolası (görülebilir)")
+        lines.append("    • etapadmin parolası (görülebilir)")
         if user_status.get("ogretmen", False):
-            lines.append("    • ogretmen parolası (isteğe bağlı)")
+            lines.append("    • ogretmen parolası (isteğe bağlı, görülebilir)")
+
+        if user_status.get("ogrenci", False):
+            lines.append("")
+            lines.append("⚠️ Öğrenci Hesabı Yönetimi:")
+            lines.append("    • Öğrenci hesabı mevcut ve güvenlik riski oluşturuyor")
+            lines.append("    → 'Öğrenci Hesabını Sil' butonu ile kaldırabilirsiniz")
 
         return "\n".join(lines)
 
     def apply(self, params: dict | None = None, progress=None) -> ApplyResult:
         params = params or {}
         root_pw = params.get("root_password", "")
-        root_pw_conf = params.get("root_password_confirm", "")
         admin_pw = params.get("admin_password", "")
-        admin_pw_conf = params.get("admin_password_confirm", "")
         teacher_pw = params.get("teacher_password", "")
-        teacher_pw_conf = params.get("teacher_password_confirm", "")
 
         if not root_pw or not admin_pw:
             return ApplyResult(
@@ -200,13 +203,7 @@ class InitialPasswordsModule(Module):
                 summary="Eksik giriş: root ve etapadmin parolaları girilmeli.",
             )
 
-        # Çift onay doğrulaması
-        if root_pw != root_pw_conf:
-            return ApplyResult(False, "root parolası ile doğrulaması eşleşmiyor.")
-        if admin_pw != admin_pw_conf:
-            return ApplyResult(False, "etapadmin parolası ile doğrulaması eşleşmiyor.")
-        if teacher_pw and teacher_pw != teacher_pw_conf:
-            return ApplyResult(False, "ogretmen parolası ile doğrulaması eşleşmiyor.")
+        # Parola uzunluk kontrolü
         if len(root_pw) < 8 or len(admin_pw) < 8:
             return ApplyResult(False, "root ve etapadmin parolaları en az 8 karakter olmalıdır.")
         if teacher_pw and len(teacher_pw) < 8:
@@ -354,5 +351,31 @@ class InitialPasswordsModule(Module):
             return ApplyResult(
                 False,
                 "Hiçbir kullanıcı silinemedi.",
+                details="Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
+            )
+
+    def remove_student_user_action(self, params: dict | None = None) -> ApplyResult:
+        """Öğrenci kullanıcısını (ogrenci) siler."""
+        if not user_exists("ogrenci"):
+            return ApplyResult(
+                False,
+                "Öğrenci kullanıcısı (ogrenci) bulunamadı.",
+                details="Kullanıcı zaten silinmiş olabilir."
+            )
+
+        state = self.ensure_state_dir()
+
+        if remove_user_with_backup("ogrenci", state):
+            return ApplyResult(
+                True,
+                "Öğrenci kullanıcısı (ogrenci) başarıyla silindi.",
+                details="Kullanıcı güvenli şekilde yedeklendi ve kaldırıldı.\n"
+                       "Geri alma işlevi ile geri yüklenebilir.",
+                data={"removed_users": ["ogrenci"]}
+            )
+        else:
+            return ApplyResult(
+                False,
+                "Öğrenci kullanıcısı silinemedi.",
                 details="Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
             )
