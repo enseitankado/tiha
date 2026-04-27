@@ -16,14 +16,6 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Sağdaki göz düğmesiyle içeriği görebilirsiniz.",
         },
         {
-            "key": "root_password_confirm",
-            "label": "Root parolası (tekrar)",
-            "type": "password",
-            "show_toggle": True,
-            "required": True,
-            "help": "Yazım hatasına karşı aynı parolayı tekrar girin.",
-        },
-        {
             "key": "admin_password",
             "label": "Yeni etapadmin parolası",
             "type": "password",
@@ -32,12 +24,12 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": "Tahtada yerel yönetim işleri için kullanılacak parola.",
         },
         {
-            "key": "admin_password_confirm",
-            "label": "etapadmin parolası (tekrar)",
+            "key": "teacher_password",
+            "label": "Öğretmen parolası (isteğe bağlı)",
             "type": "password",
             "show_toggle": True,
-            "required": True,
-            "help": "Yazım hatasına karşı aynı parolayı tekrar girin.",
+            "required": False,
+            "help": "Öğretmen hesabı varsa, bu hesap için parola belirleyebilirsiniz. Boş bırakılabilir.",
         },
     ],
     "m03_otp_secrets": [
