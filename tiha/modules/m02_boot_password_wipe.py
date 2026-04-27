@@ -1,33 +1,33 @@
 """Modül 2 (wizard 3. adım) — Her açılışta parola temizliği.
 
-**Ne yapar?**
-Tahta her açıldığında, ``etapadmin`` dışındaki **tüm** gerçek kullanıcıların
-(standart olarak ``ogretmen`` ve ``ogrenci``, ve varsa TiHA Modül 4'ün
+Ne yapar?
+Tahta her açıldığında, etapadmin dışındaki TÜM gerçek kullanıcıların
+(standart olarak ogretmen ve ogrenci, ve varsa TiHA Modül 4'ün
 oluşturduğu tek tek öğretmen/yedek hesapları) parolalarını kriptografik
-olarak güvenli rastgele bir değere çeviren bir *systemd oneshot* servisi
+olarak güvenli rastgele bir değere çeviren bir systemd oneshot servisi
 kurar. Servis her sistem açılışında bir kez çalışır.
 
-**Neden gerekir?**
+Neden gerekir?
 Sınıfın 65" dokunmatik ekranında öğretmenin parolayı parmağıyla yazdığı
 her an, arkadaki öğrenciler parolayı görür. Hatta ilk tanımlama anında
 EBA-QR akışı kullanıcıdan parola isteyince bu ifşa mutlaka yaşanır.
-TiHA bu yüzden **hiçbir parolanın kalıcı olmasına izin vermez**:
+TiHA bu yüzden HİÇBİR PAROLANIN KALICI OLMASINA İZİN VERMEZ:
 
-- ``ogretmen`` (standart ortak öğretmen hesabı) parolası her açılışta
+- ogretmen (standart ortak öğretmen hesabı) parolası her açılışta
   rastgele bir değerle ezilir — öğretmen bu parolayı bilmez, bilemez,
   dolayısıyla tahtaya yalnızca EBA-QR, PIN veya USB bellek ile girer.
-- ``ogrenci`` (standart ortak öğrenci hesabı) için de aynı kural geçerli:
+- ogrenci (standart ortak öğrenci hesabı) için de aynı kural geçerli:
   parolalı giriş imkânsız.
-- Modül 4'te **her öğretmene özel** hesaplar oluşturulursa (ör.
-  ``ayse.yilmaz``, ``ogretmen01`` …) onlar da aynı temizliğe dahil edilir;
+- Modül 4'te her öğretmene özel hesaplar oluşturulursa (ör.
+  ayse.yilmaz, ogretmen01 …) onlar da aynı temizliğe dahil edilir;
   girişleri yalnızca PIN kodu ile olur.
-- ``etapadmin`` bu işlemin DIŞINDADIR; yönetici bakım erişimi korunur.
+- etapadmin bu işlemin DIŞINDADIR; yönetici bakım erişimi korunur.
 
-**Geri al (tam restore).**
+Geri al (tam restore).
 - Açılış servisi ve script dosyası silinir.
-- *Ek olarak*, TiHA oturumları sırasında sistemde **standart dışı**
-  (``etapadmin``/``ogretmen``/``ogrenci`` dışında kalan) kullanıcı hesabı
-  varsa bunlar listelenip **kullanıcıdan onay alınarak** ``userdel -r`` ile
+- Ek olarak, TiHA oturumları sırasında sistemde standart dışı
+  (etapadmin/ogretmen/ogrenci dışında kalan) kullanıcı hesabı
+  varsa bunlar listelenip kullanıcıdan onay alınarak userdel -r ile
   sistemden silinir — ev dizinleri ve posta kuyruklarıyla birlikte.
   Böylece açılış temizlik servisi kapatıldığında atıl hesap bırakılmaz.
 """
@@ -144,7 +144,7 @@ class BootPasswordWipeModule(Module):
 
         for u in ("ogretmen", "ogrenci"):
             if _user_exists(u):
-                rows.append((u, "ortak", "—", "parolasız kalır (kişisel kullanım için değil)"))
+                rows.append((u, "ortak", "—", "parola ile giriş yapılamaz (ortak hesap)"))
 
         missing: list[str] = []
         for u in extras:

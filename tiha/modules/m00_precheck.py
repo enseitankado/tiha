@@ -1,25 +1,25 @@
 """Modül 0 — Donanım ön kontrol.
 
-**Ne yapar?**
+Ne yapar?
 Tahtanın imaj alınmaya ve imajdan boot edilmeye uygun olup olmadığını
 kontrol eder. Aşağıdakileri raporlar:
 
-- **SMBIOS product_uuid** — boş/tümü-sıfır/tümü-FF ise ``eta-register``
-  tahtayı sanal makine sanıp çalışmayı reddeder → **KRİTİK**
-- **systemd-detect-virt** — Sanal makinede eta-register çalışmaz; bu
+- SMBIOS product_uuid — boş/tümü-sıfır/tümü-FF ise eta-register
+  tahtayı sanal makine sanıp çalışmayı reddeder → KRİTİK
+- systemd-detect-virt — Sanal makinede eta-register çalışmaz; bu
   ortamda imaj hazırlığı sorun değil ama imajı fiziksel tahtada test
-  etmek gerekir → **UYARI**
-- **Kablolu NIC MAC** — ``00:00:00:00:00:00`` ise çok nadir bir
-  donanım sorunudur → **KRİTİK**
-- **/etc/machine-id** — boşsa zaten temizdir; boş değil ise sanitize
-  adımı tarafından temizlenecektir → **BİLGİ**
+  etmek gerekir → UYARI
+- Kablolu NIC MAC — 00:00:00:00:00:00 ise çok nadir bir
+  donanım sorunudur → KRİTİK
+- /etc/machine-id — boşsa zaten temizdir; boş değil ise sanitize
+  adımı tarafından temizlenecektir → BİLGİ
 
-**Neden gerekir?**
-Geliştiricilerin ``imajlamayı önermiyoruz`` tavsiyesi çoğunlukla bu
+Neden gerekir?
+Geliştiricilerin "imajlamayı önermiyoruz" tavsiyesi çoğunlukla bu
 ön-kontrolle ekarte edilen edge-case'lerden kaynaklanır. Bu modül,
 imaj almanın güvenli olup olmayacağını önceden söyler.
 
-**Geri alma.** Yalnızca okuma yapar; geri alma gerekmez.
+Geri alma. Yalnızca okuma yapar; geri alma gerekmez.
 """
 
 from __future__ import annotations
