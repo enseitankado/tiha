@@ -69,6 +69,14 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "step": 1,
             "help": "Sonradan okula atanacak öğretmenler için ogretmen01, ogretmen02 … biçiminde boş hesap.",
         },
+        {
+            "key": "remove_extra_users",
+            "label": "Fazladan Hesapları Sil",
+            "type": "button",
+            "action": "remove_extra_users_action",
+            "style": "destructive",
+            "help": "Varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) dışındaki tüm fazladan kullanıcıları siler. Bu işlem onay gerektirir.",
+        },
     ],
     "m05_samba_share": [
         {

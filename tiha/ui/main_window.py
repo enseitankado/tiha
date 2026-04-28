@@ -200,9 +200,17 @@ class TiHAWindow(Gtk.Window):
             page.refresh()
 
         if sync_sidebar:
+            # Tüm adımlardan active sınıfını kaldır
+            for i in range(len(self.pages)):
+                old_row = self.sidebar_list.get_row_at_index(i)
+                if old_row:
+                    old_row.get_style_context().remove_class("tiha-step-active")
+
+            # Aktif adıma active sınıfını ekle
             row = self.sidebar_list.get_row_at_index(index)
             if row is not None:
                 self.sidebar_list.select_row(row)
+                row.get_style_context().add_class("tiha-step-active")
 
         # Aksiyon çubuğu görünürlüğü (Apply ve ipucu yalnızca manuel modüllerde)
         is_module = isinstance(page, ModulePage)
