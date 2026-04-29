@@ -130,6 +130,13 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
         {
+            "key": "test_ntp_servers",
+            "label": "NTP Sunucularını Test Et",
+            "type": "button",
+            "action": "test_ntp_servers_action",
+            "help": "Yukarıda yazılan NTP sunucularının çevrimiçi ve işlevsel olup olmadığını kontrol eder.",
+        },
+        {
             "key": "ntp_fallback",
             "label": "Yedek NTP sunucuları",
             "type": "text",
@@ -160,6 +167,23 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "required": False,
             "default": "etap",
             "help": "Klonda hostname şu biçimde olur: <önek>-<MAC'in son 6 hanesi>",
+        },
+    ],
+    "m11_power_management": [
+        {
+            "key": "idle_minutes",
+            "label": "Otomatik kapatma süresi (dakika)",
+            "type": "spin",
+            "required": False,
+            "default": "45",
+            "min": 15,
+            "max": 180,
+            "step": 5,
+            "help": (
+                "LightDM greeter ekranında tahta bu süre boyunca boşta kalırsa "
+                "otomatik olarak kapatılır. Minimum 15, maksimum 180 dakika. "
+                "Önerilen: 30-60 dakika arası."
+            ),
         },
     ],
 }

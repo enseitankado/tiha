@@ -63,6 +63,61 @@ log = get_logger(__name__)
 RSYSLOG_QUEUE_DIR = Path("/var/lib/rsyslog")
 
 
+def _parse_config() -> tuple[str, int, str] | None:
+    """Mevcut TiHA rsyslog yapılandırmasından host, port, protokol değerlerini çıkarır.
+
+    Returns:
+        (host, port, protocol) tuple eğer geçerli yapılandırma varsa, yoksa None.
+    """
+    if not RSYSLOG_CONF.exists():
+        return None
+
+    try:
+        content = RSYSLOG_CONF.read_text(encoding="utf-8")
+
+        # target="host" satırını bul
+        host = ""
+        for line in content.splitlines():
+            if "target=" in line:
+                # target="hostname" formatındaki satırı parse et
+                import re
+                match = re.search(r'target="([^"]+)"', line)
+                if match:
+                    host = match.group(1)
+                    break
+
+        # port="514" satırını bul
+        port = 514
+        for line in content.splitlines():
+            if "port=" in line:
+                import re
+                match = re.search(r'port="([^"]+)"', line)
+                if match:
+                    try:
+                        port = int(match.group(1))
+                    except ValueError:
+                        pass
+                    break
+
+        # protocol="udp" satırını bul
+        proto = "udp"
+        for line in content.splitlines():
+            if "protocol=" in line:
+                import re
+                match = re.search(r'protocol="([^"]+)"', line)
+                if match:
+                    proto = match.group(1).lower()
+                    break
+
+        if host:  # En azından host bulunmalı
+            return (host, port, proto)
+
+    except (OSError, UnicodeDecodeError):
+        pass
+
+    return None
+
+
 def _render(host: str, port: int, proto: str) -> str:
     """Dayanıklı log iletimi için gelişmiş rsyslog yapılandırması oluşturur.
 

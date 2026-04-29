@@ -347,6 +347,24 @@ class ModulePage(Gtk.Box):
         kind = field.get("type", "text")
         default = field.get("default", "")
 
+        # Remote Syslog modülü için mevcut yapılandırmayı kontrol et ve form alanlarını doldur
+        if self.module.id == "m06_remote_syslog":
+            try:
+                # _parse_config fonksiyonunu modül içinden çağır
+                from ..modules.m06_remote_syslog import _parse_config
+                config = _parse_config()
+                if config:
+                    host, port, proto = config
+                    if field["key"] == "syslog_host":
+                        default = host
+                    elif field["key"] == "syslog_port":
+                        default = str(port)
+                    elif field["key"] == "syslog_proto":
+                        default = proto
+            except Exception:
+                # Hata varsa varsayılan değerleri kullan
+                pass
+
         if kind == "textarea":
             tv = Gtk.TextView()
             tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
@@ -418,11 +436,7 @@ class ModulePage(Gtk.Box):
 
             def on_button_clicked(_btn, action=field.get("action")):
                 if action and hasattr(self.module, action):
-                    try:
-                        result = getattr(self.module, action)()
-                        self._show_result(result)
-                    except Exception as e:
-                        log.error("Button action failed: %s", e)
+                    self._run_button_action(action)
 
             btn.connect("clicked", on_button_clicked)
             return btn
@@ -491,6 +505,41 @@ class ModulePage(Gtk.Box):
     # ------------------------------------------------------------------
     # Apply akışı — thread'li + canlı çıktı
     # ------------------------------------------------------------------
+
+    def _run_button_action(self, action: str) -> None:
+        """Button action'ını stream çıktısı ile çalıştırır."""
+        if self._applying:
+            return
+
+        # Stream alanını göster
+        self.stream_scroll.show()
+
+        def progress_callback(text: str) -> None:
+            GLib.idle_add(self._append_stream_line, text)
+
+        def worker():
+            try:
+                # Button action fonksiyonunu progress callback ile çağır
+                action_func = getattr(self.module, action)
+                # Eğer fonksiyon progress parametresi kabul ediyorsa gönder
+                try:
+                    result = action_func(progress=progress_callback)
+                except TypeError:
+                    # Progress parametresi kabul etmiyorsa normal çağır
+                    result = action_func()
+
+                GLib.idle_add(self._on_button_action_complete, result)
+            except Exception as exc:
+                error_result = ApplyResult(False, f"Button action hatası: {exc}")
+                GLib.idle_add(self._on_button_action_complete, error_result)
+
+        self._applying = True
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _on_button_action_complete(self, result: ApplyResult) -> None:
+        self._applying = False
+        self._show_result(result)
 
     def run_apply(self) -> None:
         if self._applying:

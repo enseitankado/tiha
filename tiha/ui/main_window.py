@@ -103,6 +103,32 @@ class TiHAWindow(Gtk.Window):
         sidebar_scroll.add(self.sidebar_list)
         sidebar_outer.pack_start(sidebar_scroll, True, True, 0)
 
+        # Author bilgisi
+        author_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        author_box.set_margin_start(12)
+        author_box.set_margin_end(12)
+        author_box.set_margin_bottom(8)
+
+        author_name = Gtk.Label(label="Özgür Koca", xalign=0)
+        author_name.get_style_context().add_class("tiha-author-name")
+        author_name.set_max_width_chars(20)
+        author_name.set_ellipsize(3)  # Pango.EllipsizeMode.END
+        author_box.pack_start(author_name, False, False, 0)
+
+        author_web = Gtk.Label(label="ozgurkoca.com", xalign=0)
+        author_web.get_style_context().add_class("tiha-author-web")
+        author_web.set_max_width_chars(20)
+        author_web.set_ellipsize(3)
+        author_box.pack_start(author_web, False, False, 0)
+
+        author_email = Gtk.Label(label="ozgur.koca@linux.org.tr", xalign=0)
+        author_email.get_style_context().add_class("tiha-author-email")
+        author_email.set_max_width_chars(20)
+        author_email.set_ellipsize(3)
+        author_box.pack_start(author_email, False, False, 0)
+
+        sidebar_outer.pack_start(author_box, False, False, 0)
+
         paned.pack1(sidebar_outer, resize=False, shrink=False)
 
         # --- Sağ: Stack (ScrolledWindow içinde) + aksiyon çubuğu ---

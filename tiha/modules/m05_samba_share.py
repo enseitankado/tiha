@@ -81,9 +81,28 @@ class SambaShareModule(Module):
 
     def preview(self) -> str:
         installed = _is_package_installed("samba")
-        return ("samba zaten kurulu — yalnızca paylaşım tanımı eklenecek."
-                if installed
-                else "samba kurulacak ve paylaşım tanımı eklenecek.")
+        share_exists = SAMBA_SHARE_CONF.exists()
+
+        # smb.conf'ta include satırının varlığını kontrol et
+        include_line = f"include = {SAMBA_SHARE_CONF}"
+        include_exists = False
+        if SAMBA_SMB_CONF.exists():
+            try:
+                content = SAMBA_SMB_CONF.read_text(encoding="utf-8")
+                include_exists = include_line in content
+            except OSError:
+                pass
+
+        if installed and share_exists and include_exists:
+            return "samba kurulu ve paylaşım tanımı mevcut — yapılandırma güncellenecek."
+        elif installed and (share_exists or include_exists):
+            return "samba kurulu, kısmi yapılandırma mevcut — tamamlanacak."
+        elif installed:
+            return "samba zaten kurulu — paylaşım tanımı eklenecek."
+        elif share_exists:
+            return "samba kurulacak — mevcut paylaşım tanımı korunacak."
+        else:
+            return "samba kurulacak ve paylaşım tanımı eklenecek."
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         params = params or {}

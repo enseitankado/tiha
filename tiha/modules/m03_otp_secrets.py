@@ -404,7 +404,7 @@ class OTPSecretsModule(Module):
             else:
                 lines.append("  → Otomatik greeter cache service oluşturulacak")
         else:
-            lines.append(f"ℹ {MIN_USERS_FOR_CACHE} kullanıcının altında — greeter cache gerekli değil")
+            lines.append(f"{MIN_USERS_FOR_CACHE} kullanıcının altında — greeter cache gerekli değil")
         lines.append("")
 
         if has_otp:

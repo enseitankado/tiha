@@ -182,3 +182,45 @@ textview.tiha-placeholder text selection {
 label.tiha-rationale {
     margin-bottom: 4px;
 }
+
+/* Scroll çubuğunu belirgin ve kalın yap */
+scrolledwindow scrollbar {
+    background: alpha(@theme_fg_color, 0.15);
+    border-radius: 8px;
+    min-width: 16px;
+}
+
+scrolledwindow scrollbar slider {
+    background: alpha(@theme_fg_color, 0.45);
+    border-radius: 8px;
+    min-width: 14px;
+    min-height: 32px;
+    border: 1px solid alpha(@theme_fg_color, 0.2);
+}
+
+scrolledwindow scrollbar slider:hover {
+    background: alpha(@theme_fg_color, 0.65);
+    border-color: alpha(@theme_fg_color, 0.4);
+}
+
+scrolledwindow scrollbar slider:active {
+    background: @theme_selected_bg_color;
+}
+
+/* Author bilgisi kenar çubuğu altında */
+.tiha-author-name {
+    font-size: 9pt;
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.tiha-author-web {
+    font-size: 8pt;
+    opacity: 0.65;
+    color: @theme_selected_bg_color;
+}
+
+.tiha-author-email {
+    font-size: 8pt;
+    opacity: 0.65;
+}

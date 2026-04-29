@@ -17,6 +17,7 @@ from .m07_time_sync import TimeSyncModule
 from .m08_hostname import HostnameModule
 from .m09_system_update import SystemUpdateModule
 from .m10_image_sanitize import ImageSanitizeModule
+from .m11_power_management import PowerManagementModule
 
 
 def all_modules() -> list[Module]:
@@ -33,4 +34,5 @@ def all_modules() -> list[Module]:
         HostnameModule(),
         SystemUpdateModule(),
         ImageSanitizeModule(),
+        PowerManagementModule(),
     ]

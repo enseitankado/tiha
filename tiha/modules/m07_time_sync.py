@@ -19,6 +19,7 @@ yeniden başlatılır; Debian varsayılan davranışına dönülür.
 
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
 from ..core.logger import get_logger
@@ -103,6 +104,147 @@ class TimeSyncModule(Module):
             f"Zaman senkronu ayarlandı (saat dilimi: {tz}).",
             details=f"Dosya: {TIMESYNCD_CONF}\n\n{status}",
         )
+
+    def test_ntp_servers_action(self, progress=None) -> ApplyResult:
+        """Form'daki NTP sunucularını test eder."""
+        if progress:
+            progress("NTP sunucu testi başlatılıyor...")
+
+        # Mevcut yapılandırmadaki sunucuları test et
+        if TIMESYNCD_CONF.exists():
+            try:
+                if progress:
+                    progress("Mevcut yapılandırma dosyası okunuyor...")
+                content = TIMESYNCD_CONF.read_text(encoding="utf-8")
+                ntp_line = ""
+                fallback_line = ""
+
+                for line in content.splitlines():
+                    if line.startswith("NTP="):
+                        ntp_line = line.split("=", 1)[1].strip()
+                    elif line.startswith("FallbackNTP="):
+                        fallback_line = line.split("=", 1)[1].strip()
+
+                servers = []
+                if ntp_line:
+                    servers.extend(ntp_line.split())
+                if fallback_line:
+                    servers.extend(fallback_line.split())
+
+                if not servers:
+                    if progress:
+                        progress("❌ Yapılandırmada NTP sunucusu bulunamadı.")
+                    return ApplyResult(False, "Mevcut yapılandırmada NTP sunucusu bulunamadı.")
+
+                if progress:
+                    progress(f"📋 {len(servers)} NTP sunucusu bulundu: {', '.join(servers)}")
+
+                return self._test_ntp_servers(servers, progress)
+
+            except Exception as e:
+                if progress:
+                    progress(f"❌ Yapılandırma dosyası okunamadı: {e}")
+                return ApplyResult(False, f"Yapılandırma dosyası okunamadı: {e}")
+        else:
+            # Mevcut config yoksa varsayılan sunucuları test et
+            if progress:
+                progress("Mevcut yapılandırma yok, varsayılan sunucular test ediliyor...")
+            default_servers = ["0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "time.cloudflare.com"]
+            if progress:
+                progress(f"📋 Test edilecek sunucular: {', '.join(default_servers)}")
+            return self._test_ntp_servers(default_servers, progress)
+
+    def _test_ntp_servers(self, servers: list[str], progress=None) -> ApplyResult:
+        """NTP sunucularını UDP 123 portunda test eder."""
+        results = []
+        successful_count = 0
+        total_servers = len(servers)
+
+        if progress:
+            progress(f"\n🔍 {total_servers} sunucu test ediliyor...")
+            progress("")
+
+        for i, server in enumerate(servers, 1):
+            if progress:
+                progress(f"[{i}/{total_servers}] {server} test ediliyor...")
+
+            try:
+                # NTP portu UDP 123
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.settimeout(5.0)  # 5 saniye timeout
+
+                if progress:
+                    progress(f"  → UDP 123 portuna bağlanıyor...")
+
+                # Basit NTP paket gönder (48 byte, ilk byte 0x1b)
+                ntp_packet = b'\x1b' + b'\x00' * 47
+                sock.sendto(ntp_packet, (server, 123))
+
+                if progress:
+                    progress(f"  → NTP paketi gönderildi, yanıt bekleniyor...")
+
+                # Cevap bekle
+                response, addr = sock.recvfrom(1024)
+                sock.close()
+
+                if len(response) >= 48:
+                    result_msg = f"✓ {server} — Erişilebilir ve yanıt veriyor"
+                    if progress:
+                        progress(f"  ✅ Başarılı! NTP yanıtı alındı ({len(response)} byte)")
+                    successful_count += 1
+                else:
+                    result_msg = f"⚠ {server} — Yanıt aldı ama NTP formatı doğru değil"
+                    if progress:
+                        progress(f"  ⚠️ Yanıt alındı ama NTP formatı hatalı")
+
+                results.append(result_msg)
+
+            except socket.timeout:
+                result_msg = f"✗ {server} — Zaman aşımı (5 saniye)"
+                results.append(result_msg)
+                if progress:
+                    progress(f"  ❌ Zaman aşımı! 5 saniye içinde yanıt alınamadı")
+
+            except socket.gaierror:
+                result_msg = f"✗ {server} — DNS çözümlenemedi"
+                results.append(result_msg)
+                if progress:
+                    progress(f"  ❌ DNS hatası! Sunucu adı çözümlenemedi")
+
+            except Exception as e:
+                result_msg = f"✗ {server} — Bağlantı hatası: {str(e)[:50]}"
+                results.append(result_msg)
+                if progress:
+                    progress(f"  ❌ Bağlantı hatası: {str(e)[:50]}")
+
+            if progress:
+                progress("")
+
+        if progress:
+            progress("🏁 Test tamamlandı!")
+            progress(f"📊 Sonuç: {successful_count}/{total_servers} sunucu başarılı")
+            progress("")
+
+        summary = f"{successful_count}/{total_servers} NTP sunucusu başarılı"
+
+        if successful_count == 0:
+            return ApplyResult(
+                False,
+                "Hiçbir NTP sunucusuna ulaşılamadı!",
+                details="\n".join(results)
+            )
+        elif successful_count < total_servers:
+            return ApplyResult(
+                True,
+                f"Kısmi başarı: {summary}",
+                details="\n".join(results) + f"\n\n⚠ {total_servers - successful_count} sunucu erişilemez durumda."
+            )
+        else:
+            return ApplyResult(
+                True,
+                f"Mükemmel: {summary}",
+                details="\n".join(results) + "\n\n✓ Tüm NTP sunucuları çalışıyor."
+            )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         try:
