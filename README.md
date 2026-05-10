@@ -60,6 +60,38 @@ Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol list
 | 10 | **Güç yönetimi** | Giriş ekranında tahta belirtilen süre (15–180 dk) boşta kalırsa otomatik kapanır. Aktif SSH bağlantısı, takılı USB veya devam eden işlem varsa kapatmaz; 1 dakika önceden uyarı verir. |
 | 11 | **İmaj için sanitize** | Son adım, **geri alınamaz**. Her klonun aynı görünmemesi için tekil kimlikleri (machine-id, SSH host anahtarları, NetworkManager parolaları, DHCP lease vb.) sıfırlar; imajdan önce kapsamlı bir temizlik yaparak yer açar — paket önbellekleri, loglar, kullanılmayan diller, geçici dosyalar, kullanıcı önbellekleri, ayrıca tarayıcı önbellek ve gezinti verileri (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex). Tipik kazanım: 500 MB – 1 GB+. |
 
+## Sihirbazdan kareler
+
+<table>
+<tr>
+<td width="50%"><a href="docs/images/01-hosgeldiniz.png"><img src="docs/images/01-hosgeldiniz.png" alt="Hoş geldiniz"></a><br><sub><b>Hoş geldiniz</b> — sihirbazın sunduğu özelliklerin özeti</sub></td>
+<td width="50%"><a href="docs/images/02-sistem-guncellemesi.png"><img src="docs/images/02-sistem-guncellemesi.png" alt="Sistem güncellemesi"></a><br><sub><b>1. Sistem güncellemesi</b> — bekleyen yükseltme yoksa atlanabilir</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/03-yerel-hesaplar.png"><img src="docs/images/03-yerel-hesaplar.png" alt="Yerel hesaplar"></a><br><sub><b>2. Yerel hesaplar</b> — root/etapadmin/ogretmen parolaları</sub></td>
+<td><a href="docs/images/04-otomatik-parola-temizligi.png"><img src="docs/images/04-otomatik-parola-temizligi.png" alt="Otomatik parola temizliği"></a><br><sub><b>3. Otomatik parola temizliği</b> — açılışta parola sıfırlama servisi</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/05-toplu-pin-anahtari.png"><img src="docs/images/05-toplu-pin-anahtari.png" alt="Toplu PIN anahtarı"></a><br><sub><b>4. Toplu PIN anahtarı</b> — anahtar/kod açıklaması + öğretmen listesi</sub></td>
+<td><a href="docs/images/06-ssh-sunucusu.png"><img src="docs/images/06-ssh-sunucusu.png" alt="SSH sunucusu"></a><br><sub><b>5. SSH Sunucusu</b> — uzaktan terminal erişimi</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/07-samba-dosya-paylasimi.png"><img src="docs/images/07-samba-dosya-paylasimi.png" alt="Samba"></a><br><sub><b>6. Samba dosya paylaşımı</b> — uzak dosya gezgini erişimi</sub></td>
+<td><a href="docs/images/08-merkezi-log-sunucusu.png"><img src="docs/images/08-merkezi-log-sunucusu.png" alt="Merkezi log"></a><br><sub><b>7. Merkezi log sunucusu</b> — dayanıklı rsyslog iletimi</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/09-zaman-senkronizasyonu.png"><img src="docs/images/09-zaman-senkronizasyonu.png" alt="NTP"></a><br><sub><b>8. Zaman senkronizasyonu (NTP)</b> — test düğmesi dahil</sub></td>
+<td><a href="docs/images/10-benzersiz-hostname.png"><img src="docs/images/10-benzersiz-hostname.png" alt="Hostname"></a><br><sub><b>9. Benzersiz hostname</b> — her klona MAC tabanlı isim</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/11-guc-yonetimi.png"><img src="docs/images/11-guc-yonetimi.png" alt="Güç yönetimi"></a><br><sub><b>10. Güç yönetimi</b> — boştayken otomatik kapanma</sub></td>
+<td><a href="docs/images/12-imaj-icin-sanitize.png"><img src="docs/images/12-imaj-icin-sanitize.png" alt="Sanitize"></a><br><sub><b>11. İmaj için sanitize</b> — son adım, kapsamlı temizlik</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center" width="100%"><a href="docs/images/13-ozet.png"><img src="docs/images/13-ozet.png" alt="Özet" width="50%"></a><br><sub><b>Özet</b> — oturumda uygulanan/geri alınan adımların listesi</sub></td>
+</tr>
+</table>
+
 ## 📡 Ağ Topolojisi ve Erişim Gereksinimleri
 
 Okulların ağ yapısı genellikle şu şekildedir. **5., 6. ve 7. adımların** (SSH, Samba, Merkezi log) sağladığı özellikler **yalnızca tahta ve AP ağından** kullanılabilir.
