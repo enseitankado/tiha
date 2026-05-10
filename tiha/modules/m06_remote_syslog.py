@@ -1,4 +1,4 @@
-"""Modül 6 (wizard 7. adım) — Dayanıklı merkezi log iletimi.
+"""Modül 6 — Dayanıklı merkezi log iletimi.
 
 Ne yapar?
 Tahtadaki tüm sistem günlüklerinin (syslog: oturum açma, servis
@@ -163,6 +163,7 @@ $Umask 0000
 class RemoteSyslogModule(Module):
     id = "m06_remote_syslog"
     title = "Dayanıklı merkezi log iletimi"
+    sidebar_title = "Merkezi log sunucusu"
     apply_hint = (
         "Hiç log kaybı olmayan dayanıklı merkezi log iletimi kurulur."
     )
@@ -172,6 +173,11 @@ class RemoteSyslogModule(Module):
         "sunucusuna DAYANIKLI BİÇİMDE gönderir. 50 tahtalı bir okulun "
         "loglarını tek bir arayüzden izleyebilir, olay/arıza taramasını "
         "saniyeler içinde yapabilirsiniz.\n\n"
+        "⚠ Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka "
+        "uygulayın. Aksi hâlde imajdan klonlanan tüm tahtalar aynı hostname "
+        "ile log gönderir; merkezi sunucudaki kayıtları tahta tahta ayırt "
+        "edemezsiniz. Hostname adımı her klona kendi MAC adresinden türeyen "
+        "benzersiz bir ad verir.\n\n"
         "KRİTİK AVANTAJ: Bu modül HİÇ LOG KAYBI OLMAYAN gelişmiş "
         "yapılandırma kullanır. Uzak log sunucusu saatlerce hatta günlerce "
         "erişilemez durumda olsa bile (elektrik kesintisi, ağ bakımı, "
@@ -189,6 +195,20 @@ class RemoteSyslogModule(Module):
 
     def preview(self) -> str:
         lines: list[str] = []
+
+        # "Benzersiz hostname" adımı uygulanmamışsa hatırlat — yoksa
+        # merkezi sunucudaki loglar tahtaları birbirinden ayırt edemez.
+        hostname_setup_done = Path(
+            "/etc/systemd/system/tiha-first-boot-hostname.service"
+        ).exists()
+        if not hostname_setup_done:
+            lines.append(
+                "ℹ️ Hatırlatma: Benzersiz hostname adımı henüz uygulanmamış. "
+                "Bu adımı uygulayacaksanız mutlaka onu da uygulayın; aksi "
+                "hâlde merkezi sunucudaki loglarda tahtalar aynı isimle "
+                "görünür ve birbirinden ayırt edilemez."
+            )
+            lines.append("")
 
         if RSYSLOG_CONF.exists():
             lines.append(f"✓ Mevcut TiHA dayanıklı log yapılandırması: {RSYSLOG_CONF}")

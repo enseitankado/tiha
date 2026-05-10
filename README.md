@@ -8,39 +8,27 @@
 
 ## TiHA nedir?
 
-TiHA, öğretmenin tahtaya dokunarak parola girdiği tüm senaryoları ortadan kaldırır. Böylece öğretmen parolasının ifşa olmasına bağlı izin verilmeyen öğrenci kullanımlarının önüne geçilir.
+TiHA, Pardus ETAP kurulu bir tahtayı imaj alınmaya hazırlayan; isteyen yöneticiye ek olarak parola sertleştirme ve PIN ile giriş kurulumu sunan bir sihirbaz uygulamasıdır.
 
-Pardus ETAP 23 kurulu tahtada **tek bir komutla** çalışır — **bilgisayara yüklenmez**, geçici olarak açılıp kapanır. Görsel bir sihirbaz her adımın **ne yaptığını** ve **neden yaptığını** size açıklar, onayınızı alır, sonucu gösterir ve gerektiğinde **geri alır**.
+Pardus ETAP 23 kurulu tahtada **tek bir komutla** çalışır — **bilgisayara yüklenmez**, geçici olarak açılıp kapanır. Görsel bir sihirbaz her adımın **ne yaptığını** ve **neden yaptığını** size açıklar, onayınızı alır, sonucu gösterir ve gerektiğinde **geri alır**. Sayfa her açıldığında önizleme/raporlar sistemin o anki durumuyla yeniden hesaplanır.
 
-## Hangi sorunu çözer?
+## Ne işe yarar?
 
-Sınıfta öğretmen, tahtada **EBA-QR ile ilk kez oturum açarken** sistem kendisinden bir yerel parola belirlemesini ister. Öğretmen bu parolayı **65 inç dokunmatik ekranda parmağıyla yazmak zorundadır**. Arkadaki sıralarda oturan öğrenciler ekrandaki tuşları rahatlıkla gördüğü için **parolayı ezberler**. Sonraki derslerde öğretmenin hesabıyla tahtayı açıp yetkisiz işlemler yapabilirler.
+Tek tahtada hazırlanan bir Pardus ETAP imajını **onlarca tahtaya sorunsuz dağıtmak** için gerekli iki tür hazırlığı tek sihirbazda toplar:
 
-**TiHA bu sorunu kökten çözer.** İmaj uygulandıktan sonra ekrandan parola yazarak giriş yapmak **artık mümkün değildir**. Öğretmen yalnızca şu üç yoldan biriyle oturum açabilir:
+1. **İmaja özel teknik hazırlık** (her senaryoda gereklidir): paket güncellemesi, NTP, benzersiz hostname stratejisi, SSH/Samba ile uzak bakım, merkezi log, güç yönetimi, imaj öncesi tekil kimlik sanitizasyonu ve yer açma.
+2. **İsteğe bağlı parola sertleştirmesi**: `root` ve `etapadmin` için bilinçli parola atamak; istenirse açılışta parolaların yeniden rastgeleleştirildiği bir servisle parolalı girişi tamamen kapatmak; öğretmenler için PIN anahtarlarını imaj öncesi toplu üretmek.
+
+> **Tarihçe.** Projeyi başlatan tetikleyici, EBA-QR'ın ilk girişte öğretmenden yerel parola tanımlamasını isteyen ve bu parolanın 65 inç dokunmatik ekrana parmakla yazılması nedeniyle arka sıralardaki öğrenciler tarafından okunabilen davranışıydı. **Bu zorunluluk yeni dağıtımda kaldırıldı.** Yine de ekrana parola yazılması her zaman ifşa riski taşır; o riski tamamen kapatmak isteyenler için TiHA'nın parola sertleştirme adımları olduğu gibi kullanılabilir.
+
+İmaj uygulandıktan sonra öğretmenlerin oturum açabileceği yollar:
 
 | Yol | Açıklama |
 |-----|----------|
-| 🔳 **EBA-QR** | Telefondaki EBA uygulamasından ekrandaki kare kodu okutarak |
-| 🔢 **PIN kodu** | Google Authenticator gibi bir uygulamadan üretilen, 30 saniyede bir değişen 6 haneli kod |
+| 🔳 **EBA-QR** | Telefondaki EBA uygulamasından ekrandaki kare kodu okutarak (Pardus ETAP'ın varsayılan giriş yolu) |
+| 🔢 **PIN kodu** | Authenticator uygulamasından üretilen, 30 saniyede bir değişen 6 haneli kod |
 | 🗝️ **USB anahtar** | Öğretmene özel hazırlanmış kişisel USB bellek |
-
-## Nasıl çalışır?
-
-İmaj uygulandıktan sonra her öğretmen şu üç yoldan biriyle oturum açabilir — **dikkat**, yerel parolayla giriş yoktur:
-
-```mermaid
-flowchart LR
-    T((Tahta<br/>açıldı))
-    T --> A[🔳 EBA-QR okut]
-    T --> B[🔢 PIN kodu gir]
-    T --> C[🗝️ USB anahtar tak]
-    A --> S((Oturum<br/>açıldı))
-    B --> S
-    C --> S
-    X[❌ Ekrandan parola]:::forbidden -.-> T
-
-    classDef forbidden stroke:#dc3545,color:#dc3545,stroke-dasharray: 5 5,fill:#f8d7da
-```
+| 🔑 **Yerel parola** | Standart yol; TiHA'nın parola sertleştirme adımları uygulandığında kapatılır |
 
 ## 📡 Ağ Topolojisi ve Erişim Gereksinimleri
 
@@ -119,21 +107,21 @@ graph TB
 
 ## Neler yapar?
 
-Sihirbaz bu adımları sırasıyla uygular. Her biri isteğe bağlıdır; ancak ana senaryo için hepsinin uygulanması tavsiye edilir.
+Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol listeden istediğiniz adıma her zaman geçebilirsiniz. **Parola sertleştirme adımları** (2, 3, 4) bir bütündür; uygulayıp uygulamamak size kalmıştır.
 
 | # | Adım | Kısa açıklama |
 |---|------|----------------|
-| 1  | **Donanım ön kontrol**          | Tahta imajlanmaya uygun mu? SMBIOS, MAC, `machine-id` kontrolü. |
-| 2  | **Başlangıç parolaları**         | `root` ve `etapadmin` parolalarını ayarlar; genel hesapları rastgele parolayla kilitler. |
-| 3  | **Her açılışta parola temizliği**| Genel öğretmen/öğrenci hesaplarının parolasını her açılışta rastgele değere çeviren sistem servisini kurar. Yönetici `etapadmin` hesabına **dokunulmaz**; teknik erişim korunur. |
-| 4  | **Öğretmen PIN anahtarları**     | Öğretmen listenizden 6 haneli PIN kodu üreten güvenlik anahtarlarını imaj öncesinde toplu üretir. Bu adım şart, çünkü Pardus ETAP'ın kendi PIN üretici uygulaması kullanıcının yerel parolasını ister; TiHA bu parolaları sıfırladığı için öğretmen sahada kendi başına PIN kuramaz. |
-| 5  | **SSH sunucusu**                 | Tahtayla aynı ağa bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. (Tahtalar ve kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır.) |
-| 6  | **Samba dosya paylaşımı**        | Tahtanın diskine aynı ağdaki bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. (Tahtalar ve AP'ler `10.x.x.x` aralığındadır.) |
-| 7  | **Merkezi log iletimi**          | Tahtanın günlüklerini aynı ağdaki merkezi log sunucusuna iletir. (Log sunucusu tahta ağında `10.x.x.x` olmalı.) |
-| 8  | **Zaman senkronizasyonu (NTP)**  | Saat dilimini ve yedek zaman sunucularını yapılandırır. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. |
-| 9  | **Benzersiz hostname stratejisi**| Her klonun ilk açılışta kendine özgü bir hostname almasını sağlar. |
-| 10 | **Sistem güncellemesi (apt)**    | `apt update` + `full-upgrade` + temizlik. |
-| 11 | **İmaj için sanitizasyon**       | Son adım: tekil kimlikleri (SSH anahtarları, `machine-id`, NetworkManager vb.) temizler. |
+| 1  | **Sistem güncellemesi (apt)** | `apt update` + `full-upgrade` + temizlik. Bekleyen paket sayısı sayfa açılırken hesaplanır; varsa "İleri" düğmesi pasif kalır (kullanıcının atlamadan güncelleyip geçmesi için), yoksa atlanabilir. Sol listeden navigasyon her zaman açıktır. |
+| 2  | **Yerel hesaplar** | `root`, `etapadmin` (ve isterseniz `ogretmen`) parolalarını siz belirlersiniz. Diğer hesaplara dokunulmaz. Ortak `ogretmen`/`ogrenci` hesaplarını tamamen silmek için ayrı düğmeler vardır. Geri alma ile `/etc/shadow` yedeği yerine konup tüm parolalar uygulamadan önceki hâline döner. |
+| 3  | **Otomatik parola temizliği** | Açılışta `etapadmin` dışındaki hesapların parolasını rastgele bir değere çeviren systemd oneshot servisini kurar; sonradan elle atanan parolalar da bir sonraki açılışta işe yaramaz hâle gelir. *(isteğe bağlı parola sertleştirme)* Geri alma servisi ve isteğe bağlı olarak ek hesapları kaldırır. |
+| 4  | **Toplu PIN anahtarı** | Öğretmenler için 6 haneli PIN üreten güvenli anahtarları imaj öncesi merkezî olarak üretip imaja gömer. Yardım metni "anahtar nedir, kod nedir" benzetmeleriyle yaşlı öğretmen-dostu biçimde anlatılır. `enseitankado/eta-otp-cli` aracı **her koşulda** otomatik indirilir (bootstrap.sh dışı çalıştırmalarda da); başarısız olursa dahili `pyotp` yoluna sessiz düşer. Kullanıcı oluşturulurken tam ad-soyad passwd dosyasının GECOS alanına yazılır. "Fazladan Hesapları Sil" düğmesi yalnız sistemde fazladan hesap varsa görünür; tıklatıldığında önce kullanıcı prosesleri sonlandırılır, sonra `deluser --remove-home` çalıştırılır ve sonuç (hatalar dahil) doğrudan sayfada gösterilir. |
+| 5  | **SSH sunucusu** | Tahtayla aynı ağa bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. (Tahtalar ve AP'ler genellikle `10.x.x.x` aralığındadır.) |
+| 6  | **Samba dosya paylaşımı** | Tahtanın diskine aynı ağdaki bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. |
+| 7  | **Merkezi log sunucusu** | Tahtanın tüm sistem günlüklerini ağdaki merkezi rsyslog sunucusuna **disk-destekli kuyrukla** dayanıklı biçimde iletir; sunucu erişilemez olsa bile loglar yerel diskte birikir, sunucu geri gelince otomatik gönderilir. **Bu adımı uyguluyorsanız 9. adımı (Benzersiz hostname) de mutlaka uygulayın**, yoksa merkezi sunucudaki kayıtlar aynı isimle gelir ve tahtalar birbirinden ayırt edilemez. |
+| 8  | **Zaman senkronizasyonu (NTP)** | Saat dilimini ve birincil/yedek zaman sunucularını yapılandırır. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. Form üzerinde "NTP Sunucularını Test Et" düğmesi, her sunucuyu UDP/123 üzerinden canlı raporlayarak sınar. |
+| 9  | **Benzersiz hostname** | İmaj alınırken hostname'i şablon (`etap-image` vb.) yapar; her klon ilk açılışta kablolu MAC adresinin son 6 hanesinden türeyen kendine özgü bir ad alır (`etap-ab12cd` gibi). `/etc/hosts` da senkron tutulur. |
+| 10 | **Güç yönetimi** | LightDM greeter ekranında tahta belirtilen süre (15–180 dk) boşta kalırsa otomatik kapanma. Aktif SSH bağlantısı, takılı USB veya devam eden işlem varsa kapatmaz; 1 dakika önceden uyarı verir. |
+| 11 | **İmaj için sanitize** | Son adım, **GERİ ALINAMAZ**. İki iş yapar: (a) Tekil kimlikleri sıfırlar — machine-id, SSH host anahtarları, NetworkManager UUID/parolaları, DHCP lease, `/var/lib/systemd/random-seed` (her klon ilk açılışta yenisini üretir). (b) Kapsamlı yer açma + iz silme: APT önbelleği ve `rc`-state paketleri, `journalctl --vacuum-size=1K`, kullanılmayan diller için `/usr/share/locale` temizliği, `/var/log` içerikleri, crash raporları, mail/cups/anacron/cron spool, man/fontconfig/debconf/lightdm önbellekleri, `*.dpkg-old/-dist`, tüm kullanıcıların `.cache`/`.local/share/Trash`/kabuk geçmişleri, ve **tarayıcı önbellek + gezinti verileri** (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex). Tipik kazanım: 500 MB – 1 GB+. Sonuç ekranda hem yer kazancı hem ayrıntılı kategori dökümüyle, ayrıca bir popup ile bildirilir. |
 
 ## Nasıl çalıştırılır?
 
@@ -155,24 +143,33 @@ tiha/
 ├── LICENSE
 ├── bootstrap.sh                 Tek komutla çalıştıran başlatıcı
 ├── pyproject.toml
-├── data/styles.css
+├── data/styles.css              GTK3 teması (input kenarlıkları, scrollbar, vb.)
 └── tiha/                        Python paketi
     ├── app.py                   Uygulama girişi
-    ├── core/                    Altyapı (günce, günlük, yetki, yardımcılar)
-    ├── modules/                 11 sihirbaz adımı (m00–m10)
-    └── ui/                      GTK3 arayüzü
+    ├── core/                    Altyapı (günce, günlük, yetki, yardımcılar, yollar)
+    ├── modules/                 Sihirbaz adımları (m01–m11)
+    └── ui/                      GTK3 arayüzü (karşılama, modül, özet sayfaları)
 ```
 
 ## Dayandığı projeler
 
-TiHA, Modül 4'te (Öğretmen PIN anahtarları) aşağıdaki açık kaynaklı aracı indirip doğrudan kullanır:
+TiHA, "Toplu PIN anahtarı" adımında aşağıdaki açık kaynaklı aracı indirip doğrudan kullanır:
 
 - **[enseitankado/eta-otp-cli](https://github.com/enseitankado/eta-otp-cli)** — Pardus ETAP'ın `/etc/otp-secrets.json` dosyasıyla bire bir uyumlu, terminal tabanlı TOTP/PIN yönetim aracı. TiHA özellikle `toplu-kullanici-olustur.py` betiğini çağırır; bu betik:
   - Öğretmen listesinden Linux kullanıcılarını doğru gruplarla (cdrom, audio, video, plugdev, bluetooth, scanner, netdev, dip, lpadmin) oluşturur,
   - Her hesap için BASE32 PIN anahtarı üretip `/etc/otp-secrets.json` dosyasına yazar,
   - AccountsService cache'ini günceller — yeni hesaplar LightDM login ekranında görünür olur.
 
-Araç `bootstrap.sh` tarafından otomatik indirilir (`/tmp/tiha.XXXX/eta-otp-cli/`). İndirme başarısız olsa bile TiHA dahili `pyotp` yedek yoluyla (aynı dosya, aynı format) çalışmaya devam eder. Yazara ve projeye teşekkürler — bu iş akışını öğretmen hesaplarının toplu kurulumu açısından oldukça basitleştirdi.
+Araç önce `bootstrap.sh` tarafından `/tmp/tiha.XXXX/eta-otp-cli/` altına indirilmeyi dener; başarısız olursa veya TiHA bootstrap.sh dışında başlatıldıysa modül `/var/lib/tiha/eta-otp-cli/` altına kendi indirme denemesini yapar (oturum başına bir kez). İnternet erişimi yoksa TiHA dahili `pyotp` yedek yoluna (aynı dosya, aynı format) sessizce düşer; kullanıcı arayüzünde hata gürültüsü olmaz. Yazara ve projeye teşekkürler — bu iş akışını öğretmen hesaplarının toplu kurulumu açısından oldukça basitleştirdi.
+
+## Sanitize adımının esinlendiği projeler
+
+11. adımdaki yer açma katmanı, açık kaynak temizleyicilerin yaklaşımlarını harmanlar:
+
+- [virt-sysprep](https://libguestfs.org/virt-sysprep.1.html) — sanal makine imajlarını "ilk klon" hâline indirir.
+- [cloud-init clean](https://cloudinit.readthedocs.io/) — bulut imaj örneklerinde durum sıfırlama.
+- [BleachBit](https://www.bleachbit.org/) — kullanıcı önbellek ve gezinti verisi temizliği.
+- Debian'ın kendi `apt-get autoremove --purge` + `apt-get clean` + `journalctl --vacuum-*` araç zinciri.
 
 ## Katkı ve destek
 

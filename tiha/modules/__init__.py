@@ -6,7 +6,6 @@ from ..core.module import Module
 
 # Aşağıdaki sıralama doğrudan sihirbaz akışını belirler.
 # Yeni modül eklerken buraya da tanıtın.
-from .m00_precheck import PrecheckModule
 from .m01_initial_passwords import InitialPasswordsModule
 from .m02_boot_password_wipe import BootPasswordWipeModule
 from .m03_otp_secrets import OTPSecretsModule
@@ -23,7 +22,7 @@ from .m11_power_management import PowerManagementModule
 def all_modules() -> list[Module]:
     """Sihirbaza eklenecek tüm modüllerin sıralı örneklerini döndürür."""
     return [
-        PrecheckModule(),
+        SystemUpdateModule(),
         InitialPasswordsModule(),
         BootPasswordWipeModule(),
         OTPSecretsModule(),
@@ -32,7 +31,6 @@ def all_modules() -> list[Module]:
         RemoteSyslogModule(),
         TimeSyncModule(),
         HostnameModule(),
-        SystemUpdateModule(),
-        ImageSanitizeModule(),
         PowerManagementModule(),
+        ImageSanitizeModule(),
     ]

@@ -1,19 +1,22 @@
 """Modül 1 — Kullanıcı parolaları.
 
 Ne yapar?
-- Sistemdeki gerçek kullanıcıların (UID ≥ 1000) etapadmin dışındaki
-  hepsine kriptografik olarak güvenli rastgele parola atar ve bu hesapları
-  usermod -L ile kilitler.
-- Kullanıcının belirlediği yeni root ve etapadmin parolalarını
-  uygular.
+- Kullanıcının belirlediği yeni `root` ve `etapadmin` parolalarını uygular.
+- İsteğe bağlı olarak `ogretmen` hesabı için parola belirler (alan boş
+  bırakılırsa hesaba dokunulmaz).
+- İsteğe bağlı olarak `ogretmen`/`ogrenci` ortak hesaplarını sistemden
+  tamamen siler.
+
+Diğer hesaplara dokunulmaz; bu adım kimseyi kilitlemez.
 
 Neden gerekir?
-Sınıftaki 65" dokunmatik ekranda öğrencilerin izlediği ortamda kişisel
-parola tanımlamak, parolanın görsel olarak ifşa olmasına yol açar. Bu adım
-imaj alınmadan önce tüm genel hesapları kilitleyerek, tahta dağıtıldığında
-öğrencilerin bu hesaplarla ekrana parola yazmasının yolunu kapatır.
+İmajdan onlarca tahtaya dağıtılacak bir kurulumda root ve etapadmin
+parolalarının siz tarafından bilinçli olarak belirlenmiş olması gerekir;
+varsayılan/önceden bilinen parolaların imajda kalmaması için.
 
-Geri al. Önceki /etc/shadow yedeği geri yüklenir.
+Geri al. Apply öncesi alınan `/etc/shadow` yedeği yerine yazılır;
+böylece root, etapadmin ve ogretmen başta olmak üzere tüm hesapların
+parolası `apply` öncesi haline döner.
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ from pathlib import Path
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
-from ..core.utils import backup_file, random_password, restore_file, run_cmd, user_exists
+from ..core.utils import backup_file, restore_file, run_cmd, user_exists
 
 log = get_logger(__name__)
 
@@ -34,25 +37,11 @@ SHADOW = Path("/etc/shadow")
 REMOVABLE_USERS = {"ogrenci", "ogretmen"}
 
 
-def _human_users() -> list[str]:
-    """UID 1000-59999 aralığındaki (gerçek kullanıcı) isimlerin listesi."""
-    users = []
-    for entry in pwd.getpwall():
-        if 1000 <= entry.pw_uid < 60000:
-            users.append(entry.pw_name)
-    return users
-
-
 def _set_password(user: str, password: str) -> bool:
     """``chpasswd`` ile parola atar. Başarıyı bool döner."""
     result = run_cmd(["chpasswd"], input_data=f"{user}:{password}\n")
     if not result.ok:
         log.error("'%s' için parola atanamadı: %s", user, result.stderr.strip())
-    return result.ok
-
-
-def _lock_user(user: str) -> bool:
-    result = run_cmd(["usermod", "-L", user])
     return result.ok
 
 
@@ -145,49 +134,30 @@ def get_removable_user_status() -> dict[str, bool]:
 class InitialPasswordsModule(Module):
     id = "m01_initial_passwords"
     title = "Kullanıcı parolaları"
+    sidebar_title = "Yerel hesaplar"
     apply_hint = (
-        "Belirlenen root/etapadmin parolaları uygulanır; diğer hesaplar kilitlenir."
+        "root, etapadmin (ve doldurulmuşsa ogretmen) parolaları belirlenen "
+        "değerlere ayarlanır. Diğer hesaplara dokunulmaz."
     )
     rationale = (
-        "Sistem kullanıcı hesaplarını güvenlik gereksinimlerinize göre yönetir. "
-        "Gereksiz hesapları (ogrenci, ogretmen) tamamen silme seçeneği sunar. "
-        "Root, etapadmin ve isteğe bağlı olarak ogretmen hesabı için güçlü "
-        "parolalar belirleyebilirsiniz. Parolalar ekranda görülebilir formatta "
-        "girilebilir."
+        "root ve etapadmin parolalarını siz belirleyin. ogretmen hesabı "
+        "varsa ve onun da parolasını siz belirlemek istiyorsanız ilgili "
+        "alanı doldurun; aksi hâlde boş bırakın.\n\n"
+        "Bu adım yalnızca formdaki hesapları etkiler; başka kullanıcıyı "
+        "kilitlemez ya da değiştirmez. Ortak hesapları (ogretmen, ogrenci) "
+        "tamamen silmek isterseniz aşağıdaki düğmeyi kullanabilirsiniz."
     )
 
     def preview(self) -> str:
         user_status = get_removable_user_status()
 
         lines: list[str] = []
-        lines.append("Kullanıcı Yönetimi ve Parola Ayarları:")
-        lines.append("")
-
-        # Silinebilir kullanıcı durumu
-        removable_exists = any(user_status.values())
-        if removable_exists:
-            lines.append("🗑️ Sistem Kullanıcıları:")
-            for user, exists in user_status.items():
-                status = "✓ mevcut" if exists else "⨯ yok"
-                lines.append(f"    • {user}: {status}")
-            lines.append("")
-            if removable_exists:
-                lines.append("Bu kullanıcılar isteğe bağlı olarak silinebilir.")
-        else:
-            lines.append("✓ Sistem kullanıcıları (ogrenci, ogretmen) zaten yok")
-
-        lines.append("")
-        lines.append("🔒 Parola Belirleme:")
-        lines.append("    • root parolası (görülebilir)")
-        lines.append("    • etapadmin parolası (görülebilir)")
-        if user_status.get("ogretmen", False):
-            lines.append("    • ogretmen parolası (isteğe bağlı, görülebilir)")
-
-        if user_status.get("ogrenci", False):
-            lines.append("")
-            lines.append("⚠️ Öğrenci Hesabı Yönetimi:")
-            lines.append("    • Öğrenci hesabı mevcut ve güvenlik riski oluşturuyor")
-            lines.append("    → 'Öğrenci Hesabını Sil' butonu ile kaldırabilirsiniz")
+        lines.append("Sistemdeki ortak hesaplar:")
+        for user, exists in user_status.items():
+            status = "✓ mevcut" if exists else "⨯ yok"
+            lines.append(f"    • {user}: {status}")
+        if not any(user_status.values()):
+            lines.append("    (ogrenci ve ogretmen zaten yok)")
 
         return "\n".join(lines)
 
@@ -225,45 +195,28 @@ class InitialPasswordsModule(Module):
                         removed_users.append(username)
                         log.info("Sistem kullanıcısı silindi: %s", username)
 
-        # 1) Gerçek kullanıcıları kilitle
-        locked: list[str] = []
-        failed: list[str] = []
-        for user in _human_users():
-            if user == "etapadmin":
-                continue
-            if _set_password(user, random_password(40)) and _lock_user(user):
-                locked.append(user)
-            else:
-                failed.append(user)
-
-        # 2) root, etapadmin ve ogretmen parolalarını ata
+        # root, etapadmin ve (varsa) ogretmen parolalarını ata
         ok_root = _set_password("root", root_pw)
         ok_admin = _set_password("etapadmin", admin_pw)
         ok_teacher = True
         if teacher_pw and user_exists("ogretmen"):
             ok_teacher = _set_password("ogretmen", teacher_pw)
-            # Öğretmen hesabının kilidi açılmalı (parola ile giriş yapılabilsin)
+            # ogretmen hesabı kilitliyse parola ile giriş yapılabilmesi için aç
             _unlock_user("ogretmen")
 
         details_lines = []
         if removed_users:
-            details_lines.append("Silinen sistem kullanıcıları: " + ", ".join(removed_users))
-        if locked:
-            details_lines.append("Kilitlenen hesaplar: " + ", ".join(locked))
-        if failed:
-            details_lines.append("Kilitlenemeyen hesaplar: " + ", ".join(failed))
+            details_lines.append("Silinen ortak hesaplar: " + ", ".join(removed_users))
         details_lines.append(f"root parolası: {'atandı' if ok_root else 'ATANAMADI'}")
         details_lines.append(f"etapadmin parolası: {'atandı' if ok_admin else 'ATANAMADI'}")
         if teacher_pw:
             details_lines.append(f"ogretmen parolası: {'atandı' if ok_teacher else 'ATANAMADI'}")
 
-        overall = ok_root and ok_admin and ok_teacher and not failed
+        overall = ok_root and ok_admin and ok_teacher
 
         summary_parts = []
         if removed_users:
-            summary_parts.append(f"{len(removed_users)} sistem kullanıcısı silindi")
-        if locked:
-            summary_parts.append(f"{len(locked)} hesap kilitlendi")
+            summary_parts.append(f"{len(removed_users)} ortak hesap silindi")
 
         password_parts = []
         if ok_root and ok_admin:
@@ -297,15 +250,9 @@ class InitialPasswordsModule(Module):
 
         try:
             restore_file(backup, SHADOW)
-            # Kilitli kullanıcıları da aç (izole olaylar için)
-            for user in _human_users():
-                if user != "etapadmin":
-                    _unlock_user(user)
-
             summary_parts = ["Önceki /etc/shadow durumu geri yüklendi"]
             if restored_users:
                 summary_parts.append(f"{len(restored_users)} kullanıcı geri yüklendi: {', '.join(restored_users)}")
-
             return ApplyResult(True, "; ".join(summary_parts) + ".")
         except OSError as exc:
             log.error("Shadow geri yükleme hatası: %s", exc)

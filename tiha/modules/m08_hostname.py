@@ -148,6 +148,7 @@ WantedBy=multi-user.target
 class HostnameModule(Module):
     id = "m08_hostname"
     title = "Benzersiz hostname stratejisi"
+    sidebar_title = "Benzersiz hostname"
     apply_hint = (
         "İmaj hostname'i uygulanır; ilk-açılış servisi kurulur."
     )

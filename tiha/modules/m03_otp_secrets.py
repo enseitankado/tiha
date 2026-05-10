@@ -1,4 +1,4 @@
-"""Modül 3 (wizard 4. adım) — Öğretmen PIN anahtarlarını toplu hazırla.
+"""Modül 3 — Öğretmen PIN anahtarlarını toplu hazırla.
 
 Ne yapar?
 Girdiğiniz öğretmen ad-soyad listesinden her öğretmen için bir kullanıcı
@@ -34,15 +34,18 @@ olarak aracın toplu-kullanici-olustur.py betiğini çağırır; böylece:
 Araç indirilemediyse TiHA dahili pyotp tabanlı yedek yolu kullanır.
 
 Neden gerekir?
-Normalde öğretmen PIN anahtarını tahtadaki eta-otp-lock uygulamasıyla
-kendisi üretir; ancak uygulama açılmadan önce kullanıcının mevcut yerel
-parolasını girmesini ister. TiHA'nın 2. ve 3. adımları (parola kilidi +
-açılışta parola temizliği) bu yerel parolayı kasıtlı olarak geçersiz
-kıldığı için öğretmen, tahtadaki PIN üreticisini açamaz. Bu yüzden
-anahtarları imaj öncesinde merkezî olarak üretir, her öğretmene
-özel olarak teslim ederiz. Öğretmen anahtarını Google Authenticator
-(veya benzeri) uygulamaya eklediği andan itibaren dağıtılmış tüm
-tahtalarda 6 haneli kodla oturum açabilir.
+Pardus ETAP'ın kendi PIN üretici uygulaması (eta-otp-lock) kullanıcının
+yerel parolasını ister. "Açılışta parola temizliği" adımı uygulanırsa o
+parolalar her açılışta rastgele bir değere çevrildiği için öğretmen
+tahtada kendi başına PIN üretemez. Bu adım, anahtarları imaj öncesinde
+merkezî olarak üretip her öğretmene özel olarak teslim etmeyi sağlar.
+Öğretmen anahtarını Google Authenticator (veya benzeri) uygulamaya
+eklediği andan itibaren dağıtılmış tüm tahtalarda 6 haneli kodla oturum
+açabilir.
+
+Parola temizliği adımını uygulamamış olsanız da bu adımı kullanmak
+pratiktir: öğretmenleri tek tek tahta başına götürmek yerine anahtarları
+hazır olarak teslim edersiniz.
 
 Geri al. Oluşturulan Linux kullanıcıları
 toplu-kullanici-olustur.py --kullanicilari-sil ile kaldırılır (ya
@@ -65,7 +68,7 @@ import pyotp
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
-from ..core.paths import OTP_SECRETS_FILE
+from ..core.paths import OTP_SECRETS_FILE, VAR_ROOT
 from ..core.utils import (
     backup_file,
     restore_file,
@@ -92,13 +95,100 @@ MIN_USERS_FOR_CACHE = 50
 DEFAULT_SYSTEM_USERS = {"etapadmin", "ogrenci", "ogretmen"}
 
 
-def _eta_otp_cli_bulk_script() -> Path | None:
-    """``toplu-kullanici-olustur.py`` bulunabiliyorsa yolunu döndürür."""
+# enseitankado/eta-otp-cli entegrasyonu: bootstrap.sh aracı
+# /tmp/tiha.XXXXXX/eta-otp-cli/ altına indirir ve TIHA_ETA_OTP_CLI_DIR
+# ortam değişkenine yazar. TiHA bootstrap.sh dışında başlatıldığında
+# (geliştirme, doğrudan ``python3 -m tiha``) bu değişken boş kalır;
+# o durumda aracı kendimiz aşağıdaki sabit önbellek dizinine indiririz.
+ETA_OTP_RAW_BASE = "https://raw.githubusercontent.com/enseitankado/eta-otp-cli/main"
+ETA_OTP_FILES = ("toplu-kullanici-olustur.py", "otp-cli.py")
+ETA_OTP_CACHE_DIR = VAR_ROOT / "eta-otp-cli"
+
+# Modül seviyesi bellek: aracı bir kez indirmeyi deneriz, sonuç tüm
+# çağrılar için saklanır (preview her sayfa girişinde yeniden indirme
+# çalıştırmasın diye).
+_eta_otp_cli_path: Path | None = None
+_eta_otp_cli_download_attempted: bool = False
+
+
+def _eta_otp_cli_download(dest_dir: Path) -> bool:
+    """Aracı GitHub'dan ``dest_dir`` altına indirir.
+
+    Başarıyla en az ``toplu-kullanici-olustur.py`` indirildiyse True
+    döner. Hatalar günce dosyasına yazılır; arayüze duyurulmaz.
+    """
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        log.warning("eta-otp-cli için %s oluşturulamadı: %s", dest_dir, exc)
+        return False
+    for fname in ETA_OTP_FILES:
+        target = dest_dir / fname
+        url = f"{ETA_OTP_RAW_BASE}/{fname}"
+        res = run_cmd(["curl", "-fsSL", "-o", str(target), url], timeout=60)
+        if not res.ok:
+            log.warning(
+                "eta-otp-cli/%s indirilemedi: %s",
+                fname, (res.stderr or "").strip(),
+            )
+            try:
+                target.unlink(missing_ok=True)
+            except OSError:
+                pass
+            continue
+        try:
+            target.chmod(0o755)
+        except OSError:
+            pass
+    # En azından toplu-kullanici-olustur.py inebildiyse kullanılabilir sayılır
+    return (dest_dir / "toplu-kullanici-olustur.py").is_file()
+
+
+def _ensure_eta_otp_cli() -> Path | None:
+    """``toplu-kullanici-olustur.py``'nin yolunu döner; gerekirse indirir.
+
+    Bulunma sırası:
+      1. Önceki çağrıda hazırlanmışsa (modül seviyesi önbellek)
+      2. ``TIHA_ETA_OTP_CLI_DIR`` ortam değişkenindeki yol (bootstrap.sh)
+      3. ``ETA_OTP_CACHE_DIR`` (TiHA'nın kendi indirme önbelleği)
+      4. GitHub'dan ``ETA_OTP_CACHE_DIR``'a indir (oturum başına 1 deneme)
+
+    Hiçbiri çalışmazsa ``None`` döner — çağıran taraf sessizce dahili
+    pyotp yoluna düşer.
+    """
+    global _eta_otp_cli_path, _eta_otp_cli_download_attempted
+
+    if _eta_otp_cli_path is not None and _eta_otp_cli_path.is_file():
+        return _eta_otp_cli_path
+
+    # 1) Ortam değişkeninden gelen yol (bootstrap.sh tarafından)
     dir_env = os.environ.get("TIHA_ETA_OTP_CLI_DIR")
-    if not dir_env:
+    if dir_env:
+        candidate = Path(dir_env) / "toplu-kullanici-olustur.py"
+        if candidate.is_file():
+            _eta_otp_cli_path = candidate
+            return candidate
+
+    # 2) Önceden indirilmiş önbellek
+    cached = ETA_OTP_CACHE_DIR / "toplu-kullanici-olustur.py"
+    if cached.is_file():
+        _eta_otp_cli_path = cached
+        os.environ["TIHA_ETA_OTP_CLI_DIR"] = str(ETA_OTP_CACHE_DIR)
+        return cached
+
+    # 3) Oturum başına bir kez indirme dene
+    if _eta_otp_cli_download_attempted:
         return None
-    script = Path(dir_env) / "toplu-kullanici-olustur.py"
-    return script if script.is_file() else None
+    _eta_otp_cli_download_attempted = True
+    if _eta_otp_cli_download(ETA_OTP_CACHE_DIR) and cached.is_file():
+        _eta_otp_cli_path = cached
+        os.environ["TIHA_ETA_OTP_CLI_DIR"] = str(ETA_OTP_CACHE_DIR)
+        return cached
+    return None
+
+
+def _eta_otp_cli_bulk_script() -> Path | None:
+    return _ensure_eta_otp_cli()
 
 
 def _eta_otp_cli_normalize(full_name: str) -> str:
@@ -128,15 +218,54 @@ def normalize_username(full_name: str) -> str:
     return f"{parts[0]}.{parts[-1]}"
 
 
-def create_user(username: str) -> bool:
-    """TiHA dahili yedek kullanıcı oluşturma (useradd + usermod -L)."""
+def create_user(username: str, full_name: str = "") -> bool:
+    """TiHA dahili yedek kullanıcı oluşturma (useradd + usermod -L).
+
+    ``full_name`` verilirse passwd dosyasının GECOS alanına yazılır
+    (öğretmenin görünen ad/soyadı).
+    """
     if user_exists(username):
+        # Hesap zaten varsa GECOS alanını yine de güncelle
+        if full_name:
+            set_user_full_name(username, full_name)
         return True
-    result = run_cmd(["useradd", "--create-home", "--shell", "/bin/bash", username])
+    cmd = ["useradd", "--create-home", "--shell", "/bin/bash"]
+    if full_name:
+        cmd += ["--comment", full_name]
+    cmd.append(username)
+    result = run_cmd(cmd)
     if not result.ok:
         log.error("Kullanıcı eklenemedi '%s': %s", username, result.stderr.strip())
     run_cmd(["usermod", "-L", username])
     return result.ok
+
+
+def set_user_full_name(username: str, full_name: str) -> bool:
+    """Var olan bir kullanıcının GECOS (ad/soyad) alanını günceller."""
+    if not user_exists(username):
+        return False
+    res = run_cmd(["usermod", "-c", full_name, username])
+    if not res.ok:
+        log.warning("GECOS güncellenemedi '%s': %s", username, res.stderr.strip())
+    return res.ok
+
+
+def kill_user_processes(username: str) -> tuple[int, int]:
+    """Kullanıcıya ait tüm prosesleri sonlandırır.
+
+    Önce SIGTERM, kısa bir gecikmeden sonra SIGKILL gönderir. Dönüş:
+    (term_returncode, kill_returncode). pkill'in '0=öldürdü, 1=hiç süreç
+    yok' yarı-anlamlı çıkış kodu nedeniyle bunları işin sonucuna direkt
+    bağlamayız; çağıran tarafta yalnız bilgilendirme amacıyla kullanılır.
+    """
+    import time
+    term = run_cmd(["pkill", "-TERM", "-u", username])
+    time.sleep(1)
+    # Ayrıca varsa systemd-logind oturumlarını sonlandır
+    run_cmd(["loginctl", "terminate-user", username])
+    time.sleep(0.5)
+    kill = run_cmd(["pkill", "-KILL", "-u", username])
+    return term.returncode, kill.returncode
 
 
 def load_secrets() -> dict[str, str]:
@@ -305,22 +434,45 @@ def get_extra_users() -> list[str]:
 
 
 
-def reset_to_default_users() -> tuple[bool, list[str]]:
-    """Varsayılan kullanıcılar dışındaki tüm kullanıcıları siler."""
+def reset_to_default_users(
+    progress: ProgressCallback | None = None,
+) -> tuple[bool, list[str], dict[str, str]]:
+    """Varsayılan kullanıcılar dışındaki tüm kullanıcıları siler.
+
+    Her kullanıcı için önce prosesleri sonlandırılır (deluser açık
+    oturum/proses varsa başarısız olabilir), sonra ``deluser --remove-home``
+    çağrılır. Dönüş: ``(başarı, silinenler, hatalar)`` — ``hatalar``
+    sözlüğü silinemeyen kullanıcı adından deluser stderr çıktısına eşler.
+    """
     extra_users = get_extra_users()
-    removed_users = []
+    removed_users: list[str] = []
+    errors: dict[str, str] = {}
 
     if not extra_users:
-        return True, []
+        return True, [], {}
 
     for username in extra_users:
+        if progress:
+            progress(f"\n→ {username}: prosesler sonlandırılıyor...")
+        log.info("Kullanıcı için prosesler sonlandırılıyor: %s", username)
+        kill_user_processes(username)
+
+        if progress:
+            progress(f"  deluser --remove-home {username}")
         log.info("Kullanıcı siliniyor: %s", username)
         result = run_cmd(["deluser", "--remove-home", username])
         if result.ok:
             removed_users.append(username)
             log.info("Kullanıcı başarıyla silindi: %s", username)
+            if progress:
+                progress(f"  ✓ {username} silindi")
         else:
-            log.error("Kullanıcı silinemedi %s: %s", username, result.stderr)
+            err = (result.stderr or result.stdout or "").strip() or \
+                f"deluser çıkış kodu {result.returncode}"
+            errors[username] = err
+            log.error("Kullanıcı silinemedi %s: %s", username, err)
+            if progress:
+                progress(f"  ✗ {username} silinemedi: {err}")
 
     # OTP secrets dosyasını temizle (sadece varsayılan kullanıcılar kalacak)
     try:
@@ -337,7 +489,7 @@ def reset_to_default_users() -> tuple[bool, list[str]]:
         run_greeter_script_once()
         log.info("Greeter cache güncellendi")
 
-    return len(removed_users) == len(extra_users), removed_users
+    return len(removed_users) == len(extra_users), removed_users, errors
 
 
 
@@ -345,24 +497,38 @@ def reset_to_default_users() -> tuple[bool, list[str]]:
 class OTPSecretsModule(Module):
     id = "m03_otp_secrets"
     title = "Öğretmen PIN anahtarları"
+    sidebar_title = "Toplu pin anahtarı"
     apply_hint = (
         "Listedeki ve yedek hesaplar için PIN anahtarları üretilir."
     )
     save_filename = "ogretmen-pin-anahtarlari.txt"
     streams_output = True
     rationale = (
-        "Her öğretmen için 6 haneli PIN kodu üreten güvenlik anahtarını "
-        "imaj öncesinde toplu oluşturur. Öğretmenler anahtarı Google "
-        "Authenticator benzeri uygulamaya ekleyip tüm tahtalarda 30 saniyede "
-        "bir değişen kodla giriş yapar.\n\n"
-        "Neden imaj öncesi? Pardus ETAP PIN üretici uygulaması yerel parola "
-        "ister, ancak TiHA güvenlik için tüm yerel parolaları rastgele hale "
-        "getirir. Bu sebeple anahtarlar önceden üretilip güvenli yolla "
-        "iletilir.\n\n"
-        "50+ kullanıcıda greeter cache otomatik güncellenir. Geri alma ile "
-        "varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) dışındakiler "
-        "silinir. Misafir kullanıcı (ogrenci) güvensiz erişim sağladığından "
-        "isteğe bağlı olarak kaldırılabilir."
+        "Her öğretmen için 6 haneli PIN kodu üreten güvenli anahtarlarını "
+        "imaj öncesinde toplu oluşturur.\n\n"
+        "Anahtar nedir, kod nedir?\n"
+        "  • Anahtar: Telefona kurulan uygulamada (Google Authenticator vb.) "
+        "saklanan, uzun ve gizli bir tanıtıcıdır — bir tür dijital kimlik "
+        "kartı. Bir kez kurulur, sonra hep telefonda durur.\n"
+        "  • Kod: Anahtardan üretilen, 30 saniyede bir değişen 6 haneli bir "
+        "sayıdır. Tahtaya giriş yaparken bu sayıyı yazarsınız. Geçici bir "
+        "parola gibi düşünün — her seferinde tahtanın kabul ettiği yeni bir "
+        "kapı şifresi.\n\n"
+        "Olağan kullanımda her öğretmen kendi anahtarını uygulamasından "
+        "üretip her tahtaya tek tek (dışa aktar / içe aktar) yüklemek "
+        "zorundadır; onlarca tahtada bu işlem pratik değil. Bu adım "
+        "anahtarları imaj alınmadan ÖNCE her öğretmen için merkezî olarak "
+        "üretir ve imaja gömer. İmajdan dağıtılan tüm tahtalarda anahtarlar "
+        "hazır gelir; öğretmen yalnızca kendi anahtarını size verdiğimiz "
+        "biçimde (yazılı veya QR kodu olarak) uygulamasına bir kez ekler ve "
+        "sonra ister sınıf 1'deki tahta olsun ister sınıf 50'deki, hepsinde "
+        "kendi PIN kodunu görüp girerek oturum açabilir.\n\n"
+        "“Otomatik parola temizliği” adımı uygulandıysa öğretmen tahtada "
+        "kendi PIN'ini üretemez (yerel parola bilinmediği için); bu durumda "
+        "anahtarları merkezî olarak üretmek mecburidir. Uygulanmadıysa da "
+        "tek tek kurulumdan çok daha hızlıdır.\n\n"
+        "Geri alma ile varsayılan kullanıcılar (etapadmin, ogrenci, "
+        "ogretmen) dışındakiler silinir."
     )
 
     def preview(self) -> str:
@@ -382,12 +548,11 @@ class OTPSecretsModule(Module):
         )
 
         lines: list[str] = []
-        cli_script = _eta_otp_cli_bulk_script()
-        if cli_script:
+        # Araç hazırsa kullanıcıyı haberdar et; hazır değilse hiç bahsetme
+        # — apply zaten dahili pyotp yoluna sessizce düşer.
+        if _ensure_eta_otp_cli() is not None:
             lines.append("Araç: enseitankado/eta-otp-cli  →  toplu-kullanici-olustur.py")
-        else:
-            lines.append("Araç indirilemedi; dahili pyotp yedek yolu kullanılacak.")
-        lines.append("")
+            lines.append("")
 
         # Kullanıcı sayısı ve greeter cache durumu
         user_count = count_regular_users()
@@ -403,8 +568,6 @@ class OTPSecretsModule(Module):
                 lines.append("✓ Greeter cache service mevcut (otomatik çalıştırma aktif)")
             else:
                 lines.append("  → Otomatik greeter cache service oluşturulacak")
-        else:
-            lines.append(f"{MIN_USERS_FOR_CACHE} kullanıcının altında — greeter cache gerekli değil")
         lines.append("")
 
         if has_otp:
@@ -419,7 +582,8 @@ class OTPSecretsModule(Module):
             lines.extend(f"    • {u}" for u in missing_otp)
             lines.append("")
             lines.append(
-                "Bu hesaplar Modül 3 aktifken tahtaya hiç giremeyecekler. "
+                "“Açılışta parola temizliği” adımı aktifken bu hesaplar "
+                "tahtaya hiç giremez. "
                 "Anahtar üretmek için aşağıdaki metin kutusuna AD SOYAD "
                 "biçiminde tam isimleri (ya da var olan kullanıcı adlarını) "
                 "yazın."
@@ -492,6 +656,13 @@ class OTPSecretsModule(Module):
                 "PIN anahtarları üretilemedi.",
                 details="Ayrıntı için /var/log/tiha/tiha.log dosyasına bakın.",
             )
+
+        # Her hesap için passwd GECOS (ad/soyad) alanını yaz. Harici
+        # toplu-kullanici-olustur.py bunu yapmıyor; yapılan kullanıcılar
+        # için biz uyguluyoruz. Dahili yolda useradd --comment ile zaten
+        # yazılmış olur ama yedek hesaplar (Ogretmen 01 vb.) için yine
+        # tutarlı kalsın diye burada da çağırıyoruz.
+        self._apply_gecos(teacher_names, cli_used=bool(cli_script), progress=progress)
 
         # Yeni eklenenleri ve anahtarlarını oku
         after_secrets = load_secrets()
@@ -635,19 +806,43 @@ class OTPSecretsModule(Module):
     ) -> bool:
         """Aracın olmadığı durumda TiHA'nın kendi pyotp yolu."""
         if progress:
-            progress("Dahili pyotp yolu kullanılıyor (araç indirilemedi).")
+            progress("Dahili pyotp yolu kullanılıyor.")
 
         secrets = load_secrets()
         for name in names:
             user = normalize_username(name)
             if not user:
                 continue
-            create_user(user)
+            create_user(user, full_name=name)
             secrets[user] = pyotp.random_base32()
             if progress:
-                progress(f"  • {user}: PIN anahtarı üretildi")
+                progress(f"  • {user} ({name}): PIN anahtarı üretildi")
         save_secrets(secrets)
         return True
+
+    def _apply_gecos(
+        self,
+        teacher_names: list[str],
+        cli_used: bool,
+        progress: ProgressCallback | None = None,
+    ) -> int:
+        """Her öğretmen için passwd GECOS alanını ad-soyad ile günceller.
+
+        Hem dahili hem harici (eta-otp-cli) yol için çağrılır; harici
+        araç GECOS yazmadığı için bu adım imajda ad-soyadı garanti
+        eder. Güncellenen kullanıcı sayısını döner.
+        """
+        normalize = _eta_otp_cli_normalize if cli_used else normalize_username
+        updated = 0
+        for name in teacher_names:
+            user = normalize(name)
+            if not user:
+                continue
+            if set_user_full_name(user, name):
+                updated += 1
+        if progress and updated:
+            progress(f"  • {updated} kullanıcının ad/soyad alanı güncellendi")
+        return updated
 
     # -----------------------------------------------------------------
     # Geri al
@@ -726,8 +921,16 @@ class OTPSecretsModule(Module):
         """Fazladan hesapları sil düğmesinin aktif olup olmayacağını belirler."""
         return bool(get_extra_users())
 
-    def remove_extra_users_action(self, params: dict | None = None) -> ApplyResult:
-        """Varsayılan hesaplar dışındaki tüm fazladan kullanıcıları siler (onay gerektirir)."""
+    def remove_extra_users_action(
+        self, params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
+        """Varsayılan hesaplar dışındaki tüm fazladan kullanıcıları siler.
+
+        Her kullanıcı için önce prosesleri sonlandırılır, sonra
+        ``deluser --remove-home`` ile silinir. Hatalar log dosyasına
+        değil, doğrudan sonuç ayrıntılarına yazılır.
+        """
         extra_users = get_extra_users()
 
         if not extra_users:
@@ -737,26 +940,49 @@ class OTPSecretsModule(Module):
                 details="Sistemde sadece varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) mevcut."
             )
 
-        # ONAYLIDIR: Bu işlem geri alınamaz, tüm fazladan kullanıcıları siler
-        success, removed = reset_to_default_users()
+        if progress:
+            progress(
+                f"{len(extra_users)} fazladan hesap silinecek: "
+                + ", ".join(extra_users)
+            )
+
+        success, removed, errors = reset_to_default_users(progress=progress)
+
+        # Detay metni — hem başarılı hem başarısız kayıtları topla
+        detail_parts: list[str] = []
+        if removed:
+            detail_parts.append("Silinen hesaplar:")
+            detail_parts.extend(f"  ✓ {u}" for u in removed)
+        if errors:
+            detail_parts.append("")
+            detail_parts.append("Silinemeyen hesaplar:")
+            for u, err in errors.items():
+                # deluser çıktısı çok satırlı olabilir; girintili göster
+                err_indented = "\n      ".join(err.splitlines()) or "(boş çıktı)"
+                detail_parts.append(f"  ✗ {u}\n      {err_indented}")
 
         if success:
+            detail_parts.append("")
+            detail_parts.append(
+                "Sistem artık sadece varsayılan hesapları içeriyor:"
+            )
+            detail_parts.extend([
+                "  • etapadmin (yönetici)",
+                "  • ogrenci (ortak hesap)",
+                "  • ogretmen (ortak hesap)",
+            ])
             return ApplyResult(
                 True,
-                f"{len(removed)} fazladan kullanıcı silindi, sistem varsayılan durumuna getirildi.",
-                details=f"Silinen kullanıcılar: {', '.join(removed)}\n"
-                       "Sistem artık sadece varsayılan hesapları içeriyor:\n"
-                       "  • etapadmin (yönetici)\n"
-                       "  • ogrenci (ortak hesap)\n"
-                       "  • ogretmen (ortak hesap)\n\n"
-                       "Greeter cache güncellendi."
+                f"{len(removed)} fazladan kullanıcı silindi, "
+                "sistem varsayılan durumuna getirildi.",
+                details="\n".join(detail_parts),
             )
         else:
-            failed_count = len(extra_users) - len(removed)
+            failed_count = len(errors)
             return ApplyResult(
                 False,
-                f"{len(removed)} kullanıcı silindi, {failed_count} kullanıcı silinemedi.",
-                details=f"Başarılı: {', '.join(removed) if removed else 'Hiçbiri'}\n"
-                       "Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
+                f"{len(removed)} kullanıcı silindi, "
+                f"{failed_count} kullanıcı silinemedi.",
+                details="\n".join(detail_parts),
             )
 

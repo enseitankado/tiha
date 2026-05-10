@@ -46,6 +46,8 @@ class Module:
     # Alt sınıflarca doldurulur
     id: str = ""
     title: str = ""
+    # Sol kenar çubuğunda görünen kısa ad. Boşsa ``title`` kullanılır.
+    sidebar_title: str = ""
     rationale: str = ""
     undo_supported: bool = True
     # ``True`` ise UI uygula sırasında canlı çıktı alanı açar.
@@ -59,6 +61,11 @@ class Module:
     # "Dosyaya kaydet" butonuna tıklandığında önerilen varsayılan dosya adı.
     # Boş bırakılırsa UI ``tiha-<id>.txt`` gibi teknik bir ad üretir.
     save_filename: str = ""
+    # ``True`` ise apply başarıyla tamamlandığında UI bir bilgi popup'ı
+    # gösterir (sayfa içi sonuç kutusuna ek olarak). Uzun süren ya da
+    # kullanıcının "tamamlandı" sinyalini özellikle görmesi gereken
+    # adımlar için.
+    popup_on_success: bool = False
 
     # --- Yardımcılar ------------------------------------------------------
 

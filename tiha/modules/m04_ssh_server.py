@@ -47,24 +47,23 @@ def _is_package_installed(name: str) -> bool:
 class SSHServerModule(Module):
     id = "m04_ssh_server"
     title = "SSH sunucusu (root girişi)"
+    sidebar_title = "SSH Sunucusu"
     apply_hint = (
         "openssh-server kurulur, uzak root girişi açılır."
     )
     streams_output = True
     rationale = (
-        "Tahta sınıfa indikten sonra her birinin başına fiziksel olarak "
-        "gidip bakım yapmak pratik değildir. Bu adım, uzak terminalle "
-        "bağlanıp sorun giderme, ayar değişikliği ve günlük inceleme "
-        "yapabilmeniz için SSH sunucusunu kurar ve root kullanıcısının "
-        "uzak oturum açmasına izin verir.\n\n"
+        "Tahtaları sınıflara dağıttıktan sonra uzaktan bakım yapabilmek "
+        "için SSH sunucusunu kurar ve root kullanıcısının uzak oturum "
+        "açmasına izin verir; sorun giderme, ayar değişikliği ve günlük "
+        "inceleme için kullanılır.\n\n"
         "🌐 Uzaktan bağlanmak için tahtayla aynı ağda olmalısınız. "
         "Okulda tahtalar ve kablosuz erişim noktaları (AP) genellikle "
         "`10.x.x.x` aralığındadır — bu ağdaki bir bilgisayardan "
         "`ssh root@<tahta-ip>` komutunu kullanırsınız. Farklı bir ağdan "
         "(örn. öğrenci/misafir ağları) ulaşılamaz; bu bilinçli bir "
         "güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile erişimi "
-        "yalnızca yönetim istasyonlarıyla sınırlamanız tavsiye edilir.\n\n"
-        "Apt çıktısı aşağıda canlı olarak akar."
+        "yalnızca yönetim istasyonlarıyla sınırlamanız tavsiye edilir."
     )
 
     def preview(self) -> str:

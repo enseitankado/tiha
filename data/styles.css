@@ -183,28 +183,97 @@ label.tiha-rationale {
     margin-bottom: 4px;
 }
 
-/* Scroll çubuğunu belirgin ve kalın yap */
+/* Kaydırma çubuğu — yalnız gerektiğinde görünür, dikkat çekmeden.
+   Trough (oluk) saydam: sayfa "kaydırılabilir görünmesin" diye. Slider
+   yalnızca içerik gerçekten taşınca tutamak olarak çıkar. */
 scrolledwindow scrollbar {
-    background: alpha(@theme_fg_color, 0.15);
-    border-radius: 8px;
-    min-width: 16px;
+    background: transparent;
+    border: none;
+    min-width: 12px;
+    min-height: 12px;
+}
+
+scrolledwindow scrollbar trough {
+    background: transparent;
+    border: none;
 }
 
 scrolledwindow scrollbar slider {
-    background: alpha(@theme_fg_color, 0.45);
+    background: alpha(@theme_fg_color, 0.32);
     border-radius: 8px;
-    min-width: 14px;
+    min-width: 8px;
     min-height: 32px;
-    border: 1px solid alpha(@theme_fg_color, 0.2);
+    border: none;
+    margin: 2px;
 }
 
 scrolledwindow scrollbar slider:hover {
-    background: alpha(@theme_fg_color, 0.65);
-    border-color: alpha(@theme_fg_color, 0.4);
+    background: alpha(@theme_fg_color, 0.55);
 }
 
 scrolledwindow scrollbar slider:active {
     background: @theme_selected_bg_color;
+}
+
+/* "Daha fazla içerik var" görsel ipuçlarını gizle (ekstra çizgi/kenar
+   olmasın — sayfa sığdığında "kaydırma var" izlenimi yaratmasın) */
+scrolledwindow undershoot,
+scrolledwindow overshoot,
+scrolledwindow junction {
+    background: none;
+    border: none;
+}
+
+/* ---- Form giriş alanları --------------------------------------------
+   Pardus ETAP "eta" teması bazı GTK sürümlerinde entry/spinbutton
+   kenarlıklarını çok solgun render ediyor; alanlar zeminle birleşip
+   görünmez oluyor. Aşağıdaki kurallar bu kenarları net ama abartısız
+   şekilde belirginleştirir. Odaklanılan alanın kenarı vurgu rengine
+   çevrilir. */
+entry,
+spinbutton {
+    border: 1px solid alpha(@theme_fg_color, 0.22);
+    border-radius: 4px;
+    padding: 4px 8px;
+    background: alpha(@theme_base_color, 1.0);
+}
+
+entry:focus,
+spinbutton:focus,
+spinbutton:focus-within {
+    border-color: alpha(@theme_selected_bg_color, 0.7);
+}
+
+entry:disabled,
+spinbutton:disabled {
+    border-color: alpha(@theme_fg_color, 0.10);
+}
+
+/* ComboBox (select) açılır kutusu */
+combobox > box > button.combo {
+    border: 1px solid alpha(@theme_fg_color, 0.22);
+    border-radius: 4px;
+}
+
+combobox > box > button.combo:hover {
+    border-color: alpha(@theme_fg_color, 0.32);
+}
+
+/* TextView'lı çok satırlı giriş (m03 öğretmen listesi gibi) — wrapper
+   ScrolledWindow'a 'tiha-textarea' sınıfı verildiğinde belirginleşir */
+scrolledwindow.tiha-textarea {
+    border: 1px solid alpha(@theme_fg_color, 0.22);
+    border-radius: 4px;
+    background: alpha(@theme_base_color, 1.0);
+}
+
+scrolledwindow.tiha-textarea:focus-within {
+    border-color: alpha(@theme_selected_bg_color, 0.7);
+}
+
+scrolledwindow.tiha-textarea textview {
+    background: transparent;
+    padding: 4px;
 }
 
 /* Author bilgisi kenar çubuğu altında */

@@ -75,6 +75,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "button",
             "action": "remove_extra_users_action",
             "style": "destructive",
+            "visible_when": "can_remove_extra_users",
             "help": "Varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) dışındaki tüm fazladan kullanıcıları siler. Bu işlem onay gerektirir.",
         },
     ],

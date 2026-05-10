@@ -17,7 +17,6 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from ..core import board
 from ..core.logger import get_logger
 from ..core.undo import Journal
 from ..modules import all_modules
@@ -49,7 +48,6 @@ class TiHAWindow(Gtk.Window):
         self._load_css()
 
         self.journal = Journal()
-        self.board_info = board.detect()
         self.modules = all_modules()
         self.pages: list[Gtk.Widget] = []
         self.current_index: int = 0
@@ -140,6 +138,10 @@ class TiHAWindow(Gtk.Window):
 
         self.content_scroll = Gtk.ScrolledWindow()
         self.content_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        # Üstte gezinen (overlay) kaydırma çubuğu — içerik sığdığında
+        # yer kaplamaz, görünmez. Tema/Pardus 'eta' dış kaydırma çubuğu
+        # zorlamasın diye açıkça etkinleştiriyoruz.
+        self.content_scroll.set_overlay_scrolling(True)
         self.content_scroll.add(self.stack)
         right.pack_start(self.content_scroll, True, True, 0)
 
@@ -175,7 +177,7 @@ class TiHAWindow(Gtk.Window):
         paned.set_position(240)
 
     def _build_welcome(self) -> None:
-        page = WelcomePage(self.board_info)
+        page = WelcomePage()
         self.pages.append(page)
         self.stack.add_named(page, "welcome")
         self._add_sidebar_entry("Hoş geldiniz")
@@ -184,9 +186,12 @@ class TiHAWindow(Gtk.Window):
         # Karşılama bir adım değildir; modüller 1'den başlayarak numaralandırılır.
         for idx, module in enumerate(self.modules, start=1):
             page = ModulePage(module, self.journal)
+            # Apply tamamlandığında ileri/geri kapısını yeniden değerlendir
+            page.post_apply_callback = lambda *_a, **_kw: self._update_navigation_gate()
             self.pages.append(page)
             self.stack.add_named(page, module.id)
-            self._add_sidebar_entry(f"{idx}. {module.title}")
+            sidebar_label = module.sidebar_title or module.title
+            self._add_sidebar_entry(f"{idx}. {sidebar_label}")
 
     def _build_summary(self) -> None:
         page = SummaryPage(self.journal, self.modules)
@@ -225,6 +230,13 @@ class TiHAWindow(Gtk.Window):
         if isinstance(page, SummaryPage):
             page.refresh()
 
+        # Modül sayfaları açıldığında önizleme/şartlı alanları sistemin
+        # güncel durumuna göre tazele. (Sayfalar uygulama başlangıcında
+        # bir kez kuruluyor; bu olmadan rapor kutusu o anki anlık değil
+        # uygulama açılış anının görüntüsü olarak kalırdı.)
+        if isinstance(page, ModulePage):
+            page._refresh_after_action()
+
         if sync_sidebar:
             # Tüm adımlardan active sınıfını kaldır
             for i in range(len(self.pages)):
@@ -254,6 +266,33 @@ class TiHAWindow(Gtk.Window):
         # Özet sayfasında "Bitir" gösterelim
         is_last = index >= len(self.pages) - 1
         self.btn_next.set_label("Bitir" if is_last else "İleri  ▶")
+
+        self._update_navigation_gate()
+
+    def _update_navigation_gate(self) -> None:
+        """Mevcut sayfadaki kurallara göre İleri düğmesini etkin/pasif tutar.
+
+        Kural: sistem güncellemesi sayfasında bekleyen yükseltme varsa
+        İleri pasifleşir; kullanıcı önce Uygula çalıştırmalı (ya da sol
+        listeden başka adıma geçmeli). Diğer tüm sayfalarda İleri serbesttir.
+        Sol listeden navigasyon hiçbir zaman engellenmez.
+        """
+        page = self.pages[self.current_index] if self.pages else None
+        gate_open = True
+        if isinstance(page, ModulePage) and page.module.id == "m09_system_update":
+            count_fn = getattr(page.module, "pending_update_count", None)
+            if callable(count_fn):
+                try:
+                    pending = count_fn()
+                except Exception as exc:
+                    log.debug("pending_update_count hatası: %s", exc)
+                    pending = -1
+                # pending > 0 → bekleyen yükseltme var → İleri kapalı
+                # pending == 0 → güncel → İleri açık
+                # pending < 0 → bilinmiyor → İleri açık (fail-open)
+                if pending > 0:
+                    gate_open = False
+        self.btn_next.set_sensitive(gate_open)
 
     def _on_back(self, _btn: Gtk.Button) -> None:
         if self.current_index == 0:

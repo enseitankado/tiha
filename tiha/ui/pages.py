@@ -16,7 +16,6 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
 from ..core import console
-from ..core.board import BoardInfo
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.undo import Journal, JournalEntry
@@ -41,6 +40,22 @@ def _compact_page() -> Gtk.Box:
     return box
 
 
+def _apply_line_spacing(label: Gtk.Label, factor: float = 1.35) -> None:
+    """Etikete Pango ``line-height`` özniteliği uygular.
+
+    Pango 1.50+ gerekir; eski sürümlerde sessizce vazgeçer. Etiket içinde
+    sarılmış uzun metinlerde satırların birbirine yapışmasını önler.
+    """
+    try:
+        if hasattr(Pango, "attr_line_height_new"):
+            attrs = Pango.AttrList()
+            attrs.insert(Pango.attr_line_height_new(factor))
+            label.set_attributes(attrs)
+    except Exception:
+        # Pango çok eskiyse veya öznitelik kabul etmezse görsel sorun yok
+        pass
+
+
 def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = False) -> Gtk.Label:
     lbl = Gtk.Label(label=text, xalign=0)
     lbl.set_line_wrap(True)
@@ -48,6 +63,7 @@ def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = F
     lbl.set_selectable(selectable)
     if klass:
         lbl.get_style_context().add_class(klass)
+    _apply_line_spacing(lbl)
     return lbl
 
 
@@ -87,125 +103,73 @@ def _scrolled_textview(text: str, *, monospace: bool = False,
 
 _WELCOME_INTRO = (
     "TiHA, Pardus ETAP etkileşimli tahtanızı imaj alınmaya hazırlayan bir "
-    "sihirbazdır. Asıl amacı, sınıf ortamında öğretmenin parolasının "
-    "öğrencilere ifşa olmasını tamamen ortadan kaldırmak ve imajdan "
-    "dağıtılan onlarca tahtanın sahada sağlıklı çalışmasını sağlamaktır."
+    "sihirbazdır. Tek tahtada yaptığınız hazırlığı, ortak bir imajdan "
+    "geçirip onlarca tahtaya tutarlı biçimde dağıtırsınız — bu yolun "
+    "başındaki sıkıcı işleri TiHA sizin yerinize, doğru sırada yapar."
 )
 
-_WELCOME_SCENARIO = (
-    "Sorun şu: Öğretmen tahtada ilk kez EBA-QR ile oturum açtığında sistem "
-    "kendisinden yerel bir parola tanımlamasını ister. Öğretmen bu parolayı "
-    "65 inç dokunmatik ekranda parmağıyla yazmak zorundadır. Sınıfta "
-    "arkadaki sıralarda oturan öğrenciler ekranda basılan tuşları rahatça "
-    "görür, parolayı ezberler ve sonraki derslerde öğretmen hesabıyla "
-    "tahtayı açıp yetkisiz işlemler yapabilir. Öğretmenin okul saatleri "
-    "dışında, öğrencisiz bir ortamda parola oluşturmasını şart koşmak "
-    "pratik değildir ve sürdürülebilir bir çözüm değildir. Bu senaryo "
-    "kesin olarak reddedilmiştir."
-)
+_WELCOME_FEATURES_TITLE = "Bu sihirbazda neler bulacaksınız?"
 
-_WELCOME_SOLUTION = (
-    "Çözüm: TiHA, öğretmenin parolasını ekrandan yazmak zorunda kaldığı "
-    "TÜM yolları kapatır. İmaj uygulandıktan sonra öğretmen, yerel "
-    "parolayla giriş yapamaz — her açılışta parolalar otomatik olarak "
-    "rastgele bir değere çevrilir ve kullanılamaz hâle gelir.\n\n"
-    "Öğretmenin oturum açmak için artık yalnızca üç yolu vardır:\n"
-    "  1.  EBA-QR  — Telefonundaki EBA uygulamasından kare kodu "
-    "okutarak (sunucu provizyonlu kimlik doğrulama).\n"
-    "  2.  PIN (6 haneli PIN kodu)  — Google Authenticator benzeri bir "
-    "uygulamadan üretilen, 30 saniyede bir değişen kod.\n"
-    "  3.  USB bellek  — Öğretmene özel hazırlanmış kişisel USB anahtarı."
-)
-
-_WELCOME_EXTRAS = (
-    "Bu asıl amacın yanında, imajdan dağıtılan tahtaların ağda sorun "
-    "çıkarmaması için birkaç hazırlık daha yapılır: eta-register tekil "
-    "kimlik çakışması önlemi, benzersiz hostname üretimi, NTP "
-    "senkronizasyonu (PIN kodlarının doğrulanabilmesi için saat kritik "
-    "önemdedir), SSH ve Samba ile uzaktan bakım erişimi, merkezi log "
-    "iletimi, sistem güncellemesi ve imaj alınmadan önce gerekli hijyen."
+_WELCOME_FEATURES = (
+    "•  Sistem güncellemesi — paketleri imaj öncesi günceller; sahaya "
+    "çıkmadan en son yamayı alırsınız.",
+    "•  Yerel hesap yönetimi — root, etapadmin ve ogretmen parolalarını "
+    "bilinçli olarak siz belirler, dilerseniz parolalı girişi tamamen "
+    "kapatırsınız.",
+    "•  Toplu PIN anahtarı — öğretmenler için anahtarları imaj öncesi "
+    "merkezî olarak üretip imaja gömer; her tahtaya tek tek kurulum "
+    "yapmaktan kurtulursunuz.",
+    "•  Uzaktan bakım — SSH, Samba ve merkezi log ile sınıflara "
+    "dağıtılmış tahtalara masanızdan dokunabilirsiniz.",
+    "•  Sağlam çalışma — saat senkronu, benzersiz hostname ve güç "
+    "yönetimi ile her klon sahada tutarlı, bağımsız ve enerji verimli "
+    "kalır.",
+    "•  İmaj için sanitize — tekil kimlikleri sıfırlar, kullanılmayan "
+    "dosyaları temizler, izleri siler. Son adım: imaj alınmaya hazırsınız.",
 )
 
 _WELCOME_FLOW = (
-    "Sihirbaz 11 adımdan oluşur. Her adımda ne yapıldığı ve neden "
-    "gerektiği size açıklanır, onayınız alınır, sonuç ekranda paylaşılır "
-    "ve gerektiğinde adımlar geri alınabilir."
+    "Sihirbaz adım adım ilerler. Her adımda ne yapılacağı ve nedeni "
+    "açıklanır, onayınız alınır, sonuç gösterilir, gerektiğinde geri "
+    "alınır. Hazırsanız soldaki listeden ya da aşağıdaki “İleri” "
+    "düğmesiyle başlayın."
 )
 
 
 class WelcomePage(Gtk.Box):
-    def __init__(self, board_info: BoardInfo) -> None:
+    def __init__(self) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
         self.set_margin_top(_PAGE_MARGIN)
         self.set_margin_bottom(_PAGE_MARGIN)
         self.set_margin_start(_PAGE_MARGIN + 4)
         self.set_margin_end(_PAGE_MARGIN + 4)
 
-        def add_section_title(text: str) -> None:
-            lbl = _wrapping_label(text, klass="tiha-section-title")
-            self.pack_start(lbl, False, False, 0)
-
         def add_paragraph(text: str) -> None:
             lbl = _wrapping_label(text)
             lbl.set_max_width_chars(110)
             self.pack_start(lbl, False, False, 0)
 
-        def add_separator() -> None:
-            self.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL),
-                            False, False, 6)
-
-        # Başlık
         heading = _wrapping_label("Hoş geldiniz", klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
-        # Tanıtım
         add_paragraph(_WELCOME_INTRO)
-        add_separator()
 
-        # Asıl senaryo — kutu içinde vurgulu
-        add_section_title("Neden ihtiyaç var?")
-        scenario_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        scenario_box.get_style_context().add_class("tiha-scenario")
-        scenario_lbl = _wrapping_label(_WELCOME_SCENARIO)
-        scenario_lbl.set_max_width_chars(110)
-        scenario_box.pack_start(scenario_lbl, False, False, 0)
-        self.pack_start(scenario_box, False, False, 0)
+        title_lbl = _wrapping_label(_WELCOME_FEATURES_TITLE)
+        title_lbl.set_max_width_chars(110)
+        title_lbl.set_margin_top(4)
+        self.pack_start(title_lbl, False, False, 0)
 
-        # Çözüm
-        add_section_title("TiHA'nın asıl çözümü")
-        solution_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        solution_box.get_style_context().add_class("tiha-solution")
-        solution_lbl = _wrapping_label(_WELCOME_SOLUTION)
-        solution_lbl.set_max_width_chars(110)
-        solution_box.pack_start(solution_lbl, False, False, 0)
-        self.pack_start(solution_box, False, False, 0)
+        for feature in _WELCOME_FEATURES:
+            lbl = _wrapping_label(feature)
+            lbl.set_max_width_chars(110)
+            lbl.set_margin_top(6)
+            lbl.set_margin_start(8)
+            self.pack_start(lbl, False, False, 0)
 
-        # Ek hazırlıklar
-        add_section_title("Yan hazırlıklar")
-        add_paragraph(_WELCOME_EXTRAS)
-
-        add_paragraph(_WELCOME_FLOW)
-        add_separator()
-
-        # Tahta bilgisi kartı
-        add_section_title("Tespit edilen tahta")
-        card = Gtk.Grid(column_spacing=18, row_spacing=4)
-        card.get_style_context().add_class("tiha-board-card")
-        for i, (key, value) in enumerate(board_info.as_rows()):
-            k = _wrapping_label(key, klass="tiha-board-key")
-            v = _wrapping_label(value, klass="tiha-board-value", selectable=True)
-            card.attach(k, 0, i, 1, 1)
-            card.attach(v, 1, i, 1, 1)
-        self.pack_start(card, False, False, 0)
-
-        if board_info.is_vm:
-            warn = _wrapping_label(
-                "⚠ Sanal makine tespit edildi. TiHA burada çalışır; fakat "
-                "eta-register sanal makinede çalışmayı reddeder. İmaj sahaya "
-                "inmeden önce bir fiziksel tahtada mutlaka test edin.",
-                klass="tiha-rationale",
-            )
-            self.pack_start(warn, False, False, 0)
+        flow_lbl = _wrapping_label(_WELCOME_FLOW)
+        flow_lbl.set_max_width_chars(110)
+        flow_lbl.set_margin_top(8)
+        self.pack_start(flow_lbl, False, False, 0)
 
 
 # =========================================================================
@@ -228,6 +192,11 @@ class ModulePage(Gtk.Box):
         self._stream_buffer: Gtk.TextBuffer | None = None
         self._applying: bool = False
         self._auto_applied: bool = False
+        self.post_apply_callback = None  # Set by main_window if needed
+        # Önizleme widget'ı + şartlı (visible_when) alanların widget grupları:
+        # Apply / buton işlemi sonrası tazelemek için saklanır.
+        self._preview_widget: Gtk.Widget | None = None
+        self._conditional_field_widgets: dict[str, list[Gtk.Widget]] = {}
         self._build()
         # Önceki oturumda uygulanmış mı? Varsa "geri al" banner'ı göster.
         self._show_previous_apply_banner()
@@ -254,17 +223,17 @@ class ModulePage(Gtk.Box):
             # satır kırmıyoruz; yatay kaydırma çubuğu alsın.
             is_tabular = "  ─" in preview_text or "KULLANICI" in preview_text
             if preview_text.count("\n") > 6 or len(preview_text) > 500:
-                self.pack_start(
-                    _scrolled_textview(
-                        preview_text, monospace=True,
-                        height=180, css_class="tiha-preview",
-                        wrap=not is_tabular,
-                    ),
-                    False, False, 0,
+                self._preview_widget = _scrolled_textview(
+                    preview_text, monospace=True,
+                    height=180, css_class="tiha-preview",
+                    wrap=not is_tabular,
                 )
+                self.pack_start(self._preview_widget, False, False, 0)
             else:
-                p = _wrapping_label(preview_text, klass="tiha-preview", selectable=True)
-                self.pack_start(p, False, False, 0)
+                self._preview_widget = _wrapping_label(
+                    preview_text, klass="tiha-preview", selectable=True,
+                )
+                self.pack_start(self._preview_widget, False, False, 0)
 
         schema = params_schema.get(self.module.id)
         if schema:
@@ -330,6 +299,18 @@ class ModulePage(Gtk.Box):
         grid = Gtk.Grid(column_spacing=12, row_spacing=6)
         row_idx = 0
         for field in schema:
+            # Şartlı görünürlük: visible_when bir modül methodunu işaret
+            # ediyorsa, başlangıç görünürlüğünü ondan al. Widget'lar
+            # daima oluşturulur ve _conditional_field_widgets'ta saklanır;
+            # böylece sonraki bir buton/apply işleminden sonra durum
+            # değişirse görünürlük tazelenebilir.
+            gate = field.get("visible_when")
+            initial_visible = True
+            if gate:
+                gate_fn = getattr(self.module, gate, None)
+                if callable(gate_fn):
+                    initial_visible = bool(gate_fn())
+
             label = _wrapping_label(field["label"])
             grid.attach(label, 0, row_idx, 1, 1)
             widget = self._make_field(field)
@@ -337,11 +318,59 @@ class ModulePage(Gtk.Box):
             grid.attach(widget, 1, row_idx, 1, 1)
             self._fields[field["key"]] = widget
             row_idx += 1
+            row_widgets: list[Gtk.Widget] = [label, widget]
             if field.get("help"):
                 help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
                 grid.attach(help_lbl, 1, row_idx, 1, 1)
                 row_idx += 1
+                row_widgets.append(help_lbl)
+
+            if gate:
+                self._conditional_field_widgets[field["key"]] = row_widgets
+                if not initial_visible:
+                    for w in row_widgets:
+                        w.set_no_show_all(True)
+                        w.set_visible(False)
         return grid
+
+    def _refresh_conditional_fields(self) -> None:
+        """``visible_when``'lı alanların görünürlüğünü tazeler.
+
+        Apply ya da buton işlemi durumu değiştirmiş olabilir (ör. fazladan
+        hesap silindi → "Fazladan Hesapları Sil" düğmesi gizlensin).
+        """
+        schema = params_schema.get(self.module.id) or []
+        for field in schema:
+            gate = field.get("visible_when")
+            if not gate:
+                continue
+            gate_fn = getattr(self.module, gate, None)
+            visible = bool(callable(gate_fn) and gate_fn())
+            for w in self._conditional_field_widgets.get(field["key"], ()):
+                w.set_no_show_all(not visible)
+                w.set_visible(visible)
+
+    def _refresh_preview(self) -> None:
+        """Önizleme metnini yeniden üretip aynı widget'a yazar."""
+        if self._preview_widget is None:
+            return
+        try:
+            new_text = self.module.preview() or ""
+        except Exception as exc:
+            log.warning("preview tazelenemedi %s: %s", self.module.id, exc)
+            return
+        if isinstance(self._preview_widget, Gtk.ScrolledWindow):
+            tv = getattr(self._preview_widget, "_textview", None)
+            if tv is not None:
+                tv.get_buffer().set_text(new_text)
+        elif isinstance(self._preview_widget, Gtk.Label):
+            self._preview_widget.set_text(new_text)
+            _apply_line_spacing(self._preview_widget)
+
+    def _refresh_after_action(self) -> None:
+        """Apply / buton işlemi sonrası önizleme + şartlı alan tazeleme."""
+        self._refresh_preview()
+        self._refresh_conditional_fields()
 
     def _make_field(self, field: dict) -> Gtk.Widget:
         kind = field.get("type", "text")
@@ -401,6 +430,7 @@ class ModulePage(Gtk.Box):
             scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
             scroller.set_min_content_height(110)
             scroller.set_max_content_height(150)
+            scroller.get_style_context().add_class("tiha-textarea")
             scroller._textview = tv  # type: ignore[attr-defined]
             return scroller
 
@@ -436,7 +466,7 @@ class ModulePage(Gtk.Box):
 
             def on_button_clicked(_btn, action=field.get("action")):
                 if action and hasattr(self.module, action):
-                    self._run_button_action(action)
+                    self._run_button_action(action, button=_btn)
 
             btn.connect("clicked", on_button_clicked)
             return btn
@@ -496,6 +526,13 @@ class ModulePage(Gtk.Box):
         missing: list[str] = []
         for field in schema:
             key = field["key"]
+            widget = self._fields.get(key)
+            if widget is None:
+                continue
+            # Şartlı görünürlüğü kapatılmış alanlar parametre olarak
+            # iletilmez; gerekli olarak işaretlense bile uyarı vermeyiz.
+            if not widget.get_visible():
+                continue
             value = self._field_value(key, field).strip()
             if field.get("required") and not value:
                 missing.append(field["label"])
@@ -506,28 +543,45 @@ class ModulePage(Gtk.Box):
     # Apply akışı — thread'li + canlı çıktı
     # ------------------------------------------------------------------
 
-    def _run_button_action(self, action: str) -> None:
-        """Button action'ını stream çıktısı ile çalıştırır."""
+    def _run_button_action(self, action: str, button: Gtk.Button | None = None) -> None:
+        """Button action'ını canlı çıktı ve görsel geri bildirimle çalıştırır."""
         if self._applying:
             return
 
-        # Stream alanını göster
-        self.stream_scroll.show()
+        # Tıklanan butonu çift tıklamaya karşı pasifleştir
+        self._active_button = button
+        if button is not None:
+            button.set_sensitive(False)
+
+        # result_holder'ı temizle ve "Çalışıyor…" satırı ekle
+        for child in self.result_holder.get_children():
+            self.result_holder.remove(child)
+        self._working_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        spinner = Gtk.Spinner()
+        spinner.start()
+        self._working_row.pack_start(spinner, False, False, 0)
+        self._working_row.pack_start(
+            _wrapping_label("Çalışıyor… Lütfen bekleyin."),
+            False, False, 0,
+        )
+        self.result_holder.pack_start(self._working_row, False, False, 0)
+        self.result_holder.show_all()
+
+        # Stream alanını gerçekten görünür kıl ve içini boşalt
+        self._stream_buffer.set_text("")
+        self.stream_scroll.set_no_show_all(False)
+        self.stream_scroll.show_all()
 
         def progress_callback(text: str) -> None:
             GLib.idle_add(self._append_stream_line, text)
 
         def worker():
             try:
-                # Button action fonksiyonunu progress callback ile çağır
                 action_func = getattr(self.module, action)
-                # Eğer fonksiyon progress parametresi kabul ediyorsa gönder
                 try:
                     result = action_func(progress=progress_callback)
                 except TypeError:
-                    # Progress parametresi kabul etmiyorsa normal çağır
                     result = action_func()
-
                 GLib.idle_add(self._on_button_action_complete, result)
             except Exception as exc:
                 error_result = ApplyResult(False, f"Button action hatası: {exc}")
@@ -539,7 +593,13 @@ class ModulePage(Gtk.Box):
 
     def _on_button_action_complete(self, result: ApplyResult) -> None:
         self._applying = False
+        if getattr(self, "_active_button", None) is not None:
+            self._active_button.set_sensitive(True)
+            self._active_button = None
         self._show_result(result)
+        # Buton işlemi sistem durumunu değiştirmiş olabilir — önizlemeyi
+        # ve "visible_when" şartlı alanların görünürlüğünü tazele.
+        self._refresh_after_action()
 
     def run_apply(self) -> None:
         if self._applying:
@@ -619,6 +679,17 @@ class ModulePage(Gtk.Box):
         else:
             console.fail(result.summary)
         self._show_result(result)
+        # Apply de sistem durumunu değiştirmiş olabilir — aynı tazelemeyi
+        # buradan da çalıştır.
+        self._refresh_after_action()
+        if self.post_apply_callback is not None:
+            try:
+                self.post_apply_callback(result)
+            except Exception as exc:
+                log.debug("post_apply_callback hatası: %s", exc)
+        # Modül "tamamlandı" sinyalini özellikle popup ile vermek istiyorsa
+        if result.success and getattr(self.module, "popup_on_success", False):
+            self._toast(result.summary)
         return False
 
     # ------------------------------------------------------------------

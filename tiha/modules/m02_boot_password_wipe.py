@@ -1,27 +1,29 @@
-"""Modül 2 (wizard 3. adım) — Her açılışta parola temizliği.
+"""Modül 2 — Her açılışta parola temizliği.
 
 Ne yapar?
-Tahta her açıldığında, etapadmin dışındaki TÜM gerçek kullanıcıların
-(standart olarak ogretmen ve ogrenci, ve varsa TiHA Modül 4'ün
-oluşturduğu tek tek öğretmen/yedek hesapları) parolalarını kriptografik
+Tahta her açıldığında, etapadmin dışındaki gerçek kullanıcıların (ortak
+ogretmen/ogrenci hesapları ve varsa "Öğretmen PIN anahtarları" adımının
+oluşturduğu kişisel öğretmen/yedek hesapları) parolalarını kriptografik
 olarak güvenli rastgele bir değere çeviren bir systemd oneshot servisi
 kurar. Servis her sistem açılışında bir kez çalışır.
 
 Neden gerekir?
-Sınıfın 65" dokunmatik ekranında öğretmenin parolayı parmağıyla yazdığı
-her an, arkadaki öğrenciler parolayı görür. Hatta ilk tanımlama anında
-EBA-QR akışı kullanıcıdan parola isteyince bu ifşa mutlaka yaşanır.
-TiHA bu yüzden HİÇBİR PAROLANIN KALICI OLMASINA İZİN VERMEZ:
+Bu, parolalı girişi tamamen kapatan isteğe bağlı bir sertleştirme
+adımıdır. Tahtaya birinin sonradan elle parola atayıp paylaştığı
+senaryoyu (ör. dokunmatik ekrana yazılması arka sıralardan görülebilen
+bir parolanın kalıcı kalması) önler — atanan parola bir sonraki açılışta
+otomatik olarak rastgele değişir.
 
-- ogretmen (standart ortak öğretmen hesabı) parolası her açılışta
-  rastgele bir değerle ezilir — öğretmen bu parolayı bilmez, bilemez,
-  dolayısıyla tahtaya yalnızca EBA-QR, PIN veya USB bellek ile girer.
-- ogrenci (standart ortak öğrenci hesabı) için de aynı kural geçerli:
-  parolalı giriş imkânsız.
-- Modül 4'te her öğretmene özel hesaplar oluşturulursa (ör.
-  ayse.yilmaz, ogretmen01 …) onlar da aynı temizliğe dahil edilir;
-  girişleri yalnızca PIN kodu ile olur.
+- ogretmen / ogrenci (ortak hesaplar) parolası her açılışta rastgele bir
+  değerle ezilir; bu hesaplara yalnızca EBA-QR, PIN veya USB bellek ile
+  girilebilir.
+- "Öğretmen PIN anahtarları" adımında oluşturulan kişisel hesaplar (ör.
+  ayse.yilmaz, ogretmen01 …) aynı temizliğe dahil edilir; girişleri
+  yalnızca PIN kodu ile olur.
 - etapadmin bu işlemin DIŞINDADIR; yönetici bakım erişimi korunur.
+
+Bu adımı atlarsanız tahta varsayılan davranışını korur (yerel parola
+ile giriş mümkündür); uygulamak ya da uygulamamak yöneticinin tercihidir.
 
 Geri al (tam restore).
 - Açılış servisi ve script dosyası silinir.
@@ -62,13 +64,14 @@ def _otp_registered_users() -> set[str]:
 
 
 SCRIPT_CONTENT = """#!/bin/bash
-# TiHA — her açılışta genel kullanıcıların parolalarını rastgele atar.
-# Sınıfta öğrencinin ekrana bakarak parola öğrenmesini engellemek için.
+# TiHA — her açılışta etapadmin dışındaki kullanıcıların parolalarını
+# rastgele bir değerle ezer. Birisi sonradan elle parola atasa bile bir
+# sonraki açılışta o parola işe yaramaz hâle gelir; tahtaya yalnızca
+# EBA-QR / PIN / USB yollarıyla girilebilir.
 # Kurallar:
 #  * etapadmin (yerel yönetici) ASLA değişmez.
 #  * UID 1000-59999 aralığındaki diğer tüm kullanıcılar rastgele parola
-#    alır ve hesap kilitlenir (-L). Oturum açmak için yalnızca
-#    EBA-QR / PIN / USB yolları açıktır.
+#    alır ve hesap kilitlenir (-L).
 set -euo pipefail
 log() { logger -t tiha-boot-wipe "$*"; }
 while IFS=: read -r user _ uid _ _ _ _; do
@@ -118,17 +121,19 @@ def _user_exists(username: str) -> bool:
 class BootPasswordWipeModule(Module):
     id = "m02_boot_password_wipe"
     title = "Her açılışta parola temizliği"
+    sidebar_title = "Otomatik parola temizliği"
     apply_hint = (
         "Açılışta parola temizleme servisi kurulur ve etkinleştirilir."
     )
     rationale = (
-        "Tahta her yeniden başladığında; standart `ogretmen`, `ogrenci` "
-        "ortak hesaplarının ve Modül 4'te oluşturulan kişisel öğretmen "
-        "hesaplarının parolasını otomatik olarak rastgele bir değere "
-        "çeviren sistem servisi kurar. Böylece ekranda görülen ya da "
-        "sızdırılan hiçbir parola bir sonraki açılışta işe yaramaz; "
-        "öğretmen yalnızca EBA-QR, PIN kodu ya da USB bellek ile "
-        "oturum açabilir.\n\n"
+        "Tahta her yeniden başladığında etapadmin dışındaki hesapların "
+        "(ortak `ogretmen`, `ogrenci` ve kişisel öğretmen hesapları) "
+        "parolasını otomatik olarak rastgele bir değere çeviren sistem "
+        "servisi kurar. Böylece sonradan elle atanan ya da sızdırılan "
+        "herhangi bir parola bir sonraki açılışta işe yaramaz; tahta "
+        "yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\n"
+        "İsteğe bağlı bir sertleştirme adımıdır; uygulamasanız yerel "
+        "parolayla giriş mümkün kalır.\n\n"
         "⚠ Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
         "Teknik bakım erişimi (yerel yönetim, SSH) her zaman korunur."
     )
@@ -178,7 +183,8 @@ class BootPasswordWipeModule(Module):
             )
             out.append(
                 "   Bu servisi etkinleştirdikten sonra tahtaya GİREMEZLER. "
-                "Modül 4'e gidip onlar için de PIN anahtarı üretin."
+                "“Öğretmen PIN anahtarları” adımına gidip onlar için de "
+                "PIN anahtarı üretin."
             )
 
         out.append("")
