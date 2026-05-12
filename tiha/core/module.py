@@ -18,11 +18,16 @@ Modüller, kendi "önce yedek al" davranışını kurmak için
 
 from __future__ import annotations
 
+import json
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .logger import get_logger
 from .paths import STATE_DIR
+
+log = get_logger(__name__)
 
 
 # Uzun işlemlerde satır-bazlı ilerleme iletmek için kullanılan tip.
@@ -84,6 +89,53 @@ class Module:
         """Uygulamadan önce durumu özetleyen kısa metin."""
         return ""
 
+    def apply_with_logging(
+        self,
+        params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
+        """İşlemi detaylı loglama ile uygular."""
+        log.info("=== MODÜL APPLY BAŞLADI ===")
+        log.info("Modül: %s (%s)", self.id, self.title)
+        if params:
+            # Parolaları loglamaktan kaçın
+            safe_params = {}
+            for key, value in params.items():
+                if "password" in key.lower() or "parola" in key.lower():
+                    safe_params[key] = f"[{len(value)} karakter]" if value else "[boş]"
+                else:
+                    safe_params[key] = value
+            log.info("Parametreler: %s", json.dumps(safe_params, ensure_ascii=False, indent=2))
+        else:
+            log.info("Parametreler: yok")
+
+        start_time = time.time()
+        try:
+            result = self.apply(params, progress)
+            duration = time.time() - start_time
+
+            log.info("=== MODÜL APPLY SONUCU ===")
+            log.info("Modül: %s", self.id)
+            log.info("Süre: %.2f saniye", duration)
+            log.info("Başarı: %s", result.success)
+            log.info("Özet: %s", result.summary)
+            if result.details:
+                log.info("Detaylar: %s", result.details)
+            if result.data:
+                log.info("Veri: %s", json.dumps(result.data, ensure_ascii=False))
+            if not result.success:
+                log.error("MODÜL APPLY BAŞARISIZ: %s - %s", self.id, result.summary)
+
+            return result
+
+        except Exception as exc:
+            duration = time.time() - start_time
+            log.error("=== MODÜL APPLY İSTİSNASI ===")
+            log.error("Modül: %s", self.id)
+            log.error("Süre: %.2f saniye", duration)
+            log.error("İstisna: %s", exc, exc_info=True)
+            return ApplyResult(False, f"Beklenmeyen hata: {exc}")
+
     def apply(
         self,
         params: dict | None = None,
@@ -109,6 +161,40 @@ class Module:
                                           geçeceği.
         """
         return None
+
+    def undo_with_logging(self, data: dict, params: dict | None = None) -> ApplyResult:
+        """İşlemi detaylı loglama ile geri alır."""
+        log.info("=== MODÜL UNDO BAŞLADI ===")
+        log.info("Modül: %s (%s)", self.id, self.title)
+        if data:
+            log.info("Veri: %s", json.dumps(data, ensure_ascii=False, indent=2))
+        if params:
+            log.info("Parametreler: %s", json.dumps(params, ensure_ascii=False, indent=2))
+
+        start_time = time.time()
+        try:
+            result = self.undo(data, params)
+            duration = time.time() - start_time
+
+            log.info("=== MODÜL UNDO SONUCU ===")
+            log.info("Modül: %s", self.id)
+            log.info("Süre: %.2f saniye", duration)
+            log.info("Başarı: %s", result.success)
+            log.info("Özet: %s", result.summary)
+            if result.details:
+                log.info("Detaylar: %s", result.details)
+            if not result.success:
+                log.error("MODÜL UNDO BAŞARISIZ: %s - %s", self.id, result.summary)
+
+            return result
+
+        except Exception as exc:
+            duration = time.time() - start_time
+            log.error("=== MODÜL UNDO İSTİSNASI ===")
+            log.error("Modül: %s", self.id)
+            log.error("Süre: %.2f saniye", duration)
+            log.error("İstisna: %s", exc, exc_info=True)
+            return ApplyResult(False, f"Beklenmeyen hata: {exc}")
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         """Daha önce uygulanan işlemi geri alır.

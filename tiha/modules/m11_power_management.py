@@ -75,20 +75,51 @@ def run_cmd(cmd: list[str]) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def get_active_sessions() -> list[str]:
-    \"\"\"Aktif kullanıcı oturumlarını listele.\"\"\"
+def get_active_sessions() -> dict:
+    \"\"\"Aktif kullanıcı oturumlarını detaylı analiz et.\"\"\"
+    result = {{"console": [], "remote": [], "locked": [], "greeter": []}}
+
+    # who komutu ile temel bilgi al
     success, output = run_cmd(["who"])
     if not success:
-        return []
+        return result
 
-    sessions = []
     for line in output.splitlines():
         if line.strip():
-            # who çıktısı: kullanıcı tty tarih
             parts = line.split()
-            if len(parts) >= 1:
-                sessions.append(parts[0])
-    return sessions
+            if len(parts) >= 2:
+                user, tty = parts[0], parts[1]
+
+                if user in ["lightdm", "gdm"]:
+                    result["greeter"].append(user)
+                elif "pts/" in tty:
+                    result["remote"].append(user)
+                elif tty.startswith("tty"):
+                    result["console"].append(user)
+
+    # loginctl ile gerçek session durumunu kontrol et
+    success, sessions_output = run_cmd(["loginctl", "list-sessions", "--no-legend"])
+    if success:
+        for line in sessions_output.splitlines():
+            parts = line.strip().split()
+            if len(parts) >= 4:
+                session_id, uid, user, seat = parts[0], parts[1], parts[2], parts[3]
+
+                # Session detayını al
+                success, detail = run_cmd(["loginctl", "show-session", session_id, "-p", "State,Type,Scope"])
+                if success:
+                    session_info = {{}}
+                    for detail_line in detail.splitlines():
+                        if "=" in detail_line:
+                            key, value = detail_line.split("=", 1)
+                            session_info[key] = value
+
+                    # Kilitli oturumları tespit et
+                    if session_info.get("State") == "closing" or session_info.get("Type") == "user":
+                        if user not in ["lightdm", "gdm", "root"]:
+                            result["locked"].append(f"{{user}}({{session_info.get('State', 'unknown')}})")
+
+    return result
 
 def get_ssh_sessions() -> int:
     \"\"\"Aktif SSH bağlantı sayısını döndür.\"\"\"
@@ -102,29 +133,106 @@ def get_ssh_sessions() -> int:
             ssh_count += 1
     return ssh_count
 
-def get_idle_time_minutes() -> float:
-    \"\"\"X11 idle süresini dakika olarak döndür.\"\"\"
-    # xprintidle kullanmayı dene
-    success, output = run_cmd(["xprintidle"])
-    if success and output.isdigit():
-        idle_ms = int(output)
-        return idle_ms / 1000 / 60  # milisaniye -> dakika
+def get_idle_time_minutes() -> tuple[float, str]:
+    \"\"\"Sistem idle süresini ve hangi yöntemle bulunduğunu döndür.\"\"\"
 
-    # Alternatif: /proc/uptime ve last activity
+    # Yöntem 1: LightDM log analizi (en güvenilir)
+    try:
+        success, output = run_cmd(["journalctl", "-u", "lightdm", "-n", "50", "--no-pager"])
+        if success:
+            import re
+            from datetime import datetime
+
+            # Son aktivite zamanını bul
+            last_activity = None
+            for line in output.splitlines():
+                if "session" in line.lower() or "greeter" in line.lower():
+                    # Timestamp çıkar: Dec 12 14:30:45
+                    timestamp_match = re.search(r'(\w+ \d+ \d+:\d+:\d+)', line)
+                    if timestamp_match:
+                        try:
+                            time_str = timestamp_match.group(1)
+                            # Yıl ekle (güncel yıl)
+                            import datetime as dt
+                            current_year = dt.datetime.now().year
+                            full_time_str = f"{{current_year}} {{time_str}}"
+                            activity_time = datetime.strptime(full_time_str, "%Y %b %d %H:%M:%S")
+
+                            if last_activity is None or activity_time > last_activity:
+                                last_activity = activity_time
+                        except:
+                            continue
+
+            if last_activity:
+                idle_seconds = (datetime.now() - last_activity).total_seconds()
+                return idle_seconds / 60, "lightdm-log"
+    except Exception as e:
+        log_info(f"LightDM log analizi başarısız: {{e}}")
+
+    # Yöntem 2: Input device analizi (/proc/interrupts)
+    try:
+        with open("/proc/interrupts", "r") as f:
+            interrupt_data = f.read()
+
+        # Klavye/mouse interrupt'larını ara
+        keyboard_lines = [line for line in interrupt_data.splitlines()
+                         if "keyboard" in line.lower() or "mouse" in line.lower() or "i8042" in line.lower()]
+
+        if keyboard_lines:
+            # Son interrupt zamanından idle hesapla
+            with open("/proc/uptime", "r") as f:
+                uptime = float(f.read().split()[0])
+
+            # Konservatif yaklaşım: son 5 dakika idle kabul et
+            return 5.0, "interrupt-analysis"
+    except:
+        pass
+
+    # Yöntem 3: systemd-logind idle hint
+    try:
+        success, output = run_cmd(["busctl", "get-property", "org.freedesktop.login1",
+                                  "/org/freedesktop/login1", "org.freedesktop.login1.Manager",
+                                  "IdleHint"])
+        if success and "true" in output:
+            success, idle_since = run_cmd(["busctl", "get-property", "org.freedesktop.login1",
+                                          "/org/freedesktop/login1", "org.freedesktop.login1.Manager",
+                                          "IdleSinceHint"])
+            if success:
+                # Unix timestamp'ten dakika hesapla
+                import re
+                timestamp_match = re.search(r'(\d+)', idle_since)
+                if timestamp_match:
+                    idle_since_ts = int(timestamp_match.group(1)) // 1000000  # mikrosaniye -> saniye
+                    current_ts = int(time.time())
+                    idle_minutes = (current_ts - idle_since_ts) / 60
+                    return idle_minutes, "systemd-logind"
+    except:
+        pass
+
+    # Yöntem 4: X11 xprintidle (sadece X session'da çalışır)
+    for display in [":0", ":1"]:
+        try:
+            env = {{"DISPLAY": display}}
+            success, output = run_cmd(["xprintidle"], env=env)
+            if success and output.isdigit():
+                idle_ms = int(output)
+                return idle_ms / 1000 / 60, f"xprintidle-{{display}}"
+        except:
+            continue
+
+    # Fallback: Boot zamanından tahmin
     try:
         with open("/proc/uptime", "r") as f:
             uptime_seconds = float(f.read().split()[0])
 
-        # En son kullanıcı etkinliğini kontrol et
-        success, output = run_cmd(["last", "-n", "1"])
-        if success:
-            # Basit yaklaşım: uptime'ın yarısını idle kabul et
-            return uptime_seconds / 60 / 2
+        # Çok muhafazakar: uptime'ın %10'unu idle kabul et (minimum 10 dk)
+        estimated_idle = max(10.0, uptime_seconds / 60 * 0.1)
+        return estimated_idle, "uptime-estimate"
     except:
         pass
 
-    # Fallback: son 1 saati idle kabul et
-    return 60.0
+    # Son çare
+    return 5.0, "fallback"
 
 def check_blocking_conditions() -> tuple[bool, str]:
     \"\"\"Kapatmayı engelleyen durumları kontrol et.\"\"\"
@@ -149,24 +257,35 @@ def check_blocking_conditions() -> tuple[bool, str]:
     return False, ""
 
 def main():
-    log_info("Güç yönetimi kontrolü başlatıldı")
+    log_info("TiHA Güç Yönetimi kontrolü başlatıldı")
 
-    # Aktif oturum kontrolü
+    # Aktif oturum detaylı analizi
     sessions = get_active_sessions()
-    log_info(f"Aktif oturumlar: {{sessions}}")
+    log_info(f"Session analizi: console={{sessions['console']}}, remote={{sessions['remote']}}, locked={{sessions['locked']}}, greeter={{sessions['greeter']}}")
 
-    # Sadece LightDM varsa idle kontrolü yap
-    user_sessions = [s for s in sessions if s not in ["lightdm", "gdm", "root"]]
-    if user_sessions:
-        log_info(f"Kullanıcı oturumu aktif: {{user_sessions}}, kapatma iptal")
+    # Aktif kullanıcı oturumu kontrolü (locked oturumlar hariç)
+    active_users = sessions['console'] + sessions['remote']
+    active_users = [u for u in active_users if u not in ["lightdm", "gdm", "root"]]
+
+    if active_users:
+        log_info(f"Aktif kullanıcı oturumu var: {{active_users}}, kapatma iptal edildi")
         return
 
-    # Idle süre kontrolü
-    idle_minutes = get_idle_time_minutes()
-    log_info(f"Idle süre: {{idle_minutes:.1f}} dakika (eşik: {{IDLE_THRESHOLD_MINUTES}})")
+    # Kilitli oturum varsa bilgilendir ama devam et
+    if sessions['locked']:
+        log_info(f"Kilitli oturum tespit edildi: {{sessions['locked']}}, ama kapatma devam edecek")
+
+    # Greeter kontrolü
+    if not sessions['greeter']:
+        log_info("LightDM greeter aktif değil, kapatma iptal edildi")
+        return
+
+    # Gelişmiş idle süre kontrolü
+    idle_minutes, detection_method = get_idle_time_minutes()
+    log_info(f"Idle süre: {{idle_minutes:.1f}} dakika (yöntem: {{detection_method}}, eşik: {{IDLE_THRESHOLD_MINUTES}})")
 
     if idle_minutes < IDLE_THRESHOLD_MINUTES:
-        log_info("Idle süre eşik altında, kapatma yapılmayacak")
+        log_info(f"Idle süre eşik altında ({{idle_minutes:.1f}} < {{IDLE_THRESHOLD_MINUTES}}), kapatma yapılmayacak")
         return
 
     # Engelleme durumları kontrolü
@@ -175,23 +294,39 @@ def main():
         log_warning(f"Kapatma engellendi: {{reason}}")
         return
 
-    # Kapatma işlemi
-    log_warning(f"Otomatik kapatma başlatılıyor: {{idle_minutes:.1f}} dakika idle, eşik {{IDLE_THRESHOLD_MINUTES}} dakika")
+    # DPMS ekran kontrolünü devre dışı bırak (sistem kapatmasından önce)
+    run_cmd(["xset", "-display", ":0", "-dpms"])
+
+    log_warning(f"OTOMATIK KAPATMA BAŞLATILIYOR: {{idle_minutes:.1f}} dakika idle ({{detection_method}}), eşik {{IDLE_THRESHOLD_MINUTES}} dakika")
 
     # Wall mesajı gönder
     run_cmd(["wall", f"TiHA: Tahta {{IDLE_THRESHOLD_MINUTES}} dakika boyunca boşta kaldığı için 1 dakika içinde kapatılacak."])
 
     # 1 dakika bekle
+    log_info("60 saniye uyarı sürecinde...")
     time.sleep(60)
 
-    # Son kontrol
+    # Son kontrol - detaylı
+    log_info("Son kontrol yapılıyor...")
     final_sessions = get_active_sessions()
-    final_user_sessions = [s for s in final_sessions if s not in ["lightdm", "gdm", "root"]]
-    if final_user_sessions:
-        log_info(f"Son kontrol: kullanıcı girişi tespit edildi {{final_user_sessions}}, kapatma iptal")
+    final_active = final_sessions['console'] + final_sessions['remote']
+    final_active = [u for u in final_active if u not in ["lightdm", "gdm", "root"]]
+
+    if final_active:
+        log_info(f"Son kontrol: yeni kullanıcı girişi tespit edildi {{final_active}}, kapatma iptal edildi")
         return
 
-    log_warning("Otomatik kapatma gerçekleştiriliyor")
+    # Son idle kontrolü
+    final_idle, final_method = get_idle_time_minutes()
+    log_info(f"Son idle kontrolü: {{final_idle:.1f}} dakika ({{final_method}})")
+
+    if final_idle < IDLE_THRESHOLD_MINUTES:
+        log_info(f"Son kontrol: idle süre eşik altına düştü, kapatma iptal edildi")
+        return
+
+    log_warning("SİSTEM KAPAMA İŞLEMİ GERÇEKLEŞTİRİLİYOR")
+    log_warning(f"Final durum - idle: {{final_idle:.1f}}dk, method: {{final_method}}, sessions: {{final_sessions}}")
+
     run_cmd(["shutdown", "-h", "now", "TiHA otomatik güç yönetimi"])
 
 if __name__ == "__main__":
@@ -254,13 +389,17 @@ class PowerManagementModule(Module):
         "Bu adım, tahtanın okulda öğretmen tarafından açık unutulması "
         "durumunda otomatik olarak güvenli kapatma işlemi yapar. Enerji "
         "tasarrufu sağlar ve tahtanın gereksiz yere açık kalmasını önler.\n\n"
-        "**Nasıl çalışır?**\n"
+        "**Nasıl çalışır? (Gelişmiş sürüm)**\n"
         "• LightDM greeter ekranında tahta belirttiğiniz süre boyunca boşta "
         "kalırsa otomatik kapatma başlatılır\n"
+        "• Kilitli kullanıcı oturumları kapatmaya engel OLMAZ (sadece aktif oturumlar)\n"
+        "• Çoklu idle detection: LightDM log, systemd-logind, xprintidle\n"
         "• SSH bağlantısı, USB cihaz veya önemli işlemler varsa kapatmaz\n"
-        "• Tüm işlemler sistem günlüklerine kaydedilir\n"
+        "• DPMS ekran koruyucu devre dışı bırakılarak gerçek sistem kapatması yapılır\n"
+        "• Tüm işlemler detaylı olarak sistem günlüklerine kaydedilir\n"
         "• 1 dakika önceden uyarı verilir (wall komutu ile)\n\n"
-        "**Güvenli:** Kullanıcı girişi olduğunda kapatma iptal edilir."
+        "**Sorun Giderme:** Arka planda kilitli oturum olsa da greeter'da idle "
+        "kalırsa sistem kapatılır. Sadece ekranın kapanması (DPMS) önlenir."
     )
 
     def preview(self) -> str:

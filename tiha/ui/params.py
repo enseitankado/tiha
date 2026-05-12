@@ -9,19 +9,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m01_initial_passwords": [
         {
             "key": "root_password",
-            "label": "Yeni root parolası",
+            "label": "Yeni root parolası (isteğe bağlı)",
             "type": "password",
             "show_toggle": True,
-            "required": True,
-            "help": "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Sağdaki göz düğmesiyle içeriği görebilirsiniz.",
+            "required": False,
+            "help": "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Boş bırakılabilir.",
         },
         {
             "key": "admin_password",
-            "label": "Yeni etapadmin parolası",
+            "label": "Yeni etapadmin parolası (isteğe bağlı)",
             "type": "password",
             "show_toggle": True,
-            "required": True,
-            "help": "Tahtada yerel yönetim işleri için kullanılacak parola.",
+            "required": False,
+            "help": "Tahtada yerel yönetim işleri için kullanılacak parola. Boş bırakılabilir.",
         },
         {
             "key": "teacher_password",

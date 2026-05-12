@@ -10,7 +10,7 @@ import sys
 
 from . import __version__
 from .core import console
-from .core.logger import get_logger
+from .core.logger import get_logger, log_startup_info, log_shutdown_info
 from .core.paths import LOG_ROOT, ensure_runtime_dirs
 from .core.privilege import require_root_and_admin
 
@@ -79,8 +79,12 @@ def main() -> int:
         print(f"\n  HATA: {exc}\n", file=sys.stderr)
         return 3
 
+    # Detaylı loglama başlat
+    log_startup_info()
+
     console.banner_open("TiHA — Tahta İmaj Hazırlık Aracı", f"v{__version__}")
     console.info("Sihirbaz penceresi açılıyor…")
+    console.info("Detaylı loglar: /tmp/tiha.logs")
 
     # Terminali kirletecek GTK/GLib/dconf uyarılarını dosyaya yönlendir.
     # (Bundan önce tüm kullanıcıya-görür mesajlar çıktı.)
@@ -99,6 +103,8 @@ def main() -> int:
     window.show_all()
     Gtk.main()
 
+    # Program kapanış bilgilerini logla
+    log_shutdown_info()
     console.banner_close("Sihirbaz kapatıldı.")
     return 0
 

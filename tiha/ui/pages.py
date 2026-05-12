@@ -646,9 +646,9 @@ class ModulePage(Gtk.Box):
         progress_cb = progress if self.module.streams_output else None
         try:
             if progress_cb is not None:
-                result = self.module.apply(params, progress=progress_cb)
+                result = self.module.apply_with_logging(params, progress=progress_cb)
             else:
-                result = self.module.apply(params)
+                result = self.module.apply_with_logging(params)
         except Exception as exc:
             log.exception("Modül uygulanamadı: %s", self.module.id)
             result = ApplyResult(False, f"Beklenmeyen hata: {exc}")
@@ -844,7 +844,7 @@ class ModulePage(Gtk.Box):
                 return  # İptal
 
         try:
-            u_result = self.module.undo(entry.data, undo_params)
+            u_result = self.module.undo_with_logging(entry.data, undo_params)
         except Exception as exc:
             u_result = ApplyResult(False, f"Geri alma sırasında hata: {exc}")
         if u_result.success:
@@ -963,7 +963,7 @@ class SummaryPage(Gtk.Box):
     def _make_undo_handler(self, module: Module, entry: JournalEntry):
         def _handler(_btn: Gtk.Button) -> None:
             try:
-                result = module.undo(entry.data)
+                result = module.undo_with_logging(entry.data)
             except Exception as exc:
                 result = ApplyResult(False, f"Hata: {exc}")
             if result.success:

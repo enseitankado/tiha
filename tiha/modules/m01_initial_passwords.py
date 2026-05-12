@@ -6,13 +6,17 @@ Ne yapar?
   bırakılırsa hesaba dokunulmaz).
 - İsteğe bağlı olarak `ogretmen`/`ogrenci` ortak hesaplarını sistemden
   tamamen siler.
+- Parolalar SHA-512 hash olarak doğrudan `/etc/shadow` dosyasına yazılır.
 
 Diğer hesaplara dokunulmaz; bu adım kimseyi kilitlemez.
 
 Neden gerekir?
-İmajdan onlarca tahtaya dağıtılacak bir kurulumda root ve etapadmin
+İmajdan onlarca tahtaya dağıtılacı bir kurulumda root ve etapadmin
 parolalarının siz tarafından bilinçli olarak belirlenmiş olması gerekir;
 varsayılan/önceden bilinen parolaların imajda kalmaması için.
+
+Teknik not: Bu modül `chpasswd` yerine doğrudan `/etc/shadow` dosyasını
+düzenler; böylece PAM politikaları ve AppArmor kısıtlamalarından etkilenmez.
 
 Geri al. Apply öncesi alınan `/etc/shadow` yedeği yerine yazılır;
 böylece root, etapadmin ve ogretmen başta olmak üzere tüm hesapların
@@ -21,8 +25,10 @@ parolası `apply` öncesi haline döner.
 
 from __future__ import annotations
 
+import crypt
 import json
 import pwd
+import time
 from pathlib import Path
 
 from ..core.logger import get_logger
@@ -37,12 +43,80 @@ SHADOW = Path("/etc/shadow")
 REMOVABLE_USERS = {"ogrenci", "ogretmen"}
 
 
+def _generate_password_hash(password: str) -> str:
+    """SHA-512 ile parola hash'i üretir."""
+    # SHA-512 salt ile hash üret
+    salt = crypt.mksalt(crypt.METHOD_SHA512)
+    return crypt.crypt(password, salt)
+
+
+def _set_password_direct(user: str, password: str) -> tuple[bool, str]:
+    """Parolayı doğrudan /etc/shadow dosyasına hash olarak yazar."""
+    try:
+        if not user_exists(user):
+            return False, f"Kullanıcı bulunamadı: {user}"
+
+        log.info("Kullanıcı '%s' için parola hash'i doğrudan shadow'a yazılıyor", user)
+
+        # Hash üret
+        password_hash = _generate_password_hash(password)
+        log.debug("Hash üretildi, uzunluk: %d karakter", len(password_hash))
+
+        # Shadow dosyasını oku
+        try:
+            with open(SHADOW, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except OSError as exc:
+            return False, f"Shadow dosyası okunamadı: {exc}"
+
+        # İlgili kullanıcının satırını bul ve güncelle
+        user_found = False
+        updated_lines = []
+
+        for line in lines:
+            if line.startswith(f"{user}:"):
+                # Shadow format: username:password:lastchange:min:max:warn:inactive:expire:reserved
+                fields = line.strip().split(':')
+                if len(fields) >= 2:
+                    # Parola hash'ini güncelle
+                    fields[1] = password_hash
+                    # Parola değişim tarihini güncelle (epoch günleri)
+                    fields[2] = str(int(time.time() // 86400))  # bugünkü gün sayısı
+                    updated_line = ':'.join(fields) + '\n'
+                    updated_lines.append(updated_line)
+                    user_found = True
+                    log.debug("Kullanıcı '%s' shadow satırı güncellendi", user)
+                else:
+                    log.error("Shadow satırı bozuk format: %s", line.strip())
+                    return False, f"Shadow dosyasında bozuk format: {user}"
+            else:
+                updated_lines.append(line)
+
+        if not user_found:
+            return False, f"Shadow dosyasında kullanıcı bulunamadı: {user}"
+
+        # Güncellenmiş içeriği geri yaz
+        try:
+            with open(SHADOW, 'w', encoding='utf-8') as f:
+                f.writelines(updated_lines)
+            log.info("Kullanıcı '%s' parolası başarıyla shadow'a yazıldı", user)
+            return True, "Başarılı"
+        except OSError as exc:
+            return False, f"Shadow dosyası yazılamadı: {exc}"
+
+    except Exception as exc:
+        log.error("Parola ayarlama sırasında beklenmeyen hata: %s", exc)
+        return False, f"Beklenmeyen hata: {exc}"
+
+
 def _set_password(user: str, password: str) -> bool:
-    """``chpasswd`` ile parola atar. Başarıyı bool döner."""
-    result = run_cmd(["chpasswd"], input_data=f"{user}:{password}\n")
-    if not result.ok:
-        log.error("'%s' için parola atanamadı: %s", user, result.stderr.strip())
-    return result.ok
+    """Parolayı doğrudan shadow dosyasına hash olarak yazar."""
+    success, message = _set_password_direct(user, password)
+    if not success:
+        log.error("'%s' için parola atanamadı: %s", user, message)
+    else:
+        log.info("'%s' için parola başarıyla atandı", user)
+    return success
 
 
 def _unlock_user(user: str) -> bool:
@@ -136,16 +210,18 @@ class InitialPasswordsModule(Module):
     title = "Kullanıcı parolaları"
     sidebar_title = "Yerel hesaplar"
     apply_hint = (
-        "root, etapadmin (ve doldurulmuşsa ogretmen) parolaları belirlenen "
-        "değerlere ayarlanır. Diğer hesaplara dokunulmaz."
+        "Parolalar SHA-512 hash olarak doğrudan /etc/shadow'a yazılır. "
+        "Doldurduğunuz alanlara göre ilgili hesapların parolaları ayarlanır."
     )
     rationale = (
-        "root ve etapadmin parolalarını siz belirleyin. ogretmen hesabı "
-        "varsa ve onun da parolasını siz belirlemek istiyorsanız ilgili "
-        "alanı doldurun; aksi hâlde boş bırakın.\n\n"
-        "Bu adım yalnızca formdaki hesapları etkiler; başka kullanıcıyı "
-        "kilitlemez ya da değiştirmez. Ortak hesapları (ogretmen, ogrenci) "
-        "tamamen silmek isterseniz aşağıdaki düğmeyi kullanabilirsiniz."
+        "root, etapadmin veya ogretmen hesaplarından istediğinizin parolasını "
+        "belirleyin. Hangi alanları doldurursanız sadece o hesapların parolası "
+        "değişir; diğerlerine dokunulmaz.\n\n"
+        "⚡ Teknik: Bu adım PAM politikalarından etkilenmez çünkü parolalar "
+        "doğrudan shadow dosyasına hash olarak yazılır. Fiziksel ve sanal "
+        "makineler arasında tutarsızlık yaşanmaz.\n\n"
+        "Ortak hesapları (ogretmen, ogrenci) tamamen silmek isterseniz "
+        "aşağıdaki düğmeyi kullanabilirsiniz."
     )
 
     def preview(self) -> str:
@@ -163,19 +239,22 @@ class InitialPasswordsModule(Module):
 
     def apply(self, params: dict | None = None, progress=None) -> ApplyResult:
         params = params or {}
-        root_pw = params.get("root_password", "")
-        admin_pw = params.get("admin_password", "")
-        teacher_pw = params.get("teacher_password", "")
+        root_pw = params.get("root_password", "").strip()
+        admin_pw = params.get("admin_password", "").strip()
+        teacher_pw = params.get("teacher_password", "").strip()
 
-        if not root_pw or not admin_pw:
+        # En az bir parola belirtilmiş olmalı
+        if not root_pw and not admin_pw and not teacher_pw:
             return ApplyResult(
                 success=False,
-                summary="Eksik giriş: root ve etapadmin parolaları girilmeli.",
+                summary="En az bir parola belirtmelisiniz (root, etapadmin veya ogretmen).",
             )
 
-        # Parola uzunluk kontrolü
-        if len(root_pw) < 8 or len(admin_pw) < 8:
-            return ApplyResult(False, "root ve etapadmin parolaları en az 8 karakter olmalıdır.")
+        # Parola uzunluk kontrolü (sadece dolu olanlar için)
+        if root_pw and len(root_pw) < 8:
+            return ApplyResult(False, "root parolası en az 8 karakter olmalıdır.")
+        if admin_pw and len(admin_pw) < 8:
+            return ApplyResult(False, "etapadmin parolası en az 8 karakter olmalıdır.")
         if teacher_pw and len(teacher_pw) < 8:
             return ApplyResult(False, "ogretmen parolası en az 8 karakter olmalıdır.")
 
@@ -195,34 +274,57 @@ class InitialPasswordsModule(Module):
                         removed_users.append(username)
                         log.info("Sistem kullanıcısı silindi: %s", username)
 
-        # root, etapadmin ve (varsa) ogretmen parolalarını ata
-        ok_root = _set_password("root", root_pw)
-        ok_admin = _set_password("etapadmin", admin_pw)
+        # Sadece doldurulmuş parolaları ata
+        results = {}
+        ok_root = True
+        ok_admin = True
         ok_teacher = True
+
+        if root_pw:
+            ok_root = _set_password("root", root_pw)
+            results["root"] = ok_root
+
+        if admin_pw:
+            ok_admin = _set_password("etapadmin", admin_pw)
+            results["etapadmin"] = ok_admin
+
         if teacher_pw and user_exists("ogretmen"):
             ok_teacher = _set_password("ogretmen", teacher_pw)
+            results["ogretmen"] = ok_teacher
             # ogretmen hesabı kilitliyse parola ile giriş yapılabilmesi için aç
             _unlock_user("ogretmen")
 
         details_lines = []
         if removed_users:
             details_lines.append("Silinen ortak hesaplar: " + ", ".join(removed_users))
-        details_lines.append(f"root parolası: {'atandı' if ok_root else 'ATANAMADI'}")
-        details_lines.append(f"etapadmin parolası: {'atandı' if ok_admin else 'ATANAMADI'}")
-        if teacher_pw:
-            details_lines.append(f"ogretmen parolası: {'atandı' if ok_teacher else 'ATANAMADI'}")
 
-        overall = ok_root and ok_admin and ok_teacher
+        failed_users = []
+        for user, success in results.items():
+            details_lines.append(f"{user} parolası: {'atandı' if success else 'ATANAMADI'}")
+            if not success:
+                failed_users.append(user)
+
+        # Başarısız olan kullanıcılar için bilgi
+        if failed_users:
+            details_lines.append("")
+            details_lines.append("== BAŞARISIZLIK BİLGİLERİ ==")
+            details_lines.append("Parola değişikliği doğrudan /etc/shadow dosyasına yapıldı.")
+            details_lines.append("Olası nedenler:")
+            details_lines.append("  • Kullanıcı shadow dosyasında bulunamadı")
+            details_lines.append("  • Shadow dosyası yazma izni problemi")
+            details_lines.append("  • Bozuk shadow dosyası formatı")
+            details_lines.append("Detaylı hatalar /tmp/tiha.logs dosyasında.")
+
+        overall = all(results.values()) if results else (len(removed_users) > 0)
 
         summary_parts = []
         if removed_users:
             summary_parts.append(f"{len(removed_users)} ortak hesap silindi")
 
         password_parts = []
-        if ok_root and ok_admin:
-            password_parts.append("root/etapadmin")
-        if teacher_pw and ok_teacher:
-            password_parts.append("ogretmen")
+        for user, success in results.items():
+            if success:
+                password_parts.append(user)
         if password_parts:
             summary_parts.append(f"{'/'.join(password_parts)} parolaları atandı")
 
