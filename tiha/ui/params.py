@@ -172,18 +172,67 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     ],
     "m11_power_management": [
         {
-            "key": "idle_minutes",
-            "label": "Otomatik kapatma süresi (dakika)",
+            "key": "auto_enabled",
+            "label": "Sabit saat kapatma",
+            "type": "bool",
+            "required": False,
+            "default": False,
+            "help": "Belirlenen saatte otomatik olarak tahta kapatılır.",
+        },
+        {
+            "key": "auto_hour",
+            "label": "Kapatma saati",
             "type": "spin",
             "required": False,
-            "default": "45",
+            "default": "22",
+            "min": 0,
+            "max": 23,
+            "step": 1,
+            "help": "Otomatik kapatma yapılacak saat (24 saat formatında).",
+        },
+        {
+            "key": "auto_minute",
+            "label": "Kapatma dakikası",
+            "type": "spin",
+            "required": False,
+            "default": "0",
+            "min": 0,
+            "max": 59,
+            "step": 1,
+            "help": "Otomatik kapatma yapılacak dakika.",
+        },
+        {
+            "key": "idle_enabled",
+            "label": "Idle tabanlı kapatma",
+            "type": "bool",
+            "required": False,
+            "default": True,
+            "help": "Tahta boşta kalırsa otomatik olarak kapatılır veya uyku moduna geçer.",
+        },
+        {
+            "key": "idle_mode",
+            "label": "Idle eylem",
+            "type": "choice",
+            "required": False,
+            "default": "shutdown",
+            "choices": [
+                {"value": "shutdown", "label": "Kapatma"},
+                {"value": "suspend", "label": "Uyku modu"}
+            ],
+            "help": "Boşta kalma süresinin aşılması durumunda yapılacak eylem.",
+        },
+        {
+            "key": "idle_minute",
+            "label": "Idle süresi (dakika)",
+            "type": "spin",
+            "required": False,
+            "default": "15",
             "min": 1,
-            "max": 999,
+            "max": 180,
             "step": 1,
             "help": (
-                "LightDM greeter ekranında tahta bu süre boyunca boşta kalırsa "
-                "otomatik olarak kapatılır. Minimum 1, maksimum 999 dakika. "
-                "Önerilen: 30-60 dakika arası. Test için: 1-5 dakika."
+                "Tahta bu süre boyunca boşta kalırsa belirlenen eylem yapılır. "
+                "Minimum 1 dakika. Önerilen: 15-60 dakika arası."
             ),
         },
     ],

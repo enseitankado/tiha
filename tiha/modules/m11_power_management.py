@@ -1,29 +1,25 @@
-"""Modül 11 — Güç yönetimi ve otomatik kapanma.
+"""Modül 11 — Otomatik kapanma sistemi.
 
 **Ne yapar?**
-LightDM greeter ekranında tahta belirtilen süre boyunca boşta kaldığında
-otomatik olarak güvenli kapanma işlemi gerçekleştirir. Bu, okulda
-öğretmenlerin tahtayı açık unutması durumunda enerji tasarrufu sağlar.
+Pardus ETA'nın mevcut eta-shutdown altyapısını kullanarak otomatik kapanma
+sistemi kurar. İki mod destekler:
 
-**Nasıl çalışır?**
-1. Systemd timer ile düzenli kontrol (her 5 dakika)
-2. LightDM greeter boştayken idle süre hesaplama
-3. Belirtilen eşik aşılınca güvenli kapatma
-4. Tüm işlemler detaylı log'lanır
+1. **Sabit saat kapatma**: Belirlenen saatte otomatik kapatma
+2. **Idle tabanlı kapatma**: Belirtilen süre boşta kalınca kapatma
 
-**Güvenlik önlemleri:**
-- SSH bağlantısı varsa kapatmaz
-- Aktif USB cihaz varsa bekler
-- Önemli süreçler çalışıyorsa atlar
-- Çalışma saatleri koruma (opsiyonel)
+**Orijinalden farkı:**
+- Her iki modda da 2 dakika önceden uyarı diyalogu gösterir
+- Kullanıcı kapatmayı erteleyebilir
+- 1 dakika aralıklarla kontrol yapar (daha hassas)
 
 **Geri al.**
-Systemd timer/service kaldırılır, script dosyaları temizlenir.
+Orijinal eta-shutdown konfigürasyonu geri yüklenir, değişiklikler kaldırılır.
 """
 
 from __future__ import annotations
 
-import os
+import configparser
+import shutil
 from pathlib import Path
 
 from ..core.logger import get_logger
@@ -33,727 +29,456 @@ from ..core.utils import run_cmd
 log = get_logger(__name__)
 
 # Dosya yolları
-POWER_SCRIPT = Path("/usr/local/sbin/tiha-power-manager.py")
-POWER_SERVICE = Path("/etc/systemd/system/tiha-power-manager.service")
-POWER_TIMER = Path("/etc/systemd/system/tiha-power-manager.timer")
-POWER_CONFIG = Path("/etc/tiha/power-management.conf")
+ETA_SHUTDOWN_CONFIG = Path("/etc/pardus/eta-shutdown.conf")
+ETA_SHUTDOWN_SERVICE = Path("/usr/share/eta/eta-shutdown/src/service/service.py")
+ETA_SHUTDOWN_SERVICE_BACKUP = Path("/usr/share/eta/eta-shutdown/src/service/service.py.tiha-backup")
 
 
-def _render_script(idle_minutes: int) -> str:
-    """Güç yönetimi script'ini oluşturur - sayaçlı zorla kapatma."""
-    return f"""#!/usr/bin/env python3
-\"\"\"
-TiHA Güç Yönetimi - LightDM greeter boştayken sayaçlı zorla kapatma
-Oluşturan: TiHA (Tahta İmaj Hazırlık Aracı)
-\"\"\"
-
-import subprocess
+def _render_enhanced_service() -> str:
+    """TiHA tarafından geliştirilmiş eta-shutdown service script'i."""
+    return '''import os
 import sys
 import time
-import syslog
-import os
-import signal
-from pathlib import Path
+import subprocess
+import threading
+import configparser
 
-# Yapılandırma
-IDLE_THRESHOLD_MINUTES = {idle_minutes}
-COUNTDOWN_SECONDS = 60  # Sayaç süresi
-LOG_PREFIX = "TiHA-PowerMgmt"
-CANCEL_FILE = "/tmp/tiha-shutdown-cancel"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def log_info(msg: str) -> None:
-    syslog.openlog(LOG_PREFIX)
-    syslog.syslog(syslog.LOG_INFO, msg)
-    syslog.closelog()
+from datetime import datetime
 
-def log_warning(msg: str) -> None:
-    syslog.openlog(LOG_PREFIX)
-    syslog.syslog(syslog.LOG_WARNING, msg)
-    syslog.closelog()
+from xidle import get_idle_time
+from logger import log
 
-def run_cmd(cmd: list[str]) -> tuple[bool, str]:
-    \"\"\"Komut çalıştır ve sonuç döndür.\"\"\"
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        return result.returncode == 0, result.stdout.strip()
-    except Exception as e:
-        return False, str(e)
+"""
+[AUTO_SHUTDOWN]
+enabled = False
+hour = 01
+minute = 00
 
-def send_notification(msg: str, urgent: bool = False) -> None:
-    \"\"\"Sistem genelinde bildirim gönder.\"\"\"
-    # Wall komutu ile tüm kullanıcılara mesaj
-    try:
-        subprocess.run(["wall", msg], input="", text=True, timeout=5)
-    except:
-        pass
+[TIMED_MODE]
+mode = "shutdown"
+hour = 00
+minute = 00
+"""
 
-    # Console'a da yazdır
-    try:
-        subprocess.run(["echo", f"\\033[1;31m{{msg}}\\033[0m"], shell=True, timeout=2)
-    except:
-        pass
+CONFIG_FILE = "/etc/pardus/eta-shutdown.conf"
+config = configparser.ConfigParser()
+config.read(CONFIG_FILE)
 
-def force_shutdown() -> None:
-    \"\"\"Zorla kapatma - hiçbir engel tanımaz.\"\"\"
-    log_warning("ZORLA KAPATMA BAŞLATILIYOR - TÜM ENGELLERLE ALAY EDİYORUZ!")
+def check_time(hour, minute, delay):
+    now = datetime.now()
+    nex = datetime(now.year, now.month, now.day, hour, minute)
+    print(now, nex, delay)
+    return nex.timestamp() - delay - now.timestamp() < 0
 
-    # Çoklu kapatma yöntemi - sert'ten yumuşak'a
-    shutdown_methods = [
-        ["systemctl", "poweroff", "--force", "--force"],  # Çok sert
-        ["systemctl", "poweroff", "--force"],  # Sert
-        ["systemctl", "poweroff"],  # Normal systemd
-        ["shutdown", "-h", "now", "TiHA zorla kapatma"],  # Klasik
-        ["poweroff"],  # Basit
-        ["halt", "-p"],  # Alternatif
-    ]
 
-    for i, cmd in enumerate(shutdown_methods, 1):
-        log_warning(f"Kapatma yöntemi {{i}}/{{len(shutdown_methods)}}: {{' '.join(cmd)}}")
-        success, output = run_cmd(cmd)
-        if success:
-            log_warning(f"Kapatma başarılı: {{' '.join(cmd)}}")
-            break
+def check_x11(disp):
+    sp = subprocess.run(["env", "DISPLAY={}".format(disp), "xset", "-q"], capture_output=True)
+    return sp.returncode == 0
+
+ret = None
+def send_notify(message, yes_msg, no_msg, timeout):
+    global ret
+    def send_notify_disp(disp):
+        global ret
+        cmd = ["timeout", str(timeout),
+            "env", "DISPLAY={}".format(disp),
+            "notify-send", "-w",
+            "-A", "true={}".format(yes_msg),
+            "-A", "false={}".format(no_msg),
+            "-t", str(timeout*1000), message]
+        log(cmd)
+        sp = subprocess.run(cmd, capture_output=True)
+        if ret == None:
+            ret = (sp.stdout.decode("utf-8").strip() == "true")
+    ths = []
+    ret = None
+    for display in os.listdir("/tmp/.X11-unix/"):
+        if check_x11(f":{display[1:]}"):
+            th = threading.Thread(target=send_notify_disp, args=[f":{display[1:]}"])
+            ths.append(th)
+    for th in ths:
+        th.start()
+    for th in ths:
+        th.join()
+    print(ret)
+    return ret
+
+# TiHA gelişmiş değişkenler
+message_shown = False
+delay = 0
+init = False
+ignore_auto = False
+shutdown_warning_shown = False
+shutdown_start_time = None
+
+def show_shutdown_warning(mode_name):
+    """TiHA 2 dakika uyarı diyalogu."""
+    global shutdown_warning_shown, shutdown_start_time
+
+    if not shutdown_warning_shown:
+        shutdown_warning_shown = True
+        shutdown_start_time = time.time()
+
+        message = f"⚠️ UYARI: Tahta 2 dakika sonra kapatılacak!\\n\\n{mode_name} moduna göre sistem kapatılacak."
+        result = send_notify(message, "10 dakika ertele", "Kapatmayı onayla", 120)
+
+        if result:  # Kullanıcı "10 dakika ertele" seçti
+            log("Kullanıcı kapatmayı 10 dakika erteledi")
+            shutdown_warning_shown = False
+            shutdown_start_time = None
+            return True  # Ertelendi
         else:
-            log_warning(f"Kapatma başarısız: {{' '.join(cmd)}} - {{output}}")
-            time.sleep(1)  # Kısa bekleme
+            log("Kullanıcı kapatmayı onayladı veya zaman aşımı")
+            return False  # Devam et
 
-    # Hala kapatmadıysa kernel panic tetikle (son çare)
-    log_warning("TÜM KAPATMA YÖNTEMLERİ BAŞARISIZ - KERNEL PANIC TETİKLENİYOR!")
-    try:
-        with open("/proc/sys/kernel/sysrq", "w") as f:
-            f.write("1")
-        time.sleep(1)
-        with open("/proc/sysrq-trigger", "w") as f:
-            f.write("o")  # Immediate poweroff
-    except:
-        log_warning("Kernel panic da başarısız!")
+    # 2 dakika geçti mi?
+    if shutdown_start_time and (time.time() - shutdown_start_time) >= 120:
+        return False  # 2 dakika geçti, kapat
 
-def start_countdown() -> bool:
-    \"\"\"60 saniyelik geri sayım başlat - iptal edilebilir.\"\"\"
-    log_warning(f"GERİ SAYIM BAŞLADI: {{COUNTDOWN_SECONDS}} saniye sonra ZORLA KAPATMA!")
-
-    # İptal dosyası temizle
-    try:
-        os.remove(CANCEL_FILE)
-    except:
-        pass
-
-    for remaining in range(COUNTDOWN_SECONDS, 0, -1):
-        # İptal kontrolü
-        if os.path.exists(CANCEL_FILE):
-            log_info("Kapatma iptal edildi: cancel dosyası bulundu")
-            send_notification("🛑 Kapatma iptal edildi!")
-            return False
-
-        # Her 10 saniyede bir uyarı
-        if remaining % 10 == 0 or remaining <= 10:
-            msg = f"⚠️ SİSTEM {{remaining}} SANİYE SONRA KAPANACAK! İptal için: touch {{CANCEL_FILE}}"
-            send_notification(msg, urgent=True)
-            log_warning(f"Geri sayım: {{remaining}} saniye kaldı")
-
-        time.sleep(1)
-
-    # Sayım bitti, iptal edilmedi
-    log_warning("GERİ SAYIM BİTTİ - ZORLA KAPATMA BAŞLALIYOR!")
-    send_notification("🔴 SİSTEM ŞİMDİ KAPATILIYOR!")
-    return True
-
-def check_lightdm_greeter_active() -> bool:
-    \"\"\"LightDM greeter'ın gerçekten aktif olup olmadığını kontrol et.\"\"\"
-
-    # Yöntem 1: who komutu ile tty7 kontrolü (en güvenilir)
-    success, who_output = run_cmd(["who"])
-    if success:
-        tty7_user = None
-        for line in who_output.splitlines():
-            if "tty7" in line:
-                parts = line.split()
-                if parts:
-                    tty7_user = parts[0]
-                    break
-
-        # tty7'de kimse yoksa ya da lightdm varsa greeter aktif
-        if tty7_user is None:
-            log_info("tty7 boş, greeter aktif olabilir")
-            return True
-        elif tty7_user == "lightdm":
-            log_info("tty7'de lightdm, greeter kesin aktif")
-            return True
-        else:
-            log_info(f"tty7'de normal user: {{tty7_user}}, greeter aktif değil")
-            return False
-
-    # Yöntem 2: loginctl ile session kontrolü
-    success, sessions_output = run_cmd(["loginctl", "list-sessions", "--no-legend"])
-    if success:
-        for line in sessions_output.splitlines():
-            parts = line.strip().split()
-            if len(parts) >= 4:
-                session_id, uid, user, seat = parts[0], parts[1], parts[2], parts[3]
-                if "seat0" in seat and user != "lightdm":
-                    # Normal user seat0'da aktif, greeter değil
-                    success2, session_detail = run_cmd(["loginctl", "show-session", session_id, "-p", "Type,State"])
-                    if success2:
-                        if "Type=x11" in session_detail and "State=active" in session_detail:
-                            log_info(f"Active X11 session: {{user}}, greeter aktif değil")
-                            return False
-
-    # Yöntem 3: LightDM service kontrolü + greeter process
-    success, lightdm_status = run_cmd(["systemctl", "is-active", "lightdm"])
-    if success and "active" in lightdm_status:
-        # LightDM çalışıyor, şimdi greeter process'i var mı?
-        success, greeter_proc = run_cmd(["pgrep", "-f", "lightdm-gtk-greeter"])
-        if success and greeter_proc.strip():
-            log_info("LightDM greeter process aktif")
-            return True
-
-    log_info("LightDM greeter aktif değil")
-    return False
+    return True  # Hala bekliyor
 
 
-def get_active_sessions() -> dict:
-    \"\"\"Aktif kullanıcı oturumlarını detaylı analiz et.\"\"\"
-    result = {{"console": [], "remote": [], "locked": [], "greeter": []}}
+def service():
+    global message_shown
+    global delay
+    global init
+    global ignore_auto
+    global shutdown_warning_shown, shutdown_start_time
 
-    # LightDM greeter özel kontrolü
-    if check_lightdm_greeter_active():
-        result["greeter"].append("lightdm")
-        log_info("LightDM greeter aktif tespit edildi")
-    else:
-        log_info("LightDM greeter aktif değil")
+    # variables
+    auto_hour = int(config["AUTO_SHUTDOWN"]["hour"])
+    auto_minute = int(config["AUTO_SHUTDOWN"]["minute"])
+    hour = int(config["TIMED_MODE"]["hour"])
+    minute = int(config["TIMED_MODE"]["minute"])
 
-    # who komutu ile temel bilgi al
-    success, output = run_cmd(["who"])
-    if not success:
-        return result
+    # first boot check
+    if not init:
+        init = True
+        if check_time(auto_hour, auto_minute, 0):
+            ignore_auto = True
 
-    for line in output.splitlines():
-        if line.strip():
-            parts = line.split()
-            if len(parts) >= 2:
-                user, tty = parts[0], parts[1]
+    log("###### TiHA Enhanced Eta Shutdown {} ######".format(time.time()))
 
-                if user in ["lightdm", "gdm"]:
-                    # who'da lightdm görünüyorsa kesin greeter
-                    if user not in result["greeter"]:
-                        result["greeter"].append(user)
-                elif "pts/" in tty:
-                    result["remote"].append(user)
-                elif tty.startswith("tty"):
-                    result["console"].append(user)
+    # TIMED MODE - Idle tabanlı kapatma
+    mode = config["TIMED_MODE"]["mode"]
+    if mode != "none":
+        idle_time = -1
+        for display in os.listdir("/tmp/.X11-unix/"):
+            idle = get_idle_time(f":{display[1:]}")
+            if idle_time < idle or idle_time < 0:
+                idle_time = idle
+        print("idle_time: {}".format(idle_time))
+        req_idle = (hour*3600 + minute * 60)*1000
+        if req_idle < 60*1000:  # Minimum 1 dakika
+            req_idle = 60*1000
+        print("req_idle:", req_idle)
 
-    # loginctl ile gerçek session durumunu kontrol et
-    success, sessions_output = run_cmd(["loginctl", "list-sessions", "--no-legend"])
-    if success:
-        for line in sessions_output.splitlines():
-            parts = line.strip().split()
-            if len(parts) >= 4:
-                session_id, uid, user, seat = parts[0], parts[1], parts[2], parts[3]
+        if idle_time > req_idle:
+            # TiHA: 2 dakika uyarı diyalogu
+            postpone = show_shutdown_warning(f"Boşta kalma süresi aşıldı ({minute} dakika)")
+            if postpone:
+                if postpone is True and shutdown_start_time is None:
+                    # 10 dakika erteleme
+                    delay_until = time.time() + 600  # 10 dakika
+                    shutdown_warning_shown = False
+                    log("Idle kapatma 10 dakika ertelendi")
+                return
 
-                # Session detayını al
-                success, detail = run_cmd(["loginctl", "show-session", session_id, "-p", "State,Type,Scope"])
-                if success:
-                    session_info = {{}}
-                    for detail_line in detail.splitlines():
-                        if "=" in detail_line:
-                            key, value = detail_line.split("=", 1)
-                            session_info[key] = value
+            # 2 dakika geçti veya kullanıcı onayladı
+            log("TiHA: Idle tabanlı kapatma gerçekleştiriliyor")
+            if mode == "shutdown":
+                os.system("poweroff")
+            elif mode == "suspend":
+                os.system("systemctl suspend")
+            shutdown_warning_shown = False
+            shutdown_start_time = None
 
-                    # Kilitli oturumları tespit et
-                    if session_info.get("State") == "closing" or session_info.get("Type") == "user":
-                        if user not in ["lightdm", "gdm", "root"]:
-                            result["locked"].append(f"{{user}}({{session_info.get('State', 'unknown')}})")
+    # AUTO SHUTDOWN - Sabit saat kapatma
+    if ignore_auto:
+        print("Ignore auto shutdown")
+    elif config["AUTO_SHUTDOWN"]["enabled"].lower() == "true":
+        # TiHA: 2 dakika önceden uyarı (orijinal 10dk yerine)
+        if check_time(auto_hour, auto_minute, 120):  # 2 dakika öncesinden
+            postpone = show_shutdown_warning(f"Sabit saat kapatma ({auto_hour:02d}:{auto_minute:02d})")
+            if postpone:
+                if postpone is True and shutdown_start_time is None:
+                    # 10 dakika erteleme
+                    delay -= 600  # 10 dakika geri çek
+                    shutdown_warning_shown = False
+                    log("Sabit saat kapatma 10 dakika ertelendi")
+                return
 
-    return result
+        if check_time(auto_hour, auto_minute, delay):
+            log("TiHA: Sabit saat kapatma gerçekleştiriliyor")
+            os.system("poweroff")
+            shutdown_warning_shown = False
+            shutdown_start_time = None
 
-def get_ssh_sessions() -> int:
-    \"\"\"Aktif SSH bağlantı sayısını döndür.\"\"\"
-    success, output = run_cmd(["who"])
-    if not success:
-        return 0
-
-    ssh_count = 0
-    for line in output.splitlines():
-        if "pts/" in line:  # SSH terminal sessions
-            ssh_count += 1
-    return ssh_count
-
-def get_idle_time_minutes() -> tuple[float, str]:
-    \"\"\"Sistem idle süresini ve hangi yöntemle bulunduğunu döndür.\"\"\"
-
-    # Yöntem 1: LightDM log analizi (en güvenilir)
-    try:
-        success, output = run_cmd(["journalctl", "-u", "lightdm", "-n", "50", "--no-pager"])
-        if success:
-            import re
-            from datetime import datetime
-
-            # Son aktivite zamanını bul
-            last_activity = None
-            for line in output.splitlines():
-                if "session" in line.lower() or "greeter" in line.lower():
-                    # Timestamp çıkar: Dec 12 14:30:45
-                    timestamp_match = re.search(r'(\w+ \d+ \d+:\d+:\d+)', line)
-                    if timestamp_match:
-                        try:
-                            time_str = timestamp_match.group(1)
-                            # Yıl ekle (güncel yıl)
-                            import datetime as dt
-                            current_year = dt.datetime.now().year
-                            full_time_str = f"{{current_year}} {{time_str}}"
-                            activity_time = datetime.strptime(full_time_str, "%Y %b %d %H:%M:%S")
-
-                            if last_activity is None or activity_time > last_activity:
-                                last_activity = activity_time
-                        except:
-                            continue
-
-            if last_activity:
-                idle_seconds = (datetime.now() - last_activity).total_seconds()
-                return idle_seconds / 60, "lightdm-log"
-    except Exception as e:
-        log_info(f"LightDM log analizi başarısız: {{e}}")
-
-    # Yöntem 2: Input device analizi (/proc/interrupts)
-    try:
-        with open("/proc/interrupts", "r") as f:
-            interrupt_data = f.read()
-
-        # Klavye/mouse interrupt'larını ara
-        keyboard_lines = [line for line in interrupt_data.splitlines()
-                         if "keyboard" in line.lower() or "mouse" in line.lower() or "i8042" in line.lower()]
-
-        if keyboard_lines:
-            # Son interrupt zamanından idle hesapla
-            with open("/proc/uptime", "r") as f:
-                uptime = float(f.read().split()[0])
-
-            # Konservatif yaklaşım: son 5 dakika idle kabul et
-            return 5.0, "interrupt-analysis"
-    except:
-        pass
-
-    # Yöntem 3: systemd-logind idle hint
-    try:
-        success, output = run_cmd(["busctl", "get-property", "org.freedesktop.login1",
-                                  "/org/freedesktop/login1", "org.freedesktop.login1.Manager",
-                                  "IdleHint"])
-        if success and "true" in output:
-            success, idle_since = run_cmd(["busctl", "get-property", "org.freedesktop.login1",
-                                          "/org/freedesktop/login1", "org.freedesktop.login1.Manager",
-                                          "IdleSinceHint"])
-            if success:
-                # Unix timestamp'ten dakika hesapla
-                import re
-                timestamp_match = re.search(r'(\d+)', idle_since)
-                if timestamp_match:
-                    idle_since_ts = int(timestamp_match.group(1)) // 1000000  # mikrosaniye -> saniye
-                    current_ts = int(time.time())
-                    idle_minutes = (current_ts - idle_since_ts) / 60
-                    return idle_minutes, "systemd-logind"
-    except:
-        pass
-
-    # Yöntem 4: X11 xprintidle (sadece X session'da çalışır)
-    for display in [":0", ":1"]:
-        try:
-            env = {{"DISPLAY": display}}
-            success, output = run_cmd(["xprintidle"], env=env)
-            if success and output.isdigit():
-                idle_ms = int(output)
-                return idle_ms / 1000 / 60, f"xprintidle-{{display}}"
-        except:
-            continue
-
-    # Fallback: Boot zamanından tahmin
-    try:
-        with open("/proc/uptime", "r") as f:
-            uptime_seconds = float(f.read().split()[0])
-
-        # Çok muhafazakar: uptime'ın %10'unu idle kabul et (minimum 10 dk)
-        estimated_idle = max(10.0, uptime_seconds / 60 * 0.1)
-        return estimated_idle, "uptime-estimate"
-    except:
-        pass
-
-    # Son çare
-    return 5.0, "fallback"
-
-def check_blocking_conditions() -> tuple[bool, str]:
-    \"\"\"Kapatmayı engelleyen durumları kontrol et.\"\"\"
-
-    # SSH bağlantısı kontrolü
-    ssh_count = get_ssh_sessions()
-    if ssh_count > 0:
-        return True, f"{{ssh_count}} SSH bağlantısı aktif"
-
-    # USB cihaz kontrolü
-    usb_devices = list(Path("/sys/bus/usb/devices").glob("*-*"))
-    # Built-in cihazları çıkar (klavye, mouse vs hariç tutabiliriz)
-    external_usb = [d for d in usb_devices if not any(x in str(d) for x in ["1-1", "2-1"])]
-    if len(external_usb) > 2:  # Temel cihazlar hariç
-        return True, f"{{len(external_usb)}} USB cihaz bağlı"
-
-    # Önemli süreç kontrolü (opsiyonel)
-    success, output = run_cmd(["pgrep", "-f", "backup|sync|update"])
-    if success and output.strip():
-        return True, "Önemli süreç çalışıyor (backup/sync/update)"
-
-    return False, ""
-
-def main():
-    """AGRESİF MOD: Sadece idle süre kontrolü + zorla kapatma."""
-    log_info("TiHA Güç Yönetimi - AGRESİF MOD başlatıldı")
-
-    # Sadece idle süre kontrolü - tüm güvenlik kontrolleri kaldırıldı
-    idle_minutes, detection_method = get_idle_time_minutes()
-    log_info(f"Idle süre: {{idle_minutes:.1f}} dakika (yöntem: {{detection_method}}, eşik: {{IDLE_THRESHOLD_MINUTES}})")
-
-    if idle_minutes < IDLE_THRESHOLD_MINUTES:
-        log_info(f"Idle süre eşik altında ({{idle_minutes:.1f}} < {{IDLE_THRESHOLD_MINUTES}}), henüz kapatma zamanı değil")
-        return
-
-    # EŞIK AŞILDI - TÜM ENGELLERİ GÖRMEZDEN GEL
-    log_warning(f"IDLE EŞIK AŞILDI: {{idle_minutes:.1f}} dakika > {{IDLE_THRESHOLD_MINUTES}} dakika")
-    log_warning("AGRESİF MOD: SSH, kullanıcı oturumu, USB vb. TÜM KONTROLLER GÖRMEZDENGELİNDİ!")
-
-    # Bilgilendirme amaçlı durum raporu (ama engellemez)
-    try:
-        sessions = get_active_sessions()
-        ssh_count = get_ssh_sessions()
-        log_info(f"DURUM RAPORU (sadece bilgi): sessions={{sessions}}, ssh={{ssh_count}}")
-        log_info("Bu durumlar GÖRMEZDEN GELİNİYOR ve kapatmayı engellemeyecek!")
-    except Exception as e:
-        log_info(f"Durum raporu alınamadı (önemli değil): {{e}}")
-
-    # DPMS ekran kontrolünü devre dışı bırak
-    try:
-        run_cmd(["xset", "-display", ":0", "-dpms"])
-    except:
-        pass
-
-    # GERİ SAYIM BAŞLAT (60 saniye)
-    log_warning("ZORLA KAPATMA GERİ SAYIMI BAŞLATILIYOR!")
-
-    # İlk uyarı mesajı
-    warning_msg = f"🚨 DİKKAT! Sistem {{COUNTDOWN_SECONDS}} saniye sonra ZORLA kapatılacak! İptal için: touch {{CANCEL_FILE}}"
-    send_notification(warning_msg, urgent=True)
-
-    # Geri sayım
-    if start_countdown():
-        # Geri sayım tamamlandı, iptal edilmedi
-        log_warning("GERİ SAYIM TAMAMLANDI - ZORLA KAPATMA İŞLEMİ!")
-        force_shutdown()
-    else:
-        # İptal edildi
-        log_info("Kapatma kullanıcı tarafından iptal edildi")
-        send_notification("✅ Kapatma başarıyla iptal edildi!", urgent=False)
 
 if __name__ == "__main__":
-    main()
-"""
-
-
-def _render_service() -> str:
-    """Systemd service dosyası."""
-    return f"""[Unit]
-Description=TiHA Güç Yönetimi
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart={POWER_SCRIPT}
-User=root
-Group=root
-# Güvenli shutdown için gerekli yetkiler
-SupplementaryGroups=adm
-# PolicyKit bypass için
-Environment="SYSTEMD_IGNORE_CHROOT=1"
-# Kapatma yetkisi için
-CapabilityBoundingSet=CAP_SYS_BOOT CAP_SYS_ADMIN
-AmbientCapabilities=CAP_SYS_BOOT CAP_SYS_ADMIN
-StandardOutput=journal
-StandardError=journal
-# Timeout ayarı (kapatma sürecinde)
-TimeoutStopSec=30
-KillMode=mixed
-
-[Install]
-WantedBy=multi-user.target
-"""
-
-
-def _render_timer(interval_minutes: int = 5) -> str:
-    """Systemd timer dosyası."""
-    return f"""[Unit]
-Description=TiHA Güç Yönetimi Timer
-Requires=tiha-power-manager.service
-
-[Timer]
-OnBootSec={interval_minutes}min
-OnUnitActiveSec={interval_minutes}min
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-"""
-
-
-def _render_config(idle_minutes: int) -> str:
-    """Yapılandırma dosyası."""
-    return f"""# TiHA Güç Yönetimi Yapılandırması
-# Bu dosya TiHA tarafından otomatik oluşturulmuştur.
-
-idle_threshold_minutes={idle_minutes}
-check_interval_minutes=5
-enable_worktime_protection=false
-worktime_start=09:00
-worktime_end=17:00
-"""
+    send_notify(sys.argv[1], "Yes", "No", 10)
+'''
 
 
 class PowerManagementModule(Module):
     id = "m11_power_management"
-    title = "Güç yönetimi ve otomatik kapanma"
-    apply_hint = "LightDM boşta kaldığında otomatik kapatma sistemi kurulur."
+    title = "Otomatik kapanma"
+    sidebar_title = "Otomatik kapanma"
+    apply_hint = "ETA-Shutdown tabanlı otomatik kapanma sistemi kurulur."
     rationale = (
-        "Bu adım, tahtanın okulda öğretmen tarafından açık unutulması "
-        "durumunda otomatik olarak zorla kapatma işlemi yapar. Enerji "
-        "tasarrufu sağlar ve tahtanın gereksiz yere açık kalmasını önler.\n\n"
-        "**Nasıl çalışır? (AGRESİF SÜRÜM)**\n"
-        "• Sadece idle süre kontrolü yapılır - diğer tüm güvenlik kontrolleri "
-        "kaldırılmıştır\n"
-        "• Belirtilen süre boyunca idle kalındığında 60 saniyelik geri sayım başlar\n"
-        "• SSH bağlantısı, aktif kullanıcı oturumu, USB cihaz vs. HİÇBİRİ "
-        "kapatmayı engellemez\n"
-        "• Geri sayım sırasında 'touch /tmp/tiha-shutdown-cancel' ile iptal "
-        "edilebilir\n"
-        "• İptal edilmezse sistem ZORLA kapatılır (çoklu kapatma yöntemi)\n"
-        "• Çoklu idle detection: LightDM log, systemd-logind, xprintidle\n"
-        "• Tüm işlemler detaylı olarak sistem günlüklerine kaydedilir\n\n"
-        "**UYARI:** Bu sürüm güvenlik kontrollerini tamamen görmezden gelir. "
-        "Arkada SSH bağlantısı veya aktif kullanıcı olsa bile kapatma işlemi "
-        "gerçekleştirilir!"
+        "Bu adım, tahtanın okulda unutulması durumunda otomatik olarak "
+        "kapatılmasını sağlar. Pardus ETA'nın mevcut eta-shutdown altyapısını "
+        "kullanarak iki farklı kapatma modu sunar:\n\n"
+        "**1. Sabit Saat Kapatma:**\n"
+        "• Belirlediğiniz saatte otomatik olarak kapatma yapar\n"
+        "• Kapatmadan 2 dakika önce uyarı diyalogu gösterir\n"
+        "• Kullanıcı 10 dakika erteleyebilir\n\n"
+        "**2. Idle Tabanlı Kapatma:**\n"
+        "• Tahta belirlenen süre boyunca boşta kalırsa kapatma yapar\n"
+        "• X11 idle detection kullanır (mouse, klavye aktivitesi)\n"
+        "• Kapatmadan 2 dakika önce uyarı diyalogu gösterir\n"
+        "• Minimum 1 dakika idle süresi\n\n"
+        "**Orijinal eta-shutdown'dan farkları:**\n"
+        "• Her iki modda da 2 dakika uyarı (orijinal: 10dk/hiç)\n"
+        "• Erteleme imkanı her iki modda da mevcut\n"
+        "• 1 dakika hassas kontrol aralığı"
     )
 
     def preview(self) -> str:
-        if POWER_TIMER.exists() and POWER_SERVICE.exists() and POWER_SCRIPT.exists():
-            # Mevcut yapılandırmayı oku
-            idle_time = "45"  # varsayılan
-            if POWER_CONFIG.exists():
-                try:
-                    config_content = POWER_CONFIG.read_text(encoding="utf-8")
-                    for line in config_content.splitlines():
-                        if line.startswith("idle_threshold_minutes="):
-                            idle_time = line.split("=")[1].strip()
-                            break
-                except:
-                    pass
+        eta_service_running = False
+        eta_config_exists = ETA_SHUTDOWN_CONFIG.exists()
 
-            # Timer durumunu kontrol et
-            timer_result = run_cmd(["systemctl", "is-enabled", "tiha-power-manager.timer"])
-            timer_status = "aktif" if timer_result.ok else "pasif"
+        # Servis durumunu kontrol et
+        result = run_cmd(["systemctl", "is-active", "eta-shutdown"])
+        eta_service_running = result.ok and "active" in result.stdout
 
-            return (
-                f"✓ TiHA güç yönetimi sistemi kurulu (AGRESİF MOD)\n"
-                f"• Idle eşiği: {idle_time} dakika → Geri sayım başlar\n"
-                f"• Geri sayım süresi: 60 saniye\n"
-                f"• Timer durumu: {timer_status}\n"
-                f"• Kontrol aralığı: 5 dakika\n\n"
-                f"🚨 AGRESİF MOD AKTIF:\n"
-                f"  • SSH bağlantıları görmezden gelinir\n"
-                f"  • Aktif kullanıcı oturumları görmezden gelinir\n"
-                f"  • USB cihazları görmezden gelinir\n"
-                f"  • Sadece 'touch /tmp/tiha-shutdown-cancel' ile iptal edilebilir\n\n"
-                f"Dosyalar:\n"
-                f"  • Script: {POWER_SCRIPT}\n"
-                f"  • Service: {POWER_SERVICE}\n"
-                f"  • Timer: {POWER_TIMER}\n"
-                f"  • Config: {POWER_CONFIG}"
-            )
+        if eta_config_exists:
+            try:
+                config = configparser.ConfigParser()
+                config.read(ETA_SHUTDOWN_CONFIG)
+
+                auto_enabled = config.getboolean("AUTO_SHUTDOWN", "enabled", fallback=False)
+                auto_hour = config.get("AUTO_SHUTDOWN", "hour", fallback="0")
+                auto_minute = config.get("AUTO_SHUTDOWN", "minute", fallback="0")
+
+                timed_mode = config.get("TIMED_MODE", "mode", fallback="none")
+                timed_hour = config.get("TIMED_MODE", "hour", fallback="0")
+                timed_minute = config.get("TIMED_MODE", "minute", fallback="0")
+
+                enhanced = ETA_SHUTDOWN_SERVICE_BACKUP.exists()
+
+                status = "✓ Otomatik kapanma sistemi aktif"
+                if enhanced:
+                    status += " (TiHA ile geliştirilmiş)"
+                else:
+                    status += " (orijinal eta-shutdown)"
+
+                lines = [
+                    status,
+                    f"• Servis durumu: {'çalışıyor' if eta_service_running else 'durdurulmuş'}",
+                    "",
+                    "Mevcut yapılandırma:"
+                ]
+
+                if auto_enabled:
+                    lines.extend([
+                        f"• Sabit saat kapatma: AKTIF ({auto_hour}:{auto_minute})",
+                        "  - 2 dakika önceden uyarı diyalogu",
+                        "  - 10 dakika erteleme seçeneği"
+                    ])
+                else:
+                    lines.append("• Sabit saat kapatma: KAPALI")
+
+                if timed_mode != "none":
+                    action = "kapatma" if timed_mode == "shutdown" else "uyku modu"
+                    lines.extend([
+                        f"• Idle tabanlı {action}: AKTIF ({timed_hour}:{timed_minute})",
+                        "  - 2 dakika önceden uyarı diyalogu",
+                        "  - 10 dakika erteleme seçeneği"
+                    ])
+                else:
+                    lines.append("• Idle tabanlı kapatma: KAPALI")
+
+                return "\n".join(lines)
+
+            except Exception as exc:
+                return f"✗ Yapılandırma okunurken hata: {exc}"
         else:
             return (
-                "Henüz TiHA güç yönetimi sistemi kurulmamış.\n\n"
-                "Bu adım şunları kuracak (AGRESİF MOD):\n"
-                f"• Python script: {POWER_SCRIPT}\n"
-                f"• Systemd service: {POWER_SERVICE}\n"
-                f"• Systemd timer: {POWER_TIMER}\n"
-                f"• Yapılandırma: {POWER_CONFIG}\n\n"
-                "🚨 AGRESİF MOD: Timer her 5 dakikada idle durumunu kontrol edecek.\n"
-                "Idle eşik aşılınca tüm güvenlik kontrollerini görmezden gelerek\n"
-                "60 saniyelik geri sayım başlatacak ve sistem zorla kapatılacak!\n\n"
-                "İptal: 'touch /tmp/tiha-shutdown-cancel' komutu ile"
+                "Henüz otomatik kapanma sistemi yapılandırılmamış.\n\n"
+                "Bu adım şunları yapacak:\n"
+                "• ETA-shutdown konfigürasyonu oluşturacak\n"
+                "• 2 dakika uyarı diyalogu ekleyecek\n"
+                "• Sabit saat ve idle tabanlı kapatma modları sunacak\n"
+                "• eta-shutdown.service'i aktifleştirecek"
             )
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
-        idle_minutes = int(params.get("idle_minutes") or 45)
+
+        # Parametreleri al
+        auto_enabled = params.get("auto_enabled", False)
+        auto_hour = int(params.get("auto_hour", 22))
+        auto_minute = int(params.get("auto_minute", 0))
+
+        idle_enabled = params.get("idle_enabled", False)
+        idle_mode = params.get("idle_mode", "shutdown")  # shutdown veya suspend
+        idle_hour = int(params.get("idle_hour", 0))
+        idle_minute = int(params.get("idle_minute", 15))
 
         if progress:
-            progress("TiHA güç yönetimi sistemi kuruluyor...")
+            progress("Mevcut eta-shutdown konfigürasyonu yedekleniyor...")
 
-        # Gerekli dizinleri oluştur
-        try:
-            POWER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
-            POWER_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            return ApplyResult(False, f"Dizin oluşturulamadı: {exc}")
-
-        if progress:
-            progress("Python script yazılıyor...")
-
-        # Python script oluştur
-        try:
-            POWER_SCRIPT.write_text(_render_script(idle_minutes), encoding="utf-8")
-            POWER_SCRIPT.chmod(0o755)
-        except OSError as exc:
-            return ApplyResult(False, f"Python script yazılamadı: {exc}")
+        # Mevcut service dosyasını yedekle (ilk kez ise)
+        if not ETA_SHUTDOWN_SERVICE_BACKUP.exists():
+            try:
+                shutil.copy2(ETA_SHUTDOWN_SERVICE, ETA_SHUTDOWN_SERVICE_BACKUP)
+                log.info("Orijinal eta-shutdown service yedeklendi")
+            except OSError as exc:
+                return ApplyResult(False, f"Service yedekleme başarısız: {exc}")
 
         if progress:
-            progress("Systemd service dosyası yazılıyor...")
+            progress("Geliştirilmiş eta-shutdown service yazılıyor...")
 
-        # Service dosyası oluştur
+        # Geliştirilmiş service dosyasını yaz
         try:
-            POWER_SERVICE.write_text(_render_service(), encoding="utf-8")
-            POWER_SERVICE.chmod(0o644)
+            ETA_SHUTDOWN_SERVICE.write_text(_render_enhanced_service(), encoding="utf-8")
+            ETA_SHUTDOWN_SERVICE.chmod(0o755)
         except OSError as exc:
             return ApplyResult(False, f"Service dosyası yazılamadı: {exc}")
 
         if progress:
-            progress("Systemd timer dosyası yazılıyor...")
+            progress("Otomatik kapanma konfigürasyonu yazılıyor...")
 
-        # Timer dosyası oluştur
+        # Konfigürasyon dosyasını oluştur
+        config = configparser.ConfigParser()
+        config["AUTO_SHUTDOWN"] = {
+            "enabled": str(auto_enabled),
+            "hour": str(auto_hour),
+            "minute": str(auto_minute)
+        }
+
+        timed_mode = "none"
+        if idle_enabled:
+            timed_mode = idle_mode
+
+        config["TIMED_MODE"] = {
+            "mode": timed_mode,
+            "hour": str(idle_hour),
+            "minute": str(idle_minute)
+        }
+
         try:
-            POWER_TIMER.write_text(_render_timer(), encoding="utf-8")
-            POWER_TIMER.chmod(0o644)
+            ETA_SHUTDOWN_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+            with open(ETA_SHUTDOWN_CONFIG, "w", encoding="utf-8") as f:
+                config.write(f)
+            ETA_SHUTDOWN_CONFIG.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"Timer dosyası yazılamadı: {exc}")
+            return ApplyResult(False, f"Konfigürasyon dosyası yazılamadı: {exc}")
 
         if progress:
-            progress("Yapılandırma dosyası yazılıyor...")
+            progress("eta-shutdown servisi yeniden başlatılıyor...")
 
-        # Config dosyası oluştur
-        try:
-            POWER_CONFIG.write_text(_render_config(idle_minutes), encoding="utf-8")
-            POWER_CONFIG.chmod(0o644)
-        except OSError as exc:
-            return ApplyResult(False, f"Yapılandırma dosyası yazılamadı: {exc}")
+        # Servisi yeniden başlat
+        restart_result = run_cmd(["systemctl", "restart", "eta-shutdown"])
+        if not restart_result.ok:
+            return ApplyResult(False, "eta-shutdown servisi başlatılamadı",
+                               details=restart_result.stderr)
 
-        if progress:
-            progress("xprintidle paketi kontrol ediliyor...")
-
-        # xprintidle kurulu değilse kur
-        xprintidle_check = run_cmd(["which", "xprintidle"])
-        if not xprintidle_check.ok:
-            if progress:
-                progress("xprintidle paketi kuruluyor...")
-            install_result = run_cmd(
-                ["apt-get", "install", "-y", "xprintidle"],
-                env={"DEBIAN_FRONTEND": "noninteractive"}
-            )
-            if not install_result.ok:
-                if progress:
-                    progress("⚠ xprintidle kurulamadı, alternatif idle kontrolü kullanılacak")
-
-        if progress:
-            progress("Systemd daemon reload...")
-
-        # Systemd reload
-        reload_result = run_cmd(["systemctl", "daemon-reload"])
-        if not reload_result.ok:
-            return ApplyResult(False, "systemctl daemon-reload başarısız")
-
-        if progress:
-            progress("Timer aktifleştiriliyor...")
-
-        # Timer'ı aktifleştir ve başlat
-        enable_result = run_cmd(["systemctl", "enable", "tiha-power-manager.timer"])
+        # Servisin aktif olduğunu doğrula
+        enable_result = run_cmd(["systemctl", "enable", "eta-shutdown"])
         if not enable_result.ok:
-            return ApplyResult(False, "Timer aktifleştirilemedi", details=enable_result.stderr)
-
-        start_result = run_cmd(["systemctl", "start", "tiha-power-manager.timer"])
-        if not start_result.ok:
-            return ApplyResult(False, "Timer başlatılamadı", details=start_result.stderr)
-
-        # Sudoers yetki kontrolü ve ekleme (opsiyonel güvenlik)
-        sudoers_added = False
-        if progress:
-            progress("Shutdown yetkisi kontrol ediliyor...")
-
-        sudoers_line = "root ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/systemctl poweroff, /usr/bin/loginctl poweroff"
-        sudoers_file = Path("/etc/sudoers.d/tiha-power-management")
-
-        try:
-            if not sudoers_file.exists():
-                sudoers_file.write_text(f"# TiHA Güç Yönetimi için shutdown yetkisi\n{sudoers_line}\n", encoding="utf-8")
-                sudoers_file.chmod(0o440)  # sudoers dosyası izinleri
-                run_cmd(["visudo", "-c"])  # Syntax kontrolü
-                sudoers_added = True
-                if progress:
-                    progress("Sudoers shutdown yetkisi eklendi")
-        except Exception as exc:
-            log.warning("Sudoers dosyası eklenirken hata: %s", exc)
-            if progress:
-                progress("⚠ Sudoers ekleme başarısız (manuel gerekebilir)")
+            log.warning("eta-shutdown servisi etkinleştirilemedi: %s", enable_result.stderr)
 
         if progress:
-            progress("✅ Kurulum tamamlandı!")
+            progress("✅ Otomatik kapanma sistemi kuruldu!")
 
+        # Özet bilgi
         details_lines = [
-            f"✓ Python script: {POWER_SCRIPT}",
-            f"✓ Systemd service: {POWER_SERVICE} (gelişmiş yetkilerle)",
-            f"✓ Systemd timer: {POWER_TIMER} (aktif)",
-            f"✓ Yapılandırma: {POWER_CONFIG}"
+            "✓ TiHA geliştirilmiş eta-shutdown sistemi kuruldu",
+            f"✓ Orijinal service yedeklendi: {ETA_SHUTDOWN_SERVICE_BACKUP}",
+            f"✓ Konfigürasyon: {ETA_SHUTDOWN_CONFIG}",
+            f"✓ eta-shutdown.service aktif",
+            ""
         ]
 
-        if sudoers_added:
-            details_lines.append(f"✓ Sudoers yetki: {sudoers_file}")
+        if auto_enabled:
+            details_lines.extend([
+                f"🕐 Sabit saat kapatma: {auto_hour:02d}:{auto_minute:02d}",
+                "   - 2 dakika önceden uyarı diyalogu",
+                "   - 10 dakika erteleme seçeneği"
+            ])
+
+        if idle_enabled:
+            action = "kapatma" if idle_mode == "shutdown" else "uyku modu"
+            idle_text = f"{idle_hour*60 + idle_minute} dakika" if idle_hour > 0 else f"{idle_minute} dakika"
+            details_lines.extend([
+                f"💤 Idle tabanlı {action}: {idle_text} boşta kalınca",
+                "   - 2 dakika önceden uyarı diyalogu",
+                "   - 10 dakika erteleme seçeneği"
+            ])
+
+        if not auto_enabled and not idle_enabled:
+            details_lines.append("ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu")
 
         details_lines.extend([
             "",
-            f"Timer her 5 dakikada kontrol yapacak.",
-            f"LightDM {idle_minutes} dakika boşta kalırsa tahta kapatılacak.",
-            "",
-            "🔧 Kapatma yöntemleri (öncelik sırası):",
-            "  1. systemctl poweroff (en güvenilir)",
-            "  2. loginctl poweroff",
-            "  3. shutdown -h now",
-            "  4. sudo shutdown -h now",
-            "",
-            "📋 Test seçenekleri:",
-            "• Normal test: Logout yapın → LightDM greeter ekranında bekleyin",
-            "• Esnek test: 'sudo touch /etc/tiha/power-test-mode' (console user ignored)",
-            "",
-            "Test: 'systemctl status tiha-power-manager.timer' ile durumu kontrol edin.",
-            "Debug: 'journalctl -f | grep TiHA-PowerMgmt' ile canlı log izleyin."
+            "📋 Test ve yönetim:",
+            "• Durum kontrolü: systemctl status eta-shutdown",
+            "• Log takibi: journalctl -f -u eta-shutdown",
+            "• Manuel yapılandırma: /usr/bin/eta-shutdown --menu"
         ])
+
+        summary = "Otomatik kapanma sistemi kuruldu"
+        if auto_enabled or idle_enabled:
+            summary += " ve aktifleştirildi"
 
         return ApplyResult(
             True,
-            f"Güç yönetimi sistemi kuruldu ({idle_minutes} dakika idle eşiği).",
+            summary,
             details="\n".join(details_lines)
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         removed_items = []
 
-        # Timer'ı durdur ve deaktive et
-        run_cmd(["systemctl", "stop", "tiha-power-manager.timer"])
-        run_cmd(["systemctl", "disable", "tiha-power-manager.timer"])
+        # Servisi durdur
+        run_cmd(["systemctl", "stop", "eta-shutdown"])
 
-        # Dosyaları kaldır
-        for filepath in [POWER_TIMER, POWER_SERVICE, POWER_SCRIPT, POWER_CONFIG]:
+        # Orijinal service dosyasını geri yükle
+        if ETA_SHUTDOWN_SERVICE_BACKUP.exists():
             try:
-                if filepath.exists():
-                    filepath.unlink()
-                    removed_items.append(str(filepath))
-            except OSError:
-                pass
+                shutil.copy2(ETA_SHUTDOWN_SERVICE_BACKUP, ETA_SHUTDOWN_SERVICE)
+                ETA_SHUTDOWN_SERVICE_BACKUP.unlink()
+                removed_items.append("Orijinal eta-shutdown service geri yüklendi")
+            except OSError as exc:
+                log.warning("Service geri yükleme başarısız: %s", exc)
 
-        # Daemon reload
-        run_cmd(["systemctl", "daemon-reload"])
+        # Konfigürasyonu sıfırla (varsayılan değerler)
+        try:
+            config = configparser.ConfigParser()
+            config["AUTO_SHUTDOWN"] = {
+                "enabled": "False",
+                "hour": "0",
+                "minute": "0"
+            }
+            config["TIMED_MODE"] = {
+                "mode": "none",
+                "hour": "0",
+                "minute": "0"
+            }
+            with open(ETA_SHUTDOWN_CONFIG, "w", encoding="utf-8") as f:
+                config.write(f)
+            removed_items.append("eta-shutdown konfigürasyonu sıfırlandı")
+        except OSError as exc:
+            log.warning("Konfigürasyon sıfırlama başarısız: %s", exc)
 
-        summary = f"TiHA güç yönetimi sistemi kaldırıldı"
-        details = f"Kaldırılan dosyalar:\n" + "\n".join(f"  • {item}" for item in removed_items) if removed_items else "Kaldırılacak dosya bulunamadı"
+        # Servisi yeniden başlat
+        run_cmd(["systemctl", "restart", "eta-shutdown"])
+
+        summary = "Otomatik kapanma sistemi kaldırıldı, orijinal eta-shutdown geri yüklendi"
+        details = "\n".join(f"• {item}" for item in removed_items) if removed_items else "Kaldırılacak öğe bulunamadı"
 
         return ApplyResult(True, summary, details=details)
