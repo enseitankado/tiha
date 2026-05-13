@@ -47,10 +47,12 @@ def get_logger(name: str | None = None) -> logging.Logger:
         except PermissionError:
             pass
 
-        # 2. Debug log dosyasına yaz (her zaman, yetki gerekmiyor)
+        # 2. Debug log dosyasına yaz (basit FileHandler, daha robust)
         try:
-            debug_handler = RotatingFileHandler(
-                DEBUG_LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8"
+            # Dosyayı açmayı dene, başarısız olursa yok say
+            DEBUG_LOG_FILE.touch(exist_ok=True)
+            debug_handler = logging.FileHandler(
+                DEBUG_LOG_FILE, mode='a', encoding="utf-8"
             )
             debug_handler.setLevel(logging.DEBUG)  # Tüm debug mesajları
             debug_handler.setFormatter(formatter)
@@ -60,8 +62,8 @@ def get_logger(name: str | None = None) -> logging.Logger:
             root.info("=== TiHA detaylı debug loglama başlatıldı ===")
             root.info("Debug log dosyası: %s", DEBUG_LOG_FILE)
         except Exception as exc:
-            # Debug loglama başarısız olursa sessizce devam et
-            print(f"Debug loglama kurulamadı: {exc}", file=sys.stderr)
+            # Debug loglama başarısız olursa sessizce devam et (normal davranış)
+            pass
 
         # 3. Terminal çıktısı (geliştirme için)
         if os.environ.get("TIHA_DEBUG"):
