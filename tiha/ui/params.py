@@ -177,7 +177,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "False",
-            "help": "Belirlenen saatte otomatik olarak tahta kapatılır.",
+            "help": "Belirlenen saatte otomatik kapatma yapar.",
         },
         {
             "key": "auto_hour",
@@ -207,19 +207,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "True",
-            "help": "Tahta boşta kalırsa otomatik olarak kapatılır veya uyku moduna geçer.",
-        },
-        {
-            "key": "idle_mode",
-            "label": "Idle eylem",
-            "type": "choice",
-            "required": False,
-            "default": "shutdown",
-            "choices": [
-                {"value": "shutdown", "label": "Kapatma"},
-                {"value": "suspend", "label": "Uyku modu"}
-            ],
-            "help": "Boşta kalma süresinin aşılması durumunda yapılacak eylem.",
+            "help": "Tahta boşta kalırsa otomatik kapatma yapar.",
         },
         {
             "key": "idle_minute",
@@ -230,10 +218,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "min": 1,
             "max": 180,
             "step": 1,
-            "help": (
-                "Tahta bu süre boyunca boşta kalırsa belirlenen eylem yapılır. "
-                "Minimum 1 dakika. Önerilen: 15-60 dakika arası."
-            ),
+            "help": "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika.",
         },
     ],
 }

@@ -228,22 +228,10 @@ class PowerManagementModule(Module):
     sidebar_title = "Otomatik kapanma"
     apply_hint = "ETA-Shutdown tabanlı otomatik kapanma sistemi kurulur."
     rationale = (
-        "Bu adım, tahtanın okulda unutulması durumunda otomatik olarak "
-        "kapatılmasını sağlar. Pardus ETA'nın mevcut eta-shutdown altyapısını "
-        "kullanarak iki farklı kapatma modu sunar:\n\n"
-        "**1. Sabit Saat Kapatma:**\n"
-        "• Belirlediğiniz saatte otomatik olarak kapatma yapar\n"
-        "• Kapatmadan 2 dakika önce uyarı diyalogu gösterir\n"
-        "• Kullanıcı 10 dakika erteleyebilir\n\n"
-        "**2. Idle Tabanlı Kapatma:**\n"
-        "• Tahta belirlenen süre boyunca boşta kalırsa kapatma yapar\n"
-        "• X11 idle detection kullanır (mouse, klavye aktivitesi)\n"
-        "• Kapatmadan 2 dakika önce uyarı diyalogu gösterir\n"
-        "• Minimum 1 dakika idle süresi\n\n"
-        "**Orijinal eta-shutdown'dan farkları:**\n"
-        "• Her iki modda da 2 dakika uyarı (orijinal: 10dk/hiç)\n"
-        "• Erteleme imkanı her iki modda da mevcut\n"
-        "• 1 dakika hassas kontrol aralığı"
+        "Tahtanın unutulması durumunda otomatik kapatma sistemi kurar. "
+        "Belirlenen saatte veya tahta boşta kaldığında otomatik olarak "
+        "kapatma işlemi yapılır. Her iki modda da 2 dakika önceden uyarı "
+        "diyalogu gösterilir ve kapatma 10 dakika ertelenebilir."
     )
 
     def preview(self) -> str:
@@ -264,7 +252,6 @@ class PowerManagementModule(Module):
                 auto_minute = config.get("AUTO_SHUTDOWN", "minute", fallback="0")
 
                 timed_mode = config.get("TIMED_MODE", "mode", fallback="none")
-                timed_hour = config.get("TIMED_MODE", "hour", fallback="0")
                 timed_minute = config.get("TIMED_MODE", "minute", fallback="0")
 
                 enhanced = ETA_SHUTDOWN_SERVICE_BACKUP.exists()
@@ -292,9 +279,8 @@ class PowerManagementModule(Module):
                     lines.append("• Sabit saat kapatma: KAPALI")
 
                 if timed_mode != "none":
-                    action = "kapatma" if timed_mode == "shutdown" else "uyku modu"
                     lines.extend([
-                        f"• Idle tabanlı {action}: AKTIF ({timed_hour}:{timed_minute})",
+                        f"• Idle tabanlı kapatma: AKTIF ({timed_minute} dakika)",
                         "  - 2 dakika önceden uyarı diyalogu",
                         "  - 10 dakika erteleme seçeneği"
                     ])
@@ -324,8 +310,6 @@ class PowerManagementModule(Module):
         auto_minute = int(params.get("auto_minute", 0))
 
         idle_enabled = params.get("idle_enabled", False)
-        idle_mode = params.get("idle_mode", "shutdown")  # shutdown veya suspend
-        idle_hour = int(params.get("idle_hour", 0))
         idle_minute = int(params.get("idle_minute", 15))
 
         if progress:
@@ -360,13 +344,11 @@ class PowerManagementModule(Module):
             "minute": str(auto_minute)
         }
 
-        timed_mode = "none"
-        if idle_enabled:
-            timed_mode = idle_mode
+        timed_mode = "shutdown" if idle_enabled else "none"
 
         config["TIMED_MODE"] = {
             "mode": timed_mode,
-            "hour": str(idle_hour),
+            "hour": "0",
             "minute": str(idle_minute)
         }
 
@@ -412,10 +394,8 @@ class PowerManagementModule(Module):
             ])
 
         if idle_enabled:
-            action = "kapatma" if idle_mode == "shutdown" else "uyku modu"
-            idle_text = f"{idle_hour*60 + idle_minute} dakika" if idle_hour > 0 else f"{idle_minute} dakika"
             details_lines.extend([
-                f"💤 Idle tabanlı {action}: {idle_text} boşta kalınca",
+                f"💤 Idle tabanlı kapatma: {idle_minute} dakika boşta kalınca",
                 "   - 2 dakika önceden uyarı diyalogu",
                 "   - 10 dakika erteleme seçeneği"
             ])
