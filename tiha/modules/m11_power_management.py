@@ -305,11 +305,11 @@ class PowerManagementModule(Module):
         params = params or {}
 
         # Parametreleri al
-        auto_enabled = params.get("auto_enabled", False)
+        auto_enabled = str(params.get("auto_enabled", "False")).lower() == "true"
         auto_hour = int(params.get("auto_hour", 22))
         auto_minute = int(params.get("auto_minute", 0))
 
-        idle_enabled = params.get("idle_enabled", False)
+        idle_enabled = str(params.get("idle_enabled", "True")).lower() == "true"
         idle_minute = int(params.get("idle_minute", 15))
 
         if progress:

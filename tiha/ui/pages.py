@@ -471,6 +471,13 @@ class ModulePage(Gtk.Box):
             btn.connect("clicked", on_button_clicked)
             return btn
 
+        if kind == "bool":
+            checkbox = Gtk.CheckButton()
+            # Default değeri kontrol et (string olarak geliyor)
+            is_checked = default.lower() in ("true", "1", "yes", "on")
+            checkbox.set_active(is_checked)
+            return checkbox
+
         entry = Gtk.Entry()
         entry.set_text(default)
         if kind == "password":
@@ -518,6 +525,8 @@ class ModulePage(Gtk.Box):
             return widget.get_active_text() or ""
         if kind == "button":
             return ""  # Buttons don't have values
+        if kind == "bool":
+            return str(widget.get_active())  # True/False → "True"/"False"
         return widget.get_text()
 
     def _collect_params(self) -> tuple[dict, list[str]]:
