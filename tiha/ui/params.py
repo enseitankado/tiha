@@ -176,7 +176,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Sabit saat kapatma",
             "type": "bool",
             "required": False,
-            "default": False,
+            "default": "False",
             "help": "Belirlenen saatte otomatik olarak tahta kapatılır.",
         },
         {
@@ -206,7 +206,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Idle tabanlı kapatma",
             "type": "bool",
             "required": False,
-            "default": True,
+            "default": "True",
             "help": "Tahta boşta kalırsa otomatik olarak kapatılır veya uyku moduna geçer.",
         },
         {
