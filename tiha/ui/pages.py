@@ -331,6 +331,15 @@ class ModulePage(Gtk.Box):
                     for w in row_widgets:
                         w.set_no_show_all(True)
                         w.set_visible(False)
+
+        # Checkbox'ların başlangıç durumuna göre ilgili alanları ayarla
+        for field in schema:
+            if field.get("type") == "bool":
+                checkbox_key = field["key"]
+                widget = self._fields.get(checkbox_key)
+                if widget and hasattr(widget, 'get_active'):
+                    self._update_conditional_fields(checkbox_key, widget.get_active())
+
         return grid
 
     def _refresh_conditional_fields(self) -> None:
@@ -349,6 +358,22 @@ class ModulePage(Gtk.Box):
             for w in self._conditional_field_widgets.get(field["key"], ()):
                 w.set_no_show_all(not visible)
                 w.set_visible(visible)
+
+    def _update_conditional_fields(self, checkbox_key: str, is_active: bool) -> None:
+        """Checkbox durumuna göre ilgili alanları etkinleştir/pasifleştir."""
+
+        # Güç yönetimi modülü için checkbox-field ilişkilerini tanımla
+        field_relationships = {
+            "auto_enabled": ["auto_hour", "auto_minute"],
+            "idle_enabled": ["idle_minute"]
+        }
+
+        related_fields = field_relationships.get(checkbox_key, [])
+
+        for field_key in related_fields:
+            widget = self._fields.get(field_key)
+            if widget:
+                widget.set_sensitive(is_active)
 
     def _refresh_preview(self) -> None:
         """Önizleme metnini yeniden üretip aynı widget'a yazar."""
@@ -476,6 +501,12 @@ class ModulePage(Gtk.Box):
             # Default değeri kontrol et (string olarak geliyor)
             is_checked = default.lower() in ("true", "1", "yes", "on")
             checkbox.set_active(is_checked)
+
+            # Checkbox değişikliklerini dinle ve ilgili alanları aktif/pasif yap
+            def on_checkbox_toggled(cb, field_key=field["key"]):
+                self._update_conditional_fields(field_key, cb.get_active())
+
+            checkbox.connect("toggled", on_checkbox_toggled)
             return checkbox
 
         entry = Gtk.Entry()
