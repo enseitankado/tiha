@@ -40,10 +40,10 @@ POWER_CONFIG = Path("/etc/tiha/power-management.conf")
 
 
 def _render_script(idle_minutes: int) -> str:
-    """Güç yönetimi script'ini oluşturur."""
+    """Güç yönetimi script'ini oluşturur - sayaçlı zorla kapatma."""
     return f"""#!/usr/bin/env python3
 \"\"\"
-TiHA Güç Yönetimi - LightDM greeter boştayken otomatik kapatma
+TiHA Güç Yönetimi - LightDM greeter boştayken sayaçlı zorla kapatma
 Oluşturan: TiHA (Tahta İmaj Hazırlık Aracı)
 \"\"\"
 
@@ -51,11 +51,15 @@ import subprocess
 import sys
 import time
 import syslog
+import os
+import signal
 from pathlib import Path
 
 # Yapılandırma
 IDLE_THRESHOLD_MINUTES = {idle_minutes}
+COUNTDOWN_SECONDS = 60  # Sayaç süresi
 LOG_PREFIX = "TiHA-PowerMgmt"
+CANCEL_FILE = "/tmp/tiha-shutdown-cancel"
 
 def log_info(msg: str) -> None:
     syslog.openlog(LOG_PREFIX)
@@ -75,9 +79,148 @@ def run_cmd(cmd: list[str]) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+def send_notification(msg: str, urgent: bool = False) -> None:
+    \"\"\"Sistem genelinde bildirim gönder.\"\"\"
+    # Wall komutu ile tüm kullanıcılara mesaj
+    try:
+        subprocess.run(["wall", msg], input="", text=True, timeout=5)
+    except:
+        pass
+
+    # Console'a da yazdır
+    try:
+        subprocess.run(["echo", f"\\033[1;31m{{msg}}\\033[0m"], shell=True, timeout=2)
+    except:
+        pass
+
+def force_shutdown() -> None:
+    \"\"\"Zorla kapatma - hiçbir engel tanımaz.\"\"\"
+    log_warning("ZORLA KAPATMA BAŞLATILIYOR - TÜM ENGELLERLE ALAY EDİYORUZ!")
+
+    # Çoklu kapatma yöntemi - sert'ten yumuşak'a
+    shutdown_methods = [
+        ["systemctl", "poweroff", "--force", "--force"],  # Çok sert
+        ["systemctl", "poweroff", "--force"],  # Sert
+        ["systemctl", "poweroff"],  # Normal systemd
+        ["shutdown", "-h", "now", "TiHA zorla kapatma"],  # Klasik
+        ["poweroff"],  # Basit
+        ["halt", "-p"],  # Alternatif
+    ]
+
+    for i, cmd in enumerate(shutdown_methods, 1):
+        log_warning(f"Kapatma yöntemi {{i}}/{{len(shutdown_methods)}}: {{' '.join(cmd)}}")
+        success, output = run_cmd(cmd)
+        if success:
+            log_warning(f"Kapatma başarılı: {{' '.join(cmd)}}")
+            break
+        else:
+            log_warning(f"Kapatma başarısız: {{' '.join(cmd)}} - {{output}}")
+            time.sleep(1)  # Kısa bekleme
+
+    # Hala kapatmadıysa kernel panic tetikle (son çare)
+    log_warning("TÜM KAPATMA YÖNTEMLERİ BAŞARISIZ - KERNEL PANIC TETİKLENİYOR!")
+    try:
+        with open("/proc/sys/kernel/sysrq", "w") as f:
+            f.write("1")
+        time.sleep(1)
+        with open("/proc/sysrq-trigger", "w") as f:
+            f.write("o")  # Immediate poweroff
+    except:
+        log_warning("Kernel panic da başarısız!")
+
+def start_countdown() -> bool:
+    \"\"\"60 saniyelik geri sayım başlat - iptal edilebilir.\"\"\"
+    log_warning(f"GERİ SAYIM BAŞLADI: {{COUNTDOWN_SECONDS}} saniye sonra ZORLA KAPATMA!")
+
+    # İptal dosyası temizle
+    try:
+        os.remove(CANCEL_FILE)
+    except:
+        pass
+
+    for remaining in range(COUNTDOWN_SECONDS, 0, -1):
+        # İptal kontrolü
+        if os.path.exists(CANCEL_FILE):
+            log_info("Kapatma iptal edildi: cancel dosyası bulundu")
+            send_notification("🛑 Kapatma iptal edildi!")
+            return False
+
+        # Her 10 saniyede bir uyarı
+        if remaining % 10 == 0 or remaining <= 10:
+            msg = f"⚠️ SİSTEM {{remaining}} SANİYE SONRA KAPANACAK! İptal için: touch {{CANCEL_FILE}}"
+            send_notification(msg, urgent=True)
+            log_warning(f"Geri sayım: {{remaining}} saniye kaldı")
+
+        time.sleep(1)
+
+    # Sayım bitti, iptal edilmedi
+    log_warning("GERİ SAYIM BİTTİ - ZORLA KAPATMA BAŞLALIYOR!")
+    send_notification("🔴 SİSTEM ŞİMDİ KAPATILIYOR!")
+    return True
+
+def check_lightdm_greeter_active() -> bool:
+    \"\"\"LightDM greeter'ın gerçekten aktif olup olmadığını kontrol et.\"\"\"
+
+    # Yöntem 1: who komutu ile tty7 kontrolü (en güvenilir)
+    success, who_output = run_cmd(["who"])
+    if success:
+        tty7_user = None
+        for line in who_output.splitlines():
+            if "tty7" in line:
+                parts = line.split()
+                if parts:
+                    tty7_user = parts[0]
+                    break
+
+        # tty7'de kimse yoksa ya da lightdm varsa greeter aktif
+        if tty7_user is None:
+            log_info("tty7 boş, greeter aktif olabilir")
+            return True
+        elif tty7_user == "lightdm":
+            log_info("tty7'de lightdm, greeter kesin aktif")
+            return True
+        else:
+            log_info(f"tty7'de normal user: {{tty7_user}}, greeter aktif değil")
+            return False
+
+    # Yöntem 2: loginctl ile session kontrolü
+    success, sessions_output = run_cmd(["loginctl", "list-sessions", "--no-legend"])
+    if success:
+        for line in sessions_output.splitlines():
+            parts = line.strip().split()
+            if len(parts) >= 4:
+                session_id, uid, user, seat = parts[0], parts[1], parts[2], parts[3]
+                if "seat0" in seat and user != "lightdm":
+                    # Normal user seat0'da aktif, greeter değil
+                    success2, session_detail = run_cmd(["loginctl", "show-session", session_id, "-p", "Type,State"])
+                    if success2:
+                        if "Type=x11" in session_detail and "State=active" in session_detail:
+                            log_info(f"Active X11 session: {{user}}, greeter aktif değil")
+                            return False
+
+    # Yöntem 3: LightDM service kontrolü + greeter process
+    success, lightdm_status = run_cmd(["systemctl", "is-active", "lightdm"])
+    if success and "active" in lightdm_status:
+        # LightDM çalışıyor, şimdi greeter process'i var mı?
+        success, greeter_proc = run_cmd(["pgrep", "-f", "lightdm-gtk-greeter"])
+        if success and greeter_proc.strip():
+            log_info("LightDM greeter process aktif")
+            return True
+
+    log_info("LightDM greeter aktif değil")
+    return False
+
+
 def get_active_sessions() -> dict:
     \"\"\"Aktif kullanıcı oturumlarını detaylı analiz et.\"\"\"
     result = {{"console": [], "remote": [], "locked": [], "greeter": []}}
+
+    # LightDM greeter özel kontrolü
+    if check_lightdm_greeter_active():
+        result["greeter"].append("lightdm")
+        log_info("LightDM greeter aktif tespit edildi")
+    else:
+        log_info("LightDM greeter aktif değil")
 
     # who komutu ile temel bilgi al
     success, output = run_cmd(["who"])
@@ -91,7 +234,9 @@ def get_active_sessions() -> dict:
                 user, tty = parts[0], parts[1]
 
                 if user in ["lightdm", "gdm"]:
-                    result["greeter"].append(user)
+                    # who'da lightdm görünüyorsa kesin greeter
+                    if user not in result["greeter"]:
+                        result["greeter"].append(user)
                 elif "pts/" in tty:
                     result["remote"].append(user)
                 elif tty.startswith("tty"):
@@ -257,77 +402,52 @@ def check_blocking_conditions() -> tuple[bool, str]:
     return False, ""
 
 def main():
-    log_info("TiHA Güç Yönetimi kontrolü başlatıldı")
+    """AGRESİF MOD: Sadece idle süre kontrolü + zorla kapatma."""
+    log_info("TiHA Güç Yönetimi - AGRESİF MOD başlatıldı")
 
-    # Aktif oturum detaylı analizi
-    sessions = get_active_sessions()
-    log_info(f"Session analizi: console={{sessions['console']}}, remote={{sessions['remote']}}, locked={{sessions['locked']}}, greeter={{sessions['greeter']}}")
-
-    # Aktif kullanıcı oturumu kontrolü (locked oturumlar hariç)
-    active_users = sessions['console'] + sessions['remote']
-    active_users = [u for u in active_users if u not in ["lightdm", "gdm", "root"]]
-
-    if active_users:
-        log_info(f"Aktif kullanıcı oturumu var: {{active_users}}, kapatma iptal edildi")
-        return
-
-    # Kilitli oturum varsa bilgilendir ama devam et
-    if sessions['locked']:
-        log_info(f"Kilitli oturum tespit edildi: {{sessions['locked']}}, ama kapatma devam edecek")
-
-    # Greeter kontrolü
-    if not sessions['greeter']:
-        log_info("LightDM greeter aktif değil, kapatma iptal edildi")
-        return
-
-    # Gelişmiş idle süre kontrolü
+    # Sadece idle süre kontrolü - tüm güvenlik kontrolleri kaldırıldı
     idle_minutes, detection_method = get_idle_time_minutes()
     log_info(f"Idle süre: {{idle_minutes:.1f}} dakika (yöntem: {{detection_method}}, eşik: {{IDLE_THRESHOLD_MINUTES}})")
 
     if idle_minutes < IDLE_THRESHOLD_MINUTES:
-        log_info(f"Idle süre eşik altında ({{idle_minutes:.1f}} < {{IDLE_THRESHOLD_MINUTES}}), kapatma yapılmayacak")
+        log_info(f"Idle süre eşik altında ({{idle_minutes:.1f}} < {{IDLE_THRESHOLD_MINUTES}}), henüz kapatma zamanı değil")
         return
 
-    # Engelleme durumları kontrolü
-    blocked, reason = check_blocking_conditions()
-    if blocked:
-        log_warning(f"Kapatma engellendi: {{reason}}")
-        return
+    # EŞIK AŞILDI - TÜM ENGELLERİ GÖRMEZDEN GEL
+    log_warning(f"IDLE EŞIK AŞILDI: {{idle_minutes:.1f}} dakika > {{IDLE_THRESHOLD_MINUTES}} dakika")
+    log_warning("AGRESİF MOD: SSH, kullanıcı oturumu, USB vb. TÜM KONTROLLER GÖRMEZDENGELİNDİ!")
 
-    # DPMS ekran kontrolünü devre dışı bırak (sistem kapatmasından önce)
-    run_cmd(["xset", "-display", ":0", "-dpms"])
+    # Bilgilendirme amaçlı durum raporu (ama engellemez)
+    try:
+        sessions = get_active_sessions()
+        ssh_count = get_ssh_sessions()
+        log_info(f"DURUM RAPORU (sadece bilgi): sessions={{sessions}}, ssh={{ssh_count}}")
+        log_info("Bu durumlar GÖRMEZDEN GELİNİYOR ve kapatmayı engellemeyecek!")
+    except Exception as e:
+        log_info(f"Durum raporu alınamadı (önemli değil): {{e}}")
 
-    log_warning(f"OTOMATIK KAPATMA BAŞLATILIYOR: {{idle_minutes:.1f}} dakika idle ({{detection_method}}), eşik {{IDLE_THRESHOLD_MINUTES}} dakika")
+    # DPMS ekran kontrolünü devre dışı bırak
+    try:
+        run_cmd(["xset", "-display", ":0", "-dpms"])
+    except:
+        pass
 
-    # Wall mesajı gönder
-    run_cmd(["wall", f"TiHA: Tahta {{IDLE_THRESHOLD_MINUTES}} dakika boyunca boşta kaldığı için 1 dakika içinde kapatılacak."])
+    # GERİ SAYIM BAŞLAT (60 saniye)
+    log_warning("ZORLA KAPATMA GERİ SAYIMI BAŞLATILIYOR!")
 
-    # 1 dakika bekle
-    log_info("60 saniye uyarı sürecinde...")
-    time.sleep(60)
+    # İlk uyarı mesajı
+    warning_msg = f"🚨 DİKKAT! Sistem {{COUNTDOWN_SECONDS}} saniye sonra ZORLA kapatılacak! İptal için: touch {{CANCEL_FILE}}"
+    send_notification(warning_msg, urgent=True)
 
-    # Son kontrol - detaylı
-    log_info("Son kontrol yapılıyor...")
-    final_sessions = get_active_sessions()
-    final_active = final_sessions['console'] + final_sessions['remote']
-    final_active = [u for u in final_active if u not in ["lightdm", "gdm", "root"]]
-
-    if final_active:
-        log_info(f"Son kontrol: yeni kullanıcı girişi tespit edildi {{final_active}}, kapatma iptal edildi")
-        return
-
-    # Son idle kontrolü
-    final_idle, final_method = get_idle_time_minutes()
-    log_info(f"Son idle kontrolü: {{final_idle:.1f}} dakika ({{final_method}})")
-
-    if final_idle < IDLE_THRESHOLD_MINUTES:
-        log_info(f"Son kontrol: idle süre eşik altına düştü, kapatma iptal edildi")
-        return
-
-    log_warning("SİSTEM KAPAMA İŞLEMİ GERÇEKLEŞTİRİLİYOR")
-    log_warning(f"Final durum - idle: {{final_idle:.1f}}dk, method: {{final_method}}, sessions: {{final_sessions}}")
-
-    run_cmd(["shutdown", "-h", "now", "TiHA otomatik güç yönetimi"])
+    # Geri sayım
+    if start_countdown():
+        # Geri sayım tamamlandı, iptal edilmedi
+        log_warning("GERİ SAYIM TAMAMLANDI - ZORLA KAPATMA İŞLEMİ!")
+        force_shutdown()
+    else:
+        # İptal edildi
+        log_info("Kapatma kullanıcı tarafından iptal edildi")
+        send_notification("✅ Kapatma başarıyla iptal edildi!", urgent=False)
 
 if __name__ == "__main__":
     main()
@@ -344,8 +464,19 @@ After=multi-user.target
 Type=oneshot
 ExecStart={POWER_SCRIPT}
 User=root
+Group=root
+# Güvenli shutdown için gerekli yetkiler
+SupplementaryGroups=adm
+# PolicyKit bypass için
+Environment="SYSTEMD_IGNORE_CHROOT=1"
+# Kapatma yetkisi için
+CapabilityBoundingSet=CAP_SYS_BOOT CAP_SYS_ADMIN
+AmbientCapabilities=CAP_SYS_BOOT CAP_SYS_ADMIN
 StandardOutput=journal
 StandardError=journal
+# Timeout ayarı (kapatma sürecinde)
+TimeoutStopSec=30
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
@@ -387,19 +518,22 @@ class PowerManagementModule(Module):
     apply_hint = "LightDM boşta kaldığında otomatik kapatma sistemi kurulur."
     rationale = (
         "Bu adım, tahtanın okulda öğretmen tarafından açık unutulması "
-        "durumunda otomatik olarak güvenli kapatma işlemi yapar. Enerji "
+        "durumunda otomatik olarak zorla kapatma işlemi yapar. Enerji "
         "tasarrufu sağlar ve tahtanın gereksiz yere açık kalmasını önler.\n\n"
-        "**Nasıl çalışır? (Gelişmiş sürüm)**\n"
-        "• LightDM greeter ekranında tahta belirttiğiniz süre boyunca boşta "
-        "kalırsa otomatik kapatma başlatılır\n"
-        "• Kilitli kullanıcı oturumları kapatmaya engel OLMAZ (sadece aktif oturumlar)\n"
+        "**Nasıl çalışır? (AGRESİF SÜRÜM)**\n"
+        "• Sadece idle süre kontrolü yapılır - diğer tüm güvenlik kontrolleri "
+        "kaldırılmıştır\n"
+        "• Belirtilen süre boyunca idle kalındığında 60 saniyelik geri sayım başlar\n"
+        "• SSH bağlantısı, aktif kullanıcı oturumu, USB cihaz vs. HİÇBİRİ "
+        "kapatmayı engellemez\n"
+        "• Geri sayım sırasında 'touch /tmp/tiha-shutdown-cancel' ile iptal "
+        "edilebilir\n"
+        "• İptal edilmezse sistem ZORLA kapatılır (çoklu kapatma yöntemi)\n"
         "• Çoklu idle detection: LightDM log, systemd-logind, xprintidle\n"
-        "• SSH bağlantısı, USB cihaz veya önemli işlemler varsa kapatmaz\n"
-        "• DPMS ekran koruyucu devre dışı bırakılarak gerçek sistem kapatması yapılır\n"
-        "• Tüm işlemler detaylı olarak sistem günlüklerine kaydedilir\n"
-        "• 1 dakika önceden uyarı verilir (wall komutu ile)\n\n"
-        "**Sorun Giderme:** Arka planda kilitli oturum olsa da greeter'da idle "
-        "kalırsa sistem kapatılır. Sadece ekranın kapanması (DPMS) önlenir."
+        "• Tüm işlemler detaylı olarak sistem günlüklerine kaydedilir\n\n"
+        "**UYARI:** Bu sürüm güvenlik kontrollerini tamamen görmezden gelir. "
+        "Arkada SSH bağlantısı veya aktif kullanıcı olsa bile kapatma işlemi "
+        "gerçekleştirilir!"
     )
 
     def preview(self) -> str:
@@ -421,10 +555,16 @@ class PowerManagementModule(Module):
             timer_status = "aktif" if timer_result.ok else "pasif"
 
             return (
-                f"✓ TiHA güç yönetimi sistemi kurulu\n"
-                f"• Idle eşiği: {idle_time} dakika\n"
+                f"✓ TiHA güç yönetimi sistemi kurulu (AGRESİF MOD)\n"
+                f"• Idle eşiği: {idle_time} dakika → Geri sayım başlar\n"
+                f"• Geri sayım süresi: 60 saniye\n"
                 f"• Timer durumu: {timer_status}\n"
                 f"• Kontrol aralığı: 5 dakika\n\n"
+                f"🚨 AGRESİF MOD AKTIF:\n"
+                f"  • SSH bağlantıları görmezden gelinir\n"
+                f"  • Aktif kullanıcı oturumları görmezden gelinir\n"
+                f"  • USB cihazları görmezden gelinir\n"
+                f"  • Sadece 'touch /tmp/tiha-shutdown-cancel' ile iptal edilebilir\n\n"
                 f"Dosyalar:\n"
                 f"  • Script: {POWER_SCRIPT}\n"
                 f"  • Service: {POWER_SERVICE}\n"
@@ -434,12 +574,15 @@ class PowerManagementModule(Module):
         else:
             return (
                 "Henüz TiHA güç yönetimi sistemi kurulmamış.\n\n"
-                "Bu adım şunları kuracak:\n"
+                "Bu adım şunları kuracak (AGRESİF MOD):\n"
                 f"• Python script: {POWER_SCRIPT}\n"
                 f"• Systemd service: {POWER_SERVICE}\n"
                 f"• Systemd timer: {POWER_TIMER}\n"
                 f"• Yapılandırma: {POWER_CONFIG}\n\n"
-                "Timer her 5 dakikada LightDM idle durumunu kontrol edecek."
+                "🚨 AGRESİF MOD: Timer her 5 dakikada idle durumunu kontrol edecek.\n"
+                "Idle eşik aşılınca tüm güvenlik kontrollerini görmezden gelerek\n"
+                "60 saniyelik geri sayım başlatacak ve sistem zorla kapatılacak!\n\n"
+                "İptal: 'touch /tmp/tiha-shutdown-cancel' komutu ile"
             )
 
     def apply(self, params=None, progress=None) -> ApplyResult:
@@ -532,21 +675,63 @@ class PowerManagementModule(Module):
         if not start_result.ok:
             return ApplyResult(False, "Timer başlatılamadı", details=start_result.stderr)
 
+        # Sudoers yetki kontrolü ve ekleme (opsiyonel güvenlik)
+        sudoers_added = False
+        if progress:
+            progress("Shutdown yetkisi kontrol ediliyor...")
+
+        sudoers_line = "root ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/systemctl poweroff, /usr/bin/loginctl poweroff"
+        sudoers_file = Path("/etc/sudoers.d/tiha-power-management")
+
+        try:
+            if not sudoers_file.exists():
+                sudoers_file.write_text(f"# TiHA Güç Yönetimi için shutdown yetkisi\n{sudoers_line}\n", encoding="utf-8")
+                sudoers_file.chmod(0o440)  # sudoers dosyası izinleri
+                run_cmd(["visudo", "-c"])  # Syntax kontrolü
+                sudoers_added = True
+                if progress:
+                    progress("Sudoers shutdown yetkisi eklendi")
+        except Exception as exc:
+            log.warning("Sudoers dosyası eklenirken hata: %s", exc)
+            if progress:
+                progress("⚠ Sudoers ekleme başarısız (manuel gerekebilir)")
+
         if progress:
             progress("✅ Kurulum tamamlandı!")
+
+        details_lines = [
+            f"✓ Python script: {POWER_SCRIPT}",
+            f"✓ Systemd service: {POWER_SERVICE} (gelişmiş yetkilerle)",
+            f"✓ Systemd timer: {POWER_TIMER} (aktif)",
+            f"✓ Yapılandırma: {POWER_CONFIG}"
+        ]
+
+        if sudoers_added:
+            details_lines.append(f"✓ Sudoers yetki: {sudoers_file}")
+
+        details_lines.extend([
+            "",
+            f"Timer her 5 dakikada kontrol yapacak.",
+            f"LightDM {idle_minutes} dakika boşta kalırsa tahta kapatılacak.",
+            "",
+            "🔧 Kapatma yöntemleri (öncelik sırası):",
+            "  1. systemctl poweroff (en güvenilir)",
+            "  2. loginctl poweroff",
+            "  3. shutdown -h now",
+            "  4. sudo shutdown -h now",
+            "",
+            "📋 Test seçenekleri:",
+            "• Normal test: Logout yapın → LightDM greeter ekranında bekleyin",
+            "• Esnek test: 'sudo touch /etc/tiha/power-test-mode' (console user ignored)",
+            "",
+            "Test: 'systemctl status tiha-power-manager.timer' ile durumu kontrol edin.",
+            "Debug: 'journalctl -f | grep TiHA-PowerMgmt' ile canlı log izleyin."
+        ])
 
         return ApplyResult(
             True,
             f"Güç yönetimi sistemi kuruldu ({idle_minutes} dakika idle eşiği).",
-            details=(
-                f"✓ Python script: {POWER_SCRIPT}\n"
-                f"✓ Systemd service: {POWER_SERVICE}\n"
-                f"✓ Systemd timer: {POWER_TIMER} (aktif)\n"
-                f"✓ Yapılandırma: {POWER_CONFIG}\n\n"
-                f"Timer her 5 dakikada kontrol yapacak.\n"
-                f"LightDM {idle_minutes} dakika boşta kalırsa tahta kapatılacak.\n\n"
-                "Test: 'systemctl status tiha-power-manager.timer' ile durumu kontrol edin."
-            )
+            details="\n".join(details_lines)
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:

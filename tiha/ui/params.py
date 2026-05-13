@@ -177,13 +177,13 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "spin",
             "required": False,
             "default": "45",
-            "min": 15,
-            "max": 180,
-            "step": 5,
+            "min": 1,
+            "max": 999,
+            "step": 1,
             "help": (
                 "LightDM greeter ekranında tahta bu süre boyunca boşta kalırsa "
-                "otomatik olarak kapatılır. Minimum 15, maksimum 180 dakika. "
-                "Önerilen: 30-60 dakika arası."
+                "otomatik olarak kapatılır. Minimum 1, maksimum 999 dakika. "
+                "Önerilen: 30-60 dakika arası. Test için: 1-5 dakika."
             ),
         },
     ],
