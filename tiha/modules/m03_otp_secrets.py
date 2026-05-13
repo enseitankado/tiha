@@ -533,7 +533,9 @@ class OTPSecretsModule(Module):
 
     def preview(self) -> str:
         import pwd as _pwd
+        import datetime
 
+        # Canlı veri toplama
         existing = load_secrets()
         standard_or_admin = {"etapadmin", "ogretmen", "ogrenci"}
         personal_users = sorted(
@@ -548,15 +550,36 @@ class OTPSecretsModule(Module):
         )
 
         lines: list[str] = []
-        # Araç hazırsa kullanıcıyı haberdar et; hazır değilse hiç bahsetme
-        # — apply zaten dahili pyotp yoluna sessizce düşer.
-        if _ensure_eta_otp_cli() is not None:
-            lines.append("Araç: enseitankado/eta-otp-cli  →  toplu-kullanici-olustur.py")
-            lines.append("")
 
-        # Kullanıcı sayısı ve greeter cache durumu
+        # Zaman damgası ekle (canlı güncellendiğini göstermek için)
+        current_time = datetime.datetime.now().strftime("%H:%M:%S")
+        lines.append(f"CANLI DURUM ANALİZİ ({current_time})")
+        lines.append("")
+
+        # Araç durumu
+        if _ensure_eta_otp_cli() is not None:
+            lines.append("Araç: enseitankado/eta-otp-cli → otp-cli.py (sadece OTP anahtarları)")
+        else:
+            lines.append("Araç: TiHA dahili pyotp yolu (sadece OTP anahtarları)")
+        lines.append("")
+
+        # Kullanıcı sayısı analizi - CANLI GÜNCELLENEN BÖLÜM
         user_count = count_regular_users()
-        lines.append(f"Sistemdeki kullanıcı sayısı: {user_count}")
+        total_users = len(list(p for p in _pwd.getpwall() if p.pw_uid >= 1000 and p.pw_uid != 65534))
+        personal_count = len(personal_users)
+        otp_count = len(existing)
+
+        lines.append("SİSTEM KULLANICILARI ANALİZİ")
+        lines.append("─" * 40)
+        lines.append(f"Toplam sistem kullanıcıları (UID>=1000): {user_count}")
+        lines.append(f"Kişisel hesaplar: {personal_count}")
+        lines.append(f"OTP anahtarlı hesaplar: {len(has_otp)}/{personal_count}")
+        lines.append(f"Toplam OTP anahtarı: {otp_count}")
+        lines.append("")
+
+        # DİKKAT: Bu adım artık sadece OTP oluşturuyor
+        lines.append("DİKKAT: Bu adım artık sadece OTP anahtarları oluşturur!")
+        lines.append("Sistem kullanıcı hesapları oluşturmaz.")
         if user_count >= MIN_USERS_FOR_CACHE:
             lines.append(f"⚠ {MIN_USERS_FOR_CACHE}+ kullanıcı tespit edildi — greeter cache güncellemesi gerekli")
             if GREETER_SCRIPT_PATH.exists():
@@ -779,27 +802,46 @@ class OTPSecretsModule(Module):
     def _apply_with_tool(
         self, script: Path, names: list[str], progress: ProgressCallback | None,
     ) -> bool:
-        """``toplu-kullanici-olustur.py`` aracını çağırarak kullanıcı + PIN üret."""
+        """otp-cli.py aracını kullanarak sadece PIN anahtarları üret (kullanıcı oluşturmadan)."""
         if progress:
-            progress("enseitankado/eta-otp-cli aracı çalıştırılıyor…")
+            progress("enseitankado/eta-otp-cli aracı çalıştırılıyor (sadece OTP anahtarları)…")
 
-        with tempfile.NamedTemporaryFile(
-            "w", suffix="-tiha-isimler.txt", delete=False, encoding="utf-8",
-        ) as f:
-            f.write("\n".join(names) + "\n")
-            names_file = f.name
-        try:
-            result = run_cmd_stream(
-                ["python3", str(script), names_file, "--kullanicilari-olustur"],
-                progress=progress,
-                timeout=600,
-            )
-            return result.ok
-        finally:
-            try:
-                os.unlink(names_file)
-            except OSError:
-                pass
+        # otp-cli.py dosyası aynı dizinde olmalı
+        otp_cli_script = script.parent / "otp-cli.py"
+        if not otp_cli_script.exists():
+            log.error("otp-cli.py bulunamadı: %s", otp_cli_script)
+            return False
+
+        # Her kullanıcı için olustur komutunu çalıştır (sadece OTP anahtarı)
+        success_count = 0
+        total_count = len(names)
+
+        for idx, full_name in enumerate(names, 1):
+            username = _eta_otp_cli_normalize(full_name)
+            if not username:
+                continue
+
+            if progress:
+                progress(f"  {idx}/{total_count}: {full_name} → {username}")
+
+            # otp-cli.py olustur komutunu çalıştır (sadece OTP anahtarı)
+            result = run_cmd([
+                "python3", str(otp_cli_script), "olustur", username
+            ], timeout=30)
+
+            if result.ok:
+                success_count += 1
+                if progress:
+                    progress(f"    ✓ OTP anahtarı oluşturuldu: {username}")
+            else:
+                log.error("OTP anahtarı oluşturulamadı %s: %s", username, result.stderr)
+                if progress:
+                    progress(f"    ✗ Hata: {username}")
+
+        if progress:
+            progress(f"Tamamlandı: {success_count}/{total_count} OTP anahtarı oluşturuldu")
+
+        return success_count > 0
 
     def _apply_with_internal(
         self, names: list[str], progress: ProgressCallback | None,

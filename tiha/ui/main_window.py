@@ -230,6 +230,10 @@ class TiHAWindow(Gtk.Window):
         if isinstance(page, SummaryPage):
             page.refresh()
 
+        # OTP modülü sayfası her açılışta canlı veri ile güncellensin
+        if hasattr(page, 'module') and page.module.id == "m03_otp_secrets":
+            page._refresh_preview()
+
         # Modül sayfaları açıldığında önizleme/şartlı alanları sistemin
         # güncel durumuna göre tazele. (Sayfalar uygulama başlangıcında
         # bir kez kuruluyor; bu olmadan rapor kutusu o anki anlık değil

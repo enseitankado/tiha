@@ -35,7 +35,7 @@ import shutil
 from pathlib import Path
 
 from ..core.logger import get_logger
-from ..core.module import ApplyResult, Module
+from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd
 
 log = get_logger(__name__)
@@ -305,11 +305,16 @@ class ImageSanitizeModule(Module):
             "çalıştırabilirsiniz."
         )
 
-    def apply(self, params: dict | None = None) -> ApplyResult:
+    def apply(self, params: dict | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
         ops: list[str] = []
         before_kb = _disk_used_kb()
 
+        if progress:
+            progress("İmaj sanitizasyon başlatılıyor...")
+
         # ===== 1) Tekil kimlikler =====================================
+        if progress:
+            progress("Tekil kimlikler temizleniyor...")
         # machine-id
         _truncate(Path("/etc/machine-id"))
         _rm(Path("/var/lib/dbus/machine-id"))
@@ -343,6 +348,8 @@ class ImageSanitizeModule(Module):
             ops.append("systemd random-seed sıfırlandı")
 
         # ===== 2) APT önbelleği ve paket temizliği ====================
+        if progress:
+            progress("APT önbelleği ve yetim paketler temizleniyor...")
         # rc-state paketleri (silindi ama config kalmış)
         rc_pkgs = run_cmd(["bash", "-lc",
                            "dpkg -l | awk '/^rc/ {print $2}'"]).stdout.split()
@@ -365,6 +372,8 @@ class ImageSanitizeModule(Module):
             ops.append(f"APT paket listesi temizlendi ({n} dosya)")
 
         # ===== 3) Journal & loglar ====================================
+        if progress:
+            progress("Sistem logları ve journal temizleniyor...")
         # Journald: önce rotate, sonra boyut 1K'a indir
         run_cmd(["journalctl", "--rotate"])
         run_cmd(["journalctl", "--vacuum-size=1K"])
@@ -471,6 +480,8 @@ class ImageSanitizeModule(Module):
                 ops.append(f"{removed} kullanılmayan locale dizini silindi")
 
         # ===== 9) Tüm kullanıcıların ev dizinleri =====================
+        if progress:
+            progress("Kullanıcı ev dizinleri temizleniyor (cache, geçmiş, tarayıcı verileri)...")
         homes: list[Path] = [Path("/root")]
         home_root = Path("/home")
         if home_root.is_dir():
@@ -524,6 +535,9 @@ class ImageSanitizeModule(Module):
         ops.append(f"/tmp ve /var/tmp: {tmp_n} öğe silindi")
 
         # ===== Disk farkı ============================================
+        if progress:
+            progress("Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor...")
+
         after_kb = _disk_used_kb()
         freed_kb = max(0, before_kb - after_kb)
         freed_str = _human_kb(freed_kb) if freed_kb else "ölçülemedi"

@@ -1,27 +1,27 @@
-"""Modül 8 — Benzersiz bilgisayar adı (hostname) stratejisi.
+"""Modül 8 — Dinamik benzersiz bilgisayar adı (hostname) stratejisi.
 
 **Ne yapar?**
-Ağa dağıtılan imajlı tahtaların aynı hostname ile çakışmaması için iki
-katmanlı bir strateji kurar:
+Ağa dağıtılan imajlı tahtaların aynı hostname ile çakışmaması için dinamik
+bir hostname stratejisi kurar:
 
 1. Şimdiki hostname'i seçilen şablonla (ör. ``etap-image``) değiştirir
    ve ``/etc/hosts`` dosyasındaki ``127.0.1.1`` satırını bu yeni
    hostname ile eşitler. *Hosts dosyası güncellenmediği takdirde her*
    ``sudo`` *çağrısı hostname'i çözemeyip ~10 saniye timeout'a takılır;*
    *uygulama açılışı sürünür.*
-2. Her yeni tahtada ilk açılışta bu şablon hostname'i yakalayıp kablolu
-   MAC adresinin son 6 karakterinden benzersiz bir hostname üreten
-   (ör. ``etap-1a2b3c``) bir ``systemd`` ``oneshot`` servisi kurar.
-   Servis hostname'i değiştirdikten sonra ``/etc/hosts``'u da günceller
-   ve bir işaret dosyası bırakarak bir daha çalışmaz.
+2. Her açılışta çalışan bir ``systemd`` servisi kurar. Bu servis kablolu
+   MAC adresinin son 6 karakterinden benzersiz bir hostname üretir
+   (ör. ``etap-1a2b3c``) ve ``/etc/hosts``'u da günceller.
+   Hostname zaten doğruysa değişiklik yapmaz.
 
 **Neden gerekir?**
 Aynı imajdan çıkan binlerce tahta ağa aynı isimle girerse DHCP/DNS,
 yönetim araçları (Ahenk vs.) ve merkezi log hizmeti açısından karışıklık
-doğar.
+doğar. Dinamik yaklaşım ağ kartı değişse bile hostname'in güncellenmesini
+sağlar.
 
-**Geri al.** Oneshot servis + script kaldırılır; hostname ve ``/etc/hosts``
-uygula adımından önceki hâline geri yüklenir (yedekten).
+**Geri al.** Dinamik hostname servisi + script kaldırılır; hostname ve
+``/etc/hosts`` uygula adımından önceki hâline geri yüklenir (yedekten).
 """
 
 from __future__ import annotations
@@ -36,9 +36,8 @@ from ..core.utils import backup_file, restore_file, run_cmd
 log = get_logger(__name__)
 
 HOSTS_FILE = Path("/etc/hosts")
-FIRST_BOOT_SCRIPT = Path("/usr/local/sbin/tiha-first-boot-hostname.sh")
-FIRST_BOOT_SERVICE = Path("/etc/systemd/system/tiha-first-boot-hostname.service")
-SENTINEL = Path("/var/lib/tiha/first-boot-hostname.done")
+FIRST_BOOT_SCRIPT = Path("/usr/local/sbin/tiha-hostname.sh")
+FIRST_BOOT_SERVICE = Path("/etc/systemd/system/tiha-hostname.service")
 
 
 def _current_hostname() -> str:
@@ -89,32 +88,36 @@ def _sync_hosts_file(hosts_path: Path, new_name: str) -> None:
 
 
 def _render_script(prefix: str, template: str) -> str:
-    """İlk-açılış script'i: hostname'i MAC'ten üretip ``/etc/hosts``'u da
+    """Her açılışta çalışan script: hostname'i MAC'ten üretip ``/etc/hosts``'u da
     eşitler. Aksi hâlde sudo her çağrıda timeout'a takılır."""
     return f"""#!/bin/bash
-# TiHA — ilk açılışta benzersiz hostname üretir ve /etc/hosts'u eşitler.
+# TiHA — her açılışta benzersiz hostname üretir ve /etc/hosts'u eşitler.
 # /etc/hosts senkronu kritik: aksi hâlde sudo ~10 sn beklemeye takılır.
 set -euo pipefail
-sentinel="{SENTINEL}"
-[[ -f "$sentinel" ]] && exit 0
 
 current=$(hostname)
 template="{template}"
-if [[ "$current" == "$template" ]]; then
-    mac=""
-    for nif in /sys/class/net/*; do
-        name=$(basename "$nif")
-        [[ "$name" == "lo" ]] && continue
-        if [[ -f "$nif/address" && ! -e "$nif/wireless" ]]; then
-            mac=$(cat "$nif/address" | tr -d ':')
-            break
-        fi
-    done
-    suffix="${{mac: -6}}"
-    if [[ -z "$suffix" ]]; then
-        suffix=$(tr -dc 'a-f0-9' </dev/urandom | head -c 6)
+
+# Her açılışta MAC'ten hostname üret (template hostname'i kontrol etmeden)
+mac=""
+for nif in /sys/class/net/*; do
+    name=$(basename "$nif")
+    [[ "$name" == "lo" ]] && continue
+    if [[ -f "$nif/address" && ! -e "$nif/wireless" ]]; then
+        mac=$(cat "$nif/address" | tr -d ':')
+        break
     fi
-    new="{prefix}-$suffix"
+done
+
+suffix="${{mac: -6}}"
+if [[ -z "$suffix" ]]; then
+    suffix=$(tr -dc 'a-f0-9' </dev/urandom | head -c 6)
+fi
+
+new="{prefix}-$suffix"
+
+# Hostname zaten doğruysa değiştirme
+if [[ "$current" != "$new" ]]; then
     hostnamectl set-hostname "$new"
 
     # /etc/hosts içindeki 127.0.1.1 satırını yeni isme eşitle.
@@ -124,21 +127,21 @@ if [[ "$current" == "$template" ]]; then
         printf '127.0.1.1\\t%s\\n' "$new" >> /etc/hosts
     fi
 
-    logger -t tiha-first-boot "hostname '$current' -> '$new' (hosts güncellendi)"
+    logger -t tiha-hostname "hostname '$current' -> '$new' (hosts güncellendi)"
+else
+    logger -t tiha-hostname "hostname '$current' zaten doğru (değişiklik yok)"
 fi
-mkdir -p "$(dirname "$sentinel")"
-touch "$sentinel"
 """
 
 
 SERVICE_CONTENT = f"""[Unit]
-Description=TiHA — İlk açılışta benzersiz hostname ata
+Description=TiHA — Her açılışta benzersiz hostname ata
 After=network.target
-ConditionPathExists=!{SENTINEL}
 
 [Service]
 Type=oneshot
 ExecStart={FIRST_BOOT_SCRIPT}
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -147,43 +150,55 @@ WantedBy=multi-user.target
 
 class HostnameModule(Module):
     id = "m08_hostname"
-    title = "Benzersiz hostname stratejisi"
-    sidebar_title = "Benzersiz hostname"
+    title = "Dinamik hostname stratejisi"
+    sidebar_title = "Dinamik hostname"
     apply_hint = (
-        "İmaj hostname'i uygulanır; ilk-açılış servisi kurulur."
+        "İmaj hostname'i uygulanır; her açılışta dinamik hostname servisi kurulur."
     )
     rationale = (
         "Her tahtaya ağda benzersiz bir isim (hostname) lâzım. Aynı imajdan "
         "çıkan onlarca tahta aynı isimle ağa katılırsa DHCP/DNS, merkezi "
         "log sunucusu ve Ahenk/yönetim araçları karışır; kim kimdir ayırt "
-        "edilemez. Bu adım iki katmanlı bir strateji kurar:\n\n"
+        "edilemez. Bu adım dinamik hostname stratejisi kurar:\n\n"
         "1) İMAJ AŞAMASINDA: hostname geçici olarak 'etap-image' (ya da "
         "sizin seçtiğiniz şablon) yapılır; /etc/hosts da eşzamanlı "
         "güncellenir (aksi hâlde 'sudo' her çağrıda ~10 sn DNS timeout'una "
         "takılır, sistem sürünür).\n\n"
-        "2) HER KLON AÇILDIĞINDA: ilk boot'ta çalışan bir 'oneshot' "
-        "servisi, kablolu NIC'in MAC adresinin son 6 hanesinden üreterek "
-        "'etap-ab12cd' gibi tahtaya özgü bir hostname atar, /etc/hosts'u "
-        "da yeni isme eşitler. Servis bir işaret dosyası bırakarak bir "
-        "daha çalışmaz."
+        "2) HER AÇILIŞTA: systemd servisi çalışır ve kablolu NIC'in MAC "
+        "adresinin son 6 hanesinden üreterek 'etap-ab12cd' gibi tahtaya "
+        "özgü bir hostname atar, /etc/hosts'u da yeni isme eşitler. "
+        "Hostname zaten doğruysa değişiklik yapmaz, böylece ağ adaptörü "
+        "değişse bile hostname dinamik olarak güncellenir."
     )
 
     def preview(self) -> str:
         current = _current_hostname()
         service_exists = FIRST_BOOT_SERVICE.exists()
+        service_enabled = False
+        if service_exists:
+            result = run_cmd(["systemctl", "is-enabled", FIRST_BOOT_SERVICE.name])
+            service_enabled = result.ok and "enabled" in result.stdout
+
         lines = [
             f"Mevcut hostname          : {current}",
-            f"First-boot servisi       : {'kurulu' if service_exists else 'yok'}",
+            f"Dinamik hostname servisi : {'kurulu' if service_exists else 'yok'}",
+            f"Servis durumu            : {'aktif' if service_enabled else 'devre dışı'}",
             "",
             "Bu adım uygulandığında:",
             "  1) Hostname 'etap-image' (ya da sizin girdiğiniz şablon) olur.",
             "  2) /etc/hosts içindeki 127.0.1.1 satırı yeni isme eşitlenir.",
-            "  3) tiha-first-boot-hostname.service kurulur ve etkinleştirilir.",
+            "  3) tiha-hostname.service kurulur ve etkinleştirilir.",
             "",
-            "Klonlanmış tahta açıldığında:",
-            "  • Servis çalışır, MAC'ten 'etap-XXXXXX' üretir.",
-            "  • hostname ve /etc/hosts yeni isme göre ayarlanır.",
-            "  • Servis bir daha çalışmaz (sentinel dosyasıyla kilitlenir).",
+            "Her açılışta tahta:",
+            "  • MAC adresini okur (kablolu NIC'ten)",
+            "  • 'etap-XXXXXX' hostname'i üretir (MAC'in son 6 hanesi)",
+            "  • hostname ve /etc/hosts güncellenir",
+            "  • Zaten doğruysa değişiklik yapmaz",
+            "",
+            "Avantajlar:",
+            "  • Ağ kartı değişse bile hostname dinamik güncellenir",
+            "  • Her açılışta MAC'e göre benzersizlik garantilenir",
+            "  • Hostname çakışması riski minimize edilir",
         ]
         return "\n".join(lines)
 
@@ -224,11 +239,12 @@ class HostnameModule(Module):
 
         return ApplyResult(
             True,
-            f"Hostname '{template}' olarak ayarlandı; ilk açılışta '{prefix}-XXXXXX' olacak.",
+            f"Hostname '{template}' olarak ayarlandı; her açılışta '{prefix}-XXXXXX' olacak.",
             details=(
                 f"/etc/hosts içindeki 127.0.1.1 satırı güncellendi.\n"
                 f"Script: {FIRST_BOOT_SCRIPT}\n"
-                f"Servis: {FIRST_BOOT_SERVICE}"
+                f"Servis: {FIRST_BOOT_SERVICE}\n"
+                f"Her açılışta MAC adresinden dinamik hostname üretilecek."
             ),
             data={"previous_hostname": previous_hostname},
         )
@@ -237,9 +253,9 @@ class HostnameModule(Module):
         data = data or {}
         previous = data.get("previous_hostname", "")
 
-        # 1) First-boot servisi + script + sentinel
+        # 1) Dinamik hostname servisi + script kaldırma
         run_cmd(["systemctl", "disable", "--now", FIRST_BOOT_SERVICE.name])
-        for path in (FIRST_BOOT_SERVICE, FIRST_BOOT_SCRIPT, SENTINEL):
+        for path in (FIRST_BOOT_SERVICE, FIRST_BOOT_SCRIPT):
             try:
                 path.unlink(missing_ok=True)
             except OSError:
@@ -265,9 +281,9 @@ class HostnameModule(Module):
             _sync_hosts_file(HOSTS_FILE, previous)
 
         msg = (
-            f"First-boot servisi kaldırıldı, hostname '{previous}' olarak geri alındı "
+            f"Dinamik hostname servisi kaldırıldı, hostname '{previous}' olarak geri alındı "
             "ve /etc/hosts yedekten yüklendi."
             if previous
-            else "First-boot servisi kaldırıldı (önceki hostname kaydı bulunamadı)."
+            else "Dinamik hostname servisi kaldırıldı (önceki hostname kaydı bulunamadı)."
         )
         return ApplyResult(True, msg)

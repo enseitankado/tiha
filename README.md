@@ -51,12 +51,12 @@ Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol list
 | 1  | **Sistem güncellemesi (apt)** | Tahtadaki paketleri en güncel sürüme çıkarır. Bekleyen güncelleme yoksa adım atlanabilir. |
 | 2  | **Yerel hesaplar** | `root`, `etapadmin` (ve isterseniz `ogretmen`) parolalarını siz belirlersiniz. Ortak `ogretmen`/`ogrenci` hesaplarını tamamen silmek için ayrı düğmeler vardır. Geri alma adımı önceki parolalara döndürür. |
 | 3  | **Otomatik parola temizliği** | Her açılışta `etapadmin` dışındaki hesapların parolasını rastgele bir değere çevirir; sonradan elle atanan parolalar da bir sonraki açılışta işe yaramaz hâle gelir. *(isteğe bağlı parola sertleştirme)* |
-| 4  | **Toplu PIN anahtarı** | Öğretmenler için PIN üreten güvenli anahtarları imaj öncesi merkezî olarak üretip imaja gömer. Öğretmen anahtarını telefondaki Authenticator uygulamasına bir kez ekler; imajdan dağıtılan tüm tahtalarda PIN kodu ile oturum açabilir. Sistemde fazladan hesap varsa toplu silme düğmesi gelir. |
+| 4  | **Toplu PIN anahtarı** | Öğretmenler için PIN üreten güvenli anahtarlarını imaj öncesi merkezî olarak üretip `/etc/otp-secrets.json` dosyasına kaydeder. **Sadece OTP anahtarları oluşturur, sistem kullanıcı hesapları oluşturmaz.** Öğretmen anahtarını telefondaki Authenticator uygulamasına bir kez ekler; imajdan dağıtılan tüm tahtalarda PIN kodu ile oturum açabilir. Adım sayfası canlı durum analizi ile dinamik güncellenir. |
 | 5  | **SSH sunucusu** | Tahtayla aynı ağa bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. |
 | 6  | **Samba dosya paylaşımı** | Tahtanın diskine aynı ağdaki bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. |
-| 7  | **Merkezi log sunucusu** | Tahtanın tüm sistem günlüklerini ağdaki merkezi log sunucusuna dayanıklı biçimde iletir; sunucu erişilemez olsa bile loglar yerel diskte birikir, sunucu geri gelince otomatik gönderilir. **Bu adımı uyguluyorsanız 9. adımı (Benzersiz hostname) de mutlaka uygulayın**, yoksa sunucudaki kayıtlar tahtalar arasında birbirinden ayırt edilemez. |
+| 7  | **Merkezi log sunucusu** | Tahtanın tüm sistem günlüklerini ağdaki merkezi log sunucusuna dayanıklı biçimde iletir; sunucu erişilemez olsa bile loglar yerel diskte birikir, sunucu geri gelince otomatik gönderilir. **Bu adımı uyguluyorsanız 9. adımı (Dinamik hostname) de mutlaka uygulayın**, yoksa sunucudaki kayıtlar tahtalar arasında birbirinden ayırt edilemez. |
 | 8  | **Zaman senkronizasyonu (NTP)** | Saat dilimini ve birincil/yedek zaman sunucularını yapılandırır. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. Girilen sunucuları sınamak için bir test düğmesi vardır. |
-| 9  | **Benzersiz hostname** | İmaj alınırken hostname'i şablon (`etap-image` vb.) yapar; her klon ilk açılışta kablolu MAC adresinin son 6 hanesinden türeyen kendine özgü bir ad alır (`etap-ab12cd` gibi). |
+| 9  | **Dinamik hostname** | İmaj alınırken hostname'i şablon (`etap-image` vb.) yapar; her açılışta kablolu MAC adresinin son 6 hanesinden türeyen kendine özgü bir ad alır (`etap-ab12cd` gibi). Ağ kartı değişse bile hostname dinamik olarak güncellenir. |
 | 10 | **Güç yönetimi** | Giriş ekranında tahta belirtilen süre (15–180 dk) boşta kalırsa otomatik kapanır. Aktif SSH bağlantısı, takılı USB veya devam eden işlem varsa kapatmaz; 1 dakika önceden uyarı verir. |
 | 11 | **İmaj için sanitize** | Son adım, **geri alınamaz**. Her klonun aynı görünmemesi için tekil kimlikleri (machine-id, SSH host anahtarları, NetworkManager parolaları, DHCP lease vb.) sıfırlar; imajdan önce kapsamlı bir temizlik yaparak yer açar — paket önbellekleri, loglar, kullanılmayan diller, geçici dosyalar, kullanıcı önbellekleri, ayrıca tarayıcı önbellek ve gezinti verileri (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex). Tipik kazanım: 500 MB – 1 GB+. |
 
@@ -81,7 +81,7 @@ Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol list
 </tr>
 <tr>
 <td><a href="docs/images/09-zaman-senkronizasyonu.png"><img src="docs/images/09-zaman-senkronizasyonu.png" alt="NTP"></a><br><sub><b>8. Zaman senkronizasyonu (NTP)</b> — test düğmesi dahil</sub></td>
-<td><a href="docs/images/10-benzersiz-hostname.png"><img src="docs/images/10-benzersiz-hostname.png" alt="Hostname"></a><br><sub><b>9. Benzersiz hostname</b> — her klona MAC tabanlı isim</sub></td>
+<td><a href="docs/images/10-benzersiz-hostname.png"><img src="docs/images/10-benzersiz-hostname.png" alt="Hostname"></a><br><sub><b>9. Dinamik hostname</b> — her açılışta MAC tabanlı dinamik isim</sub></td>
 </tr>
 <tr>
 <td><a href="docs/images/11-guc-yonetimi.png"><img src="docs/images/11-guc-yonetimi.png" alt="Güç yönetimi"></a><br><sub><b>10. Güç yönetimi</b> — boştayken otomatik kapanma</sub></td>
@@ -197,6 +197,22 @@ TiHA, "Toplu PIN anahtarı" adımında aşağıdaki açık kaynaklı aracı doğ
 - Pull request'ler hoş karşılanır; ayrıntılar için [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Lisans
+
+## ⚡ Son Güncelleme Notları
+
+**4. Adım (Toplu PIN Anahtarı) İyileştirmeleri:**
+- ✅ **Sadece OTP modu:** Artık sadece PIN anahtarları oluşturur, sistem kullanıcı hesapları oluşturmaz
+- 🔄 **Canlı durum analizi:** Adım sayfası her açılışta güncel veriyle dinamik güncellenir
+- 📊 **Gelişmiş önizleme:** Sistem kullanıcı sayıları ve OTP durumu canlı görüntülenir
+
+**9. Adım (Dinamik Hostname) İyileştirmesi:**
+- 🔄 **Her açılışta kontrol:** Artık sadece ilk açılışta değil, her açılışta MAC adresi kontrol edilir
+- 🔧 **Dinamik güncelleme:** Ağ kartı değişse bile hostname otomatik güncellenir
+- ⚡ **Performans optimizasyonu:** Zaten doğruysa değişiklik yapmaz
+
+---
+
+## 📄 Lisans
 
 GPL-3.0 — ayrıntı için [`LICENSE`](LICENSE) dosyasına bakınız.
 
