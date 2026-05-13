@@ -234,6 +234,15 @@ class TiHAWindow(Gtk.Window):
         if hasattr(page, 'module') and page.module.id == "m03_otp_secrets":
             page._refresh_preview()
 
+        # Güç yönetimi modülü her açılışta güncel eta-shutdown config'ini okuysun
+        if hasattr(page, 'module') and page.module.id == "m11_power_management":
+            page._refresh_preview()
+            # Form alanlarını da güncel config'e göre doldur
+            if hasattr(page.module, 'get_current_config'):
+                current_config = page.module.get_current_config()
+                if current_config:
+                    page._update_form_fields(current_config)
+
         # Modül sayfaları açıldığında önizleme/şartlı alanları sistemin
         # güncel durumuna göre tazele. (Sayfalar uygulama başlangıcında
         # bir kez kuruluyor; bu olmadan rapor kutusu o anki anlık değil

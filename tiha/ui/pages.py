@@ -18,6 +18,8 @@ from gi.repository import GLib, Gtk, Pango  # noqa: E402
 from ..core import console
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
+
+log = get_logger(__name__)
 from ..core.undo import Journal, JournalEntry
 from . import params as params_schema
 
@@ -390,6 +392,27 @@ class ModulePage(Gtk.Box):
                 tv.get_buffer().set_text(new_text)
         elif isinstance(self._preview_widget, Gtk.Label):
             self._preview_widget.set_text(new_text)
+
+    def _update_form_fields(self, config_values: dict) -> None:
+        """Form alanlarını verilen config değerleriyle güncelle."""
+        for key, value in config_values.items():
+            widget = self._fields.get(key)
+            if widget is None:
+                continue
+
+            # Widget tipine göre değer ataması
+            try:
+                if hasattr(widget, 'set_active'):  # CheckBox
+                    is_checked = str(value).lower() in ("true", "1", "yes", "on")
+                    widget.set_active(is_checked)
+                    # Checkbox değişikliklerini tetikle (conditional fields için)
+                    self._update_conditional_fields(key, is_checked)
+                elif hasattr(widget, 'set_value'):  # SpinButton
+                    widget.set_value(float(value))
+                elif hasattr(widget, 'set_text'):  # Entry
+                    widget.set_text(str(value))
+            except Exception as exc:
+                log.warning("Form field güncelleme hatası %s: %s", key, exc)
             _apply_line_spacing(self._preview_widget)
 
     def _refresh_after_action(self) -> None:

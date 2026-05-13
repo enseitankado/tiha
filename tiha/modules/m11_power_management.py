@@ -235,15 +235,22 @@ class PowerManagementModule(Module):
     )
 
     def preview(self) -> str:
+        """Her açılışta güncel eta-shutdown config'ini okuyan dinamik preview."""
+
+        # Güncel tarih/saat bilgisi ekle
+        import datetime
+        current_time = datetime.datetime.now().strftime("%H:%M")
+
         eta_service_running = False
         eta_config_exists = ETA_SHUTDOWN_CONFIG.exists()
 
-        # Servis durumunu kontrol et
+        # Servis durumunu her seferinde kontrol et
         result = run_cmd(["systemctl", "is-active", "eta-shutdown"])
         eta_service_running = result.ok and "active" in result.stdout
 
         if eta_config_exists:
             try:
+                # Config'i her seferinde yeniden oku
                 config = configparser.ConfigParser()
                 config.read(ETA_SHUTDOWN_CONFIG)
 
@@ -256,49 +263,78 @@ class PowerManagementModule(Module):
 
                 enhanced = ETA_SHUTDOWN_SERVICE_BACKUP.exists()
 
-                status = "✓ Otomatik kapanma sistemi aktif"
+                # Dinamik durum başlığı
+                status = f"🔄 Otomatik kapanma sistemi (güncellendi {current_time})"
                 if enhanced:
-                    status += " (TiHA ile geliştirilmiş)"
+                    status += "\n✓ TiHA gelişmiş sürüm aktif"
                 else:
-                    status += " (orijinal eta-shutdown)"
+                    status += "\n⚠️ Orijinal eta-shutdown kullanımda"
 
                 lines = [
                     status,
-                    f"• Servis durumu: {'çalışıyor' if eta_service_running else 'durdurulmuş'}",
+                    f"• Servis durumu: {'🟢 çalışıyor' if eta_service_running else '🔴 durdurulmuş'}",
                     "",
-                    "Mevcut yapılandırma:"
+                    "📋 Mevcut yapılandırma:"
                 ]
 
                 if auto_enabled:
+                    # Sabit saat kapatmaya ne kadar kaldığını hesapla
+                    try:
+                        from datetime import datetime, time
+                        now = datetime.now()
+                        shutdown_time = datetime.combine(now.date(), time(int(auto_hour), int(auto_minute)))
+                        if shutdown_time < now:
+                            shutdown_time = shutdown_time.replace(day=now.day + 1)
+                        time_diff = shutdown_time - now
+                        hours, remainder = divmod(time_diff.seconds, 3600)
+                        minutes, _ = divmod(remainder, 60)
+                        countdown = f" ({hours}s {minutes}dk kaldı)" if time_diff.days == 0 else ""
+                    except:
+                        countdown = ""
+
                     lines.extend([
-                        f"• Sabit saat kapatma: AKTIF ({auto_hour}:{auto_minute})",
-                        "  - 2 dakika önceden uyarı diyalogu",
-                        "  - 10 dakika erteleme seçeneği"
+                        f"🕐 Sabit saat kapatma: AKTİF {auto_hour.zfill(2)}:{auto_minute.zfill(2)}{countdown}",
+                        "   - 2 dakika önceden uyarı diyalogu",
+                        "   - 10 dakika erteleme seçeneği"
                     ])
                 else:
-                    lines.append("• Sabit saat kapatma: KAPALI")
+                    lines.append("🕐 Sabit saat kapatma: KAPALI")
 
                 if timed_mode != "none":
                     lines.extend([
-                        f"• Idle tabanlı kapatma: AKTIF ({timed_minute} dakika)",
-                        "  - 2 dakika önceden uyarı diyalogu",
-                        "  - 10 dakika erteleme seçeneği"
+                        f"💤 Idle tabanlı kapatma: AKTİF ({timed_minute} dakika)",
+                        "   - X11 idle detection (mouse, klavye)",
+                        "   - 2 dakika önceden uyarı diyalogu",
+                        "   - 10 dakika erteleme seçeneği"
                     ])
                 else:
-                    lines.append("• Idle tabanlı kapatma: KAPALI")
+                    lines.append("💤 Idle tabanlı kapatma: KAPALI")
+
+                # Config dosyası son değişiklik zamanı
+                try:
+                    import os
+                    mtime = os.path.getmtime(ETA_SHUTDOWN_CONFIG)
+                    mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%H:%M")
+                    lines.extend([
+                        "",
+                        f"📄 Config son güncelleme: {mtime_str}"
+                    ])
+                except:
+                    pass
 
                 return "\n".join(lines)
 
             except Exception as exc:
-                return f"✗ Yapılandırma okunurken hata: {exc}"
+                return f"✗ Yapılandırma okunurken hata: {exc}\n🔄 Sayfa yeniden yüklendiğinde tekrar denenecek"
         else:
             return (
-                "Henüz otomatik kapanma sistemi yapılandırılmamış.\n\n"
+                f"⚙️ Henüz yapılandırılmamış (kontrol: {current_time})\n\n"
                 "Bu adım şunları yapacak:\n"
                 "• ETA-shutdown konfigürasyonu oluşturacak\n"
                 "• 2 dakika uyarı diyalogu ekleyecek\n"
                 "• Sabit saat ve idle tabanlı kapatma modları sunacak\n"
-                "• eta-shutdown.service'i aktifleştirecek"
+                "• eta-shutdown.service'i aktifleştirecek\n\n"
+                "🔄 Adım her açılışta güncel durumu kontrol eder"
             )
 
     def apply(self, params=None, progress=None) -> ApplyResult:
@@ -462,3 +498,30 @@ class PowerManagementModule(Module):
         details = "\n".join(f"• {item}" for item in removed_items) if removed_items else "Kaldırılacak öğe bulunamadı"
 
         return ApplyResult(True, summary, details=details)
+
+    def get_current_config(self) -> dict:
+        """Mevcut eta-shutdown config'ini okuyup form parametreleri döndürür."""
+        if not ETA_SHUTDOWN_CONFIG.exists():
+            return {}
+
+        try:
+            config = configparser.ConfigParser()
+            config.read(ETA_SHUTDOWN_CONFIG)
+
+            auto_enabled = config.getboolean("AUTO_SHUTDOWN", "enabled", fallback=False)
+            auto_hour = config.getint("AUTO_SHUTDOWN", "hour", fallback=22)
+            auto_minute = config.getint("AUTO_SHUTDOWN", "minute", fallback=0)
+
+            timed_mode = config.get("TIMED_MODE", "mode", fallback="none")
+            timed_minute = config.getint("TIMED_MODE", "minute", fallback=15)
+
+            return {
+                "auto_enabled": str(auto_enabled),
+                "auto_hour": str(auto_hour),
+                "auto_minute": str(auto_minute),
+                "idle_enabled": str(timed_mode != "none"),
+                "idle_minute": str(timed_minute)
+            }
+        except Exception as exc:
+            log.warning("Config okuma hatası: %s", exc)
+            return {}
