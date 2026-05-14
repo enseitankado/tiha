@@ -261,6 +261,27 @@ class ModulePage(Gtk.Box):
         self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.pack_start(self.result_holder, False, False, 0)
 
+        # Modül-özel ek bağlantılar (sol hizalı, link görünümlü)
+        for link in getattr(self.module, "extra_links", []) or []:
+            self.pack_start(self._make_action_link(link), False, False, 0)
+
+    def _make_action_link(self, link: dict) -> Gtk.Widget:
+        """Sol hizalı, mavi altı çizili tıklanabilir bir bağlantı üretir."""
+        btn = Gtk.Button()
+        btn.set_relief(Gtk.ReliefStyle.NONE)
+        btn.set_halign(Gtk.Align.START)
+        btn.get_style_context().add_class("tiha-action-link")
+        lbl = Gtk.Label()
+        lbl.set_markup(f"<u>{GLib.markup_escape_text(link['label'])}</u>")
+        lbl.set_xalign(0)
+        btn.add(lbl)
+        action = link.get("action")
+        btn.connect(
+            "clicked",
+            lambda b, a=action: self._run_button_action(a, button=b) if a else None,
+        )
+        return btn
+
     def _show_previous_apply_banner(self) -> None:
         """Journal'da önceki bir oturumdan kalma 'applied' kayıt varsa
         bilgilendirme + 'Bu adımı geri al' düğmesi göster. Sihirbaz'ın

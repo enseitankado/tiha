@@ -48,43 +48,43 @@ Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol list
 
 | # | Adım | Kısa açıklama |
 |---|------|----------------|
-| 1  | **Sistem güncellemesi (apt)** | Tahtadaki paketleri en güncel sürüme çıkarır. Bekleyen güncelleme yoksa adım atlanabilir. |
-| 2  | **Yerel hesaplar** | `root`, `etapadmin` (ve isterseniz `ogretmen`) parolalarını siz belirlersiniz. Ortak `ogretmen`/`ogrenci` hesaplarını tamamen silmek için ayrı düğmeler vardır. Geri alma adımı önceki parolalara döndürür. |
-| 3  | **Otomatik parola temizliği** | Her açılışta `etapadmin` dışındaki hesapların parolasını rastgele bir değere çevirir; sonradan elle atanan parolalar da bir sonraki açılışta işe yaramaz hâle gelir. *(isteğe bağlı parola sertleştirme)* |
-| 4  | **Toplu PIN anahtarı** | Öğretmenler için PIN üreten güvenli anahtarlarını imaj öncesi merkezî olarak üretip `/etc/otp-secrets.json` dosyasına kaydeder. **Sadece OTP anahtarları oluşturur, sistem kullanıcı hesapları oluşturmaz.** Öğretmen anahtarını telefondaki Authenticator uygulamasına bir kez ekler; imajdan dağıtılan tüm tahtalarda PIN kodu ile oturum açabilir. Adım sayfası canlı durum analizi ile dinamik güncellenir. |
-| 5  | **SSH sunucusu** | Tahtayla aynı ağa bağlı bir bilgisayardan uzak terminalle tahtayı yönetmeyi sağlar — teknik bakım için. |
-| 6  | **Samba dosya paylaşımı** | Tahtanın diskine aynı ağdaki bir bilgisayardan dosya gezgini üzerinden erişmeyi sağlar — güncelleme dosyası bırakmak, günlük çekmek için. |
-| 7  | **Merkezi log sunucusu** | Tahtanın tüm sistem günlüklerini ağdaki merkezi log sunucusuna dayanıklı biçimde iletir; sunucu erişilemez olsa bile loglar yerel diskte birikir, sunucu geri gelince otomatik gönderilir. **Bu adımı uyguluyorsanız 9. adımı (Dinamik hostname) de mutlaka uygulayın**, yoksa sunucudaki kayıtlar tahtalar arasında birbirinden ayırt edilemez. |
-| 8  | **Zaman senkronizasyonu (NTP)** | Saat dilimini ve birincil/yedek zaman sunucularını yapılandırır. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. Girilen sunucuları sınamak için bir test düğmesi vardır. |
-| 9  | **Dinamik hostname** | İmaj alınırken hostname'i şablon (`etap-image` vb.) yapar; her açılışta kablolu MAC adresinin son 6 hanesinden türeyen kendine özgü bir ad alır (`etap-ab12cd` gibi). Ağ kartı değişse bile hostname dinamik olarak güncellenir. |
-| 10 | **Güç yönetimi** | Giriş ekranında tahta belirtilen süre (15–180 dk) boşta kalırsa otomatik kapanır. Aktif SSH bağlantısı, takılı USB veya devam eden işlem varsa kapatmaz; 1 dakika önceden uyarı verir. |
-| 11 | **İmaj için sanitize** | Son adım, **geri alınamaz**. Her klonun aynı görünmemesi için tekil kimlikleri (machine-id, SSH host anahtarları, NetworkManager parolaları, DHCP lease vb.) sıfırlar; imajdan önce kapsamlı bir temizlik yaparak yer açar — paket önbellekleri, loglar, kullanılmayan diller, geçici dosyalar, kullanıcı önbellekleri, ayrıca tarayıcı önbellek ve gezinti verileri (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex). Tipik kazanım: 500 MB – 1 GB+. |
+| 1  | **Sistem güncellemesi (apt)** | Önce depo sağlığını kontrol eder (eksik Pardus ETAP depolarını ekler, bozuk `.broken.*` dosyalarını siler), sonra `apt-get update → full-upgrade → autoremove → clean` zincirini çalıştırır. Çıktı canlı akar. Bekleyen güncelleme yoksa adım atlanabilir; "İleri" düğmesi bekleme olmadan etkinleşir. |
+| 2  | **Yerel hesaplar** | `root`, `etapadmin` ve isteğe bağlı `ogretmen` parolasını siz belirlersiniz. Parolalar SHA-512 hash olarak **doğrudan `/etc/shadow`'a yazılır** — bu yol PAM politikalarından ve AppArmor kısıtlamalarından etkilenmez, fiziksel/sanal makine farkı yaratmaz. Ayrı bir düğme ile öğrenci hesabını (`ogrenci`) tamamen silebilirsiniz. Geri al adımı `/etc/shadow` yedeğini geri yükler. |
+| 3  | **Otomatik parola temizliği** | Her açılışta `etapadmin` dışındaki tüm normal hesapların (UID 1000–59999) parolasını kriptografik olarak güvenli 40 karakterlik rastgele bir değere çeviren bir `systemd` oneshot servisi kurar. Sonradan elle atanan parolalar da bir sonraki açılışta işe yaramaz hâle gelir. *(isteğe bağlı parola sertleştirme — `etapadmin`'in yönetici erişimi her zaman korunur)* Geri alma sırasında varsa standart dışı kullanıcı hesaplarını da silmeyi önerir. |
+| 4  | **Toplu PIN anahtarı** | Öğretmenler için PIN üreten güvenli anahtarları (TOTP) imaj öncesi merkezî olarak üretip `/etc/otp-secrets.json` dosyasına kaydeder. Pardus ETAP'ın PAM modülü bu dosyayı doğrudan okur. Üretim için [enseitankado/eta-otp-cli](https://github.com/enseitankado/eta-otp-cli) aracını otomatik olarak GitHub'dan indirir; başarısız olursa pyotp yedek yoluna düşer. Yedek hesap (`ogretmen01`, `ogretmen02`…) sayısı verilebilir. Her hesap için passwd `GECOS` alanına ad-soyad yazılır. Sistemde 50+ kullanıcı varsa LightDM greeter cache betiği otomatik indirilir ve her açılışta çalıştırılır. Ayrı bir düğme ile **varsayılan (etapadmin/ogretmen/ogrenci) dışındaki tüm fazladan hesapları** prosesleri sonlandırıp `deluser --remove-home` ile siler — düğme yalnız fazladan hesap varken görünür. Tüm hatalar mesaj kutusunda inline gösterilir. Üretilen anahtarlar (kullanıcı adı + BASE32 secret + `otpauth://` URL'si) panoya kopyalanabilir veya `.txt` dosyasına kaydedilebilir. |
+| 5  | **SSH Sunucusu** | `openssh-server` paketini (yoksa) kurar, `/etc/ssh/sshd_config.d/99-tiha.conf` ile root parolasıyla uzaktan girişe izin verir, `ssh` servisini etkinleştirir. apt çıktısı canlı akar. Geri al: ek yapılandırma dosyası silinir; TiHA paketi yeni kurmuşsa `apt-get purge` ile kaldırılır, daha önce kuruluysa korunur. |
+| 6  | **Samba dosya paylaşımı** | `samba` paketini (yoksa) kurar; kök `/` dizinini kullanıcının seçtiği isimle ve istediği Samba parolasıyla paylaşan `[root]` adlı bir paylaşım tanımlar (`/etc/samba/smb.conf.d/tiha-share.conf` + `smb.conf` içine `include`). Windows'tan `\\<tahta-ip>\root`, Linux'tan `smb://<tahta-ip>/root` yolu ile dosya gezgininden erişilir. Geri al: paylaşım tanımı + smbpasswd kaydı kaldırılır; paketi TiHA kurmuşsa purge edilir. |
+| 7  | **Merkezi log sunucusu** | Tahtanın tüm sistem günlüklerini ağdaki merkezi `rsyslog` sunucusuna **disk-assisted queue** ile iletir: uzak sunucu erişilemez olduğunda (elektrik kesintisi, ağ bakımı, sunucu arızası) loglar `/var/lib/rsyslog/` altında diskte birikir, sunucu geri gelince otomatik gönderilir. UDP/TCP, varsayılan port 514, 100 MB kuyruk limiti, 30 sn–10 dk arası artan yeniden deneme. Önizleme kuyruğun anlık durumunu (boş / dolu, dosya boyutları) gösterir. **Bu adımı uyguluyorsanız 9. adımı (Dinamik hostname) de mutlaka uygulayın**, yoksa sunucudaki kayıtlar tahtalar arasında ayırt edilemez. |
+| 8  | **Zaman senkronizasyonu (NTP)** | `/etc/systemd/timesyncd.conf.d/tiha.conf` üzerinden birincil ve yedek NTP sunucularını + saat dilimini (varsayılan `Europe/Istanbul`) yapılandırır, `systemd-timesyncd`'yi etkinleştirir. PIN kodları zaman tabanlı olduğu için tahtanın saati doğru olmak zorundadır. **"NTP Sunucularını Test Et"** düğmesi girilen sunuculara UDP/123'ten doğrudan paket gönderip yanıt zaman damgasını doğrular (5 sn timeout); sonuç canlı akar. |
+| 9  | **Dinamik hostname** | İmaj alınırken hostname'i şablon (`etap-image` vb.) yapar ve `/etc/hosts`'taki `127.0.1.1` satırını da eşitler — aksi hâlde her `sudo` çağrısı ~10 sn DNS timeout'una takılır. Ek olarak her açılışta çalışan bir systemd servisi kurulur; servis kablolu MAC'in son 6 hanesinden `etap-1a2b3c` benzeri benzersiz bir hostname üretir, hem hostname'i hem `/etc/hosts`'u günceller. Hostname zaten doğruysa değişiklik yapmaz; ağ kartı değişirse otomatik yeniden ad atar. |
+| 10 | **Otomatik kapanma** | Pardus ETA'nın `eta-shutdown` altyapısının üstüne **zenginleştirilmiş bir çalışma sürümü** kurar (orijinal `service.py` yedeklenip değiştirilir; systemd unit, GUI ve `/etc/pardus/eta-shutdown.conf` korunur). İki mod: belirlenen **sabit saatte** kapatma ve **idle tabanlı** kapatma (1–180 dk). Her iki modda da kapatmadan **2 dakika önce** ekranda GTK geri sayım penceresi açılır; pencereden **"10 dakika ertele"** veya **"Şimdi kapat"** seçeneklerini sunar. Aktif grafik oturum `systemd-logind` (`loginctl`) ile saptanır: kullanıcı login değilse uyarı **LightDM greeter ekranında da** gösterilir. Geri al orijinal `service.py`'yi yedekten geri yükler. |
+| 11 | **İmaj için sanitize** | Son adım, **geri alınamaz**. İki kategori temizlik yapar: *(a) tekil kimlik silme* — `machine-id`, SSH host anahtarları (ilk açılışta yeniden üreten servis bırakılır), NetworkManager bağlantıları (WiFi parolaları dahil), DHCP lease'ler, `random-seed`; *(b) yer açma & iz silme* — APT önbelleği, `rc-state` paketleri (`dpkg --purge`), `apt-get autoremove --purge`, systemd journal (1 KB'a vakum), tüm `/var/log`, crash raporları, mail/cron spool kuyrukları, sistem önbellekleri (man/fontconfig/debconf/PackageKit/lightdm/cups), `dpkg-old`/`dpkg-dist`/`ucf-*` yedekleri, kullanılmayan diller (`tr*`, `en*`, `C`, `POSIX` dışındakiler), tüm kullanıcıların `~/.cache`, `~/.local/share/Trash`, kabuk geçmişleri (`.bash_history`, `.zsh_history`, `.viminfo`, `.python_history`…), `/tmp`, `/var/tmp` ve **web tarayıcı önbellek + gezinti verileri** (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex — gezinti geçmişi, çerezler, oturumlar, IndexedDB; yer imleri korunur). Bittiğinde popup ile boşalan disk miktarını bildirir. Tipik kazanım: 500 MB – 1 GB+. |
 
 ## Sihirbazdan kareler
 
 <table>
 <tr>
 <td width="50%"><a href="docs/images/01-hosgeldiniz.png"><img src="docs/images/01-hosgeldiniz.png" alt="Hoş geldiniz"></a><br><sub><b>Hoş geldiniz</b> — sihirbazın sunduğu özelliklerin özeti</sub></td>
-<td width="50%"><a href="docs/images/02-sistem-guncellemesi.png"><img src="docs/images/02-sistem-guncellemesi.png" alt="Sistem güncellemesi"></a><br><sub><b>1. Sistem güncellemesi</b> — bekleyen yükseltme yoksa atlanabilir</sub></td>
+<td width="50%"><a href="docs/images/02-sistem-guncellemesi.png"><img src="docs/images/02-sistem-guncellemesi.png" alt="Sistem güncellemesi"></a><br><sub><b>1. Sistem güncellemesi</b> — depo sağlığı + apt zinciri</sub></td>
 </tr>
 <tr>
-<td><a href="docs/images/03-yerel-hesaplar.png"><img src="docs/images/03-yerel-hesaplar.png" alt="Yerel hesaplar"></a><br><sub><b>2. Yerel hesaplar</b> — root/etapadmin/ogretmen parolaları</sub></td>
+<td><a href="docs/images/03-yerel-hesaplar.png"><img src="docs/images/03-yerel-hesaplar.png" alt="Yerel hesaplar"></a><br><sub><b>2. Yerel hesaplar</b> — root / etapadmin / ogretmen parolaları</sub></td>
 <td><a href="docs/images/04-otomatik-parola-temizligi.png"><img src="docs/images/04-otomatik-parola-temizligi.png" alt="Otomatik parola temizliği"></a><br><sub><b>3. Otomatik parola temizliği</b> — açılışta parola sıfırlama servisi</sub></td>
 </tr>
 <tr>
-<td><a href="docs/images/05-toplu-pin-anahtari.png"><img src="docs/images/05-toplu-pin-anahtari.png" alt="Toplu PIN anahtarı"></a><br><sub><b>4. Toplu PIN anahtarı</b> — anahtar/kod açıklaması + öğretmen listesi</sub></td>
+<td><a href="docs/images/05-toplu-pin-anahtari.png"><img src="docs/images/05-toplu-pin-anahtari.png" alt="Toplu PIN anahtarı"></a><br><sub><b>4. Toplu PIN anahtarı</b> — eta-otp-cli ile öğretmen anahtarları</sub></td>
 <td><a href="docs/images/06-ssh-sunucusu.png"><img src="docs/images/06-ssh-sunucusu.png" alt="SSH sunucusu"></a><br><sub><b>5. SSH Sunucusu</b> — uzaktan terminal erişimi</sub></td>
 </tr>
 <tr>
 <td><a href="docs/images/07-samba-dosya-paylasimi.png"><img src="docs/images/07-samba-dosya-paylasimi.png" alt="Samba"></a><br><sub><b>6. Samba dosya paylaşımı</b> — uzak dosya gezgini erişimi</sub></td>
-<td><a href="docs/images/08-merkezi-log-sunucusu.png"><img src="docs/images/08-merkezi-log-sunucusu.png" alt="Merkezi log"></a><br><sub><b>7. Merkezi log sunucusu</b> — dayanıklı rsyslog iletimi</sub></td>
+<td><a href="docs/images/08-merkezi-log-sunucusu.png"><img src="docs/images/08-merkezi-log-sunucusu.png" alt="Merkezi log"></a><br><sub><b>7. Merkezi log sunucusu</b> — disk-assisted queue ile dayanıklı rsyslog</sub></td>
 </tr>
 <tr>
-<td><a href="docs/images/09-zaman-senkronizasyonu.png"><img src="docs/images/09-zaman-senkronizasyonu.png" alt="NTP"></a><br><sub><b>8. Zaman senkronizasyonu (NTP)</b> — test düğmesi dahil</sub></td>
-<td><a href="docs/images/10-benzersiz-hostname.png"><img src="docs/images/10-benzersiz-hostname.png" alt="Hostname"></a><br><sub><b>9. Dinamik hostname</b> — her açılışta MAC tabanlı dinamik isim</sub></td>
+<td><a href="docs/images/09-zaman-senkronizasyonu.png"><img src="docs/images/09-zaman-senkronizasyonu.png" alt="NTP"></a><br><sub><b>8. Zaman senkronizasyonu (NTP)</b> — canlı test düğmesi dahil</sub></td>
+<td><a href="docs/images/10-benzersiz-hostname.png"><img src="docs/images/10-benzersiz-hostname.png" alt="Hostname"></a><br><sub><b>9. Dinamik hostname</b> — her açılışta MAC tabanlı ad</sub></td>
 </tr>
 <tr>
-<td><a href="docs/images/11-guc-yonetimi.png"><img src="docs/images/11-guc-yonetimi.png" alt="Güç yönetimi"></a><br><sub><b>10. Güç yönetimi</b> — boştayken otomatik kapanma</sub></td>
+<td><a href="docs/images/11-guc-yonetimi.png"><img src="docs/images/11-guc-yonetimi.png" alt="Güç yönetimi"></a><br><sub><b>10. Otomatik kapanma</b> — 2 dk uyarı + greeter desteği</sub></td>
 <td><a href="docs/images/12-imaj-icin-sanitize.png"><img src="docs/images/12-imaj-icin-sanitize.png" alt="Sanitize"></a><br><sub><b>11. İmaj için sanitize</b> — son adım, kapsamlı temizlik</sub></td>
 </tr>
 <tr>
@@ -104,14 +104,14 @@ graph TB
 
     subgraph "🏫 Okul Ağı"
         R[🌐 Ana Router]
-        
+
         subgraph "💻 İdari Ağ (Öğretmenler Odası)"
             direction TB
             A1[💻 Müdür PC]
             A2[💻 Sekreter PC]
             A3[💻 Öğretmen PC]
         end
-        
+
         subgraph "📱 Tahta ve AP Ağı (10.x.x.x)"
             direction TB
             T1[📺 Sınıf 1 Tahta]
@@ -181,6 +181,18 @@ TiHA, "Toplu PIN anahtarı" adımında aşağıdaki açık kaynaklı aracı doğ
 
 - **[enseitankado/eta-otp-cli](https://github.com/enseitankado/eta-otp-cli)** — Pardus ETAP'ın `/etc/otp-secrets.json` dosyasıyla bire bir uyumlu, terminal tabanlı TOTP/PIN yönetim aracı. Öğretmen listesinden Linux hesaplarını doğru gruplarla oluşturur, her hesap için PIN anahtarı üretir ve giriş ekranında görünür yapar. Yazara ve projeye teşekkürler — bu iş akışını oldukça basitleştirdi.
 
+## ⚠️ Orijinal eta-shutdown servisinin bypass edildiği nokta
+
+**10. adım (Otomatik kapanma)** uygulandığında TiHA, Pardus ETA paketinin sağladığı `eta-shutdown` altyapısını **tamamen kaldırmaz** — `systemd` unit'i (`eta-shutdown.service`), `main.py` ve aynı yapılandırma dosyası (`/etc/pardus/eta-shutdown.conf`) korunur; "ETA Zamanlı Kapatma" GUI'si değişmeden çalışmaya devam eder.
+
+Bypass edilen tek dosya `/usr/share/eta/eta-shutdown/src/service/service.py`'dir: TiHA bu dosyayı, ek özellikler içeren genişletilmiş bir sürümle değiştirir:
+
+- 2 dakikalık GTK geri sayım penceresi (10 dakika erteleme veya "Şimdi kapat" düğmesiyle)
+- Aktif grafik oturumun `systemd-logind` (`loginctl`) ile saptanması — kullanıcı login değilse uyarı LightDM greeter ekranında gösterilir
+- Çoklu X11 DISPLAY (`:0`, `:1`, `:10`, `:11`) üzerinden idle algılama düzeltmesi
+
+Orijinali aynı dizinde `service.py.tiha-backup` adıyla yedeklenir. 10. adımın "geri al" işlemi yedeği geri yükler ve servisi yeniden başlatır. Ayrıca kullanıcı oturumunda gösterilen geri sayım penceresi `/usr/local/sbin/tiha-shutdown-countdown.py` olarak yazılır; geri al sırasında o da silinir.
+
 ## Sanitize adımının esinlendiği projeler
 
 11. adımdaki yer açma katmanı, açık kaynak temizleyicilerin yaklaşımlarını harmanlar:
@@ -197,22 +209,6 @@ TiHA, "Toplu PIN anahtarı" adımında aşağıdaki açık kaynaklı aracı doğ
 - Pull request'ler hoş karşılanır; ayrıntılar için [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Lisans
-
-## ⚡ Son Güncelleme Notları
-
-**4. Adım (Toplu PIN Anahtarı) İyileştirmeleri:**
-- ✅ **Sadece OTP modu:** Artık sadece PIN anahtarları oluşturur, sistem kullanıcı hesapları oluşturmaz
-- 🔄 **Canlı durum analizi:** Adım sayfası her açılışta güncel veriyle dinamik güncellenir
-- 📊 **Gelişmiş önizleme:** Sistem kullanıcı sayıları ve OTP durumu canlı görüntülenir
-
-**9. Adım (Dinamik Hostname) İyileştirmesi:**
-- 🔄 **Her açılışta kontrol:** Artık sadece ilk açılışta değil, her açılışta MAC adresi kontrol edilir
-- 🔧 **Dinamik güncelleme:** Ağ kartı değişse bile hostname otomatik güncellenir
-- ⚡ **Performans optimizasyonu:** Zaten doğruysa değişiklik yapmaz
-
----
-
-## 📄 Lisans
 
 GPL-3.0 — ayrıntı için [`LICENSE`](LICENSE) dosyasına bakınız.
 

@@ -293,3 +293,19 @@ scrolledwindow.tiha-textarea textview {
     font-size: 8pt;
     opacity: 0.65;
 }
+
+.tiha-action-link {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 2px 0;
+    margin-top: 6px;
+}
+
+.tiha-action-link label {
+    color: #1a73e8;
+}
+
+.tiha-action-link:hover label {
+    color: #0b57c9;
+}

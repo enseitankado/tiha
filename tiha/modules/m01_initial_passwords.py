@@ -28,11 +28,13 @@ from __future__ import annotations
 import crypt
 import json
 import pwd
+import subprocess
 import time
 from pathlib import Path
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
+from ..core.privilege import invoking_username
 from ..core.utils import backup_file, restore_file, run_cmd, user_exists
 
 log = get_logger(__name__)
@@ -223,6 +225,9 @@ class InitialPasswordsModule(Module):
         "Ortak hesapları (ogretmen, ogrenci) tamamen silmek isterseniz "
         "aşağıdaki düğmeyi kullanabilirsiniz."
     )
+    extra_links = [
+        {"label": "Kullanıcılar ve Gruplar uygulamasını aç", "action": "launch_users_admin_gui_action"},
+    ]
 
     def preview(self) -> str:
         user_status = get_removable_user_status()
@@ -428,3 +433,37 @@ class InitialPasswordsModule(Module):
                 "Öğrenci kullanıcısı silinemedi.",
                 details="Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
             )
+
+    def launch_users_admin_gui_action(self, params: dict | None = None) -> ApplyResult:
+        """Cinnamon 'Kullanıcılar ve Gruplar' uygulamasını kullanıcının X oturumunda açar."""
+        binary = Path("/usr/bin/cinnamon-settings-users")
+        if not binary.exists():
+            return ApplyResult(
+                False,
+                "Kullanıcılar ve Gruplar uygulaması bulunamadı.",
+                details=f"{binary} mevcut değil; cinnamon-control-center paketi kurulu mu?",
+            )
+
+        user = invoking_username()
+        try:
+            subprocess.Popen(
+                ["sudo", "-u", user, "env",
+                 "DISPLAY=:0",
+                 f"XAUTHORITY=/home/{user}/.Xauthority",
+                 str(binary)],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError as exc:
+            return ApplyResult(
+                False,
+                "Kullanıcılar ve Gruplar başlatılamadı.",
+                details=str(exc),
+            )
+
+        return ApplyResult(
+            True,
+            f"Kullanıcılar ve Gruplar '{user}' oturumunda açıldı.",
+            details="Pencereyi kapattığınızda bu adımdaki hesap durumu önizlemesi yenilenir.",
+        )
