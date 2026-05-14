@@ -11,6 +11,8 @@ sistemi kurar. İki mod destekler:
 - Her iki modda da 2 dakika önceden uyarı diyalogu gösterir
 - Kullanıcı kapatmayı erteleyebilir
 - 1 dakika aralıklarla kontrol yapar (daha hassas)
+- Aktif oturumu systemd-logind ile saptar; kullanıcı login değilse
+  uyarı LightDM greeter ekranında da gösterilir
 
 **Geri al.**
 Orijinal eta-shutdown konfigürasyonu geri yüklenir, değişiklikler kaldırılır.
@@ -20,10 +22,12 @@ from __future__ import annotations
 
 import configparser
 import shutil
+import subprocess
 from pathlib import Path
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
+from ..core.privilege import invoking_username
 from ..core.utils import run_cmd
 
 log = get_logger(__name__)
@@ -32,15 +36,124 @@ log = get_logger(__name__)
 ETA_SHUTDOWN_CONFIG = Path("/etc/pardus/eta-shutdown.conf")
 ETA_SHUTDOWN_SERVICE = Path("/usr/share/eta/eta-shutdown/src/service/service.py")
 ETA_SHUTDOWN_SERVICE_BACKUP = Path("/usr/share/eta/eta-shutdown/src/service/service.py.tiha-backup")
+# TiHA tarafından kurulan, kullanıcı oturumunda görünen GUI geri sayım penceresi
+COUNTDOWN_SCRIPT = Path("/usr/local/sbin/tiha-shutdown-countdown.py")
+
+
+def _render_countdown_script() -> str:
+    """Kullanıcı oturumunda gösterilen GTK geri sayım penceresi.
+
+    Çağrı:  tiha-shutdown-countdown.py "<mod açıklaması>" <saniye>
+    Exit kodu:  0 = kapatmaya devam et (zaman aşımı veya "Şimdi kapat")
+                1 = ertelendi (kullanıcı "10 dakika ertele" tıkladı)
+    """
+    return '''#!/usr/bin/env python3
+"""TiHA otomatik kapanma geri sayım penceresi."""
+import sys
+
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import GLib, Gtk
+
+mode_name = sys.argv[1] if len(sys.argv) > 1 else "Otomatik kapatma"
+total_seconds = int(sys.argv[2]) if len(sys.argv) > 2 else 120
+
+
+class CountdownWindow(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="Otomatik Kapatma Uyarısı")
+        self.set_keep_above(True)
+        self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
+        self.set_default_size(440, 240)
+        self.set_resizable(False)
+        self.set_border_width(20)
+        self.set_skip_taskbar_hint(False)
+
+        self.remaining = total_seconds
+        self.exit_code = 0
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self.add(vbox)
+
+        title = Gtk.Label()
+        title.set_markup('<span size="15000" weight="bold">Tahta kapatılacak</span>')
+        vbox.pack_start(title, False, False, 0)
+
+        reason = Gtk.Label(label=mode_name)
+        reason.set_line_wrap(True)
+        reason.set_justify(Gtk.Justification.CENTER)
+        vbox.pack_start(reason, False, False, 0)
+
+        self.timer_label = Gtk.Label()
+        self._update_label()
+        vbox.pack_start(self.timer_label, True, True, 0)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_box.set_halign(Gtk.Align.CENTER)
+
+        postpone_btn = Gtk.Button(label="10 dakika ertele")
+        postpone_btn.connect("clicked", self._on_postpone)
+        btn_box.pack_start(postpone_btn, False, False, 0)
+
+        shutdown_btn = Gtk.Button(label="Şimdi kapat")
+        shutdown_btn.get_style_context().add_class("destructive-action")
+        shutdown_btn.connect("clicked", self._on_shutdown_now)
+        btn_box.pack_start(shutdown_btn, False, False, 0)
+
+        vbox.pack_end(btn_box, False, False, 0)
+
+        self.connect("destroy", self._quit)
+        GLib.timeout_add(1000, self._tick)
+
+    def _fmt(self, s):
+        return "{}:{:02d}".format(s // 60, s % 60)
+
+    def _update_label(self):
+        self.timer_label.set_markup(
+            '<span size="42000" weight="bold">{}</span>'.format(self._fmt(self.remaining))
+        )
+
+    def _tick(self):
+        self.remaining -= 1
+        if self.remaining <= 0:
+            self.exit_code = 0
+            self._quit()
+            return False
+        self._update_label()
+        return True
+
+    def _on_postpone(self, _btn):
+        self.exit_code = 1
+        self._quit()
+
+    def _on_shutdown_now(self, _btn):
+        self.exit_code = 0
+        self._quit()
+
+    def _quit(self, *_args):
+        Gtk.main_quit()
+
+
+win = CountdownWindow()
+win.show_all()
+Gtk.main()
+sys.exit(win.exit_code)
+'''
 
 
 def _render_enhanced_service() -> str:
-    """TiHA tarafından geliştirilmiş eta-shutdown service script'i."""
+    """TiHA tarafından geliştirilmiş eta-shutdown service script'i.
+
+    Orijinal eta-shutdown ``service.py`` dosyası bu içerikle değiştirilir.
+    `main.py` (orijinal) her 60 saniyede ``service()`` fonksiyonunu çağırır.
+    Aynı systemd unit ve aynı /etc/pardus/eta-shutdown.conf'u kullanır;
+    yalnızca davranış (GUI geri sayım + erteleme) bu modülde tanımlanır.
+    """
     return '''import os
+import pwd
 import sys
 import time
 import subprocess
-import threading
 import configparser
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,110 +163,259 @@ from datetime import datetime
 from xidle import get_idle_time
 from logger import log
 
-"""
-[AUTO_SHUTDOWN]
-enabled = False
-hour = 01
-minute = 00
-
-[TIMED_MODE]
-mode = "shutdown"
-hour = 00
-minute = 00
-"""
-
 CONFIG_FILE = "/etc/pardus/eta-shutdown.conf"
+COUNTDOWN_SCRIPT = "/usr/local/sbin/tiha-shutdown-countdown.py"
+COUNTDOWN_SECONDS = 120  # 2 dakika
+
 config = configparser.ConfigParser()
 config.read(CONFIG_FILE)
+
 
 def check_time(hour, minute, delay):
     now = datetime.now()
     nex = datetime(now.year, now.month, now.day, hour, minute)
-    print(now, nex, delay)
     return nex.timestamp() - delay - now.timestamp() < 0
 
 
-def check_x11(disp):
-    sp = subprocess.run(["env", "DISPLAY={}".format(disp), "xset", "-q"], capture_output=True)
-    return sp.returncode == 0
+def find_display_target():
+    """O an ekrandaki aktif grafik oturumu döndürür.
 
-ret = None
-def send_notify(message, yes_msg, no_msg, timeout):
-    global ret
-    def send_notify_disp(disp):
-        global ret
-        cmd = ["timeout", str(timeout),
-            "env", "DISPLAY={}".format(disp),
-            "notify-send", "-w",
-            "-A", "true={}".format(yes_msg),
-            "-A", "false={}".format(no_msg),
-            "-t", str(timeout*1000), message]
-        log(cmd)
-        sp = subprocess.run(cmd, capture_output=True)
-        if ret == None:
-            ret = (sp.stdout.decode("utf-8").strip() == "true")
-    ths = []
-    ret = None
-    for display in os.listdir("/tmp/.X11-unix/"):
-        if check_x11(f":{display[1:]}"):
-            th = threading.Thread(target=send_notify_disp, args=[f":{display[1:]}"])
-            ths.append(th)
-    for th in ths:
-        th.start()
-    for th in ths:
-        th.join()
-    print(ret)
-    return ret
+    Sonuç: (username, env_dict, kind) ya da None.
+      kind: "user"    — UID >= 1000 olan normal kullanıcı oturumu
+            "greeter" — LightDM greeter (kimse login değil ya da user-switch)
 
-# TiHA gelişmiş değişkenler
-message_shown = False
-delay = 0
+    Önce systemd-logind ile aktif (ekrandaki) grafik oturumu sorulur; bu
+    başarısızsa eski /run/user taramasına düşülür.
+    """
+    target = _find_target_via_logind()
+    if target:
+        return target
+    return _find_target_via_runuser()
+
+
+def _find_target_via_logind():
+    """systemd-logind ile Active=yes olan grafik oturumu döndürür."""
+    try:
+        list_res = subprocess.run(
+            ["loginctl", "list-sessions", "--no-legend"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception as exc:
+        log("loginctl list-sessions failed: {}".format(exc))
+        return None
+    if list_res.returncode != 0:
+        return None
+
+    session_ids = []
+    for line in list_res.stdout.splitlines():
+        parts = line.split()
+        if parts:
+            session_ids.append(parts[0])
+
+    for sid in session_ids:
+        try:
+            show_res = subprocess.run(
+                ["loginctl", "show-session", sid,
+                 "--property=Active", "--property=Class", "--property=Type",
+                 "--property=Name", "--property=User", "--property=Display"],
+                capture_output=True, text=True, timeout=5,
+            )
+        except Exception:
+            continue
+        if show_res.returncode != 0:
+            continue
+        props = {}
+        for kv in show_res.stdout.splitlines():
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                props[k] = v
+        if props.get("Active") != "yes":
+            continue
+        if props.get("Type") not in ("x11", "wayland", "mir"):
+            continue
+
+        klass = props.get("Class", "user")
+        username = props.get("Name", "")
+        display = props.get("Display") or ":0"
+        try:
+            uid = int(props.get("User", "0"))
+        except ValueError:
+            uid = 0
+
+        if klass == "user" and uid >= 1000 and username:
+            try:
+                pw = pwd.getpwuid(uid)
+                home_dir = pw.pw_dir
+            except KeyError:
+                home_dir = "/home/{}".format(username)
+            runtime_dir = "/run/user/{}".format(uid)
+            xauth_candidates = [
+                "{}/.Xauthority".format(home_dir),
+                "{}/gdm/Xauthority".format(runtime_dir),
+                "/var/run/lightdm/{}/xauthority".format(username),
+                "/run/lightdm/{}/xauthority".format(username),
+            ]
+            xauth = next((p for p in xauth_candidates if os.path.exists(p)), "")
+            env = {
+                "DISPLAY": display,
+                "XAUTHORITY": xauth,
+                "XDG_RUNTIME_DIR": runtime_dir,
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path={}/bus".format(runtime_dir),
+                "HOME": home_dir,
+                "USER": username,
+                "LOGNAME": username,
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            }
+            return username, env, "user"
+
+        if klass == "greeter":
+            greeter_user = username or "lightdm"
+            xauth_candidates = [
+                "/var/lib/lightdm-data/lightdm/.Xauthority",
+                "/var/lib/lightdm/.Xauthority",
+                "/run/lightdm/root/{}".format(display),
+                "/var/run/lightdm/root/{}".format(display),
+            ]
+            xauth = next((p for p in xauth_candidates if os.path.exists(p)), "")
+            env = {
+                "DISPLAY": display,
+                "XAUTHORITY": xauth,
+                "HOME": "/var/lib/lightdm",
+                "USER": greeter_user,
+                "LOGNAME": greeter_user,
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            }
+            return greeter_user, env, "greeter"
+
+    return None
+
+
+def _find_target_via_runuser():
+    """Eski fallback: /run/user altında UID>=1000 + xset -q ile X oturumu bul."""
+    try:
+        for entry in os.listdir("/run/user"):
+            try:
+                uid = int(entry)
+            except ValueError:
+                continue
+            if uid < 1000:
+                continue
+            try:
+                pw = pwd.getpwuid(uid)
+            except KeyError:
+                continue
+            runtime_dir = "/run/user/{}".format(uid)
+            xauth_candidates = [
+                "{}/.Xauthority".format(pw.pw_dir),
+                "{}/gdm/Xauthority".format(runtime_dir),
+                "/var/run/lightdm/{}/xauthority".format(pw.pw_name),
+                "/run/lightdm/{}/xauthority".format(pw.pw_name),
+            ]
+            xauth = next((p for p in xauth_candidates if os.path.exists(p)), "")
+            env = {
+                "DISPLAY": os.environ.get("DISPLAY", ":0"),
+                "XAUTHORITY": xauth,
+                "XDG_RUNTIME_DIR": runtime_dir,
+                "DBUS_SESSION_BUS_ADDRESS": "unix:path={}/bus".format(runtime_dir),
+                "HOME": pw.pw_dir,
+                "USER": pw.pw_name,
+                "LOGNAME": pw.pw_name,
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            }
+            try:
+                rc = subprocess.run(
+                    ["sudo", "-u", pw.pw_name, "env"]
+                    + ["{}={}".format(k, v) for k, v in env.items()]
+                    + ["xset", "-q"],
+                    capture_output=True,
+                    timeout=5,
+                ).returncode
+                if rc == 0:
+                    return pw.pw_name, env, "user"
+            except Exception:
+                continue
+    except OSError:
+        pass
+    return None
+
+
+def show_countdown_dialog(mode_name):
+    """Aktif grafik oturumda GTK geri sayım penceresi çalıştırır.
+
+    Hedef oturum: önce login olmuş kullanıcı; yoksa LightDM greeter.
+
+    Dönüş:
+      "postpone" → kullanıcı erteledi (10 dakika)
+      "proceed"  → süre doldu veya kullanıcı "Şimdi kapat" dedi
+      "fallback" → GUI çalıştırılamadı (gösterilebilir oturum yok, vb.)
+    """
+    target = find_display_target()
+    if not target:
+        log("TiHA countdown: gösterilebilir aktif grafik oturum yok")
+        return "fallback"
+
+    username, env, kind = target
+    if not os.path.exists(COUNTDOWN_SCRIPT):
+        log("TiHA countdown: GUI script yok: {}".format(COUNTDOWN_SCRIPT))
+        return "fallback"
+
+    log("TiHA countdown: hedef={}/{} display={}".format(
+        username, kind, env.get("DISPLAY")))
+    cmd = (
+        ["sudo", "-u", username, "env"]
+        + ["{}={}".format(k, v) for k, v in env.items()]
+        + ["python3", COUNTDOWN_SCRIPT, mode_name, str(COUNTDOWN_SECONDS)]
+    )
+    try:
+        result = subprocess.run(cmd, timeout=COUNTDOWN_SECONDS + 15)
+    except subprocess.TimeoutExpired:
+        log("TiHA countdown: GUI zaman aşımına uğradı, kapatmaya devam")
+        return "proceed"
+    except Exception as exc:
+        log("TiHA countdown: GUI başlatılamadı: {}".format(exc))
+        return "fallback"
+
+    if result.returncode == 1:
+        return "postpone"
+    return "proceed"
+
+
+def wait_or_proceed(mode_name):
+    """Geri sayım göster; başarısızsa eski davranış (2 dk bekle, kapat).
+
+    Eski 'send_notify' temelli balon zaten görünmediği için fallback
+    yalnızca süreyi tüketir; sonunda True döner (kapatmaya devam).
+    """
+    outcome = show_countdown_dialog(mode_name)
+    if outcome == "postpone":
+        return False  # kapatma iptal/ertelendi
+    if outcome == "proceed":
+        return True
+    # fallback: 2 dakika bekleyip kapat (mevcut davranışla uyumlu)
+    log("TiHA countdown: fallback — {} sn bekleniyor".format(COUNTDOWN_SECONDS))
+    time.sleep(COUNTDOWN_SECONDS)
+    return True
+
+
+# State
 init = False
 ignore_auto = False
-shutdown_warning_shown = False
-shutdown_start_time = None
-
-def show_shutdown_warning(mode_name):
-    """TiHA 2 dakika uyarı diyalogu."""
-    global shutdown_warning_shown, shutdown_start_time
-
-    if not shutdown_warning_shown:
-        shutdown_warning_shown = True
-        shutdown_start_time = time.time()
-
-        message = f"⚠️ UYARI: Tahta 2 dakika sonra kapatılacak!\\n\\n{mode_name} moduna göre sistem kapatılacak."
-        result = send_notify(message, "10 dakika ertele", "Kapatmayı onayla", 120)
-
-        if result:  # Kullanıcı "10 dakika ertele" seçti
-            log("Kullanıcı kapatmayı 10 dakika erteledi")
-            shutdown_warning_shown = False
-            shutdown_start_time = None
-            return True  # Ertelendi
-        else:
-            log("Kullanıcı kapatmayı onayladı veya zaman aşımı")
-            return False  # Devam et
-
-    # 2 dakika geçti mi?
-    if shutdown_start_time and (time.time() - shutdown_start_time) >= 120:
-        return False  # 2 dakika geçti, kapat
-
-    return True  # Hala bekliyor
+postpone_until = 0.0  # bu zamana kadar uyarı suspended
 
 
 def service():
-    global message_shown
-    global delay
-    global init
-    global ignore_auto
-    global shutdown_warning_shown, shutdown_start_time
+    global init, ignore_auto, postpone_until
 
-    # variables
+    # Config'i her döngüde tazele (ETA Zamanlı Kapatma GUI'sinden gelen
+    # değişiklikleri yakalamak için)
+    config.read(CONFIG_FILE)
+
     auto_hour = int(config["AUTO_SHUTDOWN"]["hour"])
     auto_minute = int(config["AUTO_SHUTDOWN"]["minute"])
     hour = int(config["TIMED_MODE"]["hour"])
     minute = int(config["TIMED_MODE"]["minute"])
 
-    # first boot check
+    # İlk açılışta sabit saat geçmişse o günü atla
     if not init:
         init = True
         if check_time(auto_hour, auto_minute, 0):
@@ -161,64 +423,60 @@ def service():
 
     log("###### TiHA Enhanced Eta Shutdown {} ######".format(time.time()))
 
-    # TIMED MODE - Idle tabanlı kapatma
+    # Erteleme aktifse hiçbir kapatma tetiklenmesin
+    if time.time() < postpone_until:
+        log("TiHA: erteleme aktif, {:.0f} sn kaldı".format(postpone_until - time.time()))
+        return
+
+    # ---- TIMED MODE — Idle tabanlı kapatma ----
     mode = config["TIMED_MODE"]["mode"]
     if mode != "none":
         idle_time = -1
-        for display in os.listdir("/tmp/.X11-unix/"):
-            idle = get_idle_time(f":{display[1:]}")
-            if idle_time < idle or idle_time < 0:
-                idle_time = idle
-        print("idle_time: {}".format(idle_time))
-        req_idle = (hour*3600 + minute * 60)*1000
-        if req_idle < 60*1000:  # Minimum 1 dakika
-            req_idle = 60*1000
-        print("req_idle:", req_idle)
+        for display in [":0", ":1", ":10", ":11"]:
+            try:
+                idle = get_idle_time(display)
+                if idle > 0 and (idle > idle_time or idle_time < 0):
+                    idle_time = idle
+            except Exception:
+                continue
+        req_idle = (hour * 3600 + minute * 60) * 1000
+        if req_idle < 60 * 1000:
+            req_idle = 60 * 1000
+        log("idle_time={} req_idle={}".format(idle_time, req_idle))
 
         if idle_time > req_idle:
-            # TiHA: 2 dakika uyarı diyalogu
-            postpone = show_shutdown_warning(f"Boşta kalma süresi aşıldı ({minute} dakika)")
-            if postpone:
-                if postpone is True and shutdown_start_time is None:
-                    # 10 dakika erteleme
-                    delay_until = time.time() + 600  # 10 dakika
-                    shutdown_warning_shown = False
-                    log("Idle kapatma 10 dakika ertelendi")
+            proceed = wait_or_proceed(
+                "Boşta kalma süresi aşıldı ({} dakika).".format(minute)
+            )
+            if not proceed:
+                postpone_until = time.time() + 600
+                log("Idle kapatma 10 dakika ertelendi")
                 return
-
-            # 2 dakika geçti veya kullanıcı onayladı
             log("TiHA: Idle tabanlı kapatma gerçekleştiriliyor")
             if mode == "shutdown":
                 os.system("poweroff")
             elif mode == "suspend":
                 os.system("systemctl suspend")
-            shutdown_warning_shown = False
-            shutdown_start_time = None
+            return
 
-    # AUTO SHUTDOWN - Sabit saat kapatma
+    # ---- AUTO SHUTDOWN — Sabit saat kapatma ----
     if ignore_auto:
-        print("Ignore auto shutdown")
-    elif config["AUTO_SHUTDOWN"]["enabled"].lower() == "true":
-        # TiHA: 2 dakika önceden uyarı (orijinal 10dk yerine)
-        if check_time(auto_hour, auto_minute, 120):  # 2 dakika öncesinden
-            postpone = show_shutdown_warning(f"Sabit saat kapatma ({auto_hour:02d}:{auto_minute:02d})")
-            if postpone:
-                if postpone is True and shutdown_start_time is None:
-                    # 10 dakika erteleme
-                    delay -= 600  # 10 dakika geri çek
-                    shutdown_warning_shown = False
-                    log("Sabit saat kapatma 10 dakika ertelendi")
-                return
+        return
+    if config["AUTO_SHUTDOWN"]["enabled"].lower() != "true":
+        return
 
-        if check_time(auto_hour, auto_minute, delay):
+    # Geri sayım penceresini hedef saatten 2 dk önce aç
+    if check_time(auto_hour, auto_minute, COUNTDOWN_SECONDS):
+        if not check_time(auto_hour, auto_minute, 0):
+            proceed = wait_or_proceed(
+                "Sabit saat kapatma ({:02d}:{:02d}).".format(auto_hour, auto_minute)
+            )
+            if not proceed:
+                postpone_until = time.time() + 600
+                log("Sabit saat kapatma 10 dakika ertelendi")
+                return
             log("TiHA: Sabit saat kapatma gerçekleştiriliyor")
             os.system("poweroff")
-            shutdown_warning_shown = False
-            shutdown_start_time = None
-
-
-if __name__ == "__main__":
-    send_notify(sys.argv[1], "Yes", "No", 10)
 '''
 
 
@@ -231,8 +489,13 @@ class PowerManagementModule(Module):
         "Tahtanın unutulması durumunda otomatik kapatma sistemi kurar. "
         "Belirlenen saatte veya tahta boşta kaldığında otomatik olarak "
         "kapatma işlemi yapılır. Her iki modda da 2 dakika önceden uyarı "
-        "diyalogu gösterilir ve kapatma 10 dakika ertelenebilir."
+        "diyalogu gösterilir ve kapatma 10 dakika ertelenebilir. "
+        "Kullanıcı login değilse uyarı LightDM greeter ekranında "
+        "gösterilir."
     )
+    extra_links = [
+        {"label": "ETA Zamanlı Kapatma'yı aç", "action": "launch_eta_shutdown_gui_action"},
+    ]
 
     def preview(self) -> str:
         """Her açılışta güncel eta-shutdown config'ini okuyan dinamik preview."""
@@ -370,6 +633,17 @@ class PowerManagementModule(Module):
             return ApplyResult(False, f"Service dosyası yazılamadı: {exc}")
 
         if progress:
+            progress("Geri sayım penceresi (GUI) kuruluyor...")
+
+        # Kullanıcı oturumunda gösterilecek GTK geri sayım penceresini kur
+        try:
+            COUNTDOWN_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
+            COUNTDOWN_SCRIPT.write_text(_render_countdown_script(), encoding="utf-8")
+            COUNTDOWN_SCRIPT.chmod(0o755)
+        except OSError as exc:
+            return ApplyResult(False, f"Geri sayım scripti yazılamadı: {exc}")
+
+        if progress:
             progress("Otomatik kapanma konfigürasyonu yazılıyor...")
 
         # Konfigürasyon dosyasını oluştur
@@ -472,6 +746,14 @@ class PowerManagementModule(Module):
             except OSError as exc:
                 log.warning("Service geri yükleme başarısız: %s", exc)
 
+        # Geri sayım penceresi scriptini kaldır
+        if COUNTDOWN_SCRIPT.exists():
+            try:
+                COUNTDOWN_SCRIPT.unlink()
+                removed_items.append("Geri sayım penceresi scripti kaldırıldı")
+            except OSError as exc:
+                log.warning("Geri sayım scripti silinemedi: %s", exc)
+
         # Konfigürasyonu sıfırla (varsayılan değerler)
         try:
             config = configparser.ConfigParser()
@@ -498,6 +780,40 @@ class PowerManagementModule(Module):
         details = "\n".join(f"• {item}" for item in removed_items) if removed_items else "Kaldırılacak öğe bulunamadı"
 
         return ApplyResult(True, summary, details=details)
+
+    def launch_eta_shutdown_gui_action(self, params: dict | None = None) -> ApplyResult:
+        """ETA Zamanlı Kapatma GUI'sini kullanıcının X oturumunda açar."""
+        binary = Path("/usr/bin/eta-shutdown")
+        if not binary.exists():
+            return ApplyResult(
+                False,
+                "ETA Zamanlı Kapatma uygulaması bulunamadı.",
+                details=f"{binary} mevcut değil; eta-shutdown paketi kurulu mu?",
+            )
+
+        user = invoking_username()
+        try:
+            subprocess.Popen(
+                ["sudo", "-u", user, "env",
+                 "DISPLAY=:0",
+                 f"XAUTHORITY=/home/{user}/.Xauthority",
+                 str(binary)],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError as exc:
+            return ApplyResult(
+                False,
+                "ETA Zamanlı Kapatma başlatılamadı.",
+                details=str(exc),
+            )
+
+        return ApplyResult(
+            True,
+            f"ETA Zamanlı Kapatma '{user}' oturumunda açıldı.",
+            details="Yapılandırmayı kaydedip kapattığınızda 10. adımdaki bilgi yenilenecek.",
+        )
 
     def get_current_config(self) -> dict:
         """Mevcut eta-shutdown config'ini okuyup form parametreleri döndürür."""
