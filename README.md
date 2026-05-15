@@ -90,6 +90,9 @@ Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol list
 <tr>
 <td colspan="2" align="center" width="100%"><a href="docs/images/13-ozet.png"><img src="docs/images/13-ozet.png" alt="Özet" width="50%"></a><br><sub><b>Özet</b> — oturumda uygulanan/geri alınan adımların listesi</sub></td>
 </tr>
+<tr>
+<td colspan="2" align="center" width="100%"><a href="docs/images/14-otomatik-kapanma-greeter.png"><img src="docs/images/14-otomatik-kapanma-greeter.png" alt="Greeter ekranında countdown" width="55%"></a><br><sub><b>Bonus — Otomatik kapanma uyarısı greeter ekranında</b><br>Kullanıcı login değilken (LightDM giriş ekranında) bile 2 dakikalık geri sayım penceresi gösterilir; "10 dakika ertele" ile şimdilik vazgeçilebilir.</sub></td>
+</tr>
 </table>
 
 ## 📡 Ağ Topolojisi ve Erişim Gereksinimleri
@@ -192,6 +195,11 @@ Bypass edilen tek dosya `/usr/share/eta/eta-shutdown/src/service/service.py`'dir
 - Çoklu X11 DISPLAY (`:0`, `:1`, `:10`, `:11`) üzerinden idle algılama düzeltmesi
 
 Orijinali aynı dizinde `service.py.tiha-backup` adıyla yedeklenir. 10. adımın "geri al" işlemi yedeği geri yükler ve servisi yeniden başlatır. Ayrıca kullanıcı oturumunda gösterilen geri sayım penceresi `/usr/local/sbin/tiha-shutdown-countdown.py` olarak yazılır; geri al sırasında o da silinir.
+
+<p align="center">
+<a href="docs/images/14-otomatik-kapanma-greeter.png"><img src="docs/images/14-otomatik-kapanma-greeter.png" alt="Greeter ekranında 2 dakikalık geri sayım" width="60%"></a><br>
+<sub><i>LightDM giriş ekranında etkin geri sayım — kullanıcı login değilken bile uyarı görünür.</i></sub>
+</p>
 
 ## Sanitize adımının esinlendiği projeler
 
