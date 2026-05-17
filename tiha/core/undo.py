@@ -111,3 +111,13 @@ class Journal:
         for entry in self.current_session_entries():
             latest[entry.module_id] = entry
         return latest
+
+    def latest_per_module(self) -> dict[str, JournalEntry]:
+        """Oturumdan bağımsız olarak, her modül id'si için en son kaydı
+        döndürür. Özet sayfası bunu kullanır: bir adım önceki oturumlarda
+        uygulanıp hâlâ ``applied`` durumdaysa kullanıcı yine de geri
+        alabilmelidir."""
+        latest: dict[str, JournalEntry] = {}
+        for entry in self._entries:
+            latest[entry.module_id] = entry
+        return latest

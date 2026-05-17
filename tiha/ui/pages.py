@@ -958,9 +958,11 @@ class SummaryPage(Gtk.Box):
         self.pack_start(heading, False, False, 0)
 
         info = _wrapping_label(
-            "Bu oturumda uygulanan adımlar aşağıda listelenmiştir. "
-            "Herhangi birini geri almak isterseniz sağ taraftaki düğmeyi "
-            "kullanın. Alttaki 'Bitir' düğmesi uygulamayı kapatır.",
+            "Bu tahtada geri alınabilir durumdaki adımlar aşağıda "
+            "listelenmiştir. Daha önceki bir oturumda uygulanmış olsa bile, "
+            "modül geri almayı destekliyorsa ve günce kaydı hâlâ etkinse "
+            "buradan geri alabilirsiniz. Alttaki 'Bitir' düğmesi uygulamayı "
+            "kapatır.",
             klass="tiha-rationale",
         )
         self.pack_start(info, False, False, 0)
@@ -975,14 +977,15 @@ class SummaryPage(Gtk.Box):
         self.refresh()
 
     def refresh(self) -> None:
-        """Yalnızca mevcut oturumun kayıtlarını, her modül için tek kart
-        olarak listeler. ``undone`` kayıtlar net-sıfır etki oldukları için
-        gösterilmez; ``applied`` için Geri al, ``failed`` için ayırt edici
-        renk gösterilir."""
+        """Tüm geçmiş kayıtlar arasından her modül için en son durumu
+        gösterir. Hangi oturumda uygulandığına bakılmaksızın, son durumu
+        ``applied`` olan adımlar Geri al düğmesiyle birlikte listelenir;
+        ``undone`` net-sıfır etki olduğu için gizlenir; ``failed`` ayırt
+        edici renkle (geri al düğmesiz) gösterilir."""
         for child in self.entries_box.get_children():
             self.entries_box.remove(child)
 
-        latest = self.journal.latest_per_module_in_session()
+        latest = self.journal.latest_per_module()
         # Modülün sihirbaz içindeki sırasıyla dizelim
         order = {m.id: idx for idx, m in enumerate(self.modules.values())}
         entries = sorted(
@@ -992,7 +995,8 @@ class SummaryPage(Gtk.Box):
 
         if not entries:
             empty = _wrapping_label(
-                "Bu oturumda henüz uygulanmış (ya da geri alınmamış) bir adım yok.",
+                "Geri alınabilecek bir adım yok — henüz hiçbir modül "
+                "uygulanmamış ya da uygulanan tüm adımlar zaten geri alınmış.",
                 klass="tiha-rationale",
             )
             self.entries_box.pack_start(empty, False, False, 0)

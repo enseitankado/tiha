@@ -23,9 +23,15 @@ Normal iş akışımız şöyledir:
    silinir. Yaklaşımı virt-sysprep, cloud-init clean, BleachBit ve
    benzeri açık kaynak araçlardan esinlenir.
 
-**Geri al.** Sanitize'ın geri alınması anlamlı değildir (silinen
-benzersiz kimliği geri üretemeyiz, silinen logları geri getiremeyiz).
-Modül ``undo_supported = False`` olarak işaretlenmiştir.
+**Geri al.** Sanitize'ın çoğu işlemi geri alınamaz (silinen benzersiz
+kimliği yeniden üretemeyiz, silinen logları geri getiremeyiz). Tek
+istisna ahenk kimliğidir: ``apply`` çalışırken ``ahenk.conf``,
+``messaging.conf`` ve ``ahenk.db`` ``STATE_DIR`` altına yedeklenir.
+``undo`` bu yedeği geri yükler, ahenk servisini yeniden başlatır ve
+yedeği siler; böylece kullanıcı imajı almadan vazgeçtiyse aynı tahta
+Lider'e eski kimliğiyle bağlanmaya devam edebilir. Diğer temizlikler
+(loglar, önbellekler, kullanıcı geçmişi, machine-id, SSH anahtarları,
+NetworkManager bağlantıları vb.) ``undo`` ile geri gelmez.
 """
 
 from __future__ import annotations
@@ -36,7 +42,13 @@ from pathlib import Path
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
+from ..core.paths import STATE_DIR
 from ..core.utils import run_cmd
+
+AHENK_BACKUP_DIR = STATE_DIR / "m10_ahenk_backup"
+AHENK_CONF = Path("/etc/ahenk/ahenk.conf")
+AHENK_MSG_CONF = Path("/etc/ahenk/config.d/messaging.conf")
+AHENK_DB = Path("/etc/ahenk/ahenk.db")
 
 log = get_logger(__name__)
 
@@ -260,46 +272,78 @@ class ImageSanitizeModule(Module):
     popup_on_success = True
     rationale = (
         "İmaj almadan önce çalıştırılan ZORUNLU son adım. Aksi hâlde "
-        "imajdan çıkan bütün tahtalarda aynı machine-id, aynı SSH host "
-        "anahtarı, aynı NetworkManager UUID'si ve aynı kabuk geçmişi "
-        "olur — bu bir işe yaramaz mı? Yarar — ama funcationel görünse de "
-        "journald'ın dağınık davranışı, ssh bağlantılarının 'host key "
-        "değişti' uyarısı, WiFi parolasının 50 tahtaya aynen sızması "
-        "gibi sonuçlar doğar. TiHA burada tüm bu tekil kimlikleri "
-        "temizler, ilk boot'ta kendi benzersiz SSH anahtarını üreten bir "
-        "servis bırakır; ve tahtanın artık imaj alınmaya hazır olmasını "
-        "sağlar. Geri alma anlamlı değildir — silinen kimliği üretemeyiz."
+        "imajdan çıkan bütün tahtalarda aynı makine kimliği "
+        "(machine-id), aynı SSH ana bilgisayar anahtarı, aynı "
+        "NetworkManager bağlantı UUID'si ve aynı kabuk geçmişi olur. "
+        "Bu sanki çalışıyor gibi görünür ama journald günlüklerinin "
+        "karışması, SSH istemcilerinde 'ana bilgisayar anahtarı "
+        "değişti' uyarısı, kablosuz ağ parolasının 50 tahtaya aynen "
+        "sızması ve LiderAhenk tarafında Pulsar üzerinde aynı kimliğe "
+        "sahip iki tahtanın çakışması gibi sonuçlar doğurur. TiHA bu "
+        "adımda tüm tekil kimlikleri temizler, ilk açılışta kendi "
+        "benzersiz SSH anahtarını üreten bir servis bırakır ve "
+        "tahtanın imaj alınmaya hazır olmasını sağlar. Geri alma "
+        "anlamlı değildir — silinen kimliği yeniden üretemeyiz.\n\n"
+        "Ahenk için de aynı mantık uygulanır: Pulsar bağlantısı "
+        "kapatılıp ajanın yerel kimliği (UID, parola, kayıt "
+        "veritabanı) temiz bir şekilde sıfırlanır. Paket kaldırılmaz, "
+        "servis devre dışı bırakılmaz; yalnızca o tahtaya özel veriler "
+        "silinir. Böylece imajdan çıkan her kopya ilk açılışında kendi "
+        "kimliğini üretip Lider sunucusuna kendi adıyla yeniden kayıt "
+        "olur — kurulum bütünlüğü korunur, kimlik çakışması yaşanmaz.\n\n"
+        "Güvenlik kemeri: ahenk kimliği sıfırlanmadan önce dosyalar "
+        "TiHA'nın özel klasörüne yedeklenir. İmajı almadan önce "
+        "fikrinizi değiştirirseniz Özet sayfasındaki 'Geri al' düğmesi "
+        "yalnızca ahenk kimliğini geri yükler; diğer temizlikler "
+        "(loglar, önbellekler, makine kimlikleri vb.) kalıcıdır."
     )
-    undo_supported = False
+    undo_supported = True
 
     def preview(self) -> str:
         return (
             "Bu SON adımdır. Uygulandıktan sonra tahta imaj alınmaya hazırdır.\n"
             "Aşağıdaki kategoriler temizlenecek (geri alınamaz):\n\n"
-            "Tekil kimlikler (her klon kendi setini üretir):\n"
+            "Tekil kimlikler (her kopya kendi kimliğini üretir):\n"
             "  • /etc/machine-id ve /var/lib/dbus/machine-id\n"
-            "  • /etc/ssh/ssh_host_*\n"
-            "  • /etc/NetworkManager/system-connections/* (WiFi parolaları dahil)\n"
-            "  • DHCP/DHCP6 lease dosyaları\n"
+            "  • /etc/ssh/ssh_host_* (SSH ana bilgisayar anahtarları)\n"
+            "  • /etc/NetworkManager/system-connections/*\n"
+            "    (kablosuz ağ parolaları dahil bağlantı tanımları)\n"
+            "  • DHCP/DHCP6 kira (lease) dosyaları\n"
             "  • /var/lib/systemd/random-seed\n\n"
+            "Ahenk (LiderAhenk istemcisi) ve tahta kaydı:\n"
+            "  • Pulsar broker bağlantısı kesilir (ahenk servisi durdurulur).\n"
+            "  • ahenk.conf içindeki uid / parola / sunucu adresi alanları ile\n"
+            "    messaging.conf içindeki Pulsar bağlantı alanları boşaltılır.\n"
+            "  • Yerel kayıt veritabanı (ahenk.db) silinir; ahenk günlük\n"
+            "    dosyası (eski uid / ana bilgisayar adı / IP izleri) boşaltılır.\n"
+            "  • Servis otomatik başlatmaya açık (enabled) bırakılır. Kopya\n"
+            "    tahta ilk açıldığında ahenk kendine yeni UUID üretip kayıt\n"
+            "    akışına girer:\n"
+            "      – Tahtanın MAC adresi ETAP envanterinde tanımlıysa\n"
+            "        otomatik yetkilendirilir.\n"
+            "      – Tanımlı değilse, etapadmin oturumunda otomatik açılan\n"
+            "        Tahta Kayıt uygulaması üzerinden okul kodu ile yeni MAC\n"
+            "        kaydı yapılabilir; yetkilendirme tamamlanınca ahenk\n"
+            "        servisi yeniden başlatıldığında Pulsar'a bu kez yeni\n"
+            "        kimlikle bağlanır.\n\n"
             "Yer açan ve iz silen temizlikler:\n"
             "  • APT önbelleği ve indirilmiş .deb paketleri\n"
             "  • Yetim paketler (apt-get autoremove --purge)\n"
-            "  • Kalıntı yapılandırmalar (rc-state paketler dpkg --purge)\n"
+            "  • Kalıntı yapılandırmalar (rc durumundaki paketler tasfiye edilir)\n"
             "  • systemd journal (boyut 1 KB'a indirilir)\n"
             "  • /var/log altındaki dosyalar (yapı korunur, içerik boşaltılır)\n"
-            "  • Crash raporları (/var/crash, /var/lib/whoopsie)\n"
-            "  • Mail/cups/anacron spool kuyrukları\n"
+            "  • Çökme raporları (/var/crash, /var/lib/whoopsie)\n"
+            "  • Posta / cups / anacron kuyrukları\n"
             "  • man / fontconfig / debconf / lightdm önbellekleri\n"
             "  • dpkg yedek dosyaları (*.dpkg-old, *.dpkg-dist, *.ucf-*)\n"
-            "  • Tüm kullanıcıların ~/.cache, ~/.local/share/Trash, çeşitli\n"
+            "  • Tüm kullanıcıların ~/.cache, ~/.local/share/Trash ve çeşitli\n"
             "    geçmiş dosyaları (.bash_history, .lesshst, .viminfo, .python_history)\n"
             "  • Web tarayıcı önbellekleri ve gezinti verileri\n"
             "    (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex)\n"
-            "    — gezinti geçmişi, çerezler, indirme geçmişi, oturumlar, IndexedDB;\n"
-            "      tarayıcı tercihleri ve yer imleri korunur\n"
+            "    — gezinti geçmişi, çerezler, indirme geçmişi, oturumlar, yerel\n"
+            "      depolama; tarayıcı tercihleri ve yer imleri korunur\n"
             "  • /tmp ve /var/tmp içerikleri\n"
-            "  • Kullanılmayan diller için locale dosyaları\n"
+            "  • Kullanılmayan diller için yerelleştirme dosyaları\n"
             f"    ({', '.join(KEEP_LOCALES)} dışındakiler /usr/share/locale altından silinir)\n\n"
             "Uyguladıktan sonra: doğrudan imaj alma aracınızı (Clonezilla vb.) "
             "çalıştırabilirsiniz."
@@ -346,6 +390,48 @@ class ImageSanitizeModule(Module):
         # systemd random-seed (sonraki açılışta yeniden üretilir)
         if _rm(Path("/var/lib/systemd/random-seed")):
             ops.append("systemd random-seed sıfırlandı")
+
+        # ahenk (LiderAhenk) agent kimliği — UID/password ve yerel kayıt
+        # veritabanı imajda kalırsa her klon tahta aynı kimlikle MEB
+        # Pulsar broker'ına bağlanır; Exclusive consumer çakışması ve
+        # cross-board impersonation kaçınılmaz olur. ahenk.conf'taki
+        # uid/password/host alanları ve messaging.conf'taki pulsar_*
+        # alanları boşaltılır, kayıt DB'si silinir; ahenk ilk açılışta
+        # yeni UUID üretip kayıt akışına girer. Servis enable bırakılır.
+        # Yıkımdan önce dosyaların ham hâli STATE_DIR altına yedeklenir;
+        # bu sayede kullanıcı imajı henüz almadıysa Özet sayfasından
+        # "Geri al" diyerek aynı tahtaya eski Pulsar kimliğiyle dönebilir.
+        ahenk_backed_up = False
+        if AHENK_CONF.exists():
+            run_cmd(["systemctl", "stop", "ahenk.service"], check=False)
+            try:
+                AHENK_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(AHENK_CONF, AHENK_BACKUP_DIR / "ahenk.conf")
+                if AHENK_MSG_CONF.exists():
+                    shutil.copy2(AHENK_MSG_CONF, AHENK_BACKUP_DIR / "messaging.conf")
+                if AHENK_DB.exists():
+                    shutil.copy2(AHENK_DB, AHENK_BACKUP_DIR / "ahenk.db")
+                ahenk_backed_up = True
+            except OSError as exc:
+                log.warning("ahenk kimlik yedeği alınamadı: %s", exc)
+            run_cmd(
+                ["sed", "-i", "-E",
+                 r"s/^(uid|password|host)\s*=.*/\1 =/",
+                 str(AHENK_CONF)],
+                check=False,
+            )
+            if AHENK_MSG_CONF.exists():
+                run_cmd(
+                    ["sed", "-i", "-E",
+                     r"s/^(pulsar_host|pulsar_port|tls_trust_certs_file_path)\s*=.*/\1 =/",
+                     str(AHENK_MSG_CONF)],
+                    check=False,
+                )
+            _rm(AHENK_DB)
+            _truncate(Path("/var/log/ahenk.log"))
+            run_cmd(["systemctl", "enable", "ahenk.service"], check=False)
+            note = " (geri alma için yedeklendi)" if ahenk_backed_up else ""
+            ops.append(f"ahenk agent kimliği sıfırlandı (UID/parola/DB/log){note}")
 
         # ===== 2) APT önbelleği ve paket temizliği ====================
         if progress:
@@ -546,7 +632,54 @@ class ImageSanitizeModule(Module):
             True,
             f"İmaj sanitize tamamlandı; ~{freed_str} alan boşaltıldı.",
             details="\n".join(f"• {o}" for o in ops),
+            data={"ahenk_backed_up": ahenk_backed_up},
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
-        return ApplyResult(False, "Bu işlem geri alınamaz.")
+        # Sanitize'ın çoğu işlemi geri alınamaz (logu, önbelleği, geçmişi
+        # yeniden üretemeyiz). Yalnız ahenk kimliği yedeklendiyse onu
+        # geri yüklüyoruz — kullanıcı imajı almadan vazgeçmişse aynı
+        # tahta eski Pulsar kimliğiyle Lider'e bağlanmaya devam eder.
+        data = data or {}
+        if not data.get("ahenk_backed_up") or not AHENK_BACKUP_DIR.is_dir():
+            return ApplyResult(
+                False,
+                "Geri alınabilecek bir kayıt yok — yalnız ahenk kimliği "
+                "yedekleniyordu ve onun da yedeği bulunamadı.",
+            )
+
+        conf_bak = AHENK_BACKUP_DIR / "ahenk.conf"
+        msg_bak = AHENK_BACKUP_DIR / "messaging.conf"
+        db_bak = AHENK_BACKUP_DIR / "ahenk.db"
+        if not conf_bak.exists():
+            return ApplyResult(False, "ahenk.conf yedeği bulunamadı.")
+
+        restored: list[str] = []
+        run_cmd(["systemctl", "stop", "ahenk.service"], check=False)
+        try:
+            AHENK_CONF.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(conf_bak, AHENK_CONF)
+            restored.append("ahenk.conf")
+            if msg_bak.exists():
+                AHENK_MSG_CONF.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(msg_bak, AHENK_MSG_CONF)
+                restored.append("messaging.conf")
+            if db_bak.exists():
+                shutil.copy2(db_bak, AHENK_DB)
+                restored.append("ahenk.db")
+        except OSError as exc:
+            return ApplyResult(False, f"ahenk yedeği geri yüklenemedi: {exc}")
+
+        run_cmd(["systemctl", "start", "ahenk.service"], check=False)
+        # Yedeği sil — aynı kayıt iki kez geri yüklenmesin
+        shutil.rmtree(AHENK_BACKUP_DIR, ignore_errors=True)
+
+        return ApplyResult(
+            True,
+            "ahenk kimliği geri yüklendi (" + ", ".join(restored) + "); "
+            "diğer sanitize işlemleri kalıcıdır.",
+            details=(
+                "ahenk.service yeniden başlatıldı. Pulsar bağlantısı "
+                "birkaç saniye içinde eski uid/parola ile yeniden kurulur."
+            ),
+        )
