@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.async_state import AsyncValue
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import SAMBA_SHARE_CONF, SAMBA_SMB_CONF
@@ -52,6 +53,15 @@ def _is_package_installed(name: str) -> bool:
     return result.ok and "install ok installed" in result.stdout
 
 
+# preview() bu cache'ten okur. apply()/undo() doğrudan
+# _is_package_installed çağırır (kesin durum gerekir) ve cache'i
+# invalidate eder.
+_samba_installed = AsyncValue(
+    lambda: _is_package_installed("samba"),
+    name="m05.samba",
+)
+
+
 class SambaShareModule(Module):
     id = "m05_samba_share"
     title = "Samba dosya paylaşımı"
@@ -80,7 +90,8 @@ class SambaShareModule(Module):
     )
 
     def preview(self) -> str:
-        installed = _is_package_installed("samba")
+        # samba kurulum durumu async cache'ten — UI'yı bloke etmez.
+        installed = _samba_installed.get_async()
         share_exists = SAMBA_SHARE_CONF.exists()
 
         # smb.conf'ta include satırının varlığını kontrol et
@@ -93,6 +104,8 @@ class SambaShareModule(Module):
             except OSError:
                 pass
 
+        if installed is None:
+            return "samba kurulum durumu kontrol ediliyor…"
         if installed and share_exists and include_exists:
             return "samba kurulu ve paylaşım tanımı mevcut — yapılandırma güncellenecek."
         elif installed and (share_exists or include_exists):
@@ -103,6 +116,9 @@ class SambaShareModule(Module):
             return "samba kurulacak — mevcut paylaşım tanımı korunacak."
         else:
             return "samba kurulacak ve paylaşım tanımı eklenecek."
+
+    def prefetch_preview_state(self, on_ready=None) -> None:
+        _samba_installed.get_async(on_ready)
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         params = params or {}
@@ -176,6 +192,7 @@ class SambaShareModule(Module):
 
         run_cmd(["systemctl", "enable", "--now", "smbd"])
         run_cmd(["systemctl", "reload", "smbd"])
+        _samba_installed.invalidate()
         if progress:
             progress(f"Paylaşım aktif: //<tahta-ip>/{SHARE_NAME} (kullanıcı: {username})")
 
@@ -233,9 +250,11 @@ class SambaShareModule(Module):
             )
             run_cmd(["apt-get", "autoremove", "-y"],
                     env={"DEBIAN_FRONTEND": "noninteractive"})
+            _samba_installed.invalidate()
             if not purge.ok:
                 return ApplyResult(False, "Samba paketleri kaldırılamadı.", details=purge.stderr)
             return ApplyResult(True, "Samba paylaşımı ve paketleri tamamen kaldırıldı.")
 
         run_cmd(["systemctl", "reload", "smbd"])
+        _samba_installed.invalidate()
         return ApplyResult(True, f"[{SHARE_NAME}] paylaşımı kaldırıldı (Samba paketleri başlangıçta kuruluydu, korundu).")

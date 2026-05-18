@@ -66,6 +66,7 @@ from urllib.parse import quote
 
 import pyotp
 
+from ..core.async_state import AsyncValue
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import OTP_SECRETS_FILE, VAR_ROOT
@@ -189,6 +190,18 @@ def _ensure_eta_otp_cli() -> Path | None:
 
 def _eta_otp_cli_bulk_script() -> Path | None:
     return _ensure_eta_otp_cli()
+
+
+# preview() ``_ensure_eta_otp_cli()``'yi ÇAĞIRMAZ — bu çağrı oturumun
+# ilk seferinde GitHub'dan dosya indirebilir (≤60 sn timeout) ve UI
+# thread'inde bekleyiş olur. Bunun yerine async wrapper okur: ilk
+# çağrıda arka planda worker başlar, sonuç gelince preview yeniden
+# çizilir. ``apply()`` doğrudan senkron çağrıya devam eder — orada
+# kesin sonuç gerekir ve kullanıcı zaten apply progress'ini görüyor.
+_eta_otp_cli_available = AsyncValue(
+    lambda: _ensure_eta_otp_cli() is not None,
+    name="m03.eta-otp-cli",
+)
 
 
 def _eta_otp_cli_normalize(full_name: str) -> str:
@@ -531,6 +544,12 @@ class OTPSecretsModule(Module):
         "ogretmen) dışındakiler silinir."
     )
 
+    def prefetch_preview_state(self, on_ready=None) -> None:
+        """Sayfa açıldığında eta-otp-cli erişilebilirlik kontrolünü arka
+        planda başlat — gerekirse GitHub indirme yapılabilir, UI
+        bloke olmasın."""
+        _eta_otp_cli_available.get_async(on_ready)
+
     def preview(self) -> str:
         import pwd as _pwd
         import datetime
@@ -556,8 +575,13 @@ class OTPSecretsModule(Module):
         lines.append(f"CANLI DURUM ANALİZİ ({current_time})")
         lines.append("")
 
-        # Araç durumu
-        if _ensure_eta_otp_cli() is not None:
+        # Araç durumu — AsyncValue cache'ten okur. Cache yoksa worker
+        # arka planda başlar (UI bloke etmez); cache hazır olunca
+        # önizleme yeniden çizilir.
+        tool_available = _eta_otp_cli_available.get_async()
+        if tool_available is None:
+            lines.append("Araç: kontrol ediliyor (eta-otp-cli erişilebilirliği)…")
+        elif tool_available:
             lines.append("Araç: enseitankado/eta-otp-cli → otp-cli.py (sadece OTP anahtarları)")
         else:
             lines.append("Araç: TiHA dahili pyotp yolu (sadece OTP anahtarları)")

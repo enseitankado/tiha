@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.async_state import AsyncValue
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd, run_cmd_stream
@@ -42,6 +43,15 @@ def _is_package_installed(name: str) -> bool:
     """``dpkg-query`` ile paket kurulu mu denetler."""
     result = run_cmd(["dpkg-query", "-W", "-f=${Status}", name])
     return result.ok and "install ok installed" in result.stdout
+
+
+# Cache: openssh-server kurulu mu? preview() bu cache'i okur, UI bloke
+# etmez. apply()/undo() doğrudan _is_package_installed çağırır (güncel
+# durumu kesin bilmek gerekir) ve sonrasında cache'i invalidate eder.
+_ssh_installed = AsyncValue(
+    lambda: _is_package_installed("openssh-server"),
+    name="m04.openssh-server",
+)
 
 
 class SSHServerModule(Module):
@@ -67,12 +77,21 @@ class SSHServerModule(Module):
     )
 
     def preview(self) -> str:
-        installed = _is_package_installed("openssh-server")
+        # AsyncValue cache'inden okuruz; cache yoksa "kontrol ediliyor"
+        # gösterip arka plan worker'ı tetikleriz. main_window
+        # prefetch_preview_state üzerinden zaten tetiklemiş olur; bu
+        # çağrı güvenlik kemeri (cache yine yoksa worker başlasın).
+        installed = _ssh_installed.get_async()
+        if installed is None:
+            return "openssh-server kurulum durumu kontrol ediliyor…"
         return (
             "openssh-server zaten kurulu — yalnızca yapılandırma eklenecek."
             if installed
             else "openssh-server kurulacak ve yapılandırma ek bir yapılandırma dosyası yazılacak."
         )
+
+    def prefetch_preview_state(self, on_ready=None) -> None:
+        _ssh_installed.get_async(on_ready)
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         # Başlangıç durumu (undo için saklanacak)
@@ -124,6 +143,7 @@ class SSHServerModule(Module):
         if progress:
             progress(f"ssh enable/reload: {'tamam' if en.ok else 'hata'} / {'tamam' if rel.ok else 'hata'}")
 
+        _ssh_installed.invalidate()
         return ApplyResult(
             True,
             "SSH sunucusu kuruldu, root girişine izin verildi.",
@@ -157,9 +177,11 @@ class SSHServerModule(Module):
             )
             run_cmd(["apt-get", "autoremove", "-y"],
                     env={"DEBIAN_FRONTEND": "noninteractive"})
+            _ssh_installed.invalidate()
             if not purge.ok:
                 return ApplyResult(False, "openssh-server kaldırılamadı.",
                                    details=purge.stderr)
             return ApplyResult(True, "SSH yapılandırması ve openssh-server paketi kaldırıldı.")
 
+        _ssh_installed.invalidate()
         return ApplyResult(True, "SSH root izni kaldırıldı (paket zaten başlangıçta kuruluydu, korundu).")

@@ -23,27 +23,15 @@ from __future__ import annotations
 
 import glob
 import subprocess
-import threading
 from pathlib import Path
 
-from gi.repository import GLib
-
+from ..core.async_state import AsyncValue
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.privilege import invoking_username
 from ..core.utils import run_cmd, run_cmd_stream
 
 log = get_logger(__name__)
-
-# ---- Bekleyen yükseltme sayısı için thread-safe önbellek + worker --------
-# ``apt-get -s -q full-upgrade`` ~3 sn senkron sürer; UI bunu doğrudan
-# çağırırsa GTK ana iş parçacığı bloke olur ve sayfa düğmeleri donar.
-# Bu yüzden değer arka planda bir thread'de hesaplanır, sonuç cache'e
-# konur ve bekleyen UI dinleyicilerine GLib.idle_add ile bildirilir.
-_pending_lock = threading.Lock()
-_pending_cache: int | None = None
-_pending_in_progress = False
-_pending_callbacks: list = []
 
 # Pardus ETAP ana depoları
 PARDUS_ETAP_REPOS = [
@@ -162,57 +150,10 @@ def _compute_pending_update_count() -> int:
     return sum(1 for line in result.stdout.splitlines() if line.startswith("Inst "))
 
 
-def pending_update_count_cached() -> int:
-    """Cache değerini döner; cache yoksa -1 (bilinmiyor)."""
-    with _pending_lock:
-        return _pending_cache if _pending_cache is not None else -1
-
-
-def pending_update_count_async(callback=None) -> int:
-    """Cache varsa onu hemen döner. Yoksa arka planda worker başlatır
-    ve -1 döner (UI'yı bloke etmeden). Worker tamamlanınca, varsa
-    ``callback(value)`` GLib.idle_add ile UI thread'inde çağrılır.
-
-    Aynı anda birden fazla çağrı gelirse tek bir worker çalışır;
-    callback listesi worker bitince hep birlikte tetiklenir.
-    """
-    global _pending_in_progress
-    with _pending_lock:
-        if _pending_cache is not None:
-            if callback is not None:
-                GLib.idle_add(callback, _pending_cache)
-            return _pending_cache
-        if callback is not None:
-            _pending_callbacks.append(callback)
-        if _pending_in_progress:
-            return -1
-        _pending_in_progress = True
-
-    def _worker() -> None:
-        global _pending_cache, _pending_in_progress
-        try:
-            value = _compute_pending_update_count()
-        except Exception as exc:
-            log.warning("pending_update_count worker hatası: %s", exc)
-            value = -1
-        with _pending_lock:
-            _pending_cache = value
-            _pending_in_progress = False
-            callbacks = list(_pending_callbacks)
-            _pending_callbacks.clear()
-        for cb in callbacks:
-            GLib.idle_add(cb, value)
-
-    threading.Thread(target=_worker, daemon=True, name="m09-pending").start()
-    return -1
-
-
-def pending_update_invalidate() -> None:
-    """Cache'i temizler; bir sonraki ``pending_update_count_async`` çağrısı
-    yeniden ölçer. ``apt-get full-upgrade`` apply'dan sonra çağrılır."""
-    global _pending_cache
-    with _pending_lock:
-        _pending_cache = None
+# Modül seviyesi AsyncValue: cache + worker + callback yönetimi
+# ``core/async_state.py`` içinden gelir. Apply başarısı sonrası
+# ``invalidate()`` çağrılır.
+_pending_updates = AsyncValue(_compute_pending_update_count, name="m09.pending")
 
 
 class SystemUpdateModule(Module):
@@ -238,11 +179,17 @@ class SystemUpdateModule(Module):
     def pending_update_count(self) -> int:
         """Bloke etmeyen cache okuyucu. Cache yoksa arka plan worker'ı
         başlatır ve -1 döner; sonuç gelince UI yeniden tazelenir."""
-        return pending_update_count_async()
+        value = _pending_updates.get_async()
+        return -1 if value is None else value
 
     def pending_update_count_async(self, callback) -> int:
         """Sonuç hazır olunca ``callback(value)`` ana thread'de çağrılır."""
-        return pending_update_count_async(callback)
+        value = _pending_updates.get_async(callback)
+        return -1 if value is None else value
+
+    def prefetch_preview_state(self, on_ready=None) -> None:
+        """Sayfa açıldığında arka planda apt sorgusunu tetikler."""
+        _pending_updates.get_async(on_ready)
 
     def preview(self) -> str:
         # Repository sağlığını kontrol et
@@ -266,8 +213,9 @@ class SystemUpdateModule(Module):
         # arka plan worker tetiklenir (UI bloke olmadan); önizleme
         # "kontrol ediliyor" gösterir ve sonuç gelince main_window
         # callback'i bu sayfayı yeniden çizdirir.
-        count = pending_update_count_async()
-        checking = count < 0 and _pending_in_progress
+        cached = _pending_updates.get_async()
+        count = -1 if cached is None else cached
+        checking = cached is None and _pending_updates.in_progress()
 
         preview_lines = ["🔍 Repository Durumu:"] + [f"  {status}" for status in repo_status]
         preview_lines.append("")
@@ -343,7 +291,7 @@ class SystemUpdateModule(Module):
                 log.error("%s başarısız", label)
 
         # Paket envanteri değişti (veya değişmiş olabilir) — cache'i tazele.
-        pending_update_invalidate()
+        _pending_updates.invalidate()
 
         if failed:
             return ApplyResult(

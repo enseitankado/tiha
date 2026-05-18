@@ -89,6 +89,19 @@ class Module:
         """Uygulamadan önce durumu özetleyen kısa metin."""
         return ""
 
+    def prefetch_preview_state(
+        self, on_ready: Callable[[object], object] | None = None
+    ) -> None:
+        """Sayfa açıldığında main_window tarafından çağrılır. Yavaş
+        senkron işleri (apt sorgusu, dpkg-query, ağ indirme vb.) arka
+        planda başlatmak için override edilir.
+
+        Worker tamamlandığında ``on_ready(value)`` UI thread'inde
+        çağrılır; main_window bunu yakalayıp sayfanın ``_refresh_preview``
+        + gate güncellemesini tetikler. Varsayılan implementasyon
+        hiçbir şey yapmaz (modülün senkron işi hızlıdır)."""
+        return None
+
     def apply_with_logging(
         self,
         params: dict | None = None,

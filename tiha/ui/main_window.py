@@ -249,6 +249,17 @@ class TiHAWindow(Gtk.Window):
         # uygulama açılış anının görüntüsü olarak kalırdı.)
         if isinstance(page, ModulePage):
             page._refresh_after_action()
+            # Yavaş senkron işleri (apt sorgusu, dpkg-query, ağ
+            # indirme...) UI thread'ini bloke etmeden arka planda
+            # başlat. Sonuç gelince main_window önizlemeyi + gate'i
+            # tazeler. Bu metodu override etmeyen modüller no-op.
+            try:
+                page.module.prefetch_preview_state(
+                    lambda v, p=page: self._on_module_state_ready(p, v)
+                )
+            except Exception as exc:
+                log.debug("prefetch_preview_state hatası (%s): %s",
+                          page.module.id, exc)
 
         if sync_sidebar:
             # Tüm adımlardan active sınıfını kaldır
@@ -293,7 +304,7 @@ class TiHAWindow(Gtk.Window):
         m09 için ``apt-get -s -q full-upgrade`` ~3 sn senkron sürer;
         UI'yı bloke etmemek için modülün async API'sini kullanıyoruz:
         cache varsa hemen değer döner, yoksa -1 (bilinmiyor) döner ve
-        sonuç gelince geri çağrımla yeniden tazeleriz.
+        sonuç gelince ``_on_module_state_ready`` ile yeniden tazeleriz.
         """
         page = self.pages[self.current_index] if self.pages else None
         gate_open = True
@@ -302,7 +313,7 @@ class TiHAWindow(Gtk.Window):
             if callable(async_fn):
                 try:
                     pending = async_fn(
-                        lambda v, p=page: self._on_pending_update_ready(p, v)
+                        lambda v, p=page: self._on_module_state_ready(p, v)
                     )
                 except Exception as exc:
                     log.debug("pending_update_count_async hatası: %s", exc)
@@ -316,9 +327,10 @@ class TiHAWindow(Gtk.Window):
                 gate_open = False
         self.btn_next.set_sensitive(gate_open)
 
-    def _on_pending_update_ready(self, page, _value: int) -> bool:
-        """m09'un arka plan worker'ı bittiğinde UI thread'inde çağrılır.
-        Eğer kullanıcı hâlâ aynı sayfadaysa önizleme + gate tazelenir."""
+    def _on_module_state_ready(self, page, _value) -> bool:
+        """Bir modülün arka plan worker'ı tamamlandığında UI thread'inde
+        çağrılır. Kullanıcı hâlâ aynı sayfadaysa önizleme + gate
+        tazelenir; başka sayfaya geçmişse sessizce çıkılır."""
         if not self.pages:
             return False
         current = self.pages[self.current_index] if self.current_index < len(self.pages) else None
