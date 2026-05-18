@@ -33,12 +33,40 @@ from ..core.utils import run_cmd, run_cmd_stream
 
 log = get_logger(__name__)
 
-# Pardus ETAP ana depoları
+# Pardus ETAP 23 ana depoları. MEB'in dağıttığı ETAP 23 imajlarında
+# birincil depo ``depo.etap.org.tr`` olarak gelir; eski dağıtımlarda
+# (ve genel Pardus kurulumlarında) ``depo.pardus.org.tr`` kullanılır.
+# Burada modern, ETAP-merkezli URL'ler liste başına alındı —
+# ``fix_repositories`` boş ya da bozuk bir sources.list'i bu kümeyle
+# yeniden yazar.
 PARDUS_ETAP_REPOS = [
-    "deb https://depo.pardus.org.tr/pardus etap-yirmiuc main contrib non-free",
-    "deb https://depo.pardus.org.tr/pardus etap-yirmiuc-deb main contrib non-free",
-    "deb https://depo.pardus.org.tr/guvenlik etap-yirmiuc main contrib non-free",
+    "deb http://depo.etap.org.tr/etap yirmiuc main contrib non-free non-free-firmware",
+    "deb http://depo.etap.org.tr/pardus yirmiuc main contrib non-free non-free-firmware",
+    "deb http://depo.etap.org.tr/pardus yirmiuc-deb main contrib non-free non-free-firmware",
+    "deb http://depo.etap.org.tr/guvenlik yirmiuc-deb main contrib non-free non-free-firmware",
 ]
+
+# Sağlık kontrolünde ana depo sayılacak host'lar. Hem yeni MEB ETAP
+# domaini hem de eski Pardus genel depo domaini kabul edilir.
+_MAIN_REPO_HOSTS = ("depo.etap.org.tr", "depo.pardus.org.tr")
+
+# ETAP 23 için kabul edilebilir suite adları: bazı eski imajlar
+# ``etap-yirmiuc`` kullanırken günceller ``yirmiuc``/``yirmiuc-deb``
+# olarak görünür.
+_MAIN_REPO_SUITES = ("yirmiuc", "yirmiuc-deb", "etap-yirmiuc", "etap-yirmiuc-deb")
+
+
+def _line_is_main_repo(line: str) -> bool:
+    """Verilen sources.list satırı ETAP'a ait bir ana depo mu?"""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return False
+    if not any(host in stripped for host in _MAIN_REPO_HOSTS):
+        return False
+    # Suite alanı tipik olarak host'tan sonraki ilk kelime; tam kelime
+    # eşleşmesi için token bazlı kontrol.
+    tokens = stripped.split()
+    return any(suite in tokens for suite in _MAIN_REPO_SUITES)
 
 
 def check_repository_health() -> dict:
@@ -55,12 +83,8 @@ def check_repository_health() -> dict:
         issues["empty_sources_list"] = True
         issues["missing_main_repos"] = True
     else:
-        # Ana Pardus depolarını ara
         content = sources_list.read_text()
-        has_main_repo = any("depo.pardus.org.tr" in line and "etap-yirmiuc" in line
-                           for line in content.splitlines()
-                           if not line.strip().startswith("#"))
-        if not has_main_repo:
+        if not any(_line_is_main_repo(line) for line in content.splitlines()):
             issues["missing_main_repos"] = True
 
     # Bozuk repository dosyalarını bul
@@ -107,12 +131,14 @@ def fix_repositories(progress=None) -> bool:
             # Ana Pardus depolarını ekle
             new_content.extend(PARDUS_ETAP_REPOS)
 
-            # Mevcut önemli 3. parti depoları koru (eğer valid ise)
+            # Mevcut önemli 3. parti depoları koru (eğer valid ise) —
+            # ana depo host'larını içeren satırlar yeniden eklenmesin,
+            # diğer (chrome/docker/node) depo satırlarını koru.
             if existing_content:
                 for line in existing_content.splitlines():
                     line = line.strip()
                     if (line and not line.startswith("#") and
-                        "depo.pardus.org.tr" not in line and
+                        not any(host in line for host in _MAIN_REPO_HOSTS) and
                         ("chrome" in line.lower() or "docker" in line.lower() or "node" in line.lower())):
                         new_content.append(line)
 

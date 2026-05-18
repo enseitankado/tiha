@@ -213,9 +213,13 @@ class TiHAWindow(Gtk.Window):
     def _on_sidebar_row_activated(self, _lb: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
         if row is None:
             return
-        self._show_page_index(row.get_index(), sync_sidebar=False)
+        # ``sync_sidebar`` argümanı kaldırıldı: hem klavye/buton hem
+        # fare tıklamasıyla gelinen yolda aynı görsel akış (aktif satır
+        # CSS sınıfı) uygulansın. ``select_row`` zaten seçili satıra
+        # çağrılırsa no-op olur, ekstra etkisi yok.
+        self._show_page_index(row.get_index())
 
-    def _show_page_index(self, index: int, *, sync_sidebar: bool = True) -> None:
+    def _show_page_index(self, index: int) -> None:
         index = max(0, min(index, len(self.pages) - 1))
         self.current_index = index
         page = self.pages[index]
@@ -261,18 +265,16 @@ class TiHAWindow(Gtk.Window):
                 log.debug("prefetch_preview_state hatası (%s): %s",
                           page.module.id, exc)
 
-        if sync_sidebar:
-            # Tüm adımlardan active sınıfını kaldır
-            for i in range(len(self.pages)):
-                old_row = self.sidebar_list.get_row_at_index(i)
-                if old_row:
-                    old_row.get_style_context().remove_class("tiha-step-active")
-
-            # Aktif adıma active sınıfını ekle
-            row = self.sidebar_list.get_row_at_index(index)
-            if row is not None:
-                self.sidebar_list.select_row(row)
-                row.get_style_context().add_class("tiha-step-active")
+        # Aktif satır görsel vurgusu — her giriş yolunda (sidebar
+        # tıklaması, İleri/Geri, programatik) tutarlı kalsın.
+        for i in range(len(self.pages)):
+            old_row = self.sidebar_list.get_row_at_index(i)
+            if old_row:
+                old_row.get_style_context().remove_class("tiha-step-active")
+        row = self.sidebar_list.get_row_at_index(index)
+        if row is not None:
+            self.sidebar_list.select_row(row)
+            row.get_style_context().add_class("tiha-step-active")
 
         # Aksiyon çubuğu görünürlüğü (Apply ve ipucu yalnızca manuel modüllerde)
         is_module = isinstance(page, ModulePage)
