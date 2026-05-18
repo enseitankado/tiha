@@ -289,23 +289,45 @@ class TiHAWindow(Gtk.Window):
         İleri pasifleşir; kullanıcı önce Uygula çalıştırmalı (ya da sol
         listeden başka adıma geçmeli). Diğer tüm sayfalarda İleri serbesttir.
         Sol listeden navigasyon hiçbir zaman engellenmez.
+
+        m09 için ``apt-get -s -q full-upgrade`` ~3 sn senkron sürer;
+        UI'yı bloke etmemek için modülün async API'sini kullanıyoruz:
+        cache varsa hemen değer döner, yoksa -1 (bilinmiyor) döner ve
+        sonuç gelince geri çağrımla yeniden tazeleriz.
         """
         page = self.pages[self.current_index] if self.pages else None
         gate_open = True
         if isinstance(page, ModulePage) and page.module.id == "m09_system_update":
-            count_fn = getattr(page.module, "pending_update_count", None)
-            if callable(count_fn):
+            async_fn = getattr(page.module, "pending_update_count_async", None)
+            if callable(async_fn):
                 try:
-                    pending = count_fn()
+                    pending = async_fn(
+                        lambda v, p=page: self._on_pending_update_ready(p, v)
+                    )
                 except Exception as exc:
-                    log.debug("pending_update_count hatası: %s", exc)
+                    log.debug("pending_update_count_async hatası: %s", exc)
                     pending = -1
-                # pending > 0 → bekleyen yükseltme var → İleri kapalı
-                # pending == 0 → güncel → İleri açık
-                # pending < 0 → bilinmiyor → İleri açık (fail-open)
-                if pending > 0:
-                    gate_open = False
+            else:
+                pending = -1
+            # pending > 0 → bekleyen yükseltme var → İleri kapalı
+            # pending == 0 → güncel → İleri açık
+            # pending < 0 → bilinmiyor (kontrol ediliyor) → İleri açık (fail-open)
+            if pending > 0:
+                gate_open = False
         self.btn_next.set_sensitive(gate_open)
+
+    def _on_pending_update_ready(self, page, _value: int) -> bool:
+        """m09'un arka plan worker'ı bittiğinde UI thread'inde çağrılır.
+        Eğer kullanıcı hâlâ aynı sayfadaysa önizleme + gate tazelenir."""
+        if not self.pages:
+            return False
+        current = self.pages[self.current_index] if self.current_index < len(self.pages) else None
+        if current is not page:
+            return False
+        if isinstance(page, ModulePage):
+            page._refresh_preview()
+        self._update_navigation_gate()
+        return False  # GLib.idle_add tek seferlik olsun
 
     def _on_back(self, _btn: Gtk.Button) -> None:
         if self.current_index == 0:
