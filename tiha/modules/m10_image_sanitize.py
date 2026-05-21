@@ -6,8 +6,8 @@ Normal iş akışımız şöyledir:
 
     1. Boş tahtaya Pardus ETAP temiz kurulum yapılır.
     2. etapadmin'e geçilir, TiHA bu komutla başlatılır.
-    3. 1–9 arası adımlar uygulanır, ardından bu adım ve ahenk kimlik
-       sıfırlama adımı (m12) çalıştırılır.
+    3. 1–9 arası adımlar uygulanır, ardından klon-yeniden-talep
+       adımı (m12) ve son olarak bu sanitize adımı çalıştırılır.
     4. Tahta bir kez yeniden başlatılır (servisler test edilir).
     5. İmaj alma aracıyla (Clonezilla vb.) diskin imajı alınır.
     6. Bu imaj diğer tahtalara uygulanır.
@@ -24,8 +24,11 @@ Normal iş akışımız şöyledir:
    silinir. Yaklaşımı virt-sysprep, cloud-init clean, BleachBit ve
    benzeri açık kaynak araçlardan esinlenir.
 
-**Ahenk kimliği** ayrı bir adımda (``m12_ahenk_reset``) ele alınır;
-o adım kısmi geri alma desteklerken bu sanitize adımı geri alınamaz.
+**Ahenk kimliği** bu adımdan önce ayrı bir adımda
+(``m12_ahenk_reset``) ele alınır — orada klon-yeniden-talep
+mekanizması (boot servisi + MAC imzası) kurulur; credential temizliği
+klonun ilk açılışında otomatik yapılır. Sanitize ahenk
+credential'larına dokunmaz.
 
 **Geri al.** Sanitize'ın geri alınması anlamlı değildir (silinen
 benzersiz kimliği geri üretemeyiz, silinen logları geri getiremeyiz).
@@ -294,7 +297,9 @@ class ImageSanitizeModule(Module):
             "  • DHCP/DHCP6 kira (lease) dosyaları\n"
             "  • /var/lib/systemd/random-seed\n\n"
             "Not: ahenk (LiderAhenk) ajan kimliği bu adımda dokunulmaz —\n"
-            "bunun için 'Ahenk kimliği sıfırla' adımını çalıştırın.\n\n"
+            "klon-yeniden-talep mekanizması bir önceki adımda (m12)\n"
+            "imaja gömülür; credential temizliği klonun ilk açılışında\n"
+            "boot servisi tarafından otomatik yapılır.\n\n"
             "Yer açan ve iz silen temizlikler:\n"
             "  • APT önbelleği ve indirilmiş .deb paketleri\n"
             "  • Yetim paketler (apt-get autoremove --purge)\n"

@@ -21,7 +21,14 @@ from .m12_ahenk_reset import AhenkResetModule
 
 
 def all_modules() -> list[Module]:
-    """Sihirbaza eklenecek tüm modüllerin sıralı örneklerini döndürür."""
+    """Sihirbaza eklenecek tüm modüllerin sıralı örneklerini döndürür.
+
+    m12 (Klon-yeniden-talep / Ahenk) m10'dan (Sanitize) **önce** gelir:
+    m12 apt-get install ahenk çalıştırabildiği için sanitize'ın APT
+    önbelleği + log temizliğinden önce tamamlanması gerekir; aksi
+    hâlde sanitize sonrası ahenk indirme tekrarı / log kirlenmesi
+    olur. Sanitize wizard akışının son adımı olmaya devam eder.
+    """
     return [
         SystemUpdateModule(),
         InitialPasswordsModule(),
@@ -33,6 +40,6 @@ def all_modules() -> list[Module]:
         TimeSyncModule(),
         HostnameModule(),
         PowerManagementModule(),
-        ImageSanitizeModule(),
         AhenkResetModule(),
+        ImageSanitizeModule(),
     ]

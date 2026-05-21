@@ -1,177 +1,373 @@
-"""Modül 12 — Ahenk (LiderAhenk) ajan kimliğini sıfırla.
+"""Modül 12 — Klon-yeniden-talep (Ahenk).
 
-**Ne yapar?**
-``ahenk`` servisini durdurur; ``/etc/ahenk/ahenk.conf`` içindeki
-``uid``, ``parola`` (password) ve ``sunucu adresi`` (host) alanlarını;
-``/etc/ahenk/config.d/messaging.conf`` içindeki Pulsar bağlantı
-alanlarını (``pulsar_host``, ``pulsar_port``,
-``tls_trust_certs_file_path``) boşaltır; yerel kayıt veritabanını
-(``/etc/ahenk/ahenk.db``) siler; ahenk günlüğünü (``/var/log/ahenk.log``)
-boşaltır. Paket kaldırılmaz.
+Bu adım klon-ı tespit edip Lider sunucusuna kayıt akışına sokan
+mekanizmayı **imaja gömer**. Wizard zamanında ahenk credential'larına
+**dokunmaz**; tüm akıllı iş klonun ilk açılışında çalışacak bir boot
+servisi tarafından yapılır.
 
-**Kazara reboot koruması.** Bu adımdan sonra tahta yanlışlıkla
-yeniden başlatılırsa ahenk'in tekrar kimlik üretip imajı kirletmesini
-önlemek için:
+**Wizard zamanında yapılanlar (apply):**
 
-  1. İmaj anındaki birincil arayüzün MAC adresi ``STATE_DIR/imaged-mac``
-     altına yazılır.
-  2. ``ahenk.service`` **disable** edilir.
-  3. ``tiha-post-image-init.service`` (oneshot) kurulur ve enabled
-     bırakılır. Bu servis her boot'ta MAC karşılaştırması yapar:
-       • **Eşit MAC → orijinal tahta**, yanlışlıkla yeniden başlatılmış;
-         hiçbir şey yapılmaz, ahenk başlatılmaz.
-       • **Farklı MAC → klon tahta**; ahenk kimliği savunma katmanıyla
-         tekrar boşaltılır, ``ahenk.service`` enable + start edilir,
-         MAC dosyası yeni MAC ile güncellenir, klon-tespit servisi
-         kendini disable eder.
-  4. eta-register backend'e MAC sorgusu attığı için klon tahtada
-     otomatik olarak yeni kayıt akışına girer; ahenk daemon Lider'e
-     kendi MAC'iyle kayıt olur ve uid/parola yeniden atanır.
+1. *MAC imzası* — kaynak tahtanın birincil arayüz MAC adresi
+   ``/var/lib/tiha/state/imaged-mac`` altına yazılır. Bu dosya klon
+   tespitinin temel sentinel'ıdır: imajla açılan bir tahtanın MAC'i
+   bu dosyadakiyle aynıysa "kaynak tahta", farklıysa "klon" demektir.
 
-**Güvenlik kemeri.** Yıkımdan önce ilgili dosyaların ham hâli
-``STATE_DIR/m12_ahenk_backup/`` altına kopyalanır. İmaj alınmadan
-vazgeçilirse Özet sayfasındaki **Geri al** düğmesi yedeği geri
-yükler, klon-tespit servisini kaldırır ve ``ahenk.service``'i tekrar
-enable + start eder.
+2. *ahenk kurulumu* — paket yoksa ``apt-get update`` +
+   ``apt-get install -y ahenk`` ile kurulur ve ``ahenk.service``
+   enable edilir. Eta-register'ın ``installer.py`` + ``opr.py`` akışı
+   örnek alınmıştır (aynı paket adı, aynı komut zinciri).
 
-**Önkoşul.** ahenk bu tahtada yüklü değilse adım atlanır (uygula
-çağrıldığında sessizce "yapılacak iş yok" mesajıyla başarı döner);
-klon-tespit servisi de kurulmaz.
+3. *Klon-reclaim servisi* —
+   ``/usr/local/sbin/tiha-clone-reclaim.py`` (Python betiği) ve
+   ``/etc/systemd/system/tiha-clone-reclaim.service`` (Type=oneshot,
+   ``Before=ahenk.service``) yazılır ve enable edilir. Her boot'ta
+   ahenk başlamadan önce çalışır.
+
+Wizard adımı credential'ları **silmez**; kaynak tahta sanitize'a kadar
+ahenk'iyle çalışmaya devam eder. Sanitize (m11) bu adımdan sonra
+çalışıp imajı son hâline getirir.
+
+**Boot servisi mantığı (klonda her açılışta):**
+
+  a. ``imaged-mac`` dosyası yoksa → çık (adım hiç uygulanmamış veya
+     dosya elle silinmiş).
+  b. Mevcut MAC == kayıtlı MAC → çık ("orijinal tahta — kazara
+     reboot", hiçbir şey yapma; ahenk normal başlasın).
+  c. Mevcut MAC ≠ kayıtlı MAC → klon tespit edildi.
+     ``GET /api/board/check?mac=<mevcut>`` ile ETAP backend'ine sorgu
+     yapılır (eta-register'ın kullandığı endpoint, hardcoded prod
+     URL: ``http://api-etap.eba.gov.tr:1000/api``).
+       - **Ağ/HTTP hatası** → işlem yapma, çık. Servis enabled kalır;
+         sonraki boot'ta tekrar dener.
+       - **Kayıtlı** (registered=True) → ``ahenk.service`` durdurulur,
+         credential'lar (uid/password/host + Pulsar alanları +
+         ``ahenk.db`` + ``ahenk.log``) sıfırlanır, ahenk yeniden
+         enable + start edilir. ahenk daemonu boş kimliği görür,
+         yeni UUID üretir, Lider'e kendi MAC'iyle kayıt akışına
+         girer. ``imaged-mac`` mevcut MAC ile imzalanır (sonraki
+         boot'larda tekrar tetiklenmesin), servis kendini disable
+         eder.
+       - **Kayıtsız** (registered=False) → ``ahenk.service``
+         durdurulur, credential'lar sıfırlanır, ahenk **disable**
+         edilir ve servis kendini disable eder. Bu noktada
+         kullanıcı etapadmin oturumu açıp eta-register'la tahtayı
+         kaydedecek; eta-register kayıt sonrası ahenk'i otomatik
+         enable + start eder.
+
+Tasarım gerekçesi: credential temizliğini boot anına ertelemek, kaynak
+tahtanın imajı alınana dek normal işlemesine imkân tanır. Klon kayıtsız
+durumda olsa bile credential'ları silmek, ahenk'in eski uid/parola ile
+Pulsar'a bağlanıp Lider'de Exclusive consumer çakışmasına / cross-board
+impersonation'a yol açmasını **kesinlikle engeller**.
+
+**Geri al.** Klon-reclaim servisi (.service + .sh) ve ``imaged-mac``
+dosyası kaldırılır, ``systemctl daemon-reload`` çalıştırılır. ahenk
+paketi TiHA tarafından kurulduysa ``apt-get purge`` ile sökülür ve
+``autoremove`` çalıştırılır; daha önce zaten kuruluysa korunur.
+Wizard ahenk credential'larına dokunmadığı için geri yüklenecek bir
+yedek yoktur.
+
+Akışın görsel şeması ve ayrıntılı gerekçeler için bakınız:
+``docs/m12-clone-reclaim.md``.
 """
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import STATE_DIR
-from ..core.utils import run_cmd
+from ..core.utils import run_cmd, run_cmd_stream
 
 log = get_logger(__name__)
 
-AHENK_BACKUP_DIR = STATE_DIR / "m12_ahenk_backup"
-AHENK_CONF = Path("/etc/ahenk/ahenk.conf")
-AHENK_MSG_CONF = Path("/etc/ahenk/config.d/messaging.conf")
-AHENK_DB = Path("/etc/ahenk/ahenk.db")
-AHENK_LOG = Path("/var/log/ahenk.log")
+# --- Yerel kurulum yolları ----------------------------------------------------
 
-# Klon tespiti için: imaj alma anındaki birincil arayüzün MAC adresi.
-# Boot anında bu dosya okunur ve mevcut MAC ile karşılaştırılır:
-#   eşit  → orijinal tahta (kazara reboot) — ahenk başlatılmaz
-#   farklı → yeni donanım (klon) — ahenk temizle + enable + start
+# Kaynak tahta imzası: imajın alındığı anda birincil arayüzün MAC'i.
+# Boot servisi bu dosya yoksa hemen çıkar (klon değil veya adım uygulanmamış).
 IMAGED_MAC_FILE = STATE_DIR / "imaged-mac"
-POST_IMAGE_SERVICE = Path("/etc/systemd/system/tiha-post-image-init.service")
-POST_IMAGE_SCRIPT = Path("/usr/local/sbin/tiha-post-image-init.sh")
-POST_IMAGE_SERVICE_NAME = POST_IMAGE_SERVICE.name
+
+# Klon-reclaim çalıştırılabilir betiği ve systemd unit'i.
+RECLAIM_SCRIPT = Path("/usr/local/sbin/tiha-clone-reclaim.py")
+RECLAIM_SERVICE = Path("/etc/systemd/system/tiha-clone-reclaim.service")
+RECLAIM_SERVICE_NAME = RECLAIM_SERVICE.name
 
 
-POST_IMAGE_SCRIPT_CONTENT = f"""#!/bin/bash
-# TiHA — klon tespiti ve ahenk yeniden kayıt akışına sevk.
-#
-# Mantık:
-#   1. m12 (Ahenk kimliği sıfırla) uygulandığında imaj anındaki birincil
-#      MAC adresi {IMAGED_MAC_FILE} altına yazılır ve ahenk.service
-#      disable edilir.
-#   2. Bu betik her boot'ta çalışır. Mevcut MAC eşitse orijinal tahta
-#      yanlışlıkla yeniden başlatılmış demektir; hiçbir şey yapılmaz
-#      ve ahenk başlatılmaz — imaj kirletilmez.
-#   3. Mevcut MAC farklıysa yeni donanım (klon) açılmış demektir.
-#      ahenk kimliği bir savunma katmanı olarak tekrar boşaltılır;
-#      ahenk.service enable + start edilir. ahenk daemonu boş kimliği
-#      görüp Lider'e kendi MAC'iyle yeniden kayıt akışına girer.
-#      Ardından bu MAC dosyası güncellenir ve servis kendini disable
-#      eder; sonraki boot'larda artık bir şey yapmaz.
-#
-# eta-register yerel sentinel bırakmaz; backend'e GET /board/check?mac=...
-# sorgusu atar. MAC değiştiği için backend "not registered" döner ve
-# eta-register XDG autostart üzerinden zaten yeni kayıt akışına girer.
-set -uo pipefail
+# --- Boot servisi Python betiği -----------------------------------------------
+# Aşağıdaki şablon @@PLACEHOLDER@@ ile değiştirilen yer-tutucular dışında
+# olduğu gibi diske yazılır. f-string KULLANMIYORUZ — iç Python f-string
+# ifadeleri ({...}) ile çakışmasın diye. Yer-tutucular:
+#   @@SAVED_MAC_FILE@@    → IMAGED_MAC_FILE mutlak yolu
+#   @@SERVICE_NAME@@      → systemd unit dosya adı
+RECLAIM_SCRIPT_TEMPLATE = '''#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""tiha-clone-reclaim — klon tespiti ve Ahenk yeniden talep akışı.
 
-SAVED_MAC_FILE="{IMAGED_MAC_FILE}"
-LOG_TAG="tiha-post-image-init"
+Her boot'ta ``ahenk.service``'ten ÖNCE çalışır. Klon tespit ederse
+ETAP backend'ine ``/api/board/check?mac=...`` sorgusu atar; tahta
+kayıtlıysa ahenk credential'larını sıfırlayıp ahenk'i yeniden başlatır.
+Kayıtsızsa ahenk durdurulur, credential'lar sıfırlanır ve ahenk
+disable edilir (kullanıcı eta-register ile kayıt yapacak).
 
-log() {{ logger -t "$LOG_TAG" -- "$@"; echo "[$LOG_TAG] $*" >&2; }}
-
-[[ -f "$SAVED_MAC_FILE" ]] || {{ log "MAC dosyası yok, atlanıyor."; exit 0; }}
-
-# Birincil kablolu arayüzü bul; default route varsa onu kullan, yoksa
-# /sys/class/net altındaki ilk fiziksel arayüzü seç.
-iface=$(ip -o -4 route show to default 2>/dev/null | awk '{{print $5}}' | head -n1)
-if [[ -z "$iface" || ! -d "/sys/class/net/$iface" ]]; then
-    for cand in /sys/class/net/*; do
-        name=$(basename "$cand")
-        [[ "$name" == "lo" ]] && continue
-        [[ -L "$cand/device" ]] || continue
-        iface="$name"
-        break
-    done
-fi
-
-if [[ -z "$iface" || ! -r "/sys/class/net/$iface/address" ]]; then
-    log "Birincil arayüz tespit edilemedi, atlanıyor."
-    exit 0
-fi
-
-current_mac=$(cat "/sys/class/net/$iface/address" 2>/dev/null | tr 'A-F' 'a-f')
-saved_mac=$(cat "$SAVED_MAC_FILE" 2>/dev/null | tr -d '[:space:]' | tr 'A-F' 'a-f')
-
-if [[ -z "$current_mac" || -z "$saved_mac" ]]; then
-    log "MAC okuma başarısız (cur='$current_mac' saved='$saved_mac'), atlanıyor."
-    exit 0
-fi
-
-if [[ "$current_mac" == "$saved_mac" ]]; then
-    log "MAC eşleşti ($current_mac); orijinal tahta — ahenk başlatılmıyor."
-    exit 0
-fi
-
-log "MAC değişti ($saved_mac → $current_mac); klon tespit edildi, ahenk yeniden kayıt akışına alınıyor."
-
-# Savunma katmanı: m12 zaten boşaltmıştı, garantiye al.
-[[ -f /etc/ahenk/ahenk.conf ]] && sed -i -E 's/^(uid|password|host)[[:space:]]*=.*/\\1 =/' /etc/ahenk/ahenk.conf || true
-[[ -f /etc/ahenk/config.d/messaging.conf ]] && sed -i -E 's/^(pulsar_host|pulsar_port|tls_trust_certs_file_path)[[:space:]]*=.*/\\1 =/' /etc/ahenk/config.d/messaging.conf || true
-rm -f /etc/ahenk/ahenk.db
-: > /var/log/ahenk.log 2>/dev/null || true
-
-# ahenk'i etkinleştir ve başlat — kimlik üretip Lider'e MAC ile kayıt olur.
-systemctl enable --now ahenk.service || log "ahenk.service başlatılamadı"
-
-# Bu tahta artık 'imaj kaynağı' değil — kendi MAC'iyle imzala ki sonraki
-# boot'larda tekrar tetiklenmesin.
-echo "$current_mac" > "$SAVED_MAC_FILE"
-
-# Servisin kendisini disable et (artık iş bitti).
-systemctl disable {POST_IMAGE_SERVICE_NAME} || true
-
-log "Tamamlandı; bu servis disable edildi."
+Tasarımı için: ``tiha/modules/m12_ahenk_reset.py`` ve
+``docs/m12-clone-reclaim.md``.
 """
 
-POST_IMAGE_SERVICE_CONTENT = f"""[Unit]
-Description=TiHA — İmaj sonrası klon tespiti ve ahenk yeniden kayıt akışı
-After=local-fs.target network.target
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+# --- Sabitler ---------------------------------------------------------------
+
+SAVED_MAC_FILE = Path("@@SAVED_MAC_FILE@@")
+AHENK_CONF     = Path("/etc/ahenk/ahenk.conf")
+AHENK_MSG_CONF = Path("/etc/ahenk/config.d/messaging.conf")
+AHENK_DB       = Path("/etc/ahenk/ahenk.db")
+AHENK_LOG      = Path("/var/log/ahenk.log")
+
+# Eta-register ile aynı production endpoint. Test/dev için elle düzenle.
+BACKEND_URL  = "http://api-etap.eba.gov.tr:1000/api"
+APP_CODE     = "eta_register!"
+HTTP_TIMEOUT = 15
+
+SERVICE_NAME = "@@SERVICE_NAME@@"
+LOG_TAG      = "tiha-clone-reclaim"
+
+
+def note(msg: str) -> None:
+    """journald + stderr'e tek satırlık not."""
+    try:
+        subprocess.run(["logger", "-t", LOG_TAG, "--", msg], check=False)
+    except Exception:
+        pass
+    print(f"[{LOG_TAG}] {msg}", file=sys.stderr)
+
+
+def primary_mac() -> str | None:
+    """Default route arayüzünün MAC'i; yoksa ilk fiziksel arayüz.
+    Lowercase ``aa:bb:cc:dd:ee:ff`` formatında döner."""
+    iface = ""
+    try:
+        out = subprocess.run(
+            ["ip", "-o", "-4", "route", "show", "to", "default"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        parts = out.split()
+        for i, tok in enumerate(parts):
+            if tok == "dev" and i + 1 < len(parts):
+                iface = parts[i + 1]
+                break
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    if not iface or not Path(f"/sys/class/net/{iface}").is_dir():
+        net_root = Path("/sys/class/net")
+        if net_root.is_dir():
+            for entry in sorted(net_root.iterdir()):
+                if entry.name == "lo":
+                    continue
+                if (entry / "device").is_symlink():
+                    iface = entry.name
+                    break
+
+    if not iface:
+        return None
+    addr_path = Path(f"/sys/class/net/{iface}/address")
+    if not addr_path.is_file():
+        return None
+    try:
+        return addr_path.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return None
+
+
+def query_registered(mac: str) -> bool | None:
+    """GET /api/board/check?mac=<MAC>.
+       True  → kayıtlı
+       False → kayıtsız
+       None  → ağ/HTTP/parse hatası (bu boot atlanır)."""
+    url = f"{BACKEND_URL}/board/check?mac={mac}"
+    req = urllib.request.Request(url, headers={
+        "etap-app-code": APP_CODE,
+        "Accept": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            return bool(body.get("registered"))
+    except urllib.error.HTTPError as e:
+        # Backend bazı durumlarda 4xx/5xx ile de geçerli JSON döner
+        # (eta-register'ın interpret_device_status mantığı).
+        try:
+            body = json.loads(e.read().decode("utf-8"))
+            if isinstance(body, dict) and "registered" in body:
+                return bool(body["registered"])
+        except Exception:
+            pass
+        note(f"HTTPError: {e.code} {e.reason}")
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+        note(f"API sorgu hatası: {e}")
+        return None
+
+
+def wipe_ahenk_credentials() -> None:
+    """ahenk.conf uid/password/host alanlarını boşaltır; messaging.conf
+    Pulsar bağlantı alanlarını boşaltır; ahenk.db'yi siler;
+    ahenk.log'u boşaltır. configparser ExtendedInterpolation
+    quirk'lerinden kaçınmak için satır-bazlı regex kullanır."""
+    if AHENK_CONF.is_file():
+        try:
+            txt = AHENK_CONF.read_text(encoding="utf-8")
+            new = re.sub(
+                r"^(\\s*)(uid|password|host)(\\s*)=.*$",
+                lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}=",
+                txt, flags=re.MULTILINE,
+            )
+            AHENK_CONF.write_text(new, encoding="utf-8")
+        except OSError as e:
+            note(f"ahenk.conf yazılamadı: {e}")
+
+    if AHENK_MSG_CONF.is_file():
+        try:
+            txt = AHENK_MSG_CONF.read_text(encoding="utf-8")
+            new = re.sub(
+                r"^(\\s*)(pulsar_host|pulsar_port|tls_trust_certs_file_path)(\\s*)=.*$",
+                lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}=",
+                txt, flags=re.MULTILINE,
+            )
+            AHENK_MSG_CONF.write_text(new, encoding="utf-8")
+        except OSError as e:
+            note(f"messaging.conf yazılamadı: {e}")
+
+    try:
+        AHENK_DB.unlink(missing_ok=True)
+    except OSError:
+        pass
+    try:
+        if AHENK_LOG.is_file():
+            AHENK_LOG.write_text("", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def systemctl(*args: str) -> None:
+    """Sessiz systemctl çağrısı; hata durumunda günceye not."""
+    try:
+        subprocess.run(["systemctl", *args], check=False)
+    except FileNotFoundError:
+        note(f"systemctl bulunamadı: {args}")
+
+
+def disable_self() -> None:
+    systemctl("disable", SERVICE_NAME)
+
+
+def main() -> int:
+    # 1) İmza dosyası yok → adım uygulanmamış veya elle silinmiş; çık.
+    if not SAVED_MAC_FILE.is_file():
+        note("İmza dosyası yok; klon olmadığı varsayılıyor.")
+        return 0
+
+    # 2) Mevcut MAC
+    cur = primary_mac()
+    if not cur:
+        note("Birincil arayüzün MAC'i tespit edilemedi; atlanıyor.")
+        return 0
+
+    # 3) Kayıtlı MAC
+    try:
+        saved = SAVED_MAC_FILE.read_text(encoding="utf-8").strip().lower()
+    except OSError as e:
+        note(f"İmza dosyası okunamadı: {e}")
+        return 0
+
+    # 4) Eşit → kaynak tahta, sessizce devam.
+    if cur == saved:
+        note(f"MAC eşleşti ({cur}); kaynak tahta — yapılacak iş yok.")
+        return 0
+
+    # 5) Klon tespit edildi → API sorgu.
+    note(f"MAC değişti ({saved} → {cur}); klon — API sorgusu yapılıyor.")
+    registered = query_registered(cur)
+    if registered is None:
+        note("API'ye ulaşılamadı; bu boot atlanıyor (servis enabled kalır).")
+        return 0
+
+    # 6) ahenk'i durdur, credential'ları sıfırla (her iki yolda da).
+    note("ahenk.service durduruluyor; credential'lar sıfırlanıyor.")
+    systemctl("stop", "ahenk.service")
+    wipe_ahenk_credentials()
+
+    if registered:
+        # Kayıtlı klon → ahenk yeniden başlatılır; yeni MAC ile Lider'e
+        # kayıt akışına girer.
+        note("Tahta API'de KAYITLI; ahenk yeniden enable + start ediliyor.")
+        systemctl("enable", "ahenk.service")
+        systemctl("start", "ahenk.service")
+        # Yeni MAC ile imzala — bir daha tetiklenmesin.
+        try:
+            SAVED_MAC_FILE.write_text(cur + "\\n", encoding="utf-8")
+        except OSError as e:
+            note(f"İmza dosyası güncellenemedi: {e}")
+        disable_self()
+        note("Tamamlandı; klon-reclaim servisi disable edildi.")
+        return 0
+
+    # 7) Kayıtsız klon → credential'lar zaten silindi; ahenk'i disable et.
+    #    Kullanıcı eta-register ile kayıt yaptığında installer akışı
+    #    ahenk'i tekrar enable + start edecek.
+    note("Tahta API'de KAYITSIZ; ahenk disable edildi. "
+         "Kullanıcı etapadmin oturumu açıp eta-register ile "
+         "tahtayı kaydetmelidir.")
+    systemctl("disable", "ahenk.service")
+    disable_self()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+
+
+def _build_reclaim_script() -> str:
+    return (RECLAIM_SCRIPT_TEMPLATE
+            .replace("@@SAVED_MAC_FILE@@", str(IMAGED_MAC_FILE))
+            .replace("@@SERVICE_NAME@@", RECLAIM_SERVICE_NAME))
+
+
+# --- systemd unit ------------------------------------------------------------
+RECLAIM_SERVICE_TEMPLATE = '''[Unit]
+Description=TiHA — Klon tespiti ve Ahenk yeniden talep akışı
+Documentation=file:///usr/share/doc/tiha/m12-clone-reclaim.md
+After=local-fs.target network-online.target
+Wants=network-online.target
 Before=ahenk.service
 
 [Service]
 Type=oneshot
-ExecStart={POST_IMAGE_SCRIPT}
+ExecStart=@@RECLAIM_SCRIPT@@
 RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-"""
+'''
 
 
-def _truncate(path: Path) -> bool:
-    try:
-        if path.exists():
-            path.write_text("", encoding="utf-8")
-            return True
-    except OSError as exc:
-        log.warning("Boşaltılamadı %s: %s", path, exc)
-    return False
+def _build_reclaim_service() -> str:
+    return RECLAIM_SERVICE_TEMPLATE.replace("@@RECLAIM_SCRIPT@@", str(RECLAIM_SCRIPT))
 
+
+# --- Yardımcılar -------------------------------------------------------------
 
 def _rm(path: Path) -> bool:
     try:
@@ -188,7 +384,6 @@ def _primary_mac() -> str | None:
     Önce default route'un arayüzü; yoksa /sys/class/net altındaki ilk
     fiziksel (device symlink'i olan) arayüz seçilir. Lower-case döner.
     """
-    import os
     result = run_cmd(["ip", "-o", "-4", "route", "show", "to", "default"], check=False)
     iface = ""
     if result.ok and result.stdout:
@@ -217,270 +412,249 @@ def _primary_mac() -> str | None:
         return None
 
 
+def _is_ahenk_installed() -> bool:
+    """dpkg-query ile ahenk paketi kurulu mu denetler."""
+    result = run_cmd(["dpkg-query", "-W", "-f=${Status}", "ahenk"], check=False)
+    return result.ok and "install ok installed" in result.stdout
+
+
+# --- Modül -------------------------------------------------------------------
+
 class AhenkResetModule(Module):
     id = "m12_ahenk_reset"
-    title = "Ahenk kimliği sıfırla"
-    sidebar_title = "Ahenk kimliği"
+    title = "Klon-yeniden-talep (Ahenk)"
+    sidebar_title = "Klon Yeniden Talep"
+    streams_output = True
     popup_on_success = True
     apply_hint = (
-        "ahenk Pulsar bağlantısı kesilir; UID/parola/DB/günlük temizlenir, "
-        "MAC-bazlı kazara reboot koruması kurulur."
+        "Kaynak MAC kaydedilir, ahenk yoksa kurulur, klon-reclaim "
+        "boot servisi devreye alınır."
     )
     rationale = (
-        "Bir tahtanın imajı klonlanmadan önce LiderAhenk ajanının yerel "
-        "kimliği sıfırlanmalıdır. Aksi hâlde tüm klonlar aynı UID/parola "
-        "ile MEB Pulsar broker'ına bağlanır; aynı kimliğe sahip iki "
-        "tahta Pulsar'da Exclusive consumer çakışması yaşar ve "
-        "cross-board impersonation (bir tahta üzerinden gönderilen "
-        "komutun başka bir tahtaya geçmesi) mümkün hâle gelir.\n\n"
-        "Bu adım önce o tahtaya özel verileri temizler: ahenk.conf'taki "
-        "uid / parola / sunucu adresi alanları ile messaging.conf'taki "
-        "Pulsar bağlantı alanları boşaltılır, yerel kayıt veritabanı "
-        "(ahenk.db) silinir, ahenk günlüğü boşaltılır. Paket kaldırılmaz; "
-        "kurulum bütünlüğü korunur.\n\n"
-        "Kazara yeniden başlatmaya karşı koruma: m12 ahenk servisini "
-        "disable eder ve imaj anındaki MAC adresini yedek dosyaya "
-        "yazar; her boot'ta çalışan küçük bir oneshot servis MAC'i "
-        "karşılaştırır. Aynı MAC ise (orijinal tahta yanlışlıkla "
-        "yeniden başlatılmış) ahenk başlatılmaz — imaj kirletilmez. "
-        "Farklı MAC ise (klon tahta açıldı) ahenk savunma katmanıyla "
-        "tekrar temizlenir, etkinleştirilir ve başlatılır; ahenk daemon "
-        "Lider'e kendi MAC'iyle kayıt olur. eta-register backend'e MAC "
-        "sorgusu attığı için yeni kayıt akışı otomatik tetiklenir.\n\n"
-        "Güvenlik kemeri: yıkımdan önce dosyalar TiHA'nın özel "
-        "klasörüne yedeklenir. İmajı almadan fikrinizi değiştirirseniz "
-        "Özet sayfasındaki 'Geri al' düğmesi yedeği geri yükler, klon "
-        "tespit servisini kaldırır ve ahenk'i tekrar enable + start "
-        "eder; tahta Lider'e eski kimliğiyle bağlanmaya devam eder."
+        "Bu adım, imajdan klonlanan tahtaların ahenk ajan kimliğini "
+        "**ilk açılışta otomatik** yenilemek için kullanılan boot "
+        "servisini imaja gömer. Klon makineler imaj kaynağıyla aynı "
+        "Pulsar credential'larını (uid + parola) kullanırsa Lider "
+        "tarafında aynı kimliğe sahip iki ajan oluşur — Pulsar "
+        "Exclusive consumer çakışması yaşanır ve cross-board "
+        "impersonation kaçınılmazdır.\n\n"
+        "Wizard zamanında: kaynak tahtanın birincil MAC adresi "
+        "/var/lib/tiha/state/imaged-mac dosyasına yazılır; ahenk "
+        "paketi yoksa eta-register'ın installer akışı örnek alınarak "
+        "kurulur (apt update + apt install -y ahenk + systemctl "
+        "enable ahenk.service); bir Python boot servisi (tiha-clone-"
+        "reclaim.service) yazılır ve enable edilir. Ahenk "
+        "credential'larına ŞU AŞAMADA DOKUNULMAZ; kaynak tahta "
+        "sanitize'a kadar kendi kimliğiyle çalışır.\n\n"
+        "Klon ilk açıldığında: boot servisi MAC karşılaştırması yapar. "
+        "Eşitse hiçbir şey yapmaz (kaynak tahtanın kazara reboot'u). "
+        "Farklıysa ETAP backend'ine GET /api/board/check?mac=<mevcut> "
+        "atar. Kayıtlıysa ahenk credential'larını siler, ahenk'i "
+        "yeniden başlatır (yeni UUID üretip Lider'e kendi MAC'iyle "
+        "kayıt olur), boot servisi kendini disable eder. Kayıtsızsa "
+        "yine credential'ları siler ama ahenk'i disable eder; "
+        "kullanıcı etapadmin oturumu açıp eta-register ile tahtayı "
+        "kaydedince ahenk otomatik enable + start edilir (eta-"
+        "register installer akışı zaten bunu yapar).\n\n"
+        "Akışın görsel şeması ve gerekçeleri için: "
+        "docs/m12-clone-reclaim.md."
     )
     undo_supported = True
 
     def preview(self) -> str:
-        if not AHENK_CONF.exists():
-            return (
-                "ahenk bu tahtada yüklü değil — yapılacak bir iş yok.\n"
-                "Uygula çalıştırıldığında adım atlanır."
-            )
-
-        msg_conf_present = AHENK_MSG_CONF.exists()
-        db_present = AHENK_DB.exists()
-        log_present = AHENK_LOG.exists()
-
-        current_mac = _primary_mac() or "(tespit edilemedi)"
+        mac = _primary_mac() or "(tespit edilemedi)"
+        ahenk_kurulu = _is_ahenk_installed()
         lines = [
-            "Aşağıdaki ahenk dosyaları sıfırlanacak:",
-            f"  • {AHENK_CONF} → uid / parola / sunucu adresi alanları boşaltılacak",
+            "Bu adımda yapılacaklar:",
+            f"  • Kaynak MAC ({mac}) → {IMAGED_MAC_FILE}",
             (
-                f"  • {AHENK_MSG_CONF} → Pulsar bağlantı alanları boşaltılacak"
-                if msg_conf_present
-                else f"  • {AHENK_MSG_CONF} → mevcut değil, atlanacak"
+                "  • ahenk paketi zaten kurulu — yeniden kurulmayacak."
+                if ahenk_kurulu
+                else "  • ahenk paketi kurulu DEĞİL — apt update + apt install -y ahenk"
+                     " çalıştırılacak, ahenk.service enable edilecek."
             ),
-            (
-                f"  • {AHENK_DB} → yerel kayıt veritabanı silinecek"
-                if db_present
-                else f"  • {AHENK_DB} → zaten yok"
-            ),
-            (
-                f"  • {AHENK_LOG} → günlük dosyası boşaltılacak (eski uid/IP izleri)"
-                if log_present
-                else f"  • {AHENK_LOG} → mevcut değil"
-            ),
+            f"  • {RECLAIM_SCRIPT}",
+            f"  • {RECLAIM_SERVICE} (Type=oneshot, Before=ahenk.service)",
+            f"  • systemctl enable {RECLAIM_SERVICE_NAME}",
             "",
-            "Kazara yeniden başlatmaya karşı koruma:",
-            f"  • Mevcut MAC ({current_mac}) {IMAGED_MAC_FILE} altına yazılır.",
-            "  • ahenk.service DISABLE edilir (reboot'ta otomatik başlamasın).",
-            f"  • {POST_IMAGE_SERVICE_NAME} kurulur ve enabled bırakılır:",
-            "    her boot'ta MAC karşılaştırması yapar.",
-            "      – Aynı MAC → orijinal tahta yanlışlıkla yeniden başlatıldı;",
-            "        ahenk başlatılmaz, imaj kirletilmez.",
-            "      – Farklı MAC → klon tahta; ahenk savunma katmanıyla tekrar",
-            "        temizlenir, enable + start edilir, MAC dosyası güncellenir,",
-            "        servis kendini disable eder. ahenk Lider'e MAC ile kayıt olur.",
-            "        eta-register zaten backend'e MAC sorgusu attığı için yeni",
-            "        kayıt akışını otomatik tetikler.",
+            "Bu wizard'da ahenk credential'larına DOKUNULMAZ — kaynak "
+            "tahta normal çalışmaya devam eder. Tüm credential temizliği "
+            "klonun ilk açılışında, boot servisi tarafından yapılır.",
             "",
-            "Kısmi geri alma:",
-            f"  • Yıkımdan önce dosyalar {AHENK_BACKUP_DIR} altına yedeklenir.",
-            "  • Özet sayfasındaki 'Geri al' yedeği geri yükler, klon-tespit",
-            "    servisini kaldırır ve ahenk'i tekrar enable + start eder.",
+            "Klon makinedeki davranış (her boot, ahenk'ten önce):",
+            "  ┌── İmza dosyası yok ───────► çık (klon değil/uygulanmamış)",
+            "  ├── MAC eşit ────────────────► çık (kaynak tahta)",
+            "  └── MAC farklı (klon)",
+            "       │",
+            "       ├── API hatası ─────────► bu boot atla, sonraki dene",
+            "       ├── Kayıtlı ────────────► ahenk credential temizle,",
+            "       │                          ahenk restart, servis disable",
+            "       └── Kayıtsız ───────────► ahenk credential temizle,",
+            "                                   ahenk disable, servis disable",
+            "                                   (kullanıcı eta-register'la kayıt yapar)",
+            "",
+            "Geri al: boot servisi + imza dosyası kaldırılır; ahenk paketi",
+            "TiHA kurduysa apt-get purge ile sökülür, daha önce kuruluysa korunur.",
         ]
         return "\n".join(lines)
 
-    def apply(self, params: dict | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
-        if not AHENK_CONF.exists():
-            return ApplyResult(
-                True,
-                "ahenk bu tahtada yüklü değil — adım atlandı.",
-                data={"ahenk_backed_up": False, "skipped": True},
-            )
+    def apply(
+        self,
+        params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
+        # Başlangıç durumu — undo için
+        was_installed_before = _is_ahenk_installed()
 
+        # 1) MAC'i tespit et ve imza dosyasına yaz
         mac = _primary_mac()
         if not mac:
             return ApplyResult(
                 False,
                 "Birincil ağ arayüzünün MAC adresi tespit edilemedi; "
-                "klon koruma servisi kurulamadı, adım iptal edildi.",
+                "klon-reclaim servisi kurulamaz, adım iptal edildi.",
             )
-
         if progress:
-            progress("ahenk servisi durduruluyor…")
-        run_cmd(["systemctl", "stop", "ahenk.service"], check=False)
-
-        # 1) Yedek al
-        ahenk_backed_up = False
-        if progress:
-            progress(f"Yedek alınıyor: {AHENK_BACKUP_DIR}")
+            progress(f"Kaynak MAC: {mac}")
         try:
-            AHENK_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(AHENK_CONF, AHENK_BACKUP_DIR / "ahenk.conf")
-            if AHENK_MSG_CONF.exists():
-                shutil.copy2(AHENK_MSG_CONF, AHENK_BACKUP_DIR / "messaging.conf")
-            if AHENK_DB.exists():
-                shutil.copy2(AHENK_DB, AHENK_BACKUP_DIR / "ahenk.db")
-            ahenk_backed_up = True
+            IMAGED_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
+            IMAGED_MAC_FILE.write_text(mac + "\n", encoding="utf-8")
         except OSError as exc:
-            log.warning("ahenk kimlik yedeği alınamadı: %s", exc)
-
-        # 2) ahenk.conf alanlarını boşalt
+            return ApplyResult(False, f"İmza dosyası yazılamadı: {exc}")
         if progress:
-            progress("ahenk.conf: uid / parola / sunucu adresi boşaltılıyor")
-        run_cmd(
-            ["sed", "-i", "-E",
-             r"s/^(uid|password|host)\s*=.*/\1 =/",
-             str(AHENK_CONF)],
-            check=False,
-        )
+            progress(f"İmza yazıldı: {IMAGED_MAC_FILE}")
 
-        # 3) messaging.conf Pulsar alanları
-        if AHENK_MSG_CONF.exists():
+        # 2) ahenk yüklü değilse kur (eta-register installer akışını taklit et)
+        if not was_installed_before:
             if progress:
-                progress("messaging.conf: Pulsar bağlantı alanları boşaltılıyor")
-            run_cmd(
-                ["sed", "-i", "-E",
-                 r"s/^(pulsar_host|pulsar_port|tls_trust_certs_file_path)\s*=.*/\1 =/",
-                 str(AHENK_MSG_CONF)],
-                check=False,
+                progress("\n==== apt-get update ====")
+            upd = run_cmd_stream(
+                ["apt-get", "update"],
+                progress=progress,
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+                timeout=300,
             )
-
-        # 4) Yerel kayıt veritabanı
-        if AHENK_DB.exists():
+            if not upd.ok:
+                return ApplyResult(
+                    False,
+                    "apt-get update başarısız.",
+                    data={"was_installed_before": False},
+                )
             if progress:
-                progress("ahenk.db siliniyor")
-            _rm(AHENK_DB)
-
-        # 5) Günlük dosyası
-        if AHENK_LOG.exists():
+                progress("\n==== apt-get install -y ahenk ====")
+            inst = run_cmd_stream(
+                ["apt-get", "install", "-y", "ahenk"],
+                progress=progress,
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+                timeout=900,
+            )
+            if not inst.ok:
+                return ApplyResult(
+                    False,
+                    "ahenk kurulumu başarısız.",
+                    data={"was_installed_before": False},
+                )
             if progress:
-                progress("ahenk.log boşaltılıyor")
-            _truncate(AHENK_LOG)
+                progress("ahenk.service enable ediliyor (start edilmiyor — "
+                         "ahenk kendi kayıt akışı boot'ta çalışır).")
+            run_cmd(["systemctl", "enable", "ahenk.service"], check=False)
+        else:
+            if progress:
+                progress("ahenk paketi zaten kurulu — kurulum atlanıyor.")
 
-        # 6) Klon tespit servisini kur ve ahenk.service'i disable et.
-        # Kazara reboot olursa ahenk otomatik başlamaz; klon ilk boot'unda
-        # tiha-post-image-init.service MAC değişikliğini tespit edip
-        # ahenk'i yeniden devreye alır.
+        # 3) Boot servisi: betik + unit yaz, enable et
         if progress:
-            progress(f"Klon tespit servisi kuruluyor: {POST_IMAGE_SERVICE_NAME}")
-
-        IMAGED_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
-        IMAGED_MAC_FILE.write_text(mac + "\n", encoding="utf-8")
-
-        POST_IMAGE_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
-        POST_IMAGE_SCRIPT.write_text(POST_IMAGE_SCRIPT_CONTENT, encoding="utf-8")
-        POST_IMAGE_SCRIPT.chmod(0o755)
-
-        POST_IMAGE_SERVICE.write_text(POST_IMAGE_SERVICE_CONTENT, encoding="utf-8")
+            progress(f"\nBoot servisi yazılıyor: {RECLAIM_SERVICE_NAME}")
+        try:
+            RECLAIM_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
+            RECLAIM_SCRIPT.write_text(_build_reclaim_script(), encoding="utf-8")
+            RECLAIM_SCRIPT.chmod(0o755)
+            RECLAIM_SERVICE.write_text(_build_reclaim_service(), encoding="utf-8")
+        except OSError as exc:
+            return ApplyResult(
+                False,
+                f"Boot servisi dosyaları yazılamadı: {exc}",
+                data={"was_installed_before": was_installed_before},
+            )
         run_cmd(["systemctl", "daemon-reload"], check=False)
-        run_cmd(["systemctl", "enable", POST_IMAGE_SERVICE_NAME], check=False)
-
-        # ahenk'in kendisini disable et — sadece tiha-post-image-init
-        # tarafından (MAC değişikliği sonrası) tekrar etkinleştirilecek.
+        en = run_cmd(["systemctl", "enable", RECLAIM_SERVICE_NAME], check=False)
+        if not en.ok:
+            return ApplyResult(
+                False,
+                f"{RECLAIM_SERVICE_NAME} enable edilemedi.",
+                details=en.stderr,
+                data={"was_installed_before": was_installed_before},
+            )
         if progress:
-            progress("ahenk.service disable ediliyor (kazara reboot koruması)")
-        run_cmd(["systemctl", "disable", "ahenk.service"], check=False)
+            progress(f"{RECLAIM_SERVICE_NAME} enable edildi.")
 
         details = (
-            f"Yedek: {AHENK_BACKUP_DIR}\n"
-            "Sıfırlanan alanlar: uid, parola, sunucu adresi, "
-            "pulsar_host, pulsar_port, tls_trust_certs_file_path\n"
-            "Silinen: ahenk.db (yerel kayıt veritabanı)\n"
-            "Boşaltılan: ahenk.log\n"
-            f"İmaj anındaki MAC: {mac} → {IMAGED_MAC_FILE}\n"
-            f"Klon tespit servisi: {POST_IMAGE_SERVICE_NAME} (enabled)\n"
-            "Servis ahenk.service: DISABLED — "
-            "kazara reboot'ta otomatik başlamaz, klon tahtada "
-            "tiha-post-image-init enable edecek."
+            f"İmza: {IMAGED_MAC_FILE} = {mac}\n"
+            f"Betik: {RECLAIM_SCRIPT}\n"
+            f"Unit:  {RECLAIM_SERVICE}\n"
+            f"ahenk paketi: {'zaten kuruluydu' if was_installed_before else 'TiHA tarafından kuruldu'}\n"
+            "Boot davranışı: her açılışta ahenk'ten önce çalışır; "
+            "MAC değiştiyse API sorgu sonucuna göre credential temizleyip "
+            "ahenk'i yeniden başlatır veya disable eder."
         )
         return ApplyResult(
             True,
-            "ahenk kimliği sıfırlandı; klon tahtada MAC değişikliği "
-            "tespit edildiğinde ahenk otomatik kayıt akışına girer.",
+            "Klon-yeniden-talep mekanizması imaja gömüldü.",
             details=details,
             data={
-                "ahenk_backed_up": ahenk_backed_up,
-                "skipped": False,
+                "was_installed_before": was_installed_before,
                 "imaged_mac": mac,
             },
         )
 
-    def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
+    def undo(
+        self,
+        data: dict,
+        params: dict | None = None,
+    ) -> ApplyResult:
         data = data or {}
-        if data.get("skipped"):
-            # Adım atlanmıştı (ahenk yoktu); klon servisi/MAC dosyası da
-            # kurulmamış olur, geri alınacak bir şey yok.
-            return ApplyResult(
-                False,
-                "Bu uygulamada ahenk yüklü olmadığı için sıfırlama "
-                "atlandı — geri yüklenecek bir şey yok.",
-            )
-        if not data.get("ahenk_backed_up") or not AHENK_BACKUP_DIR.is_dir():
-            return ApplyResult(
-                False,
-                "Geri alınabilecek bir kayıt yok — yedek bulunamadı.",
-            )
+        was_installed_before = bool(data.get("was_installed_before", True))
 
-        conf_bak = AHENK_BACKUP_DIR / "ahenk.conf"
-        msg_bak = AHENK_BACKUP_DIR / "messaging.conf"
-        db_bak = AHENK_BACKUP_DIR / "ahenk.db"
-        if not conf_bak.exists():
-            return ApplyResult(False, "ahenk.conf yedeği bulunamadı.")
+        notes: list[str] = []
 
-        restored: list[str] = []
-        run_cmd(["systemctl", "stop", "ahenk.service"], check=False)
-
-        # 1) Klon tespit servisini ve MAC dosyasını kaldır.
-        run_cmd(["systemctl", "disable", POST_IMAGE_SERVICE_NAME], check=False)
-        _rm(POST_IMAGE_SERVICE)
-        _rm(POST_IMAGE_SCRIPT)
-        _rm(IMAGED_MAC_FILE)
+        # 1) Boot servisini disable et + dosyaları sil
+        run_cmd(["systemctl", "disable", RECLAIM_SERVICE_NAME], check=False)
+        if _rm(RECLAIM_SERVICE):
+            notes.append(f"{RECLAIM_SERVICE} silindi")
+        if _rm(RECLAIM_SCRIPT):
+            notes.append(f"{RECLAIM_SCRIPT} silindi")
         run_cmd(["systemctl", "daemon-reload"], check=False)
 
-        # 2) ahenk dosyalarını yedekten geri yükle.
-        try:
-            AHENK_CONF.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(conf_bak, AHENK_CONF)
-            restored.append("ahenk.conf")
-            if msg_bak.exists():
-                AHENK_MSG_CONF.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(msg_bak, AHENK_MSG_CONF)
-                restored.append("messaging.conf")
-            if db_bak.exists():
-                shutil.copy2(db_bak, AHENK_DB)
-                restored.append("ahenk.db")
-        except OSError as exc:
-            return ApplyResult(False, f"ahenk yedeği geri yüklenemedi: {exc}")
+        # 2) İmza dosyasını sil
+        if _rm(IMAGED_MAC_FILE):
+            notes.append(f"{IMAGED_MAC_FILE} silindi")
 
-        # 3) ahenk.service'i tekrar enable et + başlat.
-        run_cmd(["systemctl", "enable", "ahenk.service"], check=False)
-        run_cmd(["systemctl", "start", "ahenk.service"], check=False)
-        shutil.rmtree(AHENK_BACKUP_DIR, ignore_errors=True)
+        # 3) ahenk TiHA tarafından kurulduysa kaldır
+        if not was_installed_before and _is_ahenk_installed():
+            run_cmd(["systemctl", "disable", "--now", "ahenk.service"], check=False)
+            purge = run_cmd(
+                ["apt-get", "purge", "-y", "ahenk"],
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+                timeout=600,
+            )
+            run_cmd(
+                ["apt-get", "autoremove", "-y"],
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+                timeout=300,
+            )
+            if purge.ok:
+                notes.append("ahenk paketi kaldırıldı (TiHA tarafından kurulmuştu)")
+            else:
+                return ApplyResult(
+                    False,
+                    "ahenk paketi kaldırılamadı.",
+                    details=purge.stderr,
+                )
+        elif was_installed_before:
+            notes.append("ahenk paketi korundu (başlangıçta zaten kuruluydu)")
 
         return ApplyResult(
             True,
-            "ahenk kimliği geri yüklendi (" + ", ".join(restored) + "); "
-            "klon tespit servisi kaldırıldı.",
-            details=(
-                "ahenk.service tekrar enabled + start edildi. Pulsar "
-                f"bağlantısı eski uid/parola ile yeniden kurulur. "
-                f"{POST_IMAGE_SERVICE_NAME} ve {IMAGED_MAC_FILE} silindi."
-            ),
+            "Klon-yeniden-talep mekanizması kaldırıldı.",
+            details="\n".join(f"• {n}" for n in notes) if notes else None,
         )
