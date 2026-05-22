@@ -137,6 +137,12 @@ _WELCOME_FLOW = (
     "düğmesiyle başlayın."
 )
 
+# Proje deposu (Hoşgeldiniz sayfasında tıklanabilir satır olarak gösterilir).
+_WELCOME_REPO_URL = "https://github.com/enseitankado/tiha"
+_WELCOME_REPO_LABEL = (
+    "Proje deposu, kaynak kodu, sürüm geçmişi ve hata bildirimi"
+)
+
 
 class WelcomePage(Gtk.Box):
     def __init__(self) -> None:
@@ -172,6 +178,18 @@ class WelcomePage(Gtk.Box):
         flow_lbl.set_max_width_chars(110)
         flow_lbl.set_margin_top(8)
         self.pack_start(flow_lbl, False, False, 0)
+
+        # GitHub depo bağlantısı — tıklanabilir.
+        repo_lbl = Gtk.Label(xalign=0)
+        repo_lbl.set_markup(
+            f'🐙 <a href="{GLib.markup_escape_text(_WELCOME_REPO_URL)}">'
+            f'{GLib.markup_escape_text(_WELCOME_REPO_LABEL)}</a>'
+        )
+        repo_lbl.set_use_markup(True)
+        repo_lbl.set_track_visited_links(False)
+        repo_lbl.set_margin_top(12)
+        repo_lbl.set_max_width_chars(110)
+        self.pack_start(repo_lbl, False, False, 0)
 
 
 # =========================================================================
@@ -213,6 +231,20 @@ class ModulePage(Gtk.Box):
 
         rationale = _wrapping_label(self.module.rationale, klass="tiha-rationale")
         self.pack_start(rationale, False, False, 0)
+
+        # İsteğe bağlı: adıma ait teknik belge / algoritma şeması linki.
+        if self.module.doc_url:
+            label = self.module.doc_label or "Algoritma akış şeması ve gerekçeler"
+            doc_lbl = Gtk.Label(xalign=0)
+            doc_lbl.set_markup(
+                f'🔗 <a href="{GLib.markup_escape_text(self.module.doc_url)}">'
+                f'{GLib.markup_escape_text(label)}</a>'
+            )
+            doc_lbl.set_use_markup(True)
+            doc_lbl.set_selectable(False)
+            doc_lbl.set_track_visited_links(False)
+            doc_lbl.get_style_context().add_class("tiha-rationale")
+            self.pack_start(doc_lbl, False, False, 0)
 
         preview_text = ""
         try:

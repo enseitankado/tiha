@@ -422,14 +422,20 @@ def _is_ahenk_installed() -> bool:
 
 class AhenkResetModule(Module):
     id = "m12_ahenk_reset"
-    title = "Klon-yeniden-talep (Ahenk)"
-    sidebar_title = "Klon Yeniden Talep"
+    title = "Otomatik Ahenk Kaydı"
+    sidebar_title = "Otomatik Ahenk Kaydı"
     streams_output = True
     popup_on_success = True
     apply_hint = (
         "Kaynak MAC kaydedilir, ahenk yoksa kurulur, klon-reclaim "
         "boot servisi devreye alınır."
     )
+    # Algoritmanın görsel akış şeması ve ayrıntılı gerekçeleri.
+    doc_url = (
+        "https://github.com/enseitankado/tiha/blob/main/"
+        "docs/m12-clone-reclaim.md"
+    )
+    doc_label = "Otomatik Ahenk Kaydı — algoritma akış şeması ve gerekçeler"
     rationale = (
         "Bu adım, imajdan klonlanan tahtaların ahenk ajan kimliğini "
         "**ilk açılışta otomatik** yenilemek için kullanılan boot "
@@ -455,9 +461,7 @@ class AhenkResetModule(Module):
         "yine credential'ları siler ama ahenk'i disable eder; "
         "kullanıcı etapadmin oturumu açıp eta-register ile tahtayı "
         "kaydedince ahenk otomatik enable + start edilir (eta-"
-        "register installer akışı zaten bunu yapar).\n\n"
-        "Akışın görsel şeması ve gerekçeleri için: "
-        "docs/m12-clone-reclaim.md."
+        "register installer akışı zaten bunu yapar)."
     )
     undo_supported = True
 

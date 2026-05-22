@@ -43,7 +43,10 @@ class TiHAWindow(Gtk.Window):
         self.set_default_size(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
         self.set_size_request(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.set_position(Gtk.WindowPosition.CENTER)
-        self.set_icon_name("preferences-system")
+        # Pardus ETAP 'eta' ikon temasında yer alan resmi imaj-yazıcı
+        # simgesi — TiHA'nın amacını (tahta imajı hazırlamak ve
+        # diskten diske yazmak) doğrudan çağrıştırır.
+        self.set_icon_name("pardus-image-writer")
 
         self._load_css()
 

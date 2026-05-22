@@ -71,6 +71,13 @@ class Module:
     # kullanıcının "tamamlandı" sinyalini özellikle görmesi gereken
     # adımlar için.
     popup_on_success: bool = False
+    # Adıma ait teknik / mimari belgenin URL'si (GitHub veya yerel
+    # dosya). Doluysa rationale altında küçük tıklanabilir bir bağlantı
+    # gösterilir ("Algoritma akış şeması & gerekçeler"). Markdown
+    # diyagramları gibi uzun ayrıntılar buradan açılır.
+    doc_url: str = ""
+    # Yukarıdaki bağlantının görünür etiketi. Boşsa varsayılan kullanılır.
+    doc_label: str = ""
 
     # --- Yardımcılar ------------------------------------------------------
 
