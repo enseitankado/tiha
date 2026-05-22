@@ -29,88 +29,111 @@ gerektirmeden yapmaya çalışır.
 
 ## Akış şeması
 
+Üç ayrı diyagramla bakıyoruz: (1) baştan sona zamansal akış, (2) wizard
+zamanı (kaynak tahta), (3) klon ilk açılış (boot servisi).
+
+### 1) Üst düzey zaman akışı
+
+```mermaid
+flowchart LR
+    A["📀 Kaynak tahta<br/>wizard çalışıyor"]:::src
+    B["🧷 m12 apply<br/>(klon-yeniden-talep<br/>mekanizmasını imaja göm)"]:::step
+    C["🧹 Sanitize adımı<br/>(son adım)"]:::step
+    D[("💾 Disk imajı alınır<br/>Clonezilla vb.")]:::media
+    E["🖥️🖥️🖥️<br/>N adet klon tahta<br/>(imaj uygulandı)"]:::clones
+    F["🔄 Her klonda<br/>ilk açılışta:<br/>tiha-clone-reclaim.service"]:::boot
+    G(["✅ Klonlar Lider'e<br/>kendi MAC'leriyle<br/>kayıt olur"]):::done
+
+    A --> B --> C --> D --> E --> F --> G
+
+    classDef src    fill:#dbeafe,stroke:#1e40af,color:#0b1a3a
+    classDef step   fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b
+    classDef media  fill:#fef3c7,stroke:#92400e,color:#451a03
+    classDef clones fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+    classDef boot   fill:#cffafe,stroke:#0e7490,color:#083344
+    classDef done   fill:#dcfce7,stroke:#166534,color:#052e16
 ```
-╔══════════════════════ KAYNAK TAHTA (wizard zamanında) ════════════════════╗
-║                                                                            ║
-║   m12 apply çağrılır                                                       ║
-║          │                                                                 ║
-║          ▼                                                                 ║
-║   ┌───────────────────────────────────────────────────────────┐            ║
-║   │ 1) Birincil arayüzün MAC'i tespit edilir                  │            ║
-║   │    /var/lib/tiha/state/imaged-mac ← <kaynak MAC>          │            ║
-║   └───────────────────────────────────────────────────────────┘            ║
-║          │                                                                 ║
-║          ▼                                                                 ║
-║   ┌───────────────────────────────────────────────────────────┐            ║
-║   │ 2) ahenk yüklü mü?                                        │            ║
-║   │    HAYIR → apt-get update                                 │            ║
-║   │           apt-get install -y ahenk                        │            ║
-║   │           systemctl enable ahenk.service                  │            ║
-║   │    EVET  → atla                                           │            ║
-║   └───────────────────────────────────────────────────────────┘            ║
-║          │                                                                 ║
-║          ▼                                                                 ║
-║   ┌───────────────────────────────────────────────────────────┐            ║
-║   │ 3) Klon-reclaim servisi yazılır:                          │            ║
-║   │    /usr/local/sbin/tiha-clone-reclaim.py                  │            ║
-║   │    /etc/systemd/system/tiha-clone-reclaim.service         │            ║
-║   │    (Type=oneshot, Before=ahenk.service)                   │            ║
-║   │    systemctl daemon-reload                                │            ║
-║   │    systemctl enable tiha-clone-reclaim.service            │            ║
-║   └───────────────────────────────────────────────────────────┘            ║
-║          │                                                                 ║
-║          ▼                                                                 ║
-║   ✓ İmaj almaya hazır. Ahenk credential'larına DOKUNULMAZ.                 ║
-║     Kaynak tahta normal işlemeye devam eder.                               ║
-║                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
 
-         ┃
-         ┃  m11 (sanitize) çalışır → imaj alınır → tahtalar klonlanır
-         ▼
+### 2) Wizard tarafı — m12.apply (kaynak tahta)
 
-╔══════════════════════ KLON TAHTA (her açılışta) ══════════════════════════╗
-║                                                                            ║
-║   tiha-clone-reclaim.service                                               ║
-║          │  (Before=ahenk.service → ahenk başlamadan ÖNCE çalışır)         ║
-║          ▼                                                                 ║
-║   ┌───────────────────────────────────────────────────────────┐            ║
-║   │ İmza dosyası var mı?                                      │            ║
-║   │    HAYIR → çık (klon değil veya adım uygulanmamış)        │            ║
-║   └─────────────┬─────────────────────────────────────────────┘            ║
-║                 ▼ EVET                                                     ║
-║   ┌───────────────────────────────────────────────────────────┐            ║
-║   │ Mevcut MAC == kayıtlı MAC ?                               │            ║
-║   │    EVET → çık (kaynak tahta kazara reboot; ahenk normal)  │            ║
-║   └─────────────┬─────────────────────────────────────────────┘            ║
-║                 ▼ HAYIR (KLON TESPİT EDİLDİ)                               ║
-║   ┌───────────────────────────────────────────────────────────┐            ║
-║   │ ETAP backend'e sorgu:                                     │            ║
-║   │ GET http://api-etap.eba.gov.tr:1000/api/board/check       │            ║
-║   │     ?mac=<mevcut>                                         │            ║
-║   │     Header: etap-app-code: eta_register!                  │            ║
-║   └─────┬──────────────────┬──────────────────┬───────────────┘            ║
-║         │                  │                  │                            ║
-║         ▼                  ▼                  ▼                            ║
-║   ┌──────────┐    ┌─────────────────┐   ┌──────────────────┐               ║
-║   │ Ağ/HTTP  │    │   KAYITLI       │   │   KAYITSIZ       │               ║
-║   │ hatası   │    │ (registered=    │   │ (registered=     │               ║
-║   │          │    │   true)         │   │   false)         │               ║
-║   └────┬─────┘    └────────┬────────┘   └────────┬─────────┘               ║
-║        │                   │                     │                         ║
-║        ▼                   ▼                     ▼                         ║
-║   ╭────────╮       ╭───────────────────╮   ╭───────────────────────────╮   ║
-║   │ Çık.   │       │ stop ahenk        │   │ stop ahenk                │   ║
-║   │ Servis │       │ credential temizle│   │ credential temizle        │   ║
-║   │ enabled│       │ enable+start ahenk│   │ disable ahenk             │   ║
-║   │ kalır; │       │ imza dosyasını    │   │ disable kendini           │   ║
-║   │ sonraki│       │   yeni MAC'le gün │   │ → Kullanıcı eta-register  │   ║
-║   │ boot'ta│       │ disable kendini   │   │   ile kayıt yapacak;      │   ║
-║   │ tekrar │       │                   │   │   o akış sonunda ahenk    │   ║
-║   │ denesin│       │ ✓ Otomatik tamam  │   │   yeniden enable+start    │   ║
-║   ╰────────╯       ╰───────────────────╯   ╰───────────────────────────╯   ║
-║                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
+```mermaid
+flowchart TD
+    Start(["m12.apply çağrılır"]):::startNode
+    Mac["Birincil arayüz tespit edilir<br/>(default route → fallback ilk fiziksel)"]
+    Sig[("/var/lib/tiha/state/imaged-mac<br/>← &lt;kaynak MAC&gt;")]:::file
+    Q1{"ahenk paketi<br/>kurulu mu?"}:::decision
+    Inst["apt-get update<br/>apt-get install -y ahenk<br/>systemctl enable ahenk.service"]:::action
+    Skip["(kurulum atlanır)"]:::action
+    WriteSvc["/usr/local/sbin/tiha-clone-reclaim.py<br/>+ /etc/systemd/system/<br/>&nbsp;&nbsp;tiha-clone-reclaim.service<br/><br/>Type=oneshot · Before=ahenk.service"]:::file
+    Enable["systemctl daemon-reload<br/>systemctl enable<br/>&nbsp;&nbsp;tiha-clone-reclaim.service"]:::action
+    Note["⚠ Ahenk credential'larına<br/>DOKUNULMAZ"]:::warn
+    Done(["✓ İmaj almaya hazır<br/>(sonraki adım: sanitize)"]):::endNode
+
+    Start --> Mac --> Sig --> Q1
+    Q1 -- "Hayır" --> Inst
+    Q1 -- "Evet" --> Skip
+    Inst --> WriteSvc
+    Skip --> WriteSvc
+    WriteSvc --> Enable --> Note --> Done
+
+    classDef startNode fill:#dbeafe,stroke:#1e40af,color:#0b1a3a
+    classDef endNode   fill:#dcfce7,stroke:#166534,color:#052e16
+    classDef decision  fill:#fef3c7,stroke:#92400e,color:#451a03
+    classDef action    fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b
+    classDef file      fill:#f3f4f6,stroke:#374151,color:#111827
+    classDef warn      fill:#fee2e2,stroke:#991b1b,color:#450a0a
+```
+
+### 3) Boot servisi — klonun ilk açılışı (her açılışta çalışır)
+
+```mermaid
+flowchart TD
+    Boot(["tiha-clone-reclaim.service<br/>(ahenk.service'ten ÖNCE)"]):::startNode
+
+    Q1{"imaged-mac<br/>dosyası var mı?"}:::decision
+    ExitNoFile(["⛔ Çık<br/>klon değil veya<br/>adım uygulanmamış"]):::neutral
+
+    ReadMac["Birincil arayüz MAC'ini oku"]:::action
+    Q2{"Mevcut MAC<br/>= kayıtlı MAC?"}:::decision
+    ExitSrc(["⏯ Çık<br/>kaynak tahta —<br/>ahenk normal başlar"]):::neutral
+
+    API["GET api-etap.eba.gov.tr:1000<br/>/api/board/check?mac=&lt;mevcut&gt;<br/>Header: etap-app-code: eta_register!"]:::api
+    Q3{"HTTP yanıtı?"}:::decision
+    ExitErr(["⏸ Çık<br/>bu boot atla,<br/>servis enabled kalır,<br/>sonraki boot dener"]):::error
+
+    %% --- KAYITLI dalı ---
+    StopOk["systemctl stop ahenk.service"]:::action
+    WipeOk["Credential temizle:<br/>• ahenk.conf: uid / password / host<br/>• messaging.conf: pulsar_host / pulsar_port<br/>&nbsp;&nbsp;/ tls_trust_certs_file_path<br/>• ahenk.db silindi<br/>• ahenk.log boşaltıldı"]:::action
+    StartOk["systemctl enable ahenk.service<br/>systemctl start ahenk.service"]:::action
+    Sign["imaged-mac ← mevcut MAC<br/>(bir daha tetiklenmesin)"]:::file
+    DisOk["systemctl disable<br/>tiha-clone-reclaim.service"]:::action
+    OkEnd(["✅ Ahenk Lider'e<br/>YENİ MAC ile kayıt olur"]):::endNode
+
+    %% --- KAYITSIZ dalı ---
+    StopNo["systemctl stop ahenk.service"]:::action
+    WipeNo["Credential temizle<br/>(yukarıdaki ile aynı set)"]:::action
+    DisAhenk["systemctl disable ahenk.service"]:::action
+    DisNo["systemctl disable<br/>tiha-clone-reclaim.service"]:::action
+    NoEnd(["⏸ ahenk pasif<br/>👤 Kullanıcı etapadmin oturumu<br/>açıp eta-register ile kaydeder →<br/>eta-register installer akışı<br/>ahenk'i enable+start eder"]):::manual
+
+    Boot --> Q1
+    Q1 -- "Hayır" --> ExitNoFile
+    Q1 -- "Evet" --> ReadMac --> Q2
+    Q2 -- "Eşit" --> ExitSrc
+    Q2 -- "Farklı (KLON!)" --> API --> Q3
+    Q3 -- "Ağ/HTTP hatası" --> ExitErr
+    Q3 -- "registered = true (kayıtlı)" --> StopOk --> WipeOk --> StartOk --> Sign --> DisOk --> OkEnd
+    Q3 -- "registered = false (kayıtsız)" --> StopNo --> WipeNo --> DisAhenk --> DisNo --> NoEnd
+
+    classDef startNode fill:#dbeafe,stroke:#1e40af,color:#0b1a3a
+    classDef endNode   fill:#dcfce7,stroke:#166534,color:#052e16
+    classDef decision  fill:#fef3c7,stroke:#92400e,color:#451a03
+    classDef action    fill:#e0e7ff,stroke:#3730a3,color:#1e1b4b
+    classDef file      fill:#f3f4f6,stroke:#374151,color:#111827
+    classDef api       fill:#fce7f3,stroke:#9d174d,color:#500724
+    classDef neutral   fill:#f3f4f6,stroke:#374151,color:#111827
+    classDef error     fill:#fee2e2,stroke:#991b1b,color:#450a0a
+    classDef manual    fill:#fef9c3,stroke:#854d0e,color:#422006
 ```
 
 ## Bileşenler
