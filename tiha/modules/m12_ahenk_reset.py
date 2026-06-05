@@ -259,9 +259,15 @@ def wipe_ahenk_credentials() -> None:
 
 
 def systemctl(*args: str) -> None:
-    """Sessiz systemctl çağrısı; hata durumunda günceye not."""
+    """systemctl çağrısı; non-zero return code journald'e loglanır."""
     try:
-        subprocess.run(["systemctl", *args], check=False)
+        r = subprocess.run(
+            ["systemctl", *args],
+            capture_output=True, text=True, check=False,
+        )
+        if r.returncode != 0:
+            err = (r.stderr or r.stdout or "").strip().replace("\\n", " ")
+            note(f"systemctl {' '.join(args)} → rc={r.returncode} {err}")
     except FileNotFoundError:
         note(f"systemctl bulunamadı: {args}")
 
@@ -311,7 +317,11 @@ def main() -> int:
         # kayıt akışına girer.
         note("Tahta API'de KAYITLI; ahenk yeniden enable + start ediliyor.")
         systemctl("enable", "ahenk.service")
-        systemctl("start", "ahenk.service")
+        # --no-block zorunlu: Before=ahenk.service olduğumuz için blocking
+        # start, ahenk'in bizi beklemesi + bizim ahenk'i beklememiz şeklinde
+        # job ordering cycle'a girer. --no-block start'ı kuyruğa ekleyip
+        # döner; biz çıkınca systemd ahenk'i başlatır.
+        systemctl("start", "--no-block", "ahenk.service")
         # Yeni MAC ile imzala — bir daha tetiklenmesin.
         try:
             SAVED_MAC_FILE.write_text(cur + "\\n", encoding="utf-8")
@@ -437,31 +447,24 @@ class AhenkResetModule(Module):
     )
     doc_label = "Otomatik Ahenk Kaydı — algoritma akış şeması ve gerekçeler"
     rationale = (
-        "Bu adım, imajdan klonlanan tahtaların ahenk ajan kimliğini "
-        "**ilk açılışta otomatik** yenilemek için kullanılan boot "
-        "servisini imaja gömer. Klon makineler imaj kaynağıyla aynı "
-        "Pulsar credential'larını (uid + parola) kullanırsa Lider "
-        "tarafında aynı kimliğe sahip iki ajan oluşur — Pulsar "
-        "Exclusive consumer çakışması yaşanır ve cross-board "
-        "impersonation kaçınılmazdır.\n\n"
-        "Wizard zamanında: kaynak tahtanın birincil MAC adresi "
-        "/var/lib/tiha/state/imaged-mac dosyasına yazılır; ahenk "
-        "paketi yoksa eta-register'ın installer akışı örnek alınarak "
-        "kurulur (apt update + apt install -y ahenk + systemctl "
-        "enable ahenk.service); bir Python boot servisi (tiha-clone-"
-        "reclaim.service) yazılır ve enable edilir. Ahenk "
-        "credential'larına ŞU AŞAMADA DOKUNULMAZ; kaynak tahta "
-        "sanitize'a kadar kendi kimliğiyle çalışır.\n\n"
-        "Klon ilk açıldığında: boot servisi MAC karşılaştırması yapar. "
-        "Eşitse hiçbir şey yapmaz (kaynak tahtanın kazara reboot'u). "
-        "Farklıysa ETAP backend'ine GET /api/board/check?mac=<mevcut> "
-        "atar. Kayıtlıysa ahenk credential'larını siler, ahenk'i "
-        "yeniden başlatır (yeni UUID üretip Lider'e kendi MAC'iyle "
-        "kayıt olur), boot servisi kendini disable eder. Kayıtsızsa "
-        "yine credential'ları siler ama ahenk'i disable eder; "
-        "kullanıcı etapadmin oturumu açıp eta-register ile tahtayı "
-        "kaydedince ahenk otomatik enable + start edilir (eta-"
-        "register installer akışı zaten bunu yapar)."
+        "Sınıftaki tahtalar Lider sunucu üzerinden merkezi olarak "
+        "yönetilirken her tahtanın kendine özel bir kimliği olur. Bir "
+        "tahtanın hazır imajını çoğaltıp başka tahtalara yüklediğinizde, "
+        "hepsi aynı kimliği taşıdığı için Lider sadece tek bir tahtayı "
+        "görür; gönderilen komutlar yanlış cihaza düşer ya da hiç "
+        "ulaşmaz, izleme ve yönetim güvenilmez hale gelir.\n\n"
+        "Bu adım, imajdan çoğaltılan kopya tahtaların ilk açılışta "
+        "kendi kimliklerini almasını sağlar. Sistemde Ahenk yüklü "
+        "değilse önce onu kurar; sonra her açılışta tahtanın kendisinin "
+        "asıl tahta mı yoksa kopya mı olduğunu kontrol eden bir "
+        "mekanizmayı imaja yerleştirir. Tahta sahada açıldığında "
+        "kopya olduğu anlaşılırsa eski kimlik temizlenir ve tahta "
+        "Lider'e kendi yeni kimliğiyle taze kayıt olur — çoğu "
+        "durumda kullanıcı müdahalesi gerekmez.\n\n"
+        "MEB sisteminde henüz kayıtlı görünmeyen tahtalar için ise "
+        "sahada normal kayıt akışı (eta-register) çalışır. Sonuç: "
+        "çoğaltılan her tahta, Lider envanterinde kendi başına ve "
+        "doğru biçimde yer alır."
     )
     undo_supported = True
 

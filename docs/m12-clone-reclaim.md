@@ -104,7 +104,7 @@ flowchart TD
     %% --- KAYITLI dalı ---
     StopOk["systemctl stop ahenk.service"]:::action
     WipeOk["Credential temizle:<br/>• ahenk.conf: uid / password / host<br/>• messaging.conf: pulsar_host / pulsar_port<br/>&nbsp;&nbsp;/ tls_trust_certs_file_path<br/>• ahenk.db silindi<br/>• ahenk.log boşaltıldı"]:::action
-    StartOk["systemctl enable ahenk.service<br/>systemctl start ahenk.service"]:::action
+    StartOk["systemctl enable ahenk.service<br/>systemctl start --no-block ahenk.service"]:::action
     Sign["imaged-mac ← mevcut MAC<br/>(bir daha tetiklenmesin)"]:::file
     DisOk["systemctl disable<br/>tiha-clone-reclaim.service"]:::action
     OkEnd(["✅ Ahenk Lider'e<br/>YENİ MAC ile kayıt olur"]):::endNode
@@ -173,7 +173,7 @@ flowchart TD
        - `ahenk.db` silinir
        - `ahenk.log` boşaltılır
      - `systemctl enable ahenk.service`
-     - `systemctl start ahenk.service`
+     - `systemctl start --no-block ahenk.service` (cycle deadlock'ı önler — aşağıya bkz)
      - `imaged-mac` ← mevcut MAC (sonraki boot'larda tetiklenmesin)
      - Boot servisi kendini disable eder
    - **Kayıtsız**:
@@ -205,6 +205,23 @@ ahenk eski credential'larla Pulsar'a bağlanmış olur → çakışma. Before=
 ile systemd bizi ahenk'ten önce başlatır; biz biter bitmez ahenk
 başlar — ya yeni temiz credential ile (kayıtlı klon) ya da disable
 olmuş halde (kayıtsız klon) hiç başlamaz.
+
+### Neden `systemctl start ahenk.service --no-block`?
+
+`Before=ahenk.service` ordering'i + boot servisinin `Type=oneshot`
+ExecStart'ı içinden **blocking** `systemctl start ahenk.service`
+çağrısı yapmak, systemd'de bir job ordering cycle yaratır:
+ahenk bizim `active` olmamızı bekler, biz de `systemctl start`'ın
+return etmesini, o da ahenk'in başlamasını bekler. systemd bunu
+`Found ordering cycle on ahenk.service/start` ile tespit edip
+döngüyü kırmak için **ahenk'in start jobunu iptal eder**. Sonuç:
+boot servisi başarıyla biter, `multi-user.target.wants/ahenk.service`
+symlink'i hâlâ var ama o boot'ta ahenk başlamaz — yalnızca bir
+sonraki boot'ta normal akışla başlar.
+
+`--no-block` ile `systemctl start` job'ı kuyruğa ekler ve hemen
+döner; biz çıkınca `Before=` ordering tatmin olur ve systemd
+ahenk'i aynı boot içinde başlatır.
 
 ### Neden API sorgusu yapıyoruz?
 
