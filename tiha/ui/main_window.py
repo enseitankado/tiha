@@ -116,9 +116,14 @@ class TiHAWindow(Gtk.Window):
         author_name.set_ellipsize(3)  # Pango.EllipsizeMode.END
         author_box.pack_start(author_name, False, False, 0)
 
-        author_web = Gtk.Label(label="ozgurkoca.com", xalign=0)
+        author_web = Gtk.Label(xalign=0)
+        author_web.set_markup(
+            '<a href="https://github.com/enseitankado/tiha">'
+            'github.com/enseitankado/tiha</a>'
+        )
+        author_web.set_track_visited_links(False)
         author_web.get_style_context().add_class("tiha-author-web")
-        author_web.set_max_width_chars(20)
+        author_web.set_max_width_chars(28)
         author_web.set_ellipsize(3)
         author_box.pack_start(author_web, False, False, 0)
 
