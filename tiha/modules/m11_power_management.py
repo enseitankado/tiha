@@ -28,7 +28,13 @@ from pathlib import Path
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.privilege import invoking_username
-from ..core.utils import run_cmd
+from ..core.utils import run_cmd, screen_blank_seconds
+
+# Geri sayım diyalogunun görünebilmesi için ekran-blank ile idle eşiği
+# arasında olması gereken minimum güvenlik payı (saniye):
+#   60s — servisin OnUnitActiveSec poll periyodu
+#   30s — kullanıcının diyalogu görüp tepki vermesi için ek buffer
+_BLANK_SAFETY_SEC = 90
 
 log = get_logger(__name__)
 
@@ -339,10 +345,34 @@ def _find_target_via_runuser():
     return None
 
 
+def wake_screen(username, env):
+    """Ekranı güç tasarrufundan çıkar (countdown penceresi görülebilsin).
+
+    Hem oturum içi hem LightDM greeter X sunucusunda çalışır. ``xset
+    dpms force on`` monitörü uyandırır; ``xset s reset`` aktif ekran
+    koruyucunun idle sayacını sıfırlar. Hatalar log'a düşer ama
+    countdown gösterimini bloklamaz.
+    """
+    base = (
+        ["sudo", "-u", username, "env"]
+        + ["{}={}".format(k, v) for k, v in env.items()]
+    )
+    for args in (["xset", "dpms", "force", "on"], ["xset", "s", "reset"]):
+        try:
+            subprocess.run(
+                base + args, timeout=5, check=False,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            log("TiHA wake_screen: {} hata: {}".format(args, exc))
+
+
 def show_countdown_dialog(mode_name):
     """Aktif grafik oturumda GTK geri sayım penceresi çalıştırır.
 
     Hedef oturum: önce login olmuş kullanıcı; yoksa LightDM greeter.
+    Pencereyi açmadan hemen önce ekran güç tasarrufundan çıkarılır, böylece
+    monitör kapalıyken bile diyalog kullanıcının görüş alanına gelir.
 
     Dönüş:
       "postpone" → kullanıcı erteledi (10 dakika)
@@ -361,6 +391,8 @@ def show_countdown_dialog(mode_name):
 
     log("TiHA countdown: hedef={}/{} display={}".format(
         username, kind, env.get("DISPLAY")))
+    # Ekran güç tasarrufundaysa monitörü uyandır — diyalog karanlıkta açılmasın.
+    wake_screen(username, env)
     cmd = (
         ["sudo", "-u", username, "env"]
         + ["{}={}".format(k, v) for k, v in env.items()]
@@ -611,6 +643,29 @@ class PowerManagementModule(Module):
         idle_enabled = str(params.get("idle_enabled", "True")).lower() == "true"
         idle_minute = int(params.get("idle_minute", 15))
 
+        # Ekran-blank ile idle kapanma süresinin çakışma kontrolü (yumuşak uyarı).
+        # Geri sayım diyalogu idle_threshold anında doğar; doğum anında ekran
+        # açık olmalı, yoksa kullanıcı 2 dk'lık erteleme penceresini hiç görmez.
+        blank_warning: str | None = None
+        if idle_enabled:
+            blank_sec = screen_blank_seconds()
+            if blank_sec is not None:
+                max_idle_min = max(0, (blank_sec - _BLANK_SAFETY_SEC) // 60)
+                if idle_minute > max_idle_min:
+                    blank_warning = (
+                        f"⚠️ UYARI: Sistemde ekran enerjisi yaklaşık "
+                        f"{blank_sec // 60} dk idle sonra kesiliyor; "
+                        f"seçtiğiniz idle kapatma süresi ({idle_minute} dk) "
+                        f"bundan uzun olduğu için 2 dk'lık geri sayım/erteleme "
+                        f"diyalogu kararmış ekranda görünmeyebilir. "
+                        f"Önerilen üst sınır: {max_idle_min} dk. Daha uzun bir "
+                        "süre istiyorsanız ekran-blank süresini Sistem "
+                        "Ayarları → Güç'ten yükseltin."
+                    )
+                    log.warning(blank_warning)
+                    if progress:
+                        progress(blank_warning)
+
         if progress:
             progress("Mevcut eta-shutdown konfigürasyonu yedekleniyor...")
 
@@ -709,6 +764,8 @@ class PowerManagementModule(Module):
                 "   - 2 dakika önceden uyarı diyalogu",
                 "   - 10 dakika erteleme seçeneği"
             ])
+            if blank_warning:
+                details_lines.extend(["", blank_warning])
 
         if not auto_enabled and not idle_enabled:
             details_lines.append("ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu")

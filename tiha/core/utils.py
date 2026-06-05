@@ -225,3 +225,136 @@ def user_exists(username: str) -> bool:
         return True
     except KeyError:
         return False
+
+
+def _find_active_graphical_session() -> dict[str, str] | None:
+    """loginctl ile aktif grafik oturumun ortam değişkenlerini döner.
+
+    Bulunan ilk State=active + Type=(x11|wayland|mir) oturum kullanılır.
+    USER/HOME/DISPLAY/XAUTHORITY/XDG_RUNTIME_DIR/DBUS_SESSION_BUS_ADDRESS
+    içeren bir dict döner; bulamazsa None.
+    """
+    import pwd
+
+    r = run_cmd(["loginctl", "list-sessions", "--no-legend"], timeout=5)
+    if not r.ok:
+        return None
+
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        sid = parts[0]
+        det = run_cmd(
+            ["loginctl", "show-session", sid,
+             "-p", "Type", "-p", "State", "-p", "User",
+             "-p", "Name", "-p", "Display"],
+            timeout=5,
+        )
+        if not det.ok:
+            continue
+        props: dict[str, str] = {}
+        for ln in det.stdout.splitlines():
+            if "=" in ln:
+                k, _, v = ln.partition("=")
+                props[k] = v
+        if props.get("State") != "active":
+            continue
+        if props.get("Type") not in ("x11", "wayland", "mir"):
+            continue
+        try:
+            uid = int(props.get("User", "0"))
+            pw = pwd.getpwuid(uid)
+        except (ValueError, KeyError):
+            continue
+        if uid < 1000:
+            continue
+
+        runtime_dir = f"/run/user/{uid}"
+        display = props.get("Display") or ":0"
+        xauth = ""
+        for cand in (
+            f"{pw.pw_dir}/.Xauthority",
+            f"{runtime_dir}/gdm/Xauthority",
+            f"/var/run/lightdm/{pw.pw_name}/xauthority",
+            f"/run/lightdm/{pw.pw_name}/xauthority",
+        ):
+            if os.path.exists(cand):
+                xauth = cand
+                break
+
+        return {
+            "USER": pw.pw_name,
+            "HOME": pw.pw_dir,
+            "DISPLAY": display,
+            "XAUTHORITY": xauth,
+            "XDG_RUNTIME_DIR": runtime_dir,
+            "DBUS_SESSION_BUS_ADDRESS": f"unix:path={runtime_dir}/bus",
+            "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        }
+    return None
+
+
+def screen_blank_seconds() -> int | None:
+    """Aktif grafik oturumda ekranın güç tasarrufuna geçeceği idle eşiği (sn).
+
+    Şu kaynakların en küçük non-zero değerini döner:
+
+    * X11 DPMS Standby/Suspend/Off timeout (``xset q``)
+    * X11 Screen Saver timeout
+    * Cinnamon ``org.cinnamon.settings-daemon.plugins.power``
+      ``sleep-display-ac`` / ``sleep-display-battery``
+    * GNOME ``org.gnome.settings-daemon.plugins.power``
+      ``sleep-display-ac`` / ``sleep-display-battery``
+
+    Hepsi 0 / yok ise ``None`` döner — sistem ekran enerjisini kesmiyor
+    demektir. Aktif grafik oturum bulunamazsa da ``None`` döner; çağıran
+    bunu "bilgi yok, kısıt uygulama" diye yorumlamalıdır.
+    """
+    import re
+
+    env = _find_active_graphical_session()
+    if not env:
+        return None
+
+    sudo_env = (
+        ["sudo", "-u", env["USER"], "env"]
+        + [f"{k}={v}" for k, v in env.items()]
+    )
+    values: list[int] = []
+
+    r = run_cmd(sudo_env + ["xset", "q"], timeout=5)
+    if r.ok:
+        for m in re.finditer(r"\b(Standby|Suspend|Off):\s*(\d+)", r.stdout):
+            v = int(m.group(2))
+            if v > 0:
+                values.append(v)
+        m = re.search(r"Screen Saver:[^\n]*\n\s*timeout:\s*(\d+)", r.stdout)
+        if m:
+            v = int(m.group(1))
+            if v > 0:
+                values.append(v)
+
+    # Sadece yüklü schema'ları sorgula — yüklü olmayanlara get çağırmak
+    # warning log gürültüsü üretir ve gereksizdir.
+    schemas_r = run_cmd(sudo_env + ["gsettings", "list-schemas"], timeout=5)
+    loaded = set(schemas_r.stdout.split()) if schemas_r.ok else set()
+    for schema in (
+        "org.cinnamon.settings-daemon.plugins.power",
+        "org.gnome.settings-daemon.plugins.power",
+    ):
+        if schema not in loaded:
+            continue
+        for key in ("sleep-display-ac", "sleep-display-battery"):
+            r = run_cmd(sudo_env + ["gsettings", "get", schema, key], timeout=5)
+            if not r.ok:
+                continue
+            s = r.stdout.strip().replace("uint32 ", "")
+            try:
+                v = int(s)
+            except ValueError:
+                continue
+            if v > 0:
+                values.append(v)
+
+    return min(values) if values else None
