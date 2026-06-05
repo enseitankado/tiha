@@ -156,19 +156,20 @@ class HostnameModule(Module):
         "İmaj hostname'i uygulanır; her açılışta dinamik hostname servisi kurulur."
     )
     rationale = (
-        "Her tahtaya ağda benzersiz bir isim (hostname) lâzım. Aynı imajdan "
-        "çıkan onlarca tahta aynı isimle ağa katılırsa DHCP/DNS, merkezi "
-        "log sunucusu ve Ahenk/yönetim araçları karışır; kim kimdir ayırt "
-        "edilemez. Bu adım dinamik hostname stratejisi kurar:\n\n"
-        "1) İMAJ AŞAMASINDA: hostname geçici olarak 'etap-image' (ya da "
-        "sizin seçtiğiniz şablon) yapılır; /etc/hosts da eşzamanlı "
-        "güncellenir (aksi hâlde 'sudo' her çağrıda ~10 sn DNS timeout'una "
-        "takılır, sistem sürünür).\n\n"
-        "2) HER AÇILIŞTA: systemd servisi çalışır ve kablolu NIC'in MAC "
-        "adresinin son 6 hanesinden üreterek 'etap-ab12cd' gibi tahtaya "
-        "özgü bir hostname atar, /etc/hosts'u da yeni isme eşitler. "
-        "Hostname zaten doğruysa değişiklik yapmaz, böylece ağ adaptörü "
-        "değişse bile hostname dinamik olarak güncellenir."
+        "Aynı imajdan çoğaltılan onlarca tahta ağa bağlandığında, ağı "
+        "yöneten kişinin karşısına hepsi aynı isimle çıkar. Bu durumda "
+        "hangi tahtanın sınıfta hangisi olduğu ayırt edilemez; uzaktan "
+        "bir tahtaya bağlanmak ya da bir sorunu izlemek istendiğinde "
+        "yanlış cihaza ulaşma riski doğar, merkezi loglar birbirine "
+        "karışır.\n\n"
+        "Bu adım her tahtanın ağda kendine özgü, sabit bir isimle "
+        "görünmesini sağlar (örneğin 'etap-ab12cd' gibi). Böylece ağı "
+        "yöneten kişi sınıftaki her tahtayı listede tekil olarak görür, "
+        "doğru cihaza erişebilir ve sorunu olanı kesin biçimde tespit "
+        "edebilir.\n\n"
+        "İmaj alınırken tahtaya geçici, ortak bir isim verilir; her tahta "
+        "ilk açıldığında ise kendi donanımına özgü kalıcı ismine otomatik "
+        "olarak geçer — sahada elle isim atamaya gerek kalmaz."
     )
 
     def preview(self) -> str:
