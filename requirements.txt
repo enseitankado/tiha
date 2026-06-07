@@ -3,3 +3,6 @@
 # install.sh dağıtım paketlerini tercih eder, böylece sisteme pip bulaşmaz.
 pyotp>=2.6.0
 PyGObject>=3.42
+# m14 (Okul Logosu) — yüksek kaliteli LANCZOS logo resize.
+# Pardus ETAP'ta python3-pil cinnamon paketinin depends'ı olarak zaten kurulu.
+Pillow>=9.0
