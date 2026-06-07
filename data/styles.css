@@ -309,3 +309,31 @@ scrolledwindow.tiha-textarea textview {
 .tiha-action-link:hover label {
     color: #0b57c9;
 }
+
+/* --- Sidebar adım durum ikonları (m22) -------------------------------- */
+.tiha-step-status {
+    font-size: 11pt;
+    font-weight: 600;
+    opacity: 0.45;
+}
+
+.tiha-step-status-ok {
+    color: #2e7d32;
+    opacity: 1.0;
+}
+
+.tiha-step-status-fail {
+    color: #c62828;
+    opacity: 1.0;
+}
+
+.tiha-step-status-undone {
+    color: #666;
+    opacity: 0.75;
+}
+
+/* --- Sürüm güncelleme rozeti (m20) ------------------------------------ */
+.tiha-update-badge {
+    font-size: 9pt;
+    color: #1a73e8;
+}

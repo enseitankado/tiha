@@ -63,8 +63,49 @@ def _redirect_stderr_to_log() -> None:
         pass
 
 
+def _silence_subprocess_warnings() -> None:
+    """KDE/Qt ve GLib gürültüsünü subprocess'lerde sustur.
+
+    GTK FileChooserDialog'da logo seçilirken Pardus'ta yüklü KDE
+    thumbnail provider'ı (``kf.kwidgetsaddons``, ``QTimeLine``,
+    ``org.kde.kdegraphics.gwenview.lib`` vb.) stderr'e debug mesajları
+    basıyor. Bu env'ler tüm spawn edilen subprocess'lere miras kalır
+    ve onları tamamen sessizleştirir.
+    """
+    os.environ.setdefault("QT_LOGGING_RULES", "*=false")
+    os.environ.setdefault("G_MESSAGES_DEBUG", "")
+    # Ek olarak QT_FATAL_WARNINGS ayarı verilmiş olabilir; varsa kaldır.
+    os.environ.pop("QT_FATAL_WARNINGS", None)
+
+
 def main() -> int:
-    """Süreç giriş noktası. Başarı durumunda ``0``, aksi hâlde >0 döner."""
+    """Süreç giriş noktası. Başarı durumunda ``0``, aksi hâlde >0 döner.
+
+    argv'de ``--list``, ``--apply``, ``--info``, ``--version`` veya
+    ``--help`` varsa **CLI moda** yönlenir; aksi hâlde GTK GUI başlatılır.
+    """
+    # Subprocess gürültüsünü kapat — TiHA başlangıcında ayarla,
+    # tüm child process'lere env miras kalır.
+    _silence_subprocess_warnings()
+
+    # CLI mod tespiti — GUI hiç açılmadan tamamen headless çalışır.
+    from .core.cli import is_cli_invocation, run as cli_run
+    cli_argv = sys.argv[1:]
+    if is_cli_invocation(cli_argv):
+        ok, reason = require_root_and_admin()
+        if not ok:
+            print(f"HATA: {reason}", file=sys.stderr)
+            return 2
+        try:
+            ensure_runtime_dirs()
+        except OSError as exc:
+            print(f"HATA: çalışma dizini oluşturulamadı: {exc}", file=sys.stderr)
+            return 3
+        log_startup_info()
+        rc = cli_run(cli_argv)
+        log_shutdown_info()
+        return rc
+
     ok, reason = require_root_and_admin()
     if not ok:
         _emergency_dialog(reason)

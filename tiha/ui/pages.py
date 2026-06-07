@@ -213,6 +213,9 @@ class ModulePage(Gtk.Box):
         self._applying: bool = False
         self._auto_applied: bool = False
         self.post_apply_callback = None  # Set by main_window if needed
+        # Bu modülün son apply çağrısında kullanılan parametreler; preset
+        # export için main_window tarafından okunur. None: hiç uygulanmadı.
+        self.last_apply_params: dict | None = None
         # Önizleme widget'ı + şartlı (visible_when) alanların widget grupları:
         # Apply / buton işlemi sonrası tazelemek için saklanır.
         self._preview_widget: Gtk.Widget | None = None
@@ -585,6 +588,107 @@ class ModulePage(Gtk.Box):
             checkbox.connect("toggled", on_checkbox_toggled)
             return checkbox
 
+        if kind == "file":
+            # HBox: dosya yolu girilen Entry + sağında "Göz at…" düğmesi.
+            # FileChooserDialog seçimi Entry'ye yazar. Manuel path yazımı
+            # da serbest — kullanıcı isterse tarayıcı açmadan girer.
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            entry = Gtk.Entry()
+            entry.set_text(default)
+            entry.set_hexpand(True)
+            placeholder = field.get("placeholder")
+            if placeholder:
+                entry.set_placeholder_text(placeholder)
+            box.pack_start(entry, True, True, 0)
+
+            browse_btn = Gtk.Button(label="📁 Göz at…")
+
+            def on_browse(_btn, _entry=entry, _field=field):
+                dlg = Gtk.FileChooserDialog(
+                    title=f"Dosya seç — {_field.get('label', '')}",
+                    transient_for=self.get_toplevel(),
+                    action=Gtk.FileChooserAction.OPEN,
+                )
+                dlg.add_buttons(
+                    "İptal", Gtk.ResponseType.CANCEL,
+                    "Seç", Gtk.ResponseType.ACCEPT,
+                )
+                # Başlangıç klasörü seçimi.
+                # Mevcut entry değeri varsa ilk konum olarak aç; aksi
+                # hâlde TiHA sudo/pkexec ile root context'te çalıştığı
+                # için default cwd / /root oluyor → kullanıcı kendi
+                # dosyalarını göremiyor. Aktif grafik oturumdaki user'ın
+                # HOME'una (varsa Masaüstü/Desktop alt klasörüne)
+                # yönlendiriyoruz.
+                from pathlib import Path as _P
+                current = _entry.get_text().strip()
+                started_at_user_dir = False
+                if current:
+                    cp = _P(current).expanduser()
+                    if cp.is_file():
+                        dlg.set_filename(str(cp))
+                        started_at_user_dir = True
+                    elif cp.parent.is_dir():
+                        dlg.set_current_folder(str(cp.parent))
+                        started_at_user_dir = True
+                if not started_at_user_dir:
+                    # Aktif kullanıcı oturumundan HOME al, Masaüstü tercih et
+                    try:
+                        from ..core.utils import _find_active_graphical_session
+                        env = _find_active_graphical_session()
+                    except ImportError:
+                        env = None
+                    user_home = _P(env["HOME"]) if env else None
+                    candidates = []
+                    if user_home:
+                        candidates.extend([
+                            user_home / "Masaüstü",   # Türkçe (Pardus)
+                            user_home / "Desktop",
+                            user_home / "Belgeler",
+                            user_home / "Documents",
+                            user_home / "İndirilenler",
+                            user_home / "Downloads",
+                            user_home,
+                        ])
+                    for cand in candidates:
+                        if cand and cand.is_dir():
+                            dlg.set_current_folder(str(cand))
+                            break
+                # Filtreler. ÖNEMLİ: "Tüm dosyalar" filter'ını VARSAYILAN
+                # olarak set ediyoruz. Sudo / xdg-desktop-portal-kde
+                # bağlamında GTK image filter'ları (add_pixbuf_formats,
+                # add_pattern, add_mime_type, add_custom) güvenilir
+                # çalışmıyor — dosyalar listede gizli kalıyor. Default'u
+                # "Tüm dosyalar" yapıp kullanıcının PNG'yi rahatlıkla
+                # görmesini sağlıyoruz; istek hâlinde filter combobox'tan
+                # "Görsel dosyaları"na geçilebilir. Uzantı kontrolü zaten
+                # apply tarafında yapılıyor.
+                any_fil = Gtk.FileFilter()
+                any_fil.set_name("Tüm dosyalar")
+                any_fil.add_pattern("*")
+                dlg.add_filter(any_fil)
+                dlg.set_filter(any_fil)  # default aktif
+
+                # Yardımcı "Görsel dosyaları" filter'ı — kullanıcı ister
+                # ve düzgün çalışırsa kullansın diye eklenir.
+                img_fil = Gtk.FileFilter()
+                img_fil.set_name("Görsel dosyaları")
+                img_fil.add_pixbuf_formats()
+                dlg.add_filter(img_fil)
+                try:
+                    if dlg.run() == Gtk.ResponseType.ACCEPT:
+                        fname = dlg.get_filename()
+                        if fname:
+                            _entry.set_text(fname)
+                finally:
+                    dlg.destroy()
+
+            browse_btn.connect("clicked", on_browse)
+            box.pack_start(browse_btn, False, False, 0)
+            # _field_value Entry'ye erişebilmek için referansı sakla
+            box._entry = entry  # type: ignore[attr-defined]
+            return box
+
         entry = Gtk.Entry()
         entry.set_text(default)
         if kind == "password":
@@ -634,6 +738,9 @@ class ModulePage(Gtk.Box):
             return ""  # Buttons don't have values
         if kind == "bool":
             return str(widget.get_active())  # True/False → "True"/"False"
+        if kind == "file":
+            # _make_field bunu HBox yaptı; içindeki Entry'e referans tuttuk
+            return widget._entry.get_text()  # type: ignore[attr-defined]
         return widget.get_text()
 
     def _collect_params(self) -> tuple[dict, list[str]]:
@@ -756,6 +863,9 @@ class ModulePage(Gtk.Box):
         thread.start()
 
     def _apply_thread_body(self, params: dict) -> None:
+        # Preset export için son apply parametrelerini sakla.
+        self.last_apply_params = dict(params)
+
         def progress(line: str) -> None:
             GLib.idle_add(self._append_stream_line, line)
 
@@ -858,8 +968,118 @@ class ModulePage(Gtk.Box):
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
             box.pack_start(undo_btn, False, False, 0)
 
+        if not result.success:
+            report_btn = Gtk.Button(label="🐛 GitHub'a hata bildir…")
+            report_btn.set_tooltip_text(
+                "Adım id'si, TiHA sürümü, hata özeti ve son log satırlarını "
+                "içeren bir GitHub Issue formunu tarayıcıda açar. Göndermeden "
+                "önce içeriği gözden geçirebilirsiniz."
+            )
+            report_btn.connect("clicked", lambda *_: self._report_failure(result))
+            box.pack_start(report_btn, False, False, 0)
+
         self.result_holder.pack_start(box, False, False, 0)
         self.result_holder.show_all()
+
+    def _report_failure(self, result: ApplyResult) -> None:
+        """Adım başarısız olduğunda kullanıcıya GitHub Issue ön-doldurulmuş
+        bir URL açar. Body'de: adım id, sürüm, özet, detay ve log son
+        satırları. Anonimleştirme ipucu olarak parolayı andıran satırlar
+        sansürlenir."""
+        import subprocess
+        import urllib.parse
+        from datetime import datetime
+        from .. import __version__
+        from ..core.paths import LOG_FILE
+
+        # Son 50 satır log
+        log_tail = ""
+        try:
+            if LOG_FILE.exists():
+                lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()
+                # Parola/secret andıran satırları sansürle
+                sanitized = []
+                for ln in lines[-50:]:
+                    low = ln.lower()
+                    if any(s in low for s in ("password", "parola", "secret", "smbpasswd")):
+                        sanitized.append("[satır parola/secret içerebileceği için maskelendi]")
+                    else:
+                        sanitized.append(ln)
+                log_tail = "\n".join(sanitized)
+        except OSError:
+            log_tail = "(log okunamadı)"
+
+        body = (
+            f"**Modül:** `{self.module.id}` — {self.module.title}\n"
+            f"**TiHA sürümü:** {__version__}\n"
+            f"**Tarih:** {datetime.now().isoformat(timespec='seconds')}\n\n"
+            f"### Hata özeti\n\n```\n{result.summary}\n```\n\n"
+        )
+        if result.details:
+            body += f"### Detay\n\n```\n{result.details[:1500]}\n```\n\n"
+        body += (
+            f"### Log son 50 satır (parola benzeri satırlar maskelendi)\n\n"
+            f"```\n{log_tail[-4000:]}\n```\n\n"
+            "---\n"
+            "_Bu rapor TiHA içinden otomatik oluşturuldu. Göndermeden önce "
+            "içeriği gözden geçirip kişisel bilgileri (IP, hostname, "
+            "kullanıcı adları) kaldırabilirsiniz._\n"
+        )
+        title = f"[{self.module.id}] {result.summary[:80]}"
+
+        url = (
+            "https://github.com/enseitankado/tiha/issues/new?"
+            + urllib.parse.urlencode({
+                "title": title,
+                "body": body,
+                "labels": "bug",
+            })
+        )
+
+        # TiHA root yetkisiyle çalışır; xdg-open root'un (boş) session'ında
+        # tarayıcı bulamaz, sessiz fail eder. Aktif kullanıcı oturumunda
+        # xdg-open çalıştırmamız lazım — m14'tekiyle aynı pattern.
+        spawned = False
+        try:
+            from ..core.utils import _find_active_graphical_session
+            env = _find_active_graphical_session()
+            if env:
+                subprocess.Popen(
+                    ["sudo", "-u", env["USER"], "env"]
+                    + [f"{k}={v}" for k, v in env.items()]
+                    + ["xdg-open", url],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                spawned = True
+        except (ImportError, OSError):
+            pass
+
+        # Fallback: doğrudan xdg-open (root oturumu varsa çalışır)
+        if not spawned:
+            try:
+                subprocess.Popen(["xdg-open", url],
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL,
+                                 start_new_session=True)
+                spawned = True
+            except OSError:
+                pass
+
+        # Yine de açılamadıysa kullanıcıya URL'i göster — kopyalayabilsin
+        if not spawned:
+            dlg = Gtk.MessageDialog(
+                transient_for=self.get_toplevel(), modal=True,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="Tarayıcı otomatik açılamadı",
+            )
+            dlg.format_secondary_text(
+                "Aşağıdaki URL'i tarayıcınıza kopyalayın:\n\n" + url
+            )
+            dlg.run()
+            dlg.destroy()
 
     def _copy_to_clipboard(self, text: str) -> None:
         from gi.repository import Gdk
@@ -977,10 +1197,17 @@ class ModulePage(Gtk.Box):
 
 
 class SummaryPage(Gtk.Box):
-    def __init__(self, journal: Journal, modules: list[Module]) -> None:
+    def __init__(
+        self,
+        journal: Journal,
+        modules: list[Module],
+        *,
+        on_export_preset=None,
+    ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
         self.journal = journal
         self.modules = {m.id: m for m in modules}
+        self.on_export_preset = on_export_preset
         self.set_margin_top(_PAGE_MARGIN)
         self.set_margin_bottom(_PAGE_MARGIN)
         self.set_margin_start(_PAGE_MARGIN + 4)
@@ -1002,9 +1229,22 @@ class SummaryPage(Gtk.Box):
         self.entries_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.pack_start(self.entries_box, False, False, 0)
 
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         refresh = Gtk.Button(label="Listeyi yenile")
         refresh.connect("clicked", lambda *_: self.refresh())
-        self.pack_start(refresh, False, False, 0)
+        btn_row.pack_start(refresh, False, False, 0)
+
+        if self.on_export_preset is not None:
+            export_btn = Gtk.Button(label="📦 Preset olarak dışa aktar…")
+            export_btn.set_tooltip_text(
+                "Bu oturumda uygulanmış adımların parametrelerini JSON "
+                "dosyasına kaydeder. Diğer tahtalarda CLI ile aynı "
+                "ayarları uygulayabilirsiniz: tiha --preset <dosya> --apply"
+            )
+            export_btn.connect("clicked", lambda *_: self.on_export_preset())
+            btn_row.pack_start(export_btn, False, False, 0)
+
+        self.pack_start(btn_row, False, False, 0)
 
         self.refresh()
 

@@ -19,6 +19,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from ..core.logger import get_logger
 from ..core.undo import Journal
+from ..core.update_check import UpdateInfo, check_async as check_update_async
 from ..modules import all_modules
 from .pages import ModulePage, SummaryPage, WelcomePage
 
@@ -60,7 +61,92 @@ class TiHAWindow(Gtk.Window):
         self._build_module_pages()
         self._build_summary()
 
+        # İlk durum ikonlarını çiz (geçmiş oturumlardan kalan applied'ları yansıt)
+        self._refresh_sidebar_status()
         self._show_page_index(0)
+
+        # Sürüm güncelleme kontrolü — arka planda, hata sessizce yutulur.
+        check_update_async(self._on_update_check_result)
+
+    def _on_export_preset_clicked(self) -> None:
+        """Özet sayfasındaki 'Preset dışa aktar' düğmesi — tüm ModulePage'lerin
+        last_apply_params'ını toplar, FileChooser ile hedef seçer, JSON yazar."""
+        from ..core.preset import export_preset
+
+        collected: dict[str, dict] = {}
+        for page in self.pages:
+            if isinstance(page, ModulePage) and page.last_apply_params:
+                collected[page.module.id] = page.last_apply_params
+
+        if not collected:
+            self._info_dialog(
+                "Dışa aktarılacak parametre yok",
+                "Henüz bu oturumda parametre alan bir modül "
+                "uygulanmamış. En az bir adımı uygulayıp tekrar deneyin.",
+            )
+            return
+
+        dlg = Gtk.FileChooserDialog(
+            title="Preset'i kaydet",
+            parent=self,
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dlg.add_buttons(
+            "İptal", Gtk.ResponseType.CANCEL,
+            "Kaydet", Gtk.ResponseType.ACCEPT,
+        )
+        dlg.set_current_name("tiha-preset.json")
+        dlg.set_do_overwrite_confirmation(True)
+        fil = Gtk.FileFilter()
+        fil.set_name("JSON dosyaları (*.json)")
+        fil.add_pattern("*.json")
+        dlg.add_filter(fil)
+        try:
+            if dlg.run() == Gtk.ResponseType.ACCEPT:
+                target = Path(dlg.get_filename())
+                try:
+                    written = export_preset(collected, target=target)
+                    self._info_dialog(
+                        "Preset kaydedildi",
+                        f"{len(collected)} modülün parametreleri "
+                        f"şu dosyaya yazıldı:\n\n{written}\n\n"
+                        "Diğer tahtalarda uygulamak için:\n"
+                        f"  sudo tiha --preset {written.name} --apply",
+                    )
+                except Exception as exc:
+                    self._info_dialog(
+                        "Kayıt başarısız",
+                        f"Preset yazılamadı: {exc}",
+                        error=True,
+                    )
+        finally:
+            dlg.destroy()
+
+    def _info_dialog(self, title: str, body: str, *, error: bool = False) -> None:
+        dlg = Gtk.MessageDialog(
+            transient_for=self, modal=True,
+            message_type=Gtk.MessageType.ERROR if error else Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text=title,
+        )
+        dlg.format_secondary_text(body)
+        dlg.run()
+        dlg.destroy()
+
+    def _on_update_check_result(self, info: UpdateInfo | None) -> None:
+        """update_check.fetch_latest sonucu — UI thread'inde çalışır."""
+        if info is None:
+            return
+        markup = (
+            f'🔔 Yeni sürüm: '
+            f'<a href="{GLib.markup_escape_text(info.html_url)}">'
+            f'v{GLib.markup_escape_text(info.latest_version)}</a>'
+        )
+        self.update_badge.set_markup(markup)
+        self.update_badge.set_tooltip_text(
+            f"Şu an v{info.current_version}. Tıklayınca sürüm notlarını açar."
+        )
+        self.update_badge.show()
 
     # ---- Kurulum yardımcıları -------------------------------------------
 
@@ -95,6 +181,18 @@ class TiHAWindow(Gtk.Window):
         subtitle.get_style_context().add_class("tiha-sidebar-subtitle")
         sidebar_outer.pack_start(title, False, False, 0)
         sidebar_outer.pack_start(subtitle, False, False, 0)
+
+        # Güncelleme rozeti — async kontrol sonucu geldiğinde belirir.
+        self.update_badge = Gtk.Label(xalign=0)
+        self.update_badge.set_max_width_chars(28)
+        self.update_badge.set_ellipsize(3)
+        self.update_badge.set_track_visited_links(False)
+        self.update_badge.set_no_show_all(True)
+        self.update_badge.get_style_context().add_class("tiha-update-badge")
+        self.update_badge.set_margin_start(12)
+        self.update_badge.set_margin_end(12)
+        self.update_badge.set_margin_top(4)
+        sidebar_outer.pack_start(self.update_badge, False, False, 0)
 
         sidebar_scroll = Gtk.ScrolledWindow()
         sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -194,27 +292,74 @@ class TiHAWindow(Gtk.Window):
         # Karşılama bir adım değildir; modüller 1'den başlayarak numaralandırılır.
         for idx, module in enumerate(self.modules, start=1):
             page = ModulePage(module, self.journal)
-            # Apply tamamlandığında ileri/geri kapısını yeniden değerlendir
-            page.post_apply_callback = lambda *_a, **_kw: self._update_navigation_gate()
+            # Apply tamamlandığında ileri/geri kapısını + sidebar ikonlarını tazele.
+            def _after_apply(*_a, _mid=module.id, **_kw):
+                self._update_navigation_gate()
+                self._refresh_sidebar_status()
+            page.post_apply_callback = _after_apply
             self.pages.append(page)
             self.stack.add_named(page, module.id)
             sidebar_label = module.sidebar_title or module.title
-            self._add_sidebar_entry(f"{idx}. {sidebar_label}")
+            self._add_sidebar_entry(f"{idx}. {sidebar_label}", module_id=module.id)
 
     def _build_summary(self) -> None:
-        page = SummaryPage(self.journal, self.modules)
+        page = SummaryPage(
+            self.journal, self.modules,
+            on_export_preset=self._on_export_preset_clicked,
+        )
         self.pages.append(page)
         self.stack.add_named(page, "summary")
         self._add_sidebar_entry("Özet")
 
-    def _add_sidebar_entry(self, label: str) -> None:
+    def _add_sidebar_entry(self, label: str, *, module_id: str | None = None) -> None:
         row = Gtk.ListBoxRow()
         row.get_style_context().add_class("tiha-step")
+        # Box: durum ikonu (sol) + adım adı (genişler)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        status = Gtk.Label(label="·", xalign=0.5)
+        status.get_style_context().add_class("tiha-step-status")
+        status.set_size_request(18, -1)
+        box.pack_start(status, False, False, 0)
         lbl = Gtk.Label(label=label, xalign=0)
         lbl.set_ellipsize(3)  # Pango.EllipsizeMode.END
-        row.add(lbl)
+        box.pack_start(lbl, True, True, 0)
+        row.add(box)
         row.show_all()
         self.sidebar_list.add(row)
+        # Durum ikonunun referansını sakla — _refresh_sidebar_status günceller.
+        if not hasattr(self, "_status_labels"):
+            self._status_labels = []
+        self._status_labels.append((module_id, status))
+
+    def _refresh_sidebar_status(self) -> None:
+        """Journal'a bakarak her sidebar satırının durum ikonunu günceller.
+        Welcome / Özet sayfaları için module_id None — boş kalır."""
+        latest = self.journal.latest_per_module()
+        for module_id, status_lbl in getattr(self, "_status_labels", []):
+            if module_id is None:
+                continue
+            entry = latest.get(module_id)
+            ctx = status_lbl.get_style_context()
+            for cls in ("tiha-step-status-ok",
+                        "tiha-step-status-fail",
+                        "tiha-step-status-undone"):
+                ctx.remove_class(cls)
+            if entry is None:
+                status_lbl.set_text("·")
+            elif entry.status == "applied":
+                status_lbl.set_text("✓")
+                ctx.add_class("tiha-step-status-ok")
+                status_lbl.set_tooltip_text(f"Uygulandı: {entry.summary}")
+            elif entry.status == "failed":
+                status_lbl.set_text("⚠")
+                ctx.add_class("tiha-step-status-fail")
+                status_lbl.set_tooltip_text(f"Hata: {entry.summary}")
+            elif entry.status == "undone":
+                status_lbl.set_text("↶")
+                ctx.add_class("tiha-step-status-undone")
+                status_lbl.set_tooltip_text("Geri alındı")
+            else:
+                status_lbl.set_text("·")
 
     # ---- Navigasyon ------------------------------------------------------
 
