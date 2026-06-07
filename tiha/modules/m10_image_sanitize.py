@@ -41,8 +41,10 @@ import os
 import shutil
 from pathlib import Path
 
+from ..core.image_info import IMAGE_INFO_FILE, write_image_info
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
+from ..core.undo import Journal
 from ..core.utils import run_cmd
 
 log = get_logger(__name__)
@@ -329,6 +331,18 @@ class ImageSanitizeModule(Module):
 
         if progress:
             progress("İmaj sanitizasyon başlatılıyor...")
+
+        # ===== 0) İmaj metadata damgası =================================
+        # Sanitize /etc'i korur; bu dosya imaj boyunca kalır.
+        # Sahada "bu tahta hangi imajdan, ne zaman?" sorusunun cevabı:
+        #   cat /etc/tiha-image-info.json
+        try:
+            write_image_info(Journal())
+            ops.append(f"İmaj damgası yazıldı: {IMAGE_INFO_FILE}")
+            if progress:
+                progress(f"  ✓ İmaj damgası: {IMAGE_INFO_FILE}")
+        except OSError as exc:
+            log.warning("İmaj damgası yazılamadı (devam): %s", exc)
 
         # ===== 1) Tekil kimlikler =====================================
         if progress:

@@ -673,8 +673,49 @@ class OTPSecretsModule(Module):
         params = params or {}
         raw_list: str = params.get("teacher_names", "")
         reserve: int = int(params.get("reserve_count", 0) or 0)
+        csv_path_str: str = (params.get("teachers_csv_path") or "").strip()
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
+
+        # CSV'den içe aktarma — ilk sütun ad-soyad. Header satırı ve
+        # tamamen boş satırlar atlanır. Yinelenenler korunur (alttaki
+        # işlemler normalizasyonla zaten teklikleştirir).
+        if csv_path_str:
+            from pathlib import Path as _P
+            csv_path = _P(csv_path_str).expanduser()
+            if not csv_path.is_file():
+                return ApplyResult(
+                    False,
+                    f"CSV dosyası bulunamadı: {csv_path}",
+                )
+            try:
+                import csv as _csv
+                with csv_path.open("r", encoding="utf-8-sig", newline="") as fh:
+                    reader = _csv.reader(fh)
+                    added = 0
+                    for row in reader:
+                        if not row:
+                            continue
+                        name = row[0].strip()
+                        if not name:
+                            continue
+                        # Header satırı tespiti — sayı yoksa ve "ad" benzeri
+                        # bir başlıksa atla.
+                        low = name.lower()
+                        if added == 0 and any(s in low for s in
+                                              ("ad soyad", "adi soyadi",
+                                               "name", "isim")):
+                            continue
+                        teacher_names.append(name)
+                        added += 1
+                if progress:
+                    progress(f"📋 CSV'den {added} isim eklendi: {csv_path}")
+            except (OSError, UnicodeDecodeError) as exc:
+                return ApplyResult(
+                    False,
+                    f"CSV okunamadı: {exc}",
+                )
+
         # Yedek hesaplar — toplu-kullanici-olustur.py'nin normalizasyonu
         # 'Ogretmen 01' → 'ogretmen01' verir.
         for i in range(1, reserve + 1):
@@ -797,10 +838,28 @@ class OTPSecretsModule(Module):
         )
         copyable = "\n".join(report_lines)
 
+        # Yazdırılabilir HTML kâğıt — her öğretmen için tek satırlık kart.
+        # Tarayıcıda açılır, Ctrl+P ile yazdırılır ya da PDF olarak kaydedilir.
+        html_path = self._write_printable_paper(
+            new_users=sorted(new_users),
+            secrets=after_secrets,
+            display_of=display_of,
+            state_dir=state,
+        )
+        if html_path and progress:
+            progress(f"🖨️ Yazdırılabilir kâğıt: {html_path}")
+
         details = (
             f"{len(new_users)} hesap için anahtar üretildi. Tam liste aşağıda; "
             "'Panoya kopyala' veya 'Dosyaya kaydet…' ile alın."
         )
+        if html_path:
+            details += (
+                f"\n\n🖨️ Yazdırılabilir öğretmen kâğıdı:\n"
+                f"  {html_path}\n"
+                "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin.\n"
+                "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
+            )
 
         # Greeter cache bilgisini ekle
         summary_parts = [f"{len(new_users)} PIN anahtarı üretildi ve {OTP_SECRETS_FILE} dosyasına yazıldı."]
@@ -822,6 +881,136 @@ class OTPSecretsModule(Module):
                 "total_users": total_users,
             },
         )
+
+    def _write_printable_paper(
+        self,
+        *,
+        new_users: list[str],
+        secrets: dict[str, str],
+        display_of: dict[str, str],
+        state_dir: Path,
+    ) -> Path | None:
+        """Her öğretmen için yazdırılabilir bir kart içeren HTML dosyası
+        oluşturur. Best-effort xdg-open ile aktif kullanıcı oturumunda
+        tarayıcıda açar."""
+        from datetime import datetime as _dt
+        from html import escape as _esc
+        import subprocess as _sp
+
+        ts = _dt.now().strftime("%Y%m%d-%H%M%S")
+        out = state_dir / f"ogretmen-pin-kagitlari-{ts}.html"
+
+        cards: list[str] = []
+        for user in new_users:
+            secret = secrets.get(user, "")
+            display = display_of.get(user, "(yedek hesap)")
+            # secret'ı 4'lü gruplara böl — telefondan manuel girişi kolaylaştırır
+            grouped = " ".join(secret[i:i + 4] for i in range(0, len(secret), 4))
+            url = otpauth_url(user, secret)
+            cards.append(f'''
+<article class="card">
+  <header>
+    <h2>{_esc(display)}</h2>
+    <div class="user">Kullanıcı adı: <code>{_esc(user)}</code></div>
+  </header>
+  <section class="secret">
+    <div class="label">PIN anahtarı (telefonunuza manuel girin):</div>
+    <div class="key">{_esc(grouped)}</div>
+  </section>
+  <section class="instructions">
+    <ol>
+      <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
+          bir uygulama kurun.</li>
+      <li>Uygulamada <em>“+ Anahtar ekle”</em> → <em>“Anahtarı manuel
+          gir”</em>'i seçin.</li>
+      <li>Hesap adı olarak yazın: <code>{_esc(user)}</code></li>
+      <li>Anahtarı 4'lü gruplar hâlinde yukarıdaki kutudan kopyalayın.</li>
+      <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
+      <li>Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir;
+          tahta giriş ekranında bu PIN'i girersiniz.</li>
+    </ol>
+  </section>
+  <footer class="otpauth">
+    <small>otpauth URL: <code>{_esc(url)}</code></small>
+  </footer>
+</article>
+''')
+
+        html = f'''<!DOCTYPE html>
+<html lang="tr"><head>
+<meta charset="utf-8">
+<title>Öğretmen PIN kâğıtları — {ts}</title>
+<style>
+  body {{ font-family: Ubuntu, sans-serif; margin: 20px; color: #222; }}
+  h1 {{ font-size: 16pt; border-bottom: 2px solid #2e7d32; padding-bottom: 6px; }}
+  .meta {{ color: #666; font-size: 10pt; margin-bottom: 18px; }}
+  .card {{
+    page-break-inside: avoid;
+    border: 1.5px dashed #888;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    border-radius: 6px;
+    background: #fafafa;
+  }}
+  .card h2 {{ margin: 0 0 4px 0; font-size: 14pt; }}
+  .card .user {{ font-size: 10pt; color: #555; margin-bottom: 8px; }}
+  .secret .label {{ font-size: 9pt; color: #555; }}
+  .secret .key {{
+    font-family: 'Ubuntu Mono', monospace;
+    font-size: 18pt;
+    letter-spacing: 1px;
+    background: #fff;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin: 4px 0 12px 0;
+    display: inline-block;
+    color: #1a73e8;
+    font-weight: 600;
+  }}
+  .instructions ol {{ font-size: 10pt; margin: 0; padding-left: 20px; }}
+  .instructions li {{ margin: 2px 0; }}
+  .otpauth {{ margin-top: 8px; }}
+  .otpauth code {{ font-size: 7pt; color: #888; word-break: break-all; }}
+  @media print {{
+    body {{ margin: 8mm; }}
+    .card {{ break-inside: avoid; }}
+  }}
+</style>
+</head><body>
+<h1>Öğretmen PIN Kâğıtları</h1>
+<div class="meta">
+  Oluşturulma: {ts.replace("-", " ")} · Toplam: {len(new_users)} kâğıt ·
+  TiHA tarafından üretildi · Issuer: <em>{_esc(OTP_ISSUER)}</em>
+</div>
+{"".join(cards)}
+</body></html>
+'''
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(html, encoding="utf-8")
+            # Etapadmin'in açabilmesi için izinleri açık tut
+            out.chmod(0o644)
+        except OSError as exc:
+            log.warning("Yazdırılabilir kâğıt oluşturulamadı: %s", exc)
+            return None
+
+        # Best-effort: aktif grafik oturumda tarayıcıyı aç
+        try:
+            from ..core.utils import _find_active_graphical_session
+            env = _find_active_graphical_session()
+            if env:
+                _sp.Popen(
+                    ["sudo", "-u", env["USER"], "env"]
+                    + [f"{k}={v}" for k, v in env.items()]
+                    + ["xdg-open", str(out)],
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                    start_new_session=True,
+                )
+        except (OSError, ImportError) as exc:
+            log.debug("xdg-open atlandı: %s", exc)
+
+        return out
 
     def _apply_with_tool(
         self, script: Path, names: list[str], progress: ProgressCallback | None,

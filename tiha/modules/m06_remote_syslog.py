@@ -313,6 +313,96 @@ class RemoteSyslogModule(Module):
             ),
         )
 
+    def test_log_server_action(self, progress=None) -> ApplyResult:
+        """Mevcut yapılandırmadaki log sunucusuna erişim testi.
+
+        UDP: socket'i hedefe bind edip RFC3164-benzeri örnek bir mesaj
+            gönderir. UDP'de ack yok, ama DNS resolve + sendto başarısı
+            ağ yolunun açık olduğunu gösterir.
+        TCP: socket.create_connection ile gerçek TCP el sıkışması; başarı
+            sunucunun port'u dinlediğini ve ağa eriştiğimizi kanıtlar.
+        """
+        import socket as _socket
+        from datetime import datetime as _dt
+
+        if progress:
+            progress("Mevcut rsyslog yapılandırması okunuyor...")
+
+        cfg = _parse_config()
+        if cfg is None:
+            msg = (
+                f"Yapılandırma dosyası yok ya da geçersiz: {RSYSLOG_CONF}.\n"
+                "Önce bu adımı bir kez uygulayın (Uygula düğmesi)."
+            )
+            if progress:
+                progress(f"❌ {msg}")
+            return ApplyResult(False, msg)
+
+        host, port, proto = cfg
+        proto = proto.lower()
+        if progress:
+            progress(f"📋 Hedef: {host}:{port} ({proto.upper()})")
+            progress(f"DNS çözülmesi deneniyor: {host}…")
+
+        try:
+            addrinfo = _socket.getaddrinfo(host, port,
+                                           type=_socket.SOCK_STREAM)
+        except _socket.gaierror as exc:
+            msg = f"DNS çözümleme başarısız ({host}): {exc}"
+            if progress:
+                progress(f"❌ {msg}")
+            return ApplyResult(False, msg)
+
+        resolved = addrinfo[0][4][0] if addrinfo else host
+        if progress:
+            progress(f"   → çözümlendi: {resolved}")
+
+        # Asıl test
+        if proto == "tcp":
+            if progress:
+                progress(f"TCP el sıkışması deneniyor: {resolved}:{port}…")
+            try:
+                with _socket.create_connection((host, port), timeout=5):
+                    pass
+            except (OSError, _socket.timeout) as exc:
+                msg = (
+                    f"TCP bağlantısı kurulamadı ({host}:{port}): {exc}. "
+                    "Sunucu kapalı veya ağ engelliyor olabilir."
+                )
+                if progress:
+                    progress(f"❌ {msg}")
+                return ApplyResult(False, msg)
+            ok_msg = f"✓ TCP bağlantı kuruldu ({host}:{port})."
+            if progress:
+                progress(ok_msg)
+                progress("Sunucu bu portu dinliyor; rsyslog logları "
+                         "kayıpsız iletebilecek durumda.")
+            return ApplyResult(True, ok_msg)
+
+        # UDP — best-effort: paket gönderebildiysek başarı say.
+        if progress:
+            progress(f"UDP örnek mesaj gönderiliyor: {resolved}:{port}…")
+        sample = (
+            f"<13>{_dt.now().strftime('%b %d %H:%M:%S')} "
+            f"tiha-test: TiHA log sunucusu erişim testi"
+        ).encode("utf-8")
+        try:
+            with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as s:
+                s.settimeout(5)
+                s.sendto(sample, (host, port))
+        except (OSError, _socket.timeout) as exc:
+            msg = f"UDP mesajı gönderilemedi ({host}:{port}): {exc}"
+            if progress:
+                progress(f"❌ {msg}")
+            return ApplyResult(False, msg)
+        ok_msg = f"✓ UDP mesajı gönderildi ({host}:{port})."
+        if progress:
+            progress(ok_msg)
+            progress("UDP'de ack yoktur — sunucu tarafında "
+                     "`journalctl -u rsyslog` veya `tcpdump -n -i any "
+                     f"port {port}` ile gerçekten alındığını teyit edin.")
+        return ApplyResult(True, ok_msg)
+
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         removed_files = 0
         cleaned_queue = False

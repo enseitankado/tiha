@@ -59,6 +59,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
         {
+            "key": "teachers_csv_path",
+            "label": "Öğretmen CSV dosyası (opsiyonel)",
+            "type": "text",
+            "required": False,
+            "placeholder": "/home/etapadmin/Belgeler/ogretmenler.csv",
+            "help": (
+                "Bir CSV dosyası yolu verirseniz oradaki isimler "
+                "yukarıdaki listeye eklenir. İlk sütun ad-soyad olmalı "
+                "(boş bırakılabilir veya header satırı olabilir, atlanır). "
+                "Örn: AYŞE YILMAZ,32A1,5. Sınıf"
+            ),
+        },
+        {
             "key": "reserve_count",
             "label": "Yedek hesap sayısı",
             "type": "spin",
@@ -115,6 +128,17 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "required": False,
             "default": "udp",
             "options": ["udp", "tcp"],
+        },
+        {
+            "key": "test_log_server",
+            "label": "Log Sunucusunu Test Et",
+            "type": "button",
+            "action": "test_log_server_action",
+            "help": (
+                "Yukarıda yazılan host/port/protokole erişilebilir mi diye "
+                "kontrol eder; TCP ise gerçek bağlantı kurar, UDP ise "
+                "örnek bir RFC3164 mesajı gönderir."
+            ),
         },
     ],
     "m07_time_sync": [
@@ -219,6 +243,47 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "max": 180,
             "step": 1,
             "help": "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika.",
+        },
+    ],
+    "m14_branding": [
+        {
+            "key": "logo_path",
+            "label": "Logo dosyası",
+            "type": "file",
+            "required": True,
+            "file_filters": [
+                ("Görsel dosyaları", ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp"]),
+            ],
+            "help": "PNG, JPG, SVG veya WEBP.",
+        },
+        {
+            "key": "size",
+            "label": "En uzun kenar (piksel)",
+            "type": "spin",
+            "required": False,
+            "default": "96",
+            "min": 16,
+            "max": 1024,
+            "step": 8,
+            "help": "Kısa kenar oran korunarak orantılı küçülür.",
+        },
+        {
+            "key": "position",
+            "label": "Konum",
+            "type": "select",
+            "required": False,
+            "default": "top-right",
+            "options": ["top-right", "top-left", "bottom-right", "bottom-left"],
+        },
+        {
+            "key": "margin",
+            "label": "Köşeden mesafe (piksel)",
+            "type": "spin",
+            "required": False,
+            "default": "24",
+            "min": 0,
+            "max": 500,
+            "step": 4,
         },
     ],
 }
