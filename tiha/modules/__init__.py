@@ -19,7 +19,6 @@ from .m10_image_sanitize import ImageSanitizeModule
 from .m11_power_management import PowerManagementModule
 from .m12_ahenk_reset import AhenkResetModule
 from .m13_password_dialog import PasswordDialogModule
-from .m14_branding import BrandingModule
 
 
 def all_modules() -> list[Module]:
@@ -43,7 +42,6 @@ def all_modules() -> list[Module]:
         TimeSyncModule(),
         HostnameModule(),
         PowerManagementModule(),
-        BrandingModule(),
         AhenkResetModule(),
         ImageSanitizeModule(),
     ]

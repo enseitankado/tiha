@@ -23,10 +23,6 @@ classifiers = [
 dependencies = [
     "pyotp>=2.6.0",
     "PyGObject>=3.42",
-    # m14 (Okul Logosu) — yüksek kaliteli (LANCZOS) logo resize için.
-    # Pardus ETAP'ta `python3-pil` zaten `cinnamon` paketi tarafından
-    # depends edilir; bu sadece formal beyan.
-    "Pillow>=9.0",
 ]
 
 [project.scripts]

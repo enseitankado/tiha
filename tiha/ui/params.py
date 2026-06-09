@@ -245,47 +245,6 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika.",
         },
     ],
-    "m14_branding": [
-        {
-            "key": "logo_path",
-            "label": "Logo dosyası",
-            "type": "file",
-            "required": True,
-            "file_filters": [
-                ("Görsel dosyaları", ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp"]),
-            ],
-            "help": "PNG, JPG, SVG veya WEBP.",
-        },
-        {
-            "key": "size",
-            "label": "En uzun kenar (piksel)",
-            "type": "spin",
-            "required": False,
-            "default": "96",
-            "min": 16,
-            "max": 1024,
-            "step": 8,
-            "help": "Kısa kenar oran korunarak orantılı küçülür.",
-        },
-        {
-            "key": "position",
-            "label": "Konum",
-            "type": "select",
-            "required": False,
-            "default": "top-right",
-            "options": ["top-right", "top-left", "bottom-right", "bottom-left"],
-        },
-        {
-            "key": "margin",
-            "label": "Köşeden mesafe (piksel)",
-            "type": "spin",
-            "required": False,
-            "default": "24",
-            "min": 0,
-            "max": 500,
-            "step": 4,
-        },
-    ],
 }
 
 
