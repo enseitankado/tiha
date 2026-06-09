@@ -276,8 +276,12 @@ class RemoteSyslogModule(Module):
         except OSError as exc:
             log.warning("rsyslog kuyruk dizini oluşturulamadı: %s", exc)
 
-        # Gelişmiş yapılandırmayı yaz
+        # Gelişmiş yapılandırmayı yaz. /etc/rsyslog.d/ bazı kurulumlarda
+        # (rsyslog paketi yoksa veya minimal sistemde) yok olabilir;
+        # apt-get install çıkışı kontrol edilmediği için defansif olarak
+        # parent dizini garantiliyoruz.
         try:
+            RSYSLOG_CONF.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
             config_content = _render(host, port, proto)
             RSYSLOG_CONF.write_text(config_content, encoding="utf-8")
             RSYSLOG_CONF.chmod(0o644)
