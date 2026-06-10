@@ -72,6 +72,20 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
         {
+            "key": "include_etapadmin",
+            "label": "Sistem yöneticisi (etapadmin) için de PIN üret",
+            "type": "bool",
+            "required": False,
+            "default": "True",
+            "help": (
+                "İşaretlenirse etapadmin için de bir OTP anahtarı üretilir. "
+                "Yönetici parolasını paylaşmak yerine birine sadece o anlık "
+                "6 haneli PIN'i vererek geçici yetki devredilebilir; parola "
+                "güvende kalır. etapadmin hesabı yine her giriş yolu (parola, "
+                "USB, QR, PIN) için kullanılabilir."
+            ),
+        },
+        {
             "key": "reserve_count",
             "label": "Yedek hesap sayısı",
             "type": "spin",

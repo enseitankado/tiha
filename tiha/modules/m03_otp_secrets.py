@@ -674,6 +674,9 @@ class OTPSecretsModule(Module):
         raw_list: str = params.get("teacher_names", "")
         reserve: int = int(params.get("reserve_count", 0) or 0)
         csv_path_str: str = (params.get("teachers_csv_path") or "").strip()
+        include_etapadmin: bool = str(
+            params.get("include_etapadmin", "False")
+        ).lower() in ("true", "1", "yes", "on")
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
 
@@ -720,6 +723,12 @@ class OTPSecretsModule(Module):
         # 'Ogretmen 01' → 'ogretmen01' verir.
         for i in range(1, reserve + 1):
             teacher_names.append(f"Ogretmen {i:02d}")
+
+        # Opsiyonel: etapadmin için de PIN üret. Sistem yöneticisi
+        # parolasını paylaşmadan birine sadece o anlık 6 haneli PIN'i
+        # vererek geçici yetki devretsin diye.
+        if include_etapadmin:
+            teacher_names.append("etapadmin")
 
         if not teacher_names:
             return ApplyResult(
@@ -808,6 +817,9 @@ class OTPSecretsModule(Module):
         for name in teacher_names:
             u = _eta_otp_cli_normalize(name) if cli_script else normalize_username(name)
             if u in new_users:
+                if u == "etapadmin":
+                    display_of[u] = "Sistem Yöneticisi (etapadmin)"
+                    continue
                 display_of[u] = name
 
         # Rapor
@@ -1092,6 +1104,10 @@ class OTPSecretsModule(Module):
         for name in teacher_names:
             user = normalize(name)
             if not user:
+                continue
+            # etapadmin sistem yöneticisi hesabı — GECOS'unu "etapadmin"
+            # diye ezmeyelim (mevcut ad/soyad varsa korunsun).
+            if user == "etapadmin":
                 continue
             if set_user_full_name(user, name):
                 updated += 1
