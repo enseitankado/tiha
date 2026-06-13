@@ -52,3 +52,6 @@ credentials
 *.bak
 *.tmp
 *.orig
+
+# Auto Release workflow yan ürünü — yalnızca CI'da üretilir, repo'ya girmez
+RELEASE_NOTES.md

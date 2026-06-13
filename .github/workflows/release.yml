@@ -1,0 +1,65 @@
+name: Auto Release
+
+# main'e her push'ta tools/release.py'ı çalıştırır. Karar "skip" ise hiçbir
+# şey yapmaz; aksi halde sürümü artırır, dosyaları günceller, commit + tag
+# atar, GitHub Release oluşturur.
+#
+# Bot'un kendi push'u bu workflow'u tekrar tetiklemez:
+#   * GITHUB_TOKEN ile yapılan push'lar tasarımı gereği yeni workflow
+#     başlatmaz (GitHub güvenlik kuralı).
+#   * Ek güvence olarak commit mesajı "[skip release]" içerirse if guard'ı
+#     job'u zaten atlar.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip release]')"
+    steps:
+      - name: Checkout (tüm geçmiş + tag'ler)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Sürüm bump kararı + dosya güncellemesi
+        id: release
+        run: python3 tools/release.py
+
+      - name: Commit + tag + push
+        if: steps.release.outputs.skip != 'true'
+        env:
+          NEW_VERSION: ${{ steps.release.outputs.new_version }}
+        run: |
+          git config user.name "tiha-release-bot"
+          git config user.email "tiha-release-bot@users.noreply.github.com"
+          git add tiha/__init__.py pyproject.toml
+          git commit -m "release: v${NEW_VERSION} [skip release]"
+          git tag "v${NEW_VERSION}"
+          git push origin HEAD:main
+          git push origin "v${NEW_VERSION}"
+
+      - name: GitHub Release oluştur
+        if: steps.release.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_VERSION: ${{ steps.release.outputs.new_version }}
+        run: |
+          gh release create "v${NEW_VERSION}" \
+            --title "TiHA v${NEW_VERSION}" \
+            --notes-file RELEASE_NOTES.md
