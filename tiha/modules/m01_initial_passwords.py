@@ -218,12 +218,7 @@ class InitialPasswordsModule(Module):
     rationale = (
         "root, etapadmin veya ogretmen hesaplarından istediğinizin parolasını "
         "belirleyin. Hangi alanları doldurursanız sadece o hesapların parolası "
-        "değişir; diğerlerine dokunulmaz.\n\n"
-        "⚡ Teknik: Bu adım PAM politikalarından etkilenmez çünkü parolalar "
-        "doğrudan shadow dosyasına hash olarak yazılır. Fiziksel ve sanal "
-        "makineler arasında tutarsızlık yaşanmaz.\n\n"
-        "Ortak hesapları (ogretmen, ogrenci) tamamen silmek isterseniz "
-        "aşağıdaki düğmeyi kullanabilirsiniz."
+        "değişir; diğerlerine dokunulmaz."
     )
     extra_links = [
         {"label": "Kullanıcılar ve Gruplar uygulamasını aç", "action": "launch_users_admin_gui_action"},

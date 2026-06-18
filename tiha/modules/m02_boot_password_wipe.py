@@ -129,11 +129,9 @@ class BootPasswordWipeModule(Module):
         "Tahta her yeniden başladığında etapadmin dışındaki hesapların "
         "(ortak `ogretmen`, `ogrenci` ve kişisel öğretmen hesapları) "
         "parolasını otomatik olarak rastgele bir değere çeviren sistem "
-        "servisi kurar. Böylece sonradan elle atanan ya da sızdırılan "
+        "servisi kurar. Böylece tahtaya dokunarak yazılan ve sızdırılan "
         "herhangi bir parola bir sonraki açılışta işe yaramaz; tahta "
         "yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\n"
-        "İsteğe bağlı bir sertleştirme adımıdır; uygulamasanız yerel "
-        "parolayla giriş mümkün kalır.\n\n"
         "⚠ Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
         "Teknik bakım erişimi (yerel yönetim, SSH) her zaman korunur."
     )

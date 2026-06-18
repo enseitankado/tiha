@@ -522,8 +522,8 @@ class PowerManagementModule(Module):
         "Belirlenen saatte veya tahta boşta kaldığında otomatik olarak "
         "kapatma işlemi yapılır. Her iki modda da 2 dakika önceden uyarı "
         "diyalogu gösterilir ve kapatma 10 dakika ertelenebilir. "
-        "Kullanıcı login değilse uyarı LightDM greeter ekranında "
-        "gösterilir."
+        "Hali hazırda oturum açmış bir kullanıcı yoksa uyarı giriş "
+        "ekranında gösterilir."
     )
     extra_links = [
         {"label": "ETA Zamanlı Kapatma'yı aç", "action": "launch_eta_shutdown_gui_action"},

@@ -175,6 +175,21 @@ CHROMIUM_DATA_FILES = (
     "Affiliation Database", "Media History",
 )
 
+# Chromium tabanlı tarayıcıların kök profil dizininde bıraktığı "tek
+# kopya kilidi" dosyaları. Tarayıcı düzgün kapanmazsa bu üç sembolik
+# bağlantı (örn. SingletonLock → "etap-4262") arkada kalır; Chrome
+# yeniden açılırken bu PID'in hâlâ canlı olduğunu sanır ve "profil
+# bozulmasın" diyerek sessizce çıkar. Klonlanmış tahtalarda PID
+# numarası başka süreçler tarafından kapılmış olacağı için sorun
+# tetiklenir; imaj almadan önce mutlaka silinmeli.
+CHROMIUM_SINGLETON_FILES = ("SingletonLock", "SingletonSocket", "SingletonCookie")
+
+# Firefox profilindeki eşdeğer kilit dosyaları. ``lock`` çalışan
+# Firefox örneğine işaret eden bir sembolik bağlantıdır; ``.parentlock``
+# ise fcntl ile tutulan boş bir dosyadır. İkisi de profilin başka
+# bir Firefox tarafından kullanıldığı yanılgısına yol açar.
+FIREFOX_LOCK_FILES = ("lock", ".parentlock")
+
 
 def _clean_browser_data(home: Path) -> int:
     """Bir ev dizinindeki tarayıcı önbellek ve kişisel verilerini siler.
@@ -218,6 +233,11 @@ def _clean_browser_data(home: Path) -> int:
                           "downloads.json"):
                 if _rm(profile / fname):
                     n += 1
+            # Bayat kilit dosyaları — düzgün kapanmamış bir Firefox bunları
+            # bırakırsa klonda tarayıcı açılmaz.
+            for lockname in FIREFOX_LOCK_FILES:
+                if _rm(profile / lockname):
+                    n += 1
 
     # ~/.cache altındaki Mozilla önbelleği (~/.cache/* zaten yukarıda
     # temizleniyor; yine de güvene alıyoruz)
@@ -235,6 +255,14 @@ def _clean_browser_data(home: Path) -> int:
                        "component_crx_cache", "extensions_crx_cache",
                        "Crashpad", "Greaselion"):
             n += _empty_dir(browser_root / shared)
+
+        # Singleton kilit dosyaları (browser kök seviyesinde tutulur).
+        # Düzgün kapanmamış bir Chrome bunları "etap-4262" gibi bir PID
+        # işaretiyle bırakır; klonlanmış tahtada o PID başka süreçler
+        # tarafından kapılmış olur ve tarayıcı sessizce açılmamayı seçer.
+        for lockname in CHROMIUM_SINGLETON_FILES:
+            if _rm(browser_root / lockname):
+                n += 1
 
         for profile in browser_root.iterdir():
             if not profile.is_dir():
@@ -318,6 +346,9 @@ class ImageSanitizeModule(Module):
             "    (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex)\n"
             "    — gezinti geçmişi, çerezler, indirme geçmişi, oturumlar, yerel\n"
             "      depolama; tarayıcı tercihleri ve yer imleri korunur\n"
+            "    — bayat kilit dosyaları da silinir (Chromium türevlerinde\n"
+            "      SingletonLock/Socket/Cookie, Firefox'ta lock + .parentlock);\n"
+            "      aksi hâlde klonlanmış tahtada tarayıcı açılmayı reddedebilir\n"
             "  • /tmp ve /var/tmp içerikleri\n"
             "  • Kullanılmayan diller için yerelleştirme dosyaları\n"
             f"    ({', '.join(KEEP_LOCALES)} dışındakiler /usr/share/locale altından silinir)\n\n"
