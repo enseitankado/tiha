@@ -47,7 +47,7 @@ değiştirir.
   yeniden başlatır ve `tiha-shutdown-countdown.py` dosyasını siler.
 
 <p align="center">
-<a href="images/14-otomatik-kapanma-greeter.png"><img src="images/14-otomatik-kapanma-greeter.png" alt="Greeter ekranında 2 dakikalık geri sayım" width="60%"></a><br>
+<a href="images/bonus-greeter-countdown.png"><img src="images/bonus-greeter-countdown.png" alt="Greeter ekranında 2 dakikalık geri sayım" width="60%"></a><br>
 <sub><i>LightDM giriş ekranında etkin geri sayım — kullanıcı login değilken bile uyarı görünür.</i></sub>
 </p>
 
