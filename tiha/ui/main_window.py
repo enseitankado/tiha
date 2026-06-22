@@ -18,14 +18,12 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from .. import __version__
-from ..core import news_state as ns
 from ..core.logger import get_logger
 from ..core.undo import Journal
 from ..core.update_check import (
     CheckResult,
     UpdateInfo,
     check_async as check_update_async,
-    is_newer,
 )
 from ..modules import all_modules
 from .pages import ModulePage, SummaryPage, WelcomePage
@@ -72,11 +70,9 @@ class TiHAWindow(Gtk.Window):
         self._refresh_sidebar_status()
         self._show_page_index(0)
 
-        # Sürüm kontrolü — tek HTTP isteğiyle hem sidebar rozetini hem
-        # (gerekiyorsa) 'Yenilikler' diyaloğunu besler. Ağ hatası sessizce
-        # yutulur. news_since None ise news analizi atlanır.
-        news_since = self._compute_news_since()
-        check_update_async(self._on_check_result, news_since=news_since)
+        # Sürüm kontrolü — çalışan koddan daha yeni bir release var mı diye
+        # bakıp sidebar rozetini besler. Ağ hatası sessizce yutulur.
+        check_update_async(self._on_check_result)
 
     def _on_export_preset_clicked(self) -> None:
         """Özet sayfasındaki 'Preset dışa aktar' düğmesi — tüm ModulePage'lerin
@@ -143,39 +139,10 @@ class TiHAWindow(Gtk.Window):
         dlg.run()
         dlg.destroy()
 
-    def _compute_news_since(self) -> str | None:
-        """'Yenilikler' diyaloğunu tetikleyecek baseline'ı döner.
-
-        Üç durumda None döner (diyalog hiç tetiklenmez):
-          * Kullanıcı bu bilgisayarda "bir daha gösterme"yi seçmişse.
-          * İlk çalıştırma (state yok) — gösterilecek geçmiş yok; state'i
-            sessizce mevcut sürüme kurar.
-          * En son görülen sürüm = mevcut sürüm (yeni bir şey yok).
-
-        Aksi halde geçmiş sürümü döner; async fetch o baseline'dan
-        ``__version__``'e kadar olan release notlarını toplar.
-        """
-        state = ns.load()
-        if state.suppress_news_dialog:
-            return None
-        if state.last_seen_version is None:
-            state.last_seen_version = __version__
-            ns.save(state)
-            return None
-        if not is_newer(__version__, state.last_seen_version):
-            return None
-        return state.last_seen_version
-
     def _on_check_result(self, result: CheckResult) -> None:
-        """Birleşik kontrol sonucu — UI thread'inde çalışır."""
+        """Sürüm kontrolü sonucu — UI thread'inde çalışır."""
         if result.update is not None:
             self._apply_update_badge(result.update)
-        if result.news_body and result.news_since:
-            self._show_news_dialog(
-                since_version=result.news_since,
-                until_version=__version__,
-                body=result.news_body,
-            )
 
     def _apply_update_badge(self, info: UpdateInfo) -> None:
         """Sidebar'daki güncelleme rozetini doldur ve göster."""
@@ -198,72 +165,6 @@ class TiHAWindow(Gtk.Window):
             )
         self.update_badge.set_tooltip_text(tip)
         self.update_badge.show()
-
-    def _show_news_dialog(
-        self,
-        since_version: str,
-        until_version: str,
-        body: str,
-    ) -> None:
-        """Bu bilgisayarda son görülen sürümden bu yana çıkan yenilikleri
-        modal bir diyalogda gösterir. "Bir daha gösterme" işaretine göre
-        suppress bayrağını günceller; her durumda last_seen_version'ı
-        ``until_version``'a yazar."""
-        dlg = Gtk.Dialog(
-            title="TiHA — Yenilikler",
-            transient_for=self,
-            modal=True,
-        )
-        dlg.add_button("Tamam", Gtk.ResponseType.OK)
-        dlg.set_default_size(680, 520)
-
-        box = dlg.get_content_area()
-        box.set_spacing(10)
-        box.set_margin_top(12)
-        box.set_margin_bottom(12)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
-
-        header = Gtk.Label(xalign=0)
-        header.set_line_wrap(True)
-        header.set_markup(
-            "Bu bilgisayarda en son "
-            f"<b>v{GLib.markup_escape_text(since_version)}</b> kullanmışsın. "
-            "Şimdi "
-            f"<b>v{GLib.markup_escape_text(until_version)}</b>'i "
-            "çalıştırıyorsun. Aradaki yenilikler:"
-        )
-        box.pack_start(header, False, False, 0)
-
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.set_shadow_type(Gtk.ShadowType.IN)
-        tv = Gtk.TextView()
-        tv.set_editable(False)
-        tv.set_cursor_visible(False)
-        tv.set_wrap_mode(Gtk.WrapMode.WORD)
-        tv.set_left_margin(10)
-        tv.set_right_margin(10)
-        tv.set_top_margin(8)
-        tv.set_bottom_margin(8)
-        tv.get_buffer().set_text(body)
-        scrolled.add(tv)
-        box.pack_start(scrolled, True, True, 0)
-
-        suppress_check = Gtk.CheckButton(
-            label="Bu bilgilendirmeyi bu bilgisayarda bir daha gösterme"
-        )
-        box.pack_start(suppress_check, False, False, 0)
-
-        dlg.show_all()
-        dlg.run()
-        suppress = suppress_check.get_active()
-        dlg.destroy()
-
-        state = ns.load()
-        state.last_seen_version = until_version
-        state.suppress_news_dialog = suppress
-        ns.save(state)
 
     def _on_update_badge_link(self, _label, uri: str) -> bool:
         """update_badge'deki linke tıklandığında çalışır.

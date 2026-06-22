@@ -1,17 +1,12 @@
 """GitHub'dan TiHA release bilgisini çek — sessiz, en fazla 3 sn süren kontrol.
 
-İki UI'i besler:
+**Sidebar güncelleme rozeti**'ni besler: çalışan kodun ``__version__``'ünden
+daha yeni bir release var mı? Varsa ``UpdateInfo`` doldurulur. (Bootstrap'la
+çalıştırıldığında her seferinde main'den indirildiği için bu durum nadirdir —
+daha çok yerel `run-dev.sh` senaryosunda görünür.)
 
-  1. **Sidebar güncelleme rozeti**: çalışan kodun ``__version__``'ünden
-     daha yeni bir release var mı? Varsa ``UpdateInfo`` doldurulur.
-     (Bootstrap'la çalıştırıldığında her seferinde main'den indirildiği için
-     bu durum nadirdir — daha çok yerel `run-dev.sh` senaryosunda görünür.)
-  2. **'Yenilikler' diyaloğu**: kullanıcının bu bilgisayarda en son gördüğü
-     sürümden (``news_since``) çalışan ``__version__``'e kadar olan release
-     notlarını sade Türkçeyle özetler. UI bu metni diyalogta gösterir.
-
-Tek bir HTTP isteğiyle her iki analiz de yapılır; ağ hatası, parse hatası
-veya zaman aşımı sessizce yutulur (uygulama çalışmaya devam eder).
+Ağ hatası, parse hatası veya zaman aşımı sessizce yutulur (uygulama
+çalışmaya devam eder).
 """
 
 from __future__ import annotations
@@ -48,11 +43,9 @@ class UpdateInfo:
 
 @dataclass
 class CheckResult:
-    """Tek bir async kontrolün birleşik sonucu."""
+    """Tek bir async kontrolün sonucu."""
 
     update: UpdateInfo | None = None    # sidebar badge için (None: güncel)
-    news_body: str | None = None        # 'Yenilikler' diyaloğu için (None: yok)
-    news_since: str | None = None       # caller'ın geçtiği baseline
 
 
 def _normalize(v: str) -> str:
@@ -154,25 +147,6 @@ def _analyze_for_badge(releases: list[dict[str, Any]]) -> UpdateInfo | None:
     )
 
 
-def _analyze_for_news(
-    releases: list[dict[str, Any]],
-    since: str,
-) -> str | None:
-    """'Yenilikler' diyaloğu için — `since` (hariç) < release ≤ `__version__`
-    (dahil) aralığındaki release'lerin gövdesini döner. Aralık boşsa None.
-    """
-    if not releases:
-        return None
-    in_range = [
-        r for r in releases
-        if is_newer(_normalize(r.get("tag_name", "")), since)
-        and not is_newer(_normalize(r.get("tag_name", "")), __version__)
-    ]
-    if not in_range:
-        return None
-    return _format_body(in_range)
-
-
 def fetch_latest() -> UpdateInfo | None:
     """Yalnız badge analizi için kısa yol — release listesini çek + analiz."""
     releases = _fetch_releases_list()
@@ -183,32 +157,18 @@ def fetch_latest() -> UpdateInfo | None:
 
 def check_async(
     callback: Callable[[CheckResult], None],
-    *,
-    news_since: str | None = None,
 ) -> None:
-    """Arka planda releases listesini çek, hem badge hem news analizini yap.
+    """Arka planda releases listesini çek, sidebar rozeti analizini yap.
 
     UI thread'inden çağrılır; callback de UI thread'inde çalıştırılır
     (GLib.idle_add ile). Ağ hatası vs.'de boş ``CheckResult`` ile çağrılır.
-
-    ``news_since`` None ise news analizi yapılmaz (yalnız badge tüketilir).
     """
     def worker():
         releases = _fetch_releases_list()
         if releases is None:
-            result = CheckResult(news_since=news_since)
+            result = CheckResult()
         else:
-            update = _analyze_for_badge(releases)
-            news_body = (
-                _analyze_for_news(releases, news_since)
-                if news_since
-                else None
-            )
-            result = CheckResult(
-                update=update,
-                news_body=news_body,
-                news_since=news_since,
-            )
+            result = CheckResult(update=_analyze_for_badge(releases))
         try:
             from gi.repository import GLib
             GLib.idle_add(lambda: callback(result) or False)
