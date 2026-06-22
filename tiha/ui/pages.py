@@ -498,6 +498,10 @@ class ModulePage(Gtk.Box):
                 # Hata varsa varsayılan değerleri kullan
                 pass
 
+        # BIOS yönetici parolası — adıma girişte gösterme. Kullanıcı
+        # "Mevcut yönetici parolasını oku" düğmesine basınca asenkron
+        # action sonucu kutuya yazılır (bkz. _on_button_action_complete).
+
         if kind == "textarea":
             tv = Gtk.TextView()
             tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
@@ -691,6 +695,31 @@ class ModulePage(Gtk.Box):
 
         entry = Gtk.Entry()
         entry.set_text(default)
+        # BIOS yönetici parolası — yalnızca İngilizce BÜYÜK harf (A-Z) ve
+        # rakam (0-9) girilebilsin. 'I' harfi okunabilirlik için yasak
+        # ('1' ile karışıyor). Türkçe karakterler ve küçük harfler
+        # reddedilir; küçük harf girildiyse büyütülür.
+        if (self.module.id == "m14_bios_password"
+                and field.get("key") == "supervisor_password"):
+            entry.set_max_length(12)
+
+            def _filter_insert(e, text, length, position):
+                cleaned = "".join(
+                    ch for ch in text.upper()
+                    if ch != "I" and (("A" <= ch <= "Z") or ("0" <= ch <= "9"))
+                )
+                if cleaned != text:
+                    # Default handler'ı block edip temiz metni elle ekle
+                    # (signal recursion engellenir).
+                    e.handler_block(handler_id[0])
+                    pos = e.get_position()
+                    e.insert_text(cleaned, pos)
+                    e.set_position(pos + len(cleaned))
+                    e.handler_unblock(handler_id[0])
+                    e.stop_emission_by_name("insert-text")
+
+            handler_id = [0]
+            handler_id[0] = entry.connect("insert-text", _filter_insert)
         if kind == "password":
             entry.set_visibility(False)
             entry.set_input_purpose(Gtk.InputPurpose.PASSWORD)
@@ -819,6 +848,18 @@ class ModulePage(Gtk.Box):
         if getattr(self, "_active_button", None) is not None:
             self._active_button.set_sensitive(True)
             self._active_button = None
+        # m14: action sonucundan parola ve/veya koruma modunu form'a yansıt.
+        if self.module.id == "m14_bios_password" and isinstance(result.data, dict):
+            if "supervisor_password" in result.data:
+                entry = self._fields.get("supervisor_password")
+                if isinstance(entry, Gtk.Entry):
+                    entry.set_text(result.data.get("supervisor_password") or "")
+            prot = result.data.get("protection_mode")
+            if prot in ("always", "setup"):
+                combo = self._fields.get("protection_mode")
+                if isinstance(combo, Gtk.ComboBoxText):
+                    # params.py'daki option sırası: [0]=setup, [1]=always
+                    combo.set_active(0 if prot == "setup" else 1)
         self._show_result(result)
         # Buton işlemi sistem durumunu değiştirmiş olabilir — önizlemeyi
         # ve "visible_when" şartlı alanların görünürlüğünü tazele.

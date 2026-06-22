@@ -17,6 +17,7 @@ set -euo pipefail
 
 REPO_TARBALL="${TIHA_TARBALL:-https://codeload.github.com/enseitankado/tiha/tar.gz/refs/heads/main}"
 ETA_OTP_RAW="${TIHA_ETA_OTP_RAW:-https://raw.githubusercontent.com/enseitankado/eta-otp-cli/main}"
+ETA_112_RAW="${TIHA_ETA_112_RAW:-https://raw.githubusercontent.com/enseitankado/eta-112/main}"
 WORKDIR="$(mktemp -d /tmp/tiha.XXXXXX)"
 
 cleanup() { rm -rf "$WORKDIR"; }
@@ -96,6 +97,22 @@ else
     c_warn "eta-otp-cli kullanılamıyor; TiHA dahili PIN üretim yolunu kullanacak."
 fi
 
+# --- 5b) eta-112 aracını indir --------------------------------------------
+# TiHA m14 (BIOS yönetici parolası) bu aracı kullanır. Yalnızca desteklenen
+# donanım modellerinde işe yarar; indirme başarısız olursa modül kendisi
+# de tekrar denemeyi yapar — bootstrap fatal değildir.
+ETA_112_DIR="$WORKDIR/eta-112"
+mkdir -p "$ETA_112_DIR"
+c_info "enseitankado/eta-112 aracı indiriliyor..."
+if curl -fsSL "$ETA_112_RAW/eta-112.py" -o "$ETA_112_DIR/eta-112.py"; then
+    chmod +x "$ETA_112_DIR/eta-112.py" 2>/dev/null || true
+    c_ok "eta-112 hazır: $ETA_112_DIR"
+    export TIHA_ETA_112_DIR="$ETA_112_DIR"
+else
+    c_warn "eta-112 indirilemedi; TiHA modülün içinden tekrar deneyecek."
+    rm -f "$ETA_112_DIR/eta-112.py"
+fi
+
 # --- 6) Uygulamayı başlat --------------------------------------------------
 c_info "Sihirbaz başlatılıyor..."
 # DISPLAY/XAUTHORITY gibi değişkenleri sudo içinde de erişilebilir tut.
@@ -103,4 +120,5 @@ exec sudo -E \
     PYTHONPATH="$WORKDIR" \
     TIHA_HOME="$WORKDIR" \
     TIHA_ETA_OTP_CLI_DIR="${TIHA_ETA_OTP_CLI_DIR:-}" \
+    TIHA_ETA_112_DIR="${TIHA_ETA_112_DIR:-}" \
     python3 -m tiha "$@"

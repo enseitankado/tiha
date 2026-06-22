@@ -259,6 +259,75 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika.",
         },
     ],
+    "m14_bios_password": [
+        {
+            "key": "supervisor_password",
+            "label": "BIOS yönetici parolası",
+            # Düz metin — kullanıcının ne yazdığını görmesi gerekir
+            # (BIOS yalnız BÜYÜK A-Z 0-9 kabul eder; 'I' yasak — '1' ile
+            # karışıyor. UI input mask ile zorlanır, apply'da yeniden
+            # doğrulanır). Donanım desteklenmiyorsa alan gizlenir.
+            "type": "text",
+            "required": False,
+            "placeholder": "ABC23X",
+            "visible_when": "is_hardware_supported_cached",
+            "help": (
+                "Yalnızca BÜYÜK harf (A-Z, I hariç) ve rakam (0-9). "
+                "Uzunluk modele göre 4-12 karakter. Kutu boş gelir — "
+                "donanımdaki mevcut parolayı görmek için aşağıdaki "
+                "düğmeye basın. BOŞ bırakırsanız hem klon servisi hem "
+                "“şimdi uygula” düğmesi parolayı TEMİZLER (BIOS "
+                "koruması fiilen kalkar)."
+            ),
+        },
+        {
+            "key": "protection_mode",
+            "label": "Yönetici parolası ne zaman sorulsun",
+            "type": "select",
+            "required": False,
+            "default": "Yalnız BIOS ayarlarına girilirken (setup)",
+            "options": [
+                "Yalnız BIOS ayarlarına girilirken (setup)",
+                "Her açılışta (always)",
+            ],
+            "visible_when": "is_hardware_supported_cached",
+            "help": (
+                "Bu seçim hem klona gömülen servise hem de "
+                "“Bu makinenin BIOS parolasını ayarla” düğmesine "
+                "uygulanır. Parola kutusu boşsa (clear yolu) bu seçim "
+                "yok sayılır — parola olmadan BIOS koruması zaten "
+                "etkili değildir."
+            ),
+        },
+        {
+            "key": "read_current",
+            "label": "Mevcut yönetici parolasını oku",
+            "type": "button",
+            "action": "read_current_supervisor_action",
+            "visible_when": "is_hardware_supported_cached",
+            "help": (
+                "Tıklayınca eta-112 indirilir (gerekirse), donanım "
+                "sorgulanır; mevcut parola ve koruma modu yukarıdaki "
+                "alanlara yazılır. İlerleme alt kısımda görünür."
+            ),
+        },
+        {
+            "key": "set_local",
+            "label": "Bu makinenin BIOS parolasını ayarla",
+            "type": "button",
+            "action": "set_local_supervisor_action",
+            "style": "destructive",
+            "visible_when": "is_hardware_supported_cached",
+            "help": (
+                "DİKKAT: Klon servisi KURMAZ; doğrudan bu makinenin "
+                "BIOS flash'ına yazar. Parola kutusu boşsa parolayı "
+                "TEMİZLER, doluysa girilen parolayı ve koruma modunu "
+                "yazar. Geri alma yoktur; eta-112 “brick riski” uyarısı "
+                "burada da geçerli. Değişikliğin tam etkili olması için "
+                "işlem sonrası makineyi yeniden başlatın."
+            ),
+        },
+    ],
 }
 
 
