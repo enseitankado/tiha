@@ -5,6 +5,6 @@ sihirbaz. Modüller sıralı olarak çalışır; her biri kendi "uygula" ve
 "geri al" davranışını tanımlar.
 """
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "Özgür Koca"
 __license__ = "GPL-3.0-or-later"
