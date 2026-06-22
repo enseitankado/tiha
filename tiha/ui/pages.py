@@ -827,13 +827,25 @@ class ModulePage(Gtk.Box):
         def progress_callback(text: str) -> None:
             GLib.idle_add(self._append_stream_line, text)
 
+        # Form değerlerini ANA thread'de topla. Button action'ları (örn. m14
+        # "Bu makinenin BIOS parolasını ayarla") parola/koruma gibi alanlara
+        # ihtiyaç duyar; bunlar geçmezse action params'ı boş görür ve yanlış
+        # davranır (m14 boş parolayı "temizle" niyeti sayar). GTK widget'larına
+        # worker thread'inden erişmek güvenli olmadığı için burada toplarız.
+        params, _missing = self._collect_params()
+
         def worker():
             try:
                 action_func = getattr(self.module, action)
                 try:
-                    result = action_func(progress=progress_callback)
+                    result = action_func(params=params, progress=progress_callback)
                 except TypeError:
-                    result = action_func()
+                    # Parametre kabul etmeyen eski action imzaları için
+                    # zarif geri dönüş.
+                    try:
+                        result = action_func(progress=progress_callback)
+                    except TypeError:
+                        result = action_func()
                 GLib.idle_add(self._on_button_action_complete, result)
             except Exception as exc:
                 error_result = ApplyResult(False, f"Button action hatası: {exc}")
