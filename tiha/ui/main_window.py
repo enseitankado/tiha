@@ -322,12 +322,6 @@ class TiHAWindow(Gtk.Window):
         author_box.set_margin_end(12)
         author_box.set_margin_bottom(8)
 
-        author_name = Gtk.Label(label="Özgür Koca", xalign=0)
-        author_name.get_style_context().add_class("tiha-author-name")
-        author_name.set_max_width_chars(20)
-        author_name.set_ellipsize(3)  # Pango.EllipsizeMode.END
-        author_box.pack_start(author_name, False, False, 0)
-
         author_web = Gtk.Label(xalign=0)
         author_web.set_markup(
             '<a href="https://github.com/enseitankado/tiha">'

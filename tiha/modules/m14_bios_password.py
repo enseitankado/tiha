@@ -454,27 +454,74 @@ if __name__ == "__main__":
 '''
 
 
-def _build_eta_112_argv(supervisor_pw: str, protection_mode: str) -> list[str]:
-    """Klon ilk açılışta eta-112'ye verilecek tam argv listesi.
+def _model_supports_protection_toggle(model_name: str | None) -> bool:
+    """eta-112'nin ``--koruma`` bayrağını destekleyip desteklemediği.
 
-    * supervisor_pw boş ise → ``bios clear yonetici --json`` (parola
-      temizlenir, BIOS koruması fiilen kalkar — parola olmadığında
-      koruma byte'ının değeri pratik olarak etkili olmaz).
-    * supervisor_pw dolu ise → ``bios set --yonetici PW --koruma MODE --json``.
-      protection_mode "always" veya "setup" olmalıdır.
+    Faz 1 modelinde pwcheck NVRAM byte'ı henüz kalibre edilmediği için
+    eta-112 ``set --koruma`` çağrısını reddeder. Bu modelde davranış
+    örtüktür:
+      * yalnız yönetici parolası → BIOS setup'a girerken sorar (setup)
+      * yönetici + kullanıcı parolası → her açılışta sorar (always)
+
+    Heuristik model adı kontrolüne dayanır; eta-112 ileride Faz 1 için
+    pwcheck'i kalibre edip aynı modelde destek eklerse bu fonksiyonun
+    yeniden değerlendirilmesi gerekir.
+    """
+    if not model_name:
+        # Bilmiyorsak destekli varsay; eta-112 hata dönerse yine de
+        # _eta_112_call sonucunu kullanıcıya gösteririz.
+        return True
+    return "Faz 1" not in model_name
+
+
+def _build_eta_112_argv(
+    supervisor_pw: str,
+    protection_mode: str,
+    *,
+    supports_koruma: bool = True,
+) -> list[str]:
+    """Klon ilk açılışta (veya local set'te) eta-112'ye verilecek argv.
+
+    * ``supervisor_pw`` boş → ``bios clear yonetici``. Hangi modelde
+      olduğumuz fark etmez; parola olmadığında koruma byte'ı pratik
+      olarak etkisizdir.
+    * ``supervisor_pw`` dolu + ``supports_koruma=True`` → ``bios set
+      --yonetici PW --koruma MODE``. Modern davranış (Faz 2 ve sonrası).
+    * ``supervisor_pw`` dolu + ``supports_koruma=False`` (Faz 1) →
+      protection_mode arka planda parola atama biçimine dönüşür:
+        - "setup":   ``bios set --yonetici PW`` (kullanıcı boş → setup'ta sorar)
+        - "always":  ``bios set --yonetici PW --kullanici PW`` (kullanıcı parolası
+                     da var → her açılışta sorar)
+      Kullanıcı parolasını yöneticininkinin aynısı yapıyoruz; aynısı
+      olması teknik bir gereklilik değil ama kullanıcının ek bir
+      parola hatırlamasına gerek bırakmıyor.
     """
     if not supervisor_pw:
         return ["bios", "clear", "yonetici", "--json"]
-    return [
-        "bios", "set",
-        "--yonetici", supervisor_pw,
-        "--koruma", protection_mode,
-        "--json",
-    ]
+    if supports_koruma:
+        return [
+            "bios", "set",
+            "--yonetici", supervisor_pw,
+            "--koruma", protection_mode,
+            "--json",
+        ]
+    # Faz 1 yolu
+    argv = ["bios", "set", "--yonetici", supervisor_pw]
+    if protection_mode == "always":
+        argv += ["--kullanici", supervisor_pw]
+    argv.append("--json")
+    return argv
 
 
-def _build_first_boot_script(supervisor_pw: str, protection_mode: str) -> str:
-    argv = _build_eta_112_argv(supervisor_pw, protection_mode)
+def _build_first_boot_script(
+    supervisor_pw: str,
+    protection_mode: str,
+    *,
+    supports_koruma: bool = True,
+) -> str:
+    argv = _build_eta_112_argv(
+        supervisor_pw, protection_mode, supports_koruma=supports_koruma,
+    )
     # JSON içine gömüleceği için tek-tırnak kaçışı şart değil (json.dumps
     # zaten çift-tırnak kullanıyor); şablonda da tek-tırnak içinde
     # parse edilecek.
@@ -570,8 +617,12 @@ class BiosPasswordModule(Module):
         "fiilen kalkar) — bu hem klon servisinin hem de “şimdi uygula” "
         "düğmesinin davranışıdır.\n\n"
         "Koruma modu: yönetici parolası her açılışta mı yoksa yalnız "
-        "BIOS setup'a girilirken mi sorulsun? Aşağıdan seçin; eta-112 "
-        "bu ayarı doğrudan yazıyor.\n\n"
+        "BIOS setup'a girilirken mi sorulsun? Aşağıdan seçin. Faz 2 "
+        "modellerinde eta-112 bu ayarı BIOS'a doğrudan yazar; Faz 1 "
+        "modellerinde ayrı bir 'ne zaman sorulsun' byte'ı olmadığı "
+        "için arka planda parolaları farklı atayarak aynı sonuç elde "
+        "edilir (yalnız yönetici = setup, yönetici+kullanıcı = her "
+        "açılışta).\n\n"
         "Bu adım YALNIZCA eta-112 tarafından kalibre edilmiş donanım "
         "modellerinde uygulanabilir (Faz 2 Vestel Gri vb.). Donanım "
         "desteklenmiyorsa form gizlenir.\n\n"
@@ -606,6 +657,7 @@ class BiosPasswordModule(Module):
         chip = info.get("chip") or "(yok)"
         pw_min = info.get("pw_min") or 4
         pw_max = info.get("pw_max") or 12
+        supports_koruma = _model_supports_protection_toggle(info.get("model"))
         passwords = query_bios_passwords()
         current = passwords.get("supervisor") if passwords.get("ok") else None
         prot = passwords.get("protection") if passwords.get("ok") else None
@@ -623,6 +675,19 @@ class BiosPasswordModule(Module):
             f"  Mevcut yönetici parolası: {current or '(ayarlanmamış)'}",
             f"  Mevcut koruma modu:       {prot_label}",
             "",
+        ]
+        if not supports_koruma:
+            lines.extend([
+                "⚠ Faz 1 farkı: BIOS'ta ayrı bir 'parola ne zaman sorulsun' "
+                "byte'ı yok.",
+                "  Koruma seçiminize göre eta-112 parolaları şöyle ayarlar:",
+                "    • Yalnız BIOS ayarlarına girilirken (setup)  →  "
+                "sadece yönetici parolası",
+                "    • Her açılışta (always)                      →  "
+                "yönetici + kullanıcı parolasına aynı değer",
+                "",
+            ])
+        lines.extend([
             "Bu adımda yapılacaklar:",
             f"  • Kaynak MAC ({mac}) → {IMAGED_MAC_FILE}",
             f"  • eta-112 → {BUNDLED_ETA_112}",
@@ -640,7 +705,7 @@ class BiosPasswordModule(Module):
             "            ✗ → sentinel yazma; sonraki boot tekrar dene",
             "",
             "Geri al: boot scripti + servis + sentinel + paketlenmiş eta-112 silinir.",
-        ]
+        ])
         return "\n".join(lines)
 
     def apply(
@@ -690,6 +755,7 @@ class BiosPasswordModule(Module):
         self._supported_cache = True
         pw_min = int(info.get("pw_min") or 4)
         pw_max = int(info.get("pw_max") or 12)
+        supports_koruma = _model_supports_protection_toggle(info.get("model"))
 
         # 3) Parola doğrulama. Boş parola = "klonda parolayı temizle"
         # niyeti — error yerine clear yoluna gireriz.
@@ -701,11 +767,25 @@ class BiosPasswordModule(Module):
             if clear_mode:
                 progress("Parola kutusu boş — klonda 'bios clear yonetici' "
                          "çalıştırılacak (BIOS koruması kalkar).")
-            else:
+            elif supports_koruma:
                 progress(
                     f"Klona gömülecek komut: bios set --yonetici <{len(pw)} kr> "
                     f"--koruma {protection}"
                 )
+            else:
+                # Faz 1 yolu: koruma byte'ı yok; davranış parola atamasıyla
+                # belirleniyor. Kullanıcıya da bunu söyle.
+                if protection == "always":
+                    progress(
+                        f"Klona gömülecek komut: bios set --yonetici <{len(pw)} kr> "
+                        f"--kullanici <{len(pw)} kr> (Faz 1: her açılışta sorulması "
+                        "için kullanıcı parolası da set ediliyor)"
+                    )
+                else:
+                    progress(
+                        f"Klona gömülecek komut: bios set --yonetici <{len(pw)} kr> "
+                        "(Faz 1: yalnız yönetici → BIOS setup'a girilirken sorulur)"
+                    )
 
         # 4) MAC imzası — m12 paylaşımlı (idempotent)
         mac = _primary_mac()
@@ -746,7 +826,10 @@ class BiosPasswordModule(Module):
         try:
             FIRST_BOOT_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
             FIRST_BOOT_SCRIPT.write_text(
-                _build_first_boot_script(pw, protection), encoding="utf-8",
+                _build_first_boot_script(
+                    pw, protection, supports_koruma=supports_koruma,
+                ),
+                encoding="utf-8",
             )
             os.chmod(FIRST_BOOT_SCRIPT, 0o700)  # parola düz metin → root only
             FIRST_BOOT_SERVICE.write_text(
@@ -784,11 +867,22 @@ class BiosPasswordModule(Module):
         except OSError:
             pass
 
-        action_summary = (
-            "klonda parola TEMİZLENECEK (bios clear yonetici)"
-            if clear_mode else
-            f"klonda parola AYARLANACAK ({len(pw)} kr, koruma={protection})"
-        )
+        if clear_mode:
+            action_summary = "klonda parola TEMİZLENECEK (bios clear yonetici)"
+        elif supports_koruma:
+            action_summary = (
+                f"klonda parola AYARLANACAK ({len(pw)} kr, koruma={protection})"
+            )
+        else:
+            # Faz 1 örtük davranış açıklamasıyla
+            mode_human = (
+                "her açılışta (yön+kul aynı parola)"
+                if protection == "always"
+                else "yalnız BIOS setup'a girilirken (yalnız yön.)"
+            )
+            action_summary = (
+                f"klonda parola AYARLANACAK ({len(pw)} kr) — Faz 1: {mode_human}"
+            )
         details = (
             f"Model:    {info.get('model')}\n"
             f"Anakart:  {info.get('board')}  ·  BIOS: {info.get('bios')}\n"
@@ -961,26 +1055,43 @@ class BiosPasswordModule(Module):
         self._supported_cache = True
         pw_min = int(info.get("pw_min") or 4)
         pw_max = int(info.get("pw_max") or 12)
+        supports_koruma = _model_supports_protection_toggle(info.get("model"))
 
         pw, err = _validate_password(raw_pw, pw_min, pw_max)
         if err:
             return ApplyResult(False, err)
 
+        # _build_eta_112_argv 'bios' önekiyle başlayan TAM komut listesi
+        # döner ("bios", ..., "--json"). _eta_112_call kendisi 'bios' ve
+        # '--json' ekliyor; ortadaki gerçek alt-komut parçasını çıkartıp
+        # ona veriyoruz.
+        full_argv = _build_eta_112_argv(
+            pw, protection, supports_koruma=supports_koruma,
+        )
+        call_args = full_argv[1:-1]  # 'bios' ve '--json' arasındaki kısım
         if pw == "":
-            argv = ["clear", "yonetici"]
             human = "BIOS yönetici parolası TEMİZLENİYOR..."
-        else:
-            argv = ["set", "--yonetici", pw, "--koruma", protection]
+        elif supports_koruma:
             human = (
                 f"BIOS yönetici parolası AYARLANIYOR "
                 f"(uzunluk {len(pw)}, koruma {protection})..."
+            )
+        else:
+            mode_human = (
+                "her açılışta (yön+kul aynı parola atanıyor)"
+                if protection == "always"
+                else "yalnız BIOS setup'a girilirken (yalnız yönetici)"
+            )
+            human = (
+                f"BIOS yönetici parolası AYARLANIYOR "
+                f"(Faz 1 davranışı: {mode_human})..."
             )
         if progress:
             progress(human)
             progress("(flash'a yazılıyor; bu birkaç saniye sürebilir)")
 
         # Yazma + doğrulama — eta-112 kendi içinde yapıyor. 180 sn yeter.
-        result, debug = _eta_112_call(argv, allow_download=False, timeout=180)
+        result, debug = _eta_112_call(call_args, allow_download=False, timeout=180)
         if not result:
             return ApplyResult(
                 False,
@@ -1013,18 +1124,29 @@ class BiosPasswordModule(Module):
                 "BIOS değişikliğinin tamamen etkili olması için "
                 "makineyi YENİDEN BAŞLATIN."
             )
-        else:
+        elif supports_koruma:
             summary = (
                 f"Bu makinenin BIOS yönetici parolası ayarlandı "
                 f"(koruma: {protection}). BIOS değişikliğinin etkili olması "
+                "için makineyi YENİDEN BAŞLATIN."
+            )
+        else:
+            faz1_human = (
+                "her açılışta (yön+kul aynı parola)"
+                if protection == "always"
+                else "yalnız BIOS setup'a girilirken (yalnız yön.)"
+            )
+            summary = (
+                "Bu makinenin BIOS yönetici parolası ayarlandı "
+                f"(Faz 1: {faz1_human}). BIOS değişikliğinin etkili olması "
                 "için makineyi YENİDEN BAŞLATIN."
             )
         return ApplyResult(
             True,
             summary,
             details=(
-                "İşlem 'eta-112 bios "
-                f"{' '.join(argv)}' ile gerçekleştirildi.\n"
+                "İşlem 'eta-112 "
+                f"{' '.join(full_argv)}' ile gerçekleştirildi.\n"
                 "Bu adımdaki Uygula akışı KURMADI — yalnız bu makineye yazıldı."
             ),
             data={"clear_mode": (pw == ""), "protection": protection},

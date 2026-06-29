@@ -113,21 +113,27 @@ _WELCOME_INTRO = (
 _WELCOME_FEATURES_TITLE = "Bu sihirbazda neler bulacaksınız?"
 
 _WELCOME_FEATURES = (
-    "•  Sistem güncellemesi — paketleri imaj öncesi günceller; sahaya "
-    "çıkmadan en son yamayı alırsınız.",
-    "•  Yerel hesap yönetimi — root, etapadmin ve ogretmen parolalarını "
-    "bilinçli olarak siz belirler, dilerseniz parolalı girişi tamamen "
-    "kapatırsınız.",
-    "•  Toplu PIN anahtarı — öğretmenler için anahtarları imaj öncesi "
-    "merkezî olarak üretip imaja gömer; her tahtaya tek tek kurulum "
-    "yapmaktan kurtulursunuz.",
-    "•  Uzaktan bakım — SSH, Samba ve merkezi log ile sınıflara "
-    "dağıtılmış tahtalara masanızdan dokunabilirsiniz.",
-    "•  Sağlam çalışma — saat senkronu, benzersiz hostname ve güç "
-    "yönetimi ile her klon sahada tutarlı, bağımsız ve enerji verimli "
-    "kalır.",
-    "•  İmaj için sanitize — tekil kimlikleri sıfırlar, kullanılmayan "
-    "dosyaları temizler, izleri siler. Son adım: imaj alınmaya hazırsınız.",
+    "•  Sistem güncellemesi — paketleri imaj öncesi günceller.",
+    "•  Yerel hesap parolaları — root, etapadmin ve öğretmen "
+    "parolalarını siz belirler.",
+    "•  Her açılışta parola temizliği — tahta yeniden başladığında "
+    "yerel parolalar otomatik sıfırlanır (opsiyonel sertleştirme).",
+    "•  Öğretmen PIN anahtarları — merkezi olarak üretilip imaja "
+    "gömülür; her tahtaya tek tek kurmaktan kurtarır.",
+    "•  EBA QR parola diyalogu — ilk girişte çıkan parola sorusu "
+    "kapatılır.",
+    "•  SSH sunucusu — uzaktan komut/dosya erişimi.",
+    "•  Samba dosya paylaşımı — pencere açmadan dosya alıp verme.",
+    "•  Dayanıklı merkezi log — tahta logları kaybolmadan toplanır.",
+    "•  Zaman senkronu (NTP) — saat sapması olmaz.",
+    "•  Dinamik hostname — her tahta benzersiz ad alır.",
+    "•  Otomatik kapanma — unutulan tahta belli süre sonra kapanır.",
+    "•  Otomatik Ahenk Kaydı — klonlanan tahta Lider'e kendi "
+    "kimliğiyle yeniden kayıt olur.",
+    "•  BIOS yönetici parolası — desteklenen donanımda klonun ilk "
+    "açılışında tek seferlik ayarlanır.",
+    "•  İmaj sanitize — tekil kimlikler sıfırlanır, tarayıcı "
+    "kilitleri ve izler silinir; tahta imaj alınmaya hazır.",
 )
 
 _WELCOME_FLOW = (
@@ -167,12 +173,17 @@ class WelcomePage(Gtk.Box):
         title_lbl.set_margin_top(4)
         self.pack_start(title_lbl, False, False, 0)
 
+        # Features sıkı liste — maddeler arasında boşluk olmasın.
+        # Ana WelcomePage box'ı _ROW_SPACING ile aralık koyduğu için
+        # her madde ayrı pack_start ile aralandı; tek bir spacing=0
+        # iç box'a paketleyip bunu tek seferde eklemek aralığı keser.
+        features_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         for feature in _WELCOME_FEATURES:
             lbl = _wrapping_label(feature)
             lbl.set_max_width_chars(110)
-            lbl.set_margin_top(6)
             lbl.set_margin_start(8)
-            self.pack_start(lbl, False, False, 0)
+            features_box.pack_start(lbl, False, False, 0)
+        self.pack_start(features_box, False, False, 0)
 
         flow_lbl = _wrapping_label(_WELCOME_FLOW)
         flow_lbl.set_max_width_chars(110)
