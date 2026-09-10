@@ -173,7 +173,7 @@ class RemoteSyslogModule(Module):
         "sunucusuna DAYANIKLI BİÇİMDE gönderir. 50 tahtalı bir okulun "
         "loglarını tek bir arayüzden izleyebilir, olay/arıza taramasını "
         "saniyeler içinde yapabilirsiniz.\n\n"
-        "⚠ Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka "
+        " Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka "
         "uygulayın. Aksi hâlde imajdan klonlanan tüm tahtalar aynı hostname "
         "ile log gönderir; merkezi sunucudaki kayıtları tahta tahta ayırt "
         "edemezsiniz. Hostname adımı her klona kendi MAC adresinden türeyen "
@@ -187,7 +187,7 @@ class RemoteSyslogModule(Module):
         "kuyruk) kullanan gelişmiş bir yapılandırma dosyası yazılır. Paket "
         "güncellemesi gelirse yapılandırmanız korunur, geri almak da o tek "
         "dosyayı silmek kadar kolaydır.\n\n"
-        "🌐 Log sunucusu tahtalarla aynı ağda olmalı. Okulda tahtalar ve "
+        " Log sunucusu tahtalarla aynı ağda olmalı. Okulda tahtalar ve "
         "kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır; "
         "log sunucusunu bu ağa konumlandırmalısınız. İdari ağdan log "
         "sunucusuna erişim olmaz — bu bilinçli bir güvenlik kısıtıdır."
@@ -203,7 +203,7 @@ class RemoteSyslogModule(Module):
         ).exists()
         if not hostname_setup_done:
             lines.append(
-                "ℹ️ Hatırlatma: Benzersiz hostname adımı henüz uygulanmamış. "
+                "️ Hatırlatma: Benzersiz hostname adımı henüz uygulanmamış. "
                 "Bu adımı uygulayacaksanız mutlaka onu da uygulayın; aksi "
                 "hâlde merkezi sunucudaki loglarda tahtalar aynı isimle "
                 "görünür ve birbirinden ayırt edilemez."
@@ -211,7 +211,7 @@ class RemoteSyslogModule(Module):
             lines.append("")
 
         if RSYSLOG_CONF.exists():
-            lines.append(f"✓ Mevcut TiHA dayanıklı log yapılandırması: {RSYSLOG_CONF}")
+            lines.append(f" Mevcut TiHA dayanıklı log yapılandırması: {RSYSLOG_CONF}")
             lines.append("")
 
             # Kuyruk dosyalarının durumunu kontrol et
@@ -230,11 +230,11 @@ class RemoteSyslogModule(Module):
                 lines.append("")
 
                 if total_size > 0:
-                    lines.append("⚠ Kuyrukta bekleyen log var — uzak sunucu erişilemez durumda olabilir.")
+                    lines.append(" Kuyrukta bekleyen log var — uzak sunucu erişilemez durumda olabilir.")
                 else:
-                    lines.append("✓ Kuyruk boş — log iletimi normal çalışıyor.")
+                    lines.append(" Kuyruk boş — log iletimi normal çalışıyor.")
             else:
-                lines.append("✓ Henüz kuyruk dosyası oluşmamış — log iletimi doğrudan çalışıyor.")
+                lines.append(" Henüz kuyruk dosyası oluşmamış — log iletimi doğrudan çalışıyor.")
 
             lines.append("")
             lines.append("Mevcut yapılandırma:")

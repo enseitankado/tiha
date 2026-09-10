@@ -110,7 +110,7 @@ class PasswordDialogModule(Module):
         "Bu adım, ilk girişte otomatik açılan diyalogu kapatır. "
         "Kullanıcının parolası olmamış olur; tahtaya yine yalnızca EBA QR "
         "ile giriş yapılır. Bir öğretmen kendi parolasını koymak isterse "
-        "her zaman Sistem Ayarları → Kullanıcı Hesapları üzerinden uygun "
+        "her zaman Sistem Ayarları > Kullanıcı Hesapları üzerinden uygun "
         "bir ortamda (örneğin teneffüste, sınıf boşken) tanımlayabilir."
     )
     undo_supported = True
@@ -118,7 +118,7 @@ class PasswordDialogModule(Module):
     def preview(self) -> str:
         if not AUTOSTART_FILE.is_file():
             return (
-                f"⚠ Hedef bulunamadı: {AUTOSTART_FILE}\n\n"
+                f" Hedef bulunamadı: {AUTOSTART_FILE}\n\n"
                 "eta-password-changer paketi kurulu değil görünüyor. "
                 "Bu adım uygulanamaz."
             )
@@ -126,7 +126,7 @@ class PasswordDialogModule(Module):
         try:
             text = AUTOSTART_FILE.read_text(encoding="utf-8")
         except OSError as exc:
-            return f"⚠ Autostart dosyası okunamadı: {exc}"
+            return f" Autostart dosyası okunamadı: {exc}"
 
         already_hidden = _is_hidden(text)
         backup_path = self.state_dir / AUTOSTART_FILE.name
@@ -134,7 +134,7 @@ class PasswordDialogModule(Module):
 
         lines = [
             f"Hedef     : {AUTOSTART_FILE}",
-            f"Durum     : {'⛔ devre dışı (Hidden=true)' if already_hidden else '🔔 etkin — diyalog açılıyor'}",
+            f"Durum     : {'⛔ devre dışı (Hidden=true)' if already_hidden else ' etkin — diyalog açılıyor'}",
             f"Yedek     : {'var (' + str(backup_path) + ')' if backup_exists else 'yok'}",
             "",
             "Bu adım uygulandığında:",

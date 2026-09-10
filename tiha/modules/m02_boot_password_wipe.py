@@ -132,7 +132,7 @@ class BootPasswordWipeModule(Module):
         "servisi kurar. Böylece tahtaya dokunarak yazılan ve sızdırılan "
         "herhangi bir parola bir sonraki açılışta işe yaramaz; tahta "
         "yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\n"
-        "⚠ Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
+        " Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
         "Teknik bakım erişimi (yerel yönetim, SSH) her zaman korunur."
     )
 
@@ -152,9 +152,9 @@ class BootPasswordWipeModule(Module):
         missing: list[str] = []
         for u in extras:
             if u in otp_users:
-                rows.append((u, "kişisel", "✓ var", "EBA-QR / PIN / USB ile girer"))
+                rows.append((u, "kişisel", " var", "EBA-QR / PIN / USB ile girer"))
             else:
-                rows.append((u, "kişisel", "⚠ yok", "bu servis aktifken tahtaya GİREMEZ"))
+                rows.append((u, "kişisel", " yok", "bu servis aktifken tahtaya GİREMEZ"))
                 missing.append(u)
 
         # Kolon genişliklerini dinamik hesapla
@@ -176,7 +176,7 @@ class BootPasswordWipeModule(Module):
         if missing:
             out.append("")
             out.append(
-                f"⚠ DİKKAT — {len(missing)} kişisel hesabın PIN anahtarı yok: "
+                f" DİKKAT — {len(missing)} kişisel hesabın PIN anahtarı yok: "
                 + ", ".join(missing)
             )
             out.append(

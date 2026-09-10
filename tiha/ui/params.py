@@ -86,6 +86,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
         {
+            "key": "include_ogretmen",
+            "label": "Ortak öğretmen hesabı (ogretmen) için de PIN üret",
+            "type": "bool",
+            "required": False,
+            "default": "True",
+            "help": (
+                "İşaretlenirse ortak ogretmen hesabı için de bir OTP "
+                "anahtarı üretilir. Sınıfta parola paylaşmadan geçici "
+                "giriş için kullanışlıdır; hesabın kendi parolası varsa "
+                "onunla giriş yine mümkündür."
+            ),
+        },
+        {
             "key": "reserve_count",
             "label": "Yedek hesap sayısı",
             "type": "spin",
@@ -94,7 +107,32 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "min": 0,
             "max": 999,
             "step": 1,
-            "help": "Sonradan okula atanacak öğretmenler için ogretmen01, ogretmen02 … biçiminde boş hesap.",
+            "help": (
+                "Sonradan okula atanacak öğretmenler için ogretmen01, "
+                "ogretmen02 … biçiminde boş hesap. "
+                "Bu hesaplar sistem üzerinde gerçekten oluşturulur: "
+                "useradd ile ev dizini açılır, EBA QR ile aynı standart "
+                "cihaz gruplarına (ses, USB, kamera, yazıcı vb.) eklenir "
+                "ve parola kilitli tutulur (yalnız OTP/QR ile giriş)."
+            ),
+        },
+        {
+            "key": "make_group_pin",
+            "label": "Yedek hesaplar için ortak PIN oluştur (@ogretmenler grup-PIN)",
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            # Bu seçenek yalnızca yedek hesap sayısı > 0 iken anlamlı.
+            # pages.py, `reserve_count` spin'inin değeriyle bu kutunun
+            # sensitive halini senkronlar.
+            "enable_when_reserve_positive": True,
+            "help": (
+                "İşaretlenirse 'ogretmenler' grubu (yoksa) oluşturulur, "
+                "bu adımda açılan ogretmenX yedek hesapları bu gruba "
+                "eklenir ve gruba özel bir '@ogretmenler' PIN anahtarı "
+                "üretilir (eta-otp-lock @grup mekanizması). PIN kartı "
+                "çıktısında ayrı bir 'ORTAK PIN' kartı olarak görünür."
+            ),
         },
         {
             "key": "remove_extra_users",

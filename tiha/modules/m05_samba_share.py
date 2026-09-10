@@ -78,7 +78,7 @@ class SambaShareModule(Module):
         "yüklemek zorunda kalmadan; uzaktaki bilgisayarınızdan erişirsiniz. "
         "Güncelleme dosyası bırakmak, öğrenci çalışmalarını almak, hata "
         "günlüklerini kopyalamak için kullanışlıdır.\n\n"
-        "🌐 Tahtayla aynı ağda olmanız gerekir. Okulda tahtalar ve "
+        "Tahtayla aynı ağda olmanız gerekir. Okulda tahtalar ve "
         "kablosuz erişim noktaları (AP) genellikle `10.x.x.x` "
         "aralığındadır; bu ağdaki bir bilgisayardan paylaşıma ulaşabilirsiniz. "
         "Farklı bir ağdan (örn. öğrenci/misafir ağları) ulaşılamaz; bu "

@@ -647,7 +647,7 @@ class BiosPasswordModule(Module):
             board = info.get("board") or "(tespit edilemedi)"
             bios = info.get("bios") or "(tespit edilemedi)"
             return (
-                "❌ Bu donanım eta-112 tarafından DESTEKLENMİYOR.\n\n"
+                " Bu donanım eta-112 tarafından DESTEKLENMİYOR.\n\n"
                 f"  Anakart: {board}\n"
                 f"  BIOS:    {bios}\n\n"
                 "Bu adım uygulanmaz; uygula tıklansa bile servis kurulmaz. "
@@ -667,7 +667,7 @@ class BiosPasswordModule(Module):
         }.get(prot, "(okunamadı)")
         mac = _primary_mac() or "(tespit edilemedi)"
         lines = [
-            "✓ Donanım destekleniyor.",
+            " Donanım destekleniyor.",
             f"  Model:           {model}",
             f"  Flash çipi:      {chip}",
             f"  Parola uzunluğu: {pw_min}-{pw_max} karakter, BÜYÜK A-Z 0-9",
@@ -678,21 +678,21 @@ class BiosPasswordModule(Module):
         ]
         if not supports_koruma:
             lines.extend([
-                "⚠ Faz 1 farkı: BIOS'ta ayrı bir 'parola ne zaman sorulsun' "
+                " Faz 1 farkı: BIOS'ta ayrı bir 'parola ne zaman sorulsun' "
                 "byte'ı yok.",
                 "  Koruma seçiminize göre eta-112 parolaları şöyle ayarlar:",
-                "    • Yalnız BIOS ayarlarına girilirken (setup)  →  "
+                "    • Yalnız BIOS ayarlarına girilirken (setup)  >  "
                 "sadece yönetici parolası",
-                "    • Her açılışta (always)                      →  "
+                "    • Her açılışta (always)                      >  "
                 "yönetici + kullanıcı parolasına aynı değer",
                 "",
             ])
         lines.extend([
             "Bu adımda yapılacaklar:",
-            f"  • Kaynak MAC ({mac}) → {IMAGED_MAC_FILE}",
-            f"  • eta-112 → {BUNDLED_ETA_112}",
-            f"  • Boot scripti → {FIRST_BOOT_SCRIPT} (chmod 700, parola gömülü)",
-            f"  • Systemd unit → {FIRST_BOOT_SERVICE}",
+            f"  • Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
+            f"  • eta-112 > {BUNDLED_ETA_112}",
+            f"  • Boot scripti > {FIRST_BOOT_SCRIPT} (chmod 700, parola gömülü)",
+            f"  • Systemd unit > {FIRST_BOOT_SERVICE}",
             f"  • systemctl enable {FIRST_BOOT_SERVICE_NAME}",
             "",
             "Klon makinedeki davranış (yalnızca ilk açılışta):",
@@ -701,8 +701,8 @@ class BiosPasswordModule(Module):
             "  ├── MAC eşit ──────────────► çık (kaynak tahta)",
             "  └── MAC farklı (klon)",
             "       └── eta-112 set --yonetici PASS",
-            "            ✓ → sentinel yaz, servisi disable et, parola scriptini sil",
-            "            ✗ → sentinel yazma; sonraki boot tekrar dene",
+            "             > sentinel yaz, servisi disable et, parola scriptini sil",
+            "             > sentinel yazma; sonraki boot tekrar dene",
             "",
             "Geri al: boot scripti + servis + sentinel + paketlenmiş eta-112 silinir.",
         ])

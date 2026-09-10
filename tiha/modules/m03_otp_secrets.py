@@ -231,14 +231,49 @@ def normalize_username(full_name: str) -> str:
     return f"{parts[0]}.{parts[-1]}"
 
 
+# EBA QR / eta-usb-login mekanizmasında yeni açılan öğretmen hesapları
+# şu cihaz gruplarına eklenir (kullanıcının ses, USB, kamera, yazıcı
+# gibi standart masaüstü kaynaklarına erişebilmesi için). Yedek
+# hesapları da aynı setle açıyoruz ki ileride bir öğretmen o hesaba
+# atandığında ek yapılandırma gerekmesin.
+EBA_STANDARD_GROUPS = (
+    "cdrom", "floppy", "audio", "video", "plugdev",
+    "bluetooth", "scanner", "netdev", "dip", "lpadmin",
+)
+
+# eta-otp-lock/pam_otp.py `@ogretmenler` gibi grup-OTP secret'larını
+# destekliyor. Bu grup Pardus ETAP kurulumunda default gelmiyor;
+# TiHA gerekirse kendisi oluşturur (idempotent).
+OGRETMENLER_GROUP = "ogretmenler"
+
+
+def ensure_ogretmenler_group() -> bool:
+    """`ogretmenler` grubunu garantiler; yoksa groupadd çağırır.
+    Zaten varsa dokunmaz."""
+    check = run_cmd(["getent", "group", OGRETMENLER_GROUP], check=False)
+    if check.ok:
+        return True
+    add = run_cmd(["groupadd", OGRETMENLER_GROUP], check=False)
+    if add.ok:
+        log.info("'%s' grubu oluşturuldu.", OGRETMENLER_GROUP)
+        return True
+    log.warning("'%s' grubu oluşturulamadı: %s",
+                OGRETMENLER_GROUP, add.stderr.strip())
+    return False
+
+
 def create_user(username: str, full_name: str = "") -> bool:
     """TiHA dahili yedek kullanıcı oluşturma (useradd + usermod -L).
 
     ``full_name`` verilirse passwd dosyasının GECOS alanına yazılır
-    (öğretmenin görünen ad/soyadı).
+    (öğretmenin görünen ad/soyadı). Yeni açılan hesap EBA QR /
+    eta-usb-login mekanizmasıyla aynı standart cihaz gruplarına
+    eklenir; parola atanmadığı için usermod -L ile kilitlenir
+    (öğretmen yalnız OTP/QR ile giriş yapar).
+    `ogretmenler` grubuna eklemek create_user'ın kapsamı dışı — o iş
+    apply()'da opsiyonel "Yedek hesaplar için grup-PIN" akışına ait.
     """
     if user_exists(username):
-        # Hesap zaten varsa GECOS alanını yine de güncelle
         if full_name:
             set_user_full_name(username, full_name)
         return True
@@ -249,8 +284,11 @@ def create_user(username: str, full_name: str = "") -> bool:
     result = run_cmd(cmd)
     if not result.ok:
         log.error("Kullanıcı eklenemedi '%s': %s", username, result.stderr.strip())
+        return False
+    for grp in EBA_STANDARD_GROUPS:
+        run_cmd(["usermod", "-a", "-G", grp, username], check=False)
     run_cmd(["usermod", "-L", username])
-    return result.ok
+    return True
 
 
 def set_user_full_name(username: str, full_name: str) -> bool:
@@ -582,7 +620,7 @@ class OTPSecretsModule(Module):
         if tool_available is None:
             lines.append("Araç: kontrol ediliyor (eta-otp-cli erişilebilirliği)…")
         elif tool_available:
-            lines.append("Araç: enseitankado/eta-otp-cli → otp-cli.py (sadece OTP anahtarları)")
+            lines.append("Araç: enseitankado/eta-otp-cli > otp-cli.py (sadece OTP anahtarları)")
         else:
             lines.append("Araç: TiHA dahili pyotp yolu (sadece OTP anahtarları)")
         lines.append("")
@@ -605,27 +643,27 @@ class OTPSecretsModule(Module):
         lines.append("DİKKAT: Bu adım artık sadece OTP anahtarları oluşturur!")
         lines.append("Sistem kullanıcı hesapları oluşturmaz.")
         if user_count >= MIN_USERS_FOR_CACHE:
-            lines.append(f"⚠ {MIN_USERS_FOR_CACHE}+ kullanıcı tespit edildi — greeter cache güncellemesi gerekli")
+            lines.append(f" {MIN_USERS_FOR_CACHE}+ kullanıcı tespit edildi — greeter cache güncellemesi gerekli")
             if GREETER_SCRIPT_PATH.exists():
-                lines.append("✓ Greeter cache script mevcut")
+                lines.append(" Greeter cache script mevcut")
             else:
-                lines.append("  → GitHub'dan greeter cache script indirilecek")
+                lines.append("  > GitHub'dan greeter cache script indirilecek")
 
             if GREETER_SERVICE_PATH.exists():
-                lines.append("✓ Greeter cache service mevcut (otomatik çalıştırma aktif)")
+                lines.append(" Greeter cache service mevcut (otomatik çalıştırma aktif)")
             else:
-                lines.append("  → Otomatik greeter cache service oluşturulacak")
+                lines.append("  > Otomatik greeter cache service oluşturulacak")
         lines.append("")
 
         if has_otp:
-            lines.append("✓ PIN anahtarı KURULU kişisel hesaplar:")
+            lines.append(" PIN anahtarı KURULU kişisel hesaplar:")
             lines.extend(f"    • {u}" for u in has_otp)
         else:
             lines.append("Henüz kişisel PIN anahtarı kayıtlı değil.")
 
         if missing_otp:
             lines.append("")
-            lines.append("⚠ Kişisel hesabı olan ama PIN anahtarı OLMAYAN kullanıcılar:")
+            lines.append(" Kişisel hesabı olan ama PIN anahtarı OLMAYAN kullanıcılar:")
             lines.extend(f"    • {u}" for u in missing_otp)
             lines.append("")
             lines.append(
@@ -639,7 +677,7 @@ class OTPSecretsModule(Module):
         if orphan_secrets:
             lines.append("")
             lines.append(
-                "ℹ Sistemde hesabı olmayan PIN kayıtları "
+                " Sistemde hesabı olmayan PIN kayıtları "
                 f"(hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
             )
 
@@ -652,16 +690,16 @@ class OTPSecretsModule(Module):
         lines.append("─" * 50)
 
         if extra_users:
-            lines.append(f"🗑️ Fazladan Kullanıcı Hesapları ({len(extra_users)} adet):")
+            lines.append(f"️ Fazladan Kullanıcı Hesapları ({len(extra_users)} adet):")
             lines.extend(f"    • {user}" for user in extra_users[:10])
             if len(extra_users) > 10:
                 lines.append(f"    • ... ve {len(extra_users) - 10} tane daha")
             lines.append("")
-            lines.append("⚠️ Bu hesaplar varsayılan sistem kullanıcıları değil!")
-            lines.append("→ 'Fazladan Hesapları Sil' (onaylı) butonu ile kaldırabilirsiniz")
+            lines.append("️ Bu hesaplar varsayılan sistem kullanıcıları değil!")
+            lines.append("> 'Fazladan Hesapları Sil' (onaylı) butonu ile kaldırabilirsiniz")
             lines.append("   Sistem yalnızca etapadmin, ogrenci, ogretmen hesaplarıyla kalacak")
         else:
-            lines.append("✓ Sadece varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)")
+            lines.append(" Sadece varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)")
 
         return "\n".join(lines) if lines else "Henüz hiç kişisel hesap yok."
 
@@ -676,6 +714,12 @@ class OTPSecretsModule(Module):
         csv_path_str: str = (params.get("teachers_csv_path") or "").strip()
         include_etapadmin: bool = str(
             params.get("include_etapadmin", "False")
+        ).lower() in ("true", "1", "yes", "on")
+        include_ogretmen: bool = str(
+            params.get("include_ogretmen", "False")
+        ).lower() in ("true", "1", "yes", "on")
+        make_group_pin: bool = str(
+            params.get("make_group_pin", "False")
         ).lower() in ("true", "1", "yes", "on")
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
@@ -729,6 +773,9 @@ class OTPSecretsModule(Module):
         # vererek geçici yetki devretsin diye.
         if include_etapadmin:
             teacher_names.append("etapadmin")
+        # Opsiyonel: ortak ogretmen hesabı için de PIN üret.
+        if include_ogretmen:
+            teacher_names.append("ogretmen")
 
         if not teacher_names:
             return ApplyResult(
@@ -754,23 +801,79 @@ class OTPSecretsModule(Module):
                 details="Ayrıntı için /var/log/tiha/tiha.log dosyasına bakın.",
             )
 
-        # Her hesap için passwd GECOS (ad/soyad) alanını yaz. Harici
-        # toplu-kullanici-olustur.py bunu yapmıyor; yapılan kullanıcılar
-        # için biz uyguluyoruz. Dahili yolda useradd --comment ile zaten
-        # yazılmış olur ama yedek hesaplar (Ogretmen 01 vb.) için yine
-        # tutarlı kalsın diye burada da çağırıyoruz.
+        # Yedek hesaplar için sistem hesabını GARANTİLE. Dahili yol
+        # (_apply_with_internal) zaten create_user çağırıyor; dış araç
+        # yolu (_apply_with_tool) yalnız OTP anahtarını üretiyor,
+        # sistem hesabı oluşturmuyor.
+        created_reserve_usernames: list[str] = []
+        if reserve > 0 and cli_script:
+            if progress:
+                progress(f"\n{reserve} yedek hesap sistemde oluşturuluyor "
+                         "(useradd + EBA cihaz grupları + parola kilitli)...")
+            for i in range(1, reserve + 1):
+                full_name = f"Ogretmen {i:02d}"
+                username = _eta_otp_cli_normalize(full_name)
+                if not username:
+                    continue
+                if create_user(username, full_name=full_name):
+                    created_reserve_usernames.append(username)
+                    if progress:
+                        progress(f"  + {username}")
+                else:
+                    if progress:
+                        progress(f"  - {username} olusturulamadi")
+        elif reserve > 0:
+            for i in range(1, reserve + 1):
+                full_name = f"Ogretmen {i:02d}"
+                username = normalize_username(full_name)
+                if username and user_exists(username):
+                    created_reserve_usernames.append(username)
+
+        # Her hesap için passwd GECOS (ad/soyad) alanını yaz.
         self._apply_gecos(teacher_names, cli_used=bool(cli_script), progress=progress)
 
         # Yeni eklenenleri ve anahtarlarını oku
         after_secrets = load_secrets()
         new_users = [u for u in after_secrets if u not in before_secrets]
 
-        if not new_users:
+        # Yedek hesap grup-PIN akışı — checkbox işaretli + reserve > 0 +
+        # en az bir ogretmenX hesabı oluşturuldu koşulu.
+        group_key = f"@{OGRETMENLER_GROUP}"
+        group_secret_is_new = False
+        if make_group_pin and reserve > 0 and created_reserve_usernames:
+            if not ensure_ogretmenler_group():
+                if progress:
+                    progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
+                             "grup-PIN akisi iptal edildi.")
+            else:
+                if progress:
+                    progress(f"\n{len(created_reserve_usernames)} yedek hesap "
+                             f"'{OGRETMENLER_GROUP}' grubuna ekleniyor...")
+                for u in created_reserve_usernames:
+                    run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
+                    if progress:
+                        progress(f"  + {u}")
+                after_secrets[group_key] = pyotp.random_base32()
+                save_secrets(after_secrets)
+                group_secret_is_new = True
+                if progress:
+                    progress(f"\nOrtak grup-PIN uretildi: {group_key} — "
+                             "onceki grup-PIN gecersizdir, telefonlara "
+                             "yeniden ekletin.")
+        elif make_group_pin and reserve == 0:
+            if progress:
+                progress("\n'Yedek hesaplar icin ortak PIN' isaretli ama "
+                         "yedek hesap sayisi 0 — akis atlandi.")
+
+        if not new_users and not group_secret_is_new:
             return ApplyResult(
                 False,
                 "Hiç yeni kullanıcı oluşmadı — hepsi zaten vardı olabilir.",
                 details=f"Mevcut kayıt sayısı: {len(after_secrets)}",
             )
+        # Grup secret'ı da PIN kartı listesine dahil et
+        if group_secret_is_new and group_key not in new_users:
+            new_users.append(group_key)
 
         # Greeter cache kontrolü ve kurulumu
         total_users = count_regular_users()
@@ -821,6 +924,9 @@ class OTPSecretsModule(Module):
                     display_of[u] = "Sistem Yöneticisi (etapadmin)"
                     continue
                 display_of[u] = name
+        # Grup-PIN kartı için özel etiket
+        if group_key in new_users:
+            display_of[group_key] = "Ogretmenler grubu — ORTAK PIN"
 
         # Rapor
         report_lines: list[str] = []
@@ -916,31 +1022,56 @@ class OTPSecretsModule(Module):
         for user in new_users:
             secret = secrets.get(user, "")
             display = display_of.get(user, "(yedek hesap)")
-            # secret'ı 4'lü gruplara böl — telefondan manuel girişi kolaylaştırır
             grouped = " ".join(secret[i:i + 4] for i in range(0, len(secret), 4))
             url = otpauth_url(user, secret)
+            is_group = user.startswith("@")
+            if is_group:
+                user_line = (
+                    f'<div class="user">Grup: <code>{_esc(user[1:])}</code> '
+                    "— bu PIN, gruba üye tüm öğretmen hesaplarına giriş için "
+                    "geçerlidir.</div>"
+                )
+                instructions = f'''    <ol>
+      <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
+          bir uygulama kurun.</li>
+      <li>Uygulamada <em>"+ Anahtar ekle"</em> > <em>"Anahtarı manuel
+          gir"</em>'i seçin.</li>
+      <li>Hesap adı olarak <em>istediğiniz</em> bir etiket yazın
+          (örn. <code>Sınıf-PIN</code>).</li>
+      <li>Anahtarı 4'lü gruplar hâlinde yukarıdaki kutudan kopyalayın.</li>
+      <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
+      <li>Kaydedin. Bu PIN, tahtada <strong>{_esc(user[1:])}</strong>
+          grubuna üye herhangi bir hesabın giriş ekranında
+          kullanılabilir.</li>
+    </ol>'''
+            else:
+                user_line = (
+                    f'<div class="user">Kullanıcı adı: '
+                    f'<code>{_esc(user)}</code></div>'
+                )
+                instructions = f'''    <ol>
+      <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
+          bir uygulama kurun.</li>
+      <li>Uygulamada <em>"+ Anahtar ekle"</em> > <em>"Anahtarı manuel
+          gir"</em>'i seçin.</li>
+      <li>Hesap adı olarak yazın: <code>{_esc(user)}</code></li>
+      <li>Anahtarı 4'lü gruplar hâlinde yukarıdaki kutudan kopyalayın.</li>
+      <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
+      <li>Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir;
+          tahta giriş ekranında bu PIN'i girersiniz.</li>
+    </ol>'''
             cards.append(f'''
-<article class="card">
+<article class="card{' group' if is_group else ''}">
   <header>
     <h2>{_esc(display)}</h2>
-    <div class="user">Kullanıcı adı: <code>{_esc(user)}</code></div>
+    {user_line}
   </header>
   <section class="secret">
     <div class="label">PIN anahtarı (telefonunuza manuel girin):</div>
     <div class="key">{_esc(grouped)}</div>
   </section>
   <section class="instructions">
-    <ol>
-      <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
-          bir uygulama kurun.</li>
-      <li>Uygulamada <em>“+ Anahtar ekle”</em> → <em>“Anahtarı manuel
-          gir”</em>'i seçin.</li>
-      <li>Hesap adı olarak yazın: <code>{_esc(user)}</code></li>
-      <li>Anahtarı 4'lü gruplar hâlinde yukarıdaki kutudan kopyalayın.</li>
-      <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
-      <li>Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir;
-          tahta giriş ekranında bu PIN'i girersiniz.</li>
-    </ol>
+{instructions}
   </section>
   <footer class="otpauth">
     <small>otpauth URL: <code>{_esc(url)}</code></small>

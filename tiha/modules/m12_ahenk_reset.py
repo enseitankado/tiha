@@ -473,7 +473,7 @@ class AhenkResetModule(Module):
         ahenk_kurulu = _is_ahenk_installed()
         lines = [
             "Bu adımda yapılacaklar:",
-            f"  • Kaynak MAC ({mac}) → {IMAGED_MAC_FILE}",
+            f"  • Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
             (
                 "  • ahenk paketi zaten kurulu — yeniden kurulmayacak."
                 if ahenk_kurulu

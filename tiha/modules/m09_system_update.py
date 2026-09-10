@@ -223,17 +223,17 @@ class SystemUpdateModule(Module):
         repo_status = []
 
         if repo_issues["missing_main_repos"]:
-            repo_status.append("❌ Ana Pardus ETAP depoları eksik")
+            repo_status.append(" Ana Pardus ETAP depoları eksik")
         else:
             repo_status.append("✅ Ana Pardus ETAP depoları mevcut")
 
         if repo_issues["broken_files"]:
-            repo_status.append(f"⚠️ {len(repo_issues['broken_files'])} bozuk repository dosyası")
+            repo_status.append(f"️ {len(repo_issues['broken_files'])} bozuk repository dosyası")
         else:
             repo_status.append("✅ Bozuk repository dosyası yok")
 
         if repo_issues["empty_sources_list"]:
-            repo_status.append("❌ /etc/apt/sources.list boş veya eksik")
+            repo_status.append(" /etc/apt/sources.list boş veya eksik")
 
         # Bekleyen güncelleme sayısı — cache'ten okunur. Cache yoksa
         # arka plan worker tetiklenir (UI bloke olmadan); önizleme
@@ -251,7 +251,7 @@ class SystemUpdateModule(Module):
                 "📦 Bekleyen yükseltme sayısı arka planda kontrol ediliyor…",
                 "",
                 "Bu sayıya bakmadan da Uygula'ya basabilirsiniz; adım yine de",
-                "repository onarımı + apt update → full-upgrade → autoremove → clean",
+                "repository onarımı + apt update > full-upgrade > autoremove > clean",
                 "zincirini çalıştırır."
             ])
         elif count < 0:
@@ -260,7 +260,7 @@ class SystemUpdateModule(Module):
                 "",
                 "Uygula çalıştırıldığında:",
                 "• Repository sorunları düzeltilir",
-                "• apt update → full-upgrade → autoremove → clean"
+                "• apt update > full-upgrade > autoremove > clean"
             ])
         elif count == 0:
             preview_lines.extend([
@@ -275,7 +275,7 @@ class SystemUpdateModule(Module):
                 "",
                 "Uygula çalıştırıldığında:",
                 "• Repository sorunları düzeltilir",
-                "• apt update → full-upgrade → autoremove → clean",
+                "• apt update > full-upgrade > autoremove > clean",
                 "• Uzun sürebilir"
             ])
 

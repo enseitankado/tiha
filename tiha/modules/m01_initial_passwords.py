@@ -230,7 +230,7 @@ class InitialPasswordsModule(Module):
         lines: list[str] = []
         lines.append("Sistemdeki ortak hesaplar:")
         for user, exists in user_status.items():
-            status = "✓ mevcut" if exists else "⨯ yok"
+            status = " mevcut" if exists else "⨯ yok"
             lines.append(f"    • {user}: {status}")
         if not any(user_status.values()):
             lines.append("    (ogrenci ve ogretmen zaten yok)")

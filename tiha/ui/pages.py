@@ -58,6 +58,20 @@ def _apply_line_spacing(label: Gtk.Label, factor: float = 1.35) -> None:
         pass
 
 
+def _count_sentences(text: str) -> int:
+    """Cümle sayısını yaklaşık olarak sayar (. ! ? ile biten dizeler).
+
+    Aynı satırdaki birden çok cümleyi ve boş satırları (paragraf ayırıcı)
+    hesaba katar. Rationale'ın "kısa" mı "uzun" mu olduğunu belirlemek
+    için kullanılır — kesin dilbilimsel sayım değil, hızlı bir yaklaşım.
+    """
+    if not text:
+        return 0
+    import re
+    parts = [p for p in re.split(r"[.!?]+", text) if p.strip()]
+    return len(parts)
+
+
 def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = False) -> Gtk.Label:
     lbl = Gtk.Label(label=text, xalign=0)
     lbl.set_line_wrap(True)
@@ -112,28 +126,42 @@ _WELCOME_INTRO = (
 
 _WELCOME_FEATURES_TITLE = "Bu sihirbazda neler bulacaksınız?"
 
-_WELCOME_FEATURES = (
-    "•  Sistem güncellemesi — paketleri imaj öncesi günceller.",
-    "•  Yerel hesap parolaları — root, etapadmin ve öğretmen "
-    "parolalarını siz belirler.",
-    "•  Her açılışta parola temizliği — tahta yeniden başladığında "
-    "yerel parolalar otomatik sıfırlanır (opsiyonel sertleştirme).",
-    "•  Öğretmen PIN anahtarları — merkezi olarak üretilip imaja "
-    "gömülür; her tahtaya tek tek kurmaktan kurtarır.",
-    "•  EBA QR parola diyalogu — ilk girişte çıkan parola sorusu "
-    "kapatılır.",
-    "•  SSH sunucusu — uzaktan komut/dosya erişimi.",
-    "•  Samba dosya paylaşımı — pencere açmadan dosya alıp verme.",
-    "•  Dayanıklı merkezi log — tahta logları kaybolmadan toplanır.",
-    "•  Zaman senkronu (NTP) — saat sapması olmaz.",
-    "•  Dinamik hostname — her tahta benzersiz ad alır.",
-    "•  Otomatik kapanma — unutulan tahta belli süre sonra kapanır.",
-    "•  Otomatik Ahenk Kaydı — klonlanan tahta Lider'e kendi "
-    "kimliğiyle yeniden kayıt olur.",
-    "•  BIOS yönetici parolası — desteklenen donanımda klonun ilk "
-    "açılışında tek seferlik ayarlanır.",
-    "•  İmaj sanitize — tekil kimlikler sıfırlanır, tarayıcı "
-    "kilitleri ve izler silinir; tahta imaj alınmaya hazır.",
+# (başlık, açıklama) çiftleri — hoşgeldiniz sayfasında iki sütunlu bir
+# Grid ile render edilir; böylece açıklamaların ilk harfi aynı hizada
+# başlar.
+_WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
+    ("Sistem güncellemesi",
+     "paketleri imaj öncesi günceller."),
+    ("Yerel hesap parolaları",
+     "root, etapadmin ve öğretmen parolalarını siz belirler."),
+    ("Her açılışta parola temizliği",
+     "tahta yeniden başladığında yerel parolalar otomatik sıfırlanır "
+     "(opsiyonel sertleştirme)."),
+    ("Öğretmen PIN anahtarları",
+     "merkezi olarak üretilip imaja gömülür; her tahtaya tek tek "
+     "kurmaktan kurtarır."),
+    ("EBA QR parola diyalogu",
+     "ilk girişte çıkan parola sorusu kapatılır."),
+    ("SSH sunucusu",
+     "uzaktan komut/dosya erişimi."),
+    ("Samba dosya paylaşımı",
+     "pencere açmadan dosya alıp verme."),
+    ("Dayanıklı merkezi log",
+     "tahta logları kaybolmadan toplanır."),
+    ("Zaman senkronu (NTP)",
+     "saat sapması olmaz."),
+    ("Dinamik hostname",
+     "her tahta benzersiz ad alır."),
+    ("Otomatik kapanma",
+     "unutulan tahta belli süre sonra kapanır."),
+    ("Otomatik Ahenk Kaydı",
+     "klonlanan tahta Lider'e kendi kimliğiyle yeniden kayıt olur."),
+    ("BIOS yönetici parolası",
+     "desteklenen donanımda klonun ilk açılışında tek seferlik "
+     "ayarlanır."),
+    ("İmaj sanitize",
+     "tekil kimlikler sıfırlanır, tarayıcı kilitleri ve izler silinir; "
+     "tahta imaj alınmaya hazır."),
 )
 
 _WELCOME_FLOW = (
@@ -173,17 +201,24 @@ class WelcomePage(Gtk.Box):
         title_lbl.set_margin_top(4)
         self.pack_start(title_lbl, False, False, 0)
 
-        # Features sıkı liste — maddeler arasında boşluk olmasın.
-        # Ana WelcomePage box'ı _ROW_SPACING ile aralık koyduğu için
-        # her madde ayrı pack_start ile aralandı; tek bir spacing=0
-        # iç box'a paketleyip bunu tek seferde eklemek aralığı keser.
-        features_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        for feature in _WELCOME_FEATURES:
-            lbl = _wrapping_label(feature)
-            lbl.set_max_width_chars(110)
-            lbl.set_margin_start(8)
-            features_box.pack_start(lbl, False, False, 0)
-        self.pack_start(features_box, False, False, 0)
+        # Features iki sütunlu Grid — sol sütun madde başlığı (kalın),
+        # sağ sütun açıklama; tüm açıklamaların ilk harfi aynı x'ten
+        # başlar. Satırlar arası boşluk 0.
+        features_grid = Gtk.Grid()
+        features_grid.set_row_spacing(2)
+        features_grid.set_column_spacing(14)
+        features_grid.set_margin_start(8)
+        for row_idx, (title, description) in enumerate(_WELCOME_FEATURES):
+            bullet = Gtk.Label(label="•", xalign=0)
+            title_lbl = Gtk.Label(xalign=0)
+            title_lbl.set_markup(f"<b>{GLib.markup_escape_text(title)}</b>")
+            desc_lbl = _wrapping_label(description)
+            desc_lbl.set_hexpand(True)
+            desc_lbl.set_max_width_chars(80)
+            features_grid.attach(bullet,    0, row_idx, 1, 1)
+            features_grid.attach(title_lbl, 1, row_idx, 1, 1)
+            features_grid.attach(desc_lbl,  2, row_idx, 1, 1)
+        self.pack_start(features_grid, False, False, 0)
 
         flow_lbl = _wrapping_label(_WELCOME_FLOW)
         flow_lbl.set_max_width_chars(110)
@@ -240,25 +275,58 @@ class ModulePage(Gtk.Box):
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        heading = _wrapping_label(self.module.title, klass="tiha-heading")
-        self.pack_start(heading, False, False, 0)
+        # Rationale 3 cümleden uzunsa: başlığın sağına yuvarlak "?" düğmesi;
+        # tıklanınca (Revealer içindeki) rationale açılır. 3 ve altı ise
+        # rationale hemen görünür — düğme yok.
+        rationale_text = (self.module.rationale or "").strip()
+        sentence_count = _count_sentences(rationale_text)
+        is_long_rationale = sentence_count > 3
 
-        rationale = _wrapping_label(self.module.rationale, klass="tiha-rationale")
-        self.pack_start(rationale, False, False, 0)
+        heading_lbl = _wrapping_label(self.module.title, klass="tiha-heading")
+        if is_long_rationale:
+            heading_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            heading_row.pack_start(heading_lbl, False, False, 0)
+            help_btn = Gtk.ToggleButton(label="?")
+            help_btn.get_style_context().add_class("tiha-help-btn")
+            help_btn.set_tooltip_text("Bu adımın açıklamasını göster / gizle")
+            help_btn.set_valign(Gtk.Align.CENTER)
+            heading_row.pack_start(help_btn, False, False, 0)
+            self.pack_start(heading_row, False, False, 0)
+        else:
+            self.pack_start(heading_lbl, False, False, 0)
+
+        rationale_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        rationale_lbl = _wrapping_label(rationale_text, klass="tiha-rationale")
+        rationale_container.pack_start(rationale_lbl, False, False, 0)
 
         # İsteğe bağlı: adıma ait teknik belge / algoritma şeması linki.
+        # Emoji kullanılmıyor — sadece linkin kendisi.
         if self.module.doc_url:
             label = self.module.doc_label or "Algoritma akış şeması ve gerekçeler"
             doc_lbl = Gtk.Label(xalign=0)
             doc_lbl.set_markup(
-                f'🔗 <a href="{GLib.markup_escape_text(self.module.doc_url)}">'
+                f'<a href="{GLib.markup_escape_text(self.module.doc_url)}">'
                 f'{GLib.markup_escape_text(label)}</a>'
             )
             doc_lbl.set_use_markup(True)
             doc_lbl.set_selectable(False)
             doc_lbl.set_track_visited_links(False)
             doc_lbl.get_style_context().add_class("tiha-rationale")
-            self.pack_start(doc_lbl, False, False, 0)
+            rationale_container.pack_start(doc_lbl, False, False, 0)
+
+        if is_long_rationale:
+            revealer = Gtk.Revealer()
+            revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+            revealer.set_transition_duration(180)
+            revealer.set_reveal_child(False)
+            revealer.add(rationale_container)
+            self.pack_start(revealer, False, False, 0)
+            help_btn.connect(
+                "toggled",
+                lambda b, r=revealer: r.set_reveal_child(b.get_active()),
+            )
+        else:
+            self.pack_start(rationale_container, False, False, 0)
 
         preview_text = ""
         try:
@@ -566,6 +634,21 @@ class ModulePage(Gtk.Box):
             spin.set_adjustment(adj)
             spin.set_numeric(True)
             spin.set_digits(0)
+            # m03: reserve_count > 0 iken make_group_pin checkbox'ı
+            # sensitive olsun; 0 iken pasif ve işaretsiz gözüksün.
+            if (self.module.id == "m03_otp_secrets"
+                    and field.get("key") == "reserve_count"):
+                def _sync_group_pin_sensitivity(sb):
+                    target = self._fields.get("make_group_pin")
+                    if not isinstance(target, Gtk.CheckButton):
+                        return
+                    positive = int(sb.get_value()) > 0
+                    target.set_sensitive(positive)
+                    if not positive:
+                        target.set_active(False)
+                spin.connect("value-changed", _sync_group_pin_sensitivity)
+                # İlk render'dan sonra checkbox var olduğunda tetikle.
+                GLib.idle_add(lambda s=spin: (_sync_group_pin_sensitivity(s) or False))
             return spin
 
         if kind == "select":

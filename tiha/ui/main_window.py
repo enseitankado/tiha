@@ -424,7 +424,9 @@ class TiHAWindow(Gtk.Window):
         row.get_style_context().add_class("tiha-step")
         # Box: durum ikonu (sol) + adım adı (genişler)
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        status = Gtk.Label(label="·", xalign=0.5)
+        # Sidebar durum ikonu: sadece uygulanan (✓) ve hatalı (⚠) adımlarda
+        # simge çıksın; bekleyen / geri alınan adımlarda boş dursun.
+        status = Gtk.Label(label="", xalign=0.5)
         status.get_style_context().add_class("tiha-step-status")
         status.set_size_request(18, -1)
         box.pack_start(status, False, False, 0)
@@ -453,7 +455,8 @@ class TiHAWindow(Gtk.Window):
                         "tiha-step-status-undone"):
                 ctx.remove_class(cls)
             if entry is None:
-                status_lbl.set_text("·")
+                status_lbl.set_text("")
+                status_lbl.set_tooltip_text("")
             elif entry.status == "applied":
                 status_lbl.set_text("✓")
                 ctx.add_class("tiha-step-status-ok")
@@ -463,11 +466,10 @@ class TiHAWindow(Gtk.Window):
                 ctx.add_class("tiha-step-status-fail")
                 status_lbl.set_tooltip_text(f"Hata: {entry.summary}")
             elif entry.status == "undone":
-                status_lbl.set_text("↶")
-                ctx.add_class("tiha-step-status-undone")
-                status_lbl.set_tooltip_text("Geri alındı")
+                status_lbl.set_text("")
+                status_lbl.set_tooltip_text("")
             else:
-                status_lbl.set_text("·")
+                status_lbl.set_text("")
 
     # ---- Navigasyon ------------------------------------------------------
 

@@ -561,15 +561,15 @@ class PowerManagementModule(Module):
                 # Dinamik durum başlığı
                 status = f"🔄 Otomatik kapanma sistemi (güncellendi {current_time})"
                 if enhanced:
-                    status += "\n✓ TiHA gelişmiş sürüm aktif"
+                    status += "\n TiHA gelişmiş sürüm aktif"
                 else:
-                    status += "\n⚠️ Orijinal eta-shutdown kullanımda"
+                    status += "\n️ Orijinal eta-shutdown kullanımda"
 
                 lines = [
                     status,
                     f"• Servis durumu: {'🟢 çalışıyor' if eta_service_running else '🔴 durdurulmuş'}",
                     "",
-                    "📋 Mevcut yapılandırma:"
+                    " Mevcut yapılandırma:"
                 ]
 
                 if auto_enabled:
@@ -620,7 +620,7 @@ class PowerManagementModule(Module):
                 return "\n".join(lines)
 
             except Exception as exc:
-                return f"✗ Yapılandırma okunurken hata: {exc}\n🔄 Sayfa yeniden yüklendiğinde tekrar denenecek"
+                return f" Yapılandırma okunurken hata: {exc}\n🔄 Sayfa yeniden yüklendiğinde tekrar denenecek"
         else:
             return (
                 f"⚙️ Henüz yapılandırılmamış (kontrol: {current_time})\n\n"

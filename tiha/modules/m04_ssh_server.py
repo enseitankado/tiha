@@ -67,7 +67,7 @@ class SSHServerModule(Module):
         "için SSH sunucusunu kurar ve root kullanıcısının uzak oturum "
         "açmasına izin verir; sorun giderme, ayar değişikliği ve günlük "
         "inceleme için kullanılır.\n\n"
-        "🌐 Uzaktan bağlanmak için tahtayla aynı ağda olmalısınız. "
+        "Uzaktan bağlanmak için tahtayla aynı ağda olmalısınız. "
         "Okulda tahtalar ve kablosuz erişim noktaları (AP) genellikle "
         "`10.x.x.x` aralığındadır — bu ağdaki bir bilgisayardan "
         "`ssh root@<tahta-ip>` komutunu kullanırsınız. Farklı bir ağdan "
