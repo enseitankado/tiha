@@ -194,62 +194,69 @@ class RemoteSyslogModule(Module):
     )
 
     def preview(self) -> str:
-        lines: list[str] = []
-
-        # "Benzersiz hostname" adımı uygulanmamışsa hatırlat — yoksa
-        # merkezi sunucudaki loglar tahtaları birbirinden ayırt edemez.
+        # m08 stiliyle: hizalı key-value başlık + girintili dash liste.
+        # Tablo/monospace görünümü kullanılmıyor - yatay kaydırma
+        # oluşmasın diye satır kırılabilir serbest metin biçimindedir.
+        config_exists = RSYSLOG_CONF.exists()
+        parsed = _parse_config() if config_exists else None
+        queue_files = (
+            list(RSYSLOG_QUEUE_DIR.glob("tiha_remote*"))
+            if RSYSLOG_QUEUE_DIR.exists() else []
+        )
+        total_size = 0
+        for qf in queue_files:
+            try:
+                total_size += qf.stat().st_size
+            except OSError:
+                pass
         hostname_setup_done = Path(
             "/etc/systemd/system/tiha-first-boot-hostname.service"
         ).exists()
+
+        lines: list[str] = []
+        lines.append(
+            "Yapılandırma dosyası : "
+            + (f"var ({RSYSLOG_CONF})" if config_exists else "yok")
+        )
+        if parsed:
+            host, port, proto = parsed
+            lines.append(f"Log sunucusu         : {host}:{port} ({proto})")
+        lines.append(f"Kuyruk dizini        : {RSYSLOG_QUEUE_DIR}")
+        if queue_files:
+            lines.append(
+                f"Bekleyen log kuyruğu : {len(queue_files)} dosya, {total_size:,} bayt"
+            )
+            if total_size > 0:
+                lines.append(
+                    "                       (uzak sunucu erişilemez durumda olabilir)"
+                )
+        else:
+            lines.append(
+                "Bekleyen log kuyruğu : yok (log iletimi doğrudan çalışıyor)"
+            )
+        lines.append("")
+
         if not hostname_setup_done:
             lines.append(
-                "️ Hatırlatma: Benzersiz hostname adımı henüz uygulanmamış. "
-                "Bu adımı uygulayacaksanız mutlaka onu da uygulayın; aksi "
-                "hâlde merkezi sunucudaki loglarda tahtalar aynı isimle "
-                "görünür ve birbirinden ayırt edilemez."
+                "Hatırlatma: \"Benzersiz hostname\" adımı henüz "
+                "uygulanmamış. Bu adımı uygulayacaksanız mutlaka onu da "
+                "uygulayın; aksi hâlde merkezi sunucudaki loglarda "
+                "tahtalar aynı isimle görünür ve birbirinden ayırt "
+                "edilemez."
             )
             lines.append("")
 
-        if RSYSLOG_CONF.exists():
-            lines.append(f" Mevcut TiHA dayanıklı log yapılandırması: {RSYSLOG_CONF}")
-            lines.append("")
-
-            # Kuyruk dosyalarının durumunu kontrol et
-            queue_files = list(RSYSLOG_QUEUE_DIR.glob("tiha_remote*")) if RSYSLOG_QUEUE_DIR.exists() else []
-            if queue_files:
-                lines.append(f"📦 Bekleyen log kuyruğu dosyaları ({RSYSLOG_QUEUE_DIR}):")
-                total_size = 0
-                for qf in sorted(queue_files):
-                    try:
-                        size = qf.stat().st_size
-                        total_size += size
-                        lines.append(f"   - {qf.name}: {size:,} bytes")
-                    except OSError:
-                        lines.append(f"   - {qf.name}: (okunamadı)")
-                lines.append(f"   Toplam kuyruk boyutu: {total_size:,} bytes")
-                lines.append("")
-
-                if total_size > 0:
-                    lines.append(" Kuyrukta bekleyen log var — uzak sunucu erişilemez durumda olabilir.")
-                else:
-                    lines.append(" Kuyruk boş — log iletimi normal çalışıyor.")
-            else:
-                lines.append(" Henüz kuyruk dosyası oluşmamış — log iletimi doğrudan çalışıyor.")
-
-            lines.append("")
-            lines.append("Mevcut yapılandırma:")
-            lines.append("─" * 50)
-            lines.append(RSYSLOG_CONF.read_text(encoding="utf-8").strip())
-        else:
-            lines.append("Henüz TiHA'ya ait dayanıklı log yapılandırması yok.")
-            lines.append("")
-            lines.append("Bu adımda şunlar yapılacak:")
-            lines.append(f"- {RSYSLOG_CONF} dosyasına gelişmiş yapılandırma yazılacak")
-            lines.append("- Disk-assisted queue (disk destekli kuyruk) etkinleştirilecek")
-            lines.append("- Uzak sunucu offline olduğunda loglar yerel diskte biriktirilecek")
-            lines.append("- Sunucu geri geldiğinde birikmiş loglar otomatik gönderilecek")
-            lines.append("- rsyslog servisi yeniden başlatılacak")
-
+        lines.append("Bu adım uygulandığında:")
+        lines.append(
+            f"  - {RSYSLOG_CONF} yazılır (disk destekli kuyruk yapılandırması)"
+        )
+        lines.append(
+            "  - Uzak sunucu erişilemezse loglar yerel diskte biriktirilir"
+        )
+        lines.append(
+            "  - Sunucu geri geldiğinde birikmiş loglar otomatik gönderilir"
+        )
+        lines.append("  - rsyslog servisi yeniden başlatılır")
         return "\n".join(lines)
 
     def apply(self, params=None, progress=None) -> ApplyResult:

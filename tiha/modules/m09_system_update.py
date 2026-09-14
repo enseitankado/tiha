@@ -218,68 +218,58 @@ class SystemUpdateModule(Module):
         _pending_updates.get_async(on_ready)
 
     def preview(self) -> str:
-        # Repository sağlığını kontrol et
+        # m08 stiliyle: hizalı key-value satırlar + girintili dash liste.
         repo_issues = check_repository_health()
-        repo_status = []
 
-        if repo_issues["missing_main_repos"]:
-            repo_status.append(" Ana Pardus ETAP depoları eksik")
-        else:
-            repo_status.append("✅ Ana Pardus ETAP depoları mevcut")
+        def _status(condition_bad: bool, ok_text: str, bad_text: str) -> str:
+            return bad_text if condition_bad else f"{ok_text}"
 
-        if repo_issues["broken_files"]:
-            repo_status.append(f"️ {len(repo_issues['broken_files'])} bozuk repository dosyası")
-        else:
-            repo_status.append("✅ Bozuk repository dosyası yok")
-
-        if repo_issues["empty_sources_list"]:
-            repo_status.append(" /etc/apt/sources.list boş veya eksik")
-
-        # Bekleyen güncelleme sayısı — cache'ten okunur. Cache yoksa
-        # arka plan worker tetiklenir (UI bloke olmadan); önizleme
-        # "kontrol ediliyor" gösterir ve sonuç gelince main_window
+        # Bekleyen güncelleme sayısı - cache'ten okunur. Cache yoksa
+        # arka plan worker tetiklenir; sonuç gelince main_window
         # callback'i bu sayfayı yeniden çizdirir.
         cached = _pending_updates.get_async()
         count = -1 if cached is None else cached
         checking = cached is None and _pending_updates.in_progress()
 
-        preview_lines = ["🔍 Repository Durumu:"] + [f"  {status}" for status in repo_status]
-        preview_lines.append("")
-
+        lines: list[str] = []
+        lines.append(
+            "Ana Pardus depoları  : "
+            + _status(repo_issues["missing_main_repos"],
+                      "mevcut", "eksik")
+        )
+        lines.append(
+            "Bozuk depo dosyaları : "
+            + (f"{len(repo_issues['broken_files'])} adet"
+               if repo_issues["broken_files"] else "yok")
+        )
+        lines.append(
+            "sources.list         : "
+            + _status(repo_issues["empty_sources_list"],
+                      "geçerli", "boş veya eksik")
+        )
         if checking:
-            preview_lines.extend([
-                "📦 Bekleyen yükseltme sayısı arka planda kontrol ediliyor…",
-                "",
-                "Bu sayıya bakmadan da Uygula'ya basabilirsiniz; adım yine de",
-                "repository onarımı + apt update > full-upgrade > autoremove > clean",
-                "zincirini çalıştırır."
-            ])
+            lines.append(
+                "Bekleyen yükseltme   : arka planda kontrol ediliyor..."
+            )
         elif count < 0:
-            preview_lines.extend([
-                "📦 Bekleyen yükseltme sayısı tespit edilemedi (apt erişilemedi).",
-                "",
-                "Uygula çalıştırıldığında:",
-                "- Repository sorunları düzeltilir",
-                "- apt update > full-upgrade > autoremove > clean"
-            ])
+            lines.append(
+                "Bekleyen yükseltme   : tespit edilemedi (apt erişilemedi)"
+            )
         elif count == 0:
-            preview_lines.extend([
-                "📦 Bekleyen yükseltme yok. Sistem güncel görünüyor.",
-                "",
-                "Repository sorunları varsa düzeltilir, sonra bu adımı",
-                "uygulamadan geçebilirsiniz."
-            ])
+            lines.append(
+                "Bekleyen yükseltme   : yok, sistem güncel görünüyor"
+            )
         else:
-            preview_lines.extend([
-                f"📦 {count} paket için yükseltme bekleniyor.",
-                "",
-                "Uygula çalıştırıldığında:",
-                "- Repository sorunları düzeltilir",
-                "- apt update > full-upgrade > autoremove > clean",
-                "- Uzun sürebilir"
-            ])
-
-        return "\n".join(preview_lines)
+            lines.append(
+                f"Bekleyen yükseltme   : {count} paket"
+            )
+        lines.append("")
+        lines.append("Bu adım uygulandığında:")
+        lines.append("  - Depo yapılandırma sorunları düzeltilir")
+        lines.append("  - apt update > full-upgrade > autoremove > clean çalışır")
+        if count > 0 or checking:
+            lines.append("  - İşlem uzun sürebilir")
+        return "\n".join(lines)
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         env = {"DEBIAN_FRONTEND": "noninteractive"}

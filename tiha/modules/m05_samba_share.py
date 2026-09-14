@@ -90,7 +90,7 @@ class SambaShareModule(Module):
     )
 
     def preview(self) -> str:
-        # samba kurulum durumu async cache'ten — UI'yı bloke etmez.
+        # samba kurulum durumu async cache'ten - UI'yı bloke etmez.
         installed = _samba_installed.get_async()
         share_exists = SAMBA_SHARE_CONF.exists()
 
@@ -105,15 +105,15 @@ class SambaShareModule(Module):
                 pass
 
         if installed is None:
-            return "samba kurulum durumu kontrol ediliyor…"
+            return "samba kurulum durumu kontrol ediliyor..."
         if installed and share_exists and include_exists:
-            return "samba kurulu ve paylaşım tanımı mevcut — yapılandırma güncellenecek."
+            return "samba kurulu ve paylaşım tanımı mevcut - yapılandırma güncellenecek."
         elif installed and (share_exists or include_exists):
-            return "samba kurulu, kısmi yapılandırma mevcut — tamamlanacak."
+            return "samba kurulu, kısmi yapılandırma mevcut - tamamlanacak."
         elif installed:
-            return "samba zaten kurulu — paylaşım tanımı eklenecek."
+            return "samba zaten kurulu - paylaşım tanımı eklenecek."
         elif share_exists:
-            return "samba kurulacak — mevcut paylaşım tanımı korunacak."
+            return "samba kurulacak - mevcut paylaşım tanımı korunacak."
         else:
             return "samba kurulacak ve paylaşım tanımı eklenecek."
 

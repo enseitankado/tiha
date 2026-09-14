@@ -142,7 +142,7 @@ class BootPasswordWipeModule(Module):
         extras = extra_users()
 
         # m08 stiliyle: hizalı key-value başlık, sonra girintili dash liste.
-        # Tablo görünümü kullanılmıyor — yatay kaydırma oluşmasın diye satır
+        # Tablo görünümü kullanılmıyor - yatay kaydırma oluşmasın diye satır
         # kırılabilen serbest metin biçimindedir.
         lines: list[str] = []
         lines.append(
@@ -152,7 +152,7 @@ class BootPasswordWipeModule(Module):
         lines.append(
             "Bu servis her açılışta, root ve etapadmin dışındaki hesapların "
             "parolasını kriptografik olarak rastgele bir değere çevirir. Bu "
-            "hesaplarda parola YAZARAK giriş yapılamaz — yalnız EBA-QR, PIN "
+            "hesaplarda parola YAZARAK giriş yapılamaz - yalnız EBA-QR, PIN "
             "veya USB bellek ile giriş yapılabilir."
         )
         lines.append("")
@@ -164,7 +164,7 @@ class BootPasswordWipeModule(Module):
         # Ortak hesaplar
         ortak = [u for u in ("ogretmen", "ogrenci") if _user_exists(u)]
         if ortak:
-            lines.append("Ortak hesaplar — parola yazarak giriş yapılamayacak:")
+            lines.append("Ortak hesaplar - parola yazarak giriş yapılamayacak:")
             for u in ortak:
                 lines.append(f"  - {u}")
             lines.append("")
@@ -172,12 +172,12 @@ class BootPasswordWipeModule(Module):
         # Kişisel hesaplar
         missing: list[str] = []
         if extras:
-            lines.append("Kişisel hesaplar — parola yazarak giriş yapılamayacak:")
+            lines.append("Kişisel hesaplar - parola yazarak giriş yapılamayacak:")
             for u in extras:
                 if u in otp_users:
-                    lines.append(f"  - {u}  (PIN anahtarı var — EBA-QR / PIN / USB ile girer)")
+                    lines.append(f"  - {u}  (PIN anahtarı var - EBA-QR / PIN / USB ile girer)")
                 else:
-                    lines.append(f"  - {u}  (PIN anahtarı yok — bu hesap parola yazarak giremez)")
+                    lines.append(f"  - {u}  (PIN anahtarı yok - bu hesap parola yazarak giremez)")
                     missing.append(u)
             lines.append("")
 

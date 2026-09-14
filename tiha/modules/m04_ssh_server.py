@@ -83,9 +83,9 @@ class SSHServerModule(Module):
         # çağrı güvenlik kemeri (cache yine yoksa worker başlasın).
         installed = _ssh_installed.get_async()
         if installed is None:
-            return "openssh-server kurulum durumu kontrol ediliyor…"
+            return "openssh-server kurulum durumu kontrol ediliyor..."
         return (
-            "openssh-server zaten kurulu — yalnızca yapılandırma eklenecek."
+            "openssh-server zaten kurulu - yalnızca yapılandırma eklenecek."
             if installed
             else "openssh-server kurulacak ve yapılandırma ek bir yapılandırma dosyası yazılacak."
         )

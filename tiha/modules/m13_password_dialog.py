@@ -134,7 +134,7 @@ class PasswordDialogModule(Module):
 
         lines = [
             f"Hedef     : {AUTOSTART_FILE}",
-            f"Durum     : {' devre dışı (Hidden=true)' if already_hidden else ' etkin — diyalog açılıyor'}",
+            f"Durum     : {' devre dışı (Hidden=true)' if already_hidden else ' etkin - diyalog açılıyor'}",
             f"Yedek     : {'var (' + str(backup_path) + ')' if backup_exists else 'yok'}",
             "",
             "Bu adım uygulandığında:",

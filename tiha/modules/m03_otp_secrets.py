@@ -680,10 +680,10 @@ class OTPSecretsModule(Module):
         _eta_otp_cli_available.get_async(on_ready)
 
     def preview(self) -> str:
+        """m08 stiliyle hizalı key-value + girintili dash liste."""
         import pwd as _pwd
         import datetime
 
-        # Canlı veri toplama
         existing = load_secrets()
         standard_or_admin = {"etapadmin", "ogretmen", "ogrenci"}
         personal_users = sorted(
@@ -696,103 +696,87 @@ class OTPSecretsModule(Module):
             u for u in existing
             if u not in personal_users and u not in standard_or_admin
         )
+        current_time = datetime.datetime.now().strftime("%H:%M")
 
-        lines: list[str] = []
-
-        # Zaman damgası ekle (canlı güncellendiğini göstermek için)
-        current_time = datetime.datetime.now().strftime("%H:%M:%S")
-        lines.append(f"CANLI DURUM ANALİZİ ({current_time})")
-        lines.append("")
-
-        # Araç durumu — AsyncValue cache'ten okur. Cache yoksa worker
-        # arka planda başlar (UI bloke etmez); cache hazır olunca
-        # önizleme yeniden çizilir.
         tool_available = _eta_otp_cli_available.get_async()
         if tool_available is None:
-            lines.append("Araç: kontrol ediliyor (eta-otp-cli erişilebilirliği)…")
+            tool_line = "kontrol ediliyor"
         elif tool_available:
-            lines.append("Araç: enseitankado/eta-otp-cli > otp-cli.py (sadece OTP anahtarları)")
+            tool_line = "enseitankado/eta-otp-cli (yalnız OTP anahtarları)"
         else:
-            lines.append("Araç: TiHA dahili pyotp yolu (sadece OTP anahtarları)")
-        lines.append("")
+            tool_line = "TiHA dahili pyotp yolu (yalnız OTP anahtarları)"
 
-        # Kullanıcı sayısı analizi - CANLI GÜNCELLENEN BÖLÜM
         user_count = count_regular_users()
-        total_users = len(list(p for p in _pwd.getpwall() if p.pw_uid >= 1000 and p.pw_uid != 65534))
-        personal_count = len(personal_users)
-        otp_count = len(existing)
+        extra_users = get_extra_users()
 
-        lines.append("SİSTEM KULLANICILARI ANALİZİ")
-        lines.append("─" * 40)
-        lines.append(f"Toplam sistem kullanıcıları (UID>=1000): {user_count}")
-        lines.append(f"Kişisel hesaplar: {personal_count}")
-        lines.append(f"OTP anahtarlı hesaplar: {len(has_otp)}/{personal_count}")
-        lines.append(f"Toplam OTP anahtarı: {otp_count}")
+        lines: list[str] = []
+        lines.append(f"Durum kontrolü       : {current_time}")
+        lines.append(f"Araç                 : {tool_line}")
+        lines.append(f"Sistem kullanıcıları : {user_count} (UID >= 1000)")
+        lines.append(f"Kişisel hesaplar     : {len(personal_users)}")
+        lines.append(
+            f"PIN anahtarlı hesap  : {len(has_otp)}/{len(personal_users)}"
+        )
+        lines.append(f"Toplam PIN kaydı     : {len(existing)}")
+        if user_count >= MIN_USERS_FOR_CACHE:
+            greeter_state = (
+                "kurulu"
+                if GREETER_SERVICE_PATH.exists()
+                else "kurulacak"
+            )
+            lines.append(f"Greeter cache        : {greeter_state}")
         lines.append("")
 
-        # DİKKAT: Bu adım artık sadece OTP oluşturuyor
-        lines.append("DİKKAT: Bu adım artık sadece OTP anahtarları oluşturur!")
-        lines.append("Sistem kullanıcı hesapları oluşturmaz.")
-        if user_count >= MIN_USERS_FOR_CACHE:
-            lines.append(f" {MIN_USERS_FOR_CACHE}+ kullanıcı tespit edildi — greeter cache güncellemesi gerekli")
-            if GREETER_SCRIPT_PATH.exists():
-                lines.append(" Greeter cache script mevcut")
-            else:
-                lines.append("  > GitHub'dan greeter cache script indirilecek")
-
-            if GREETER_SERVICE_PATH.exists():
-                lines.append(" Greeter cache service mevcut (otomatik çalıştırma aktif)")
-            else:
-                lines.append("  > Otomatik greeter cache service oluşturulacak")
+        lines.append("Not: Bu adım yalnız OTP anahtarları oluşturur; "
+                     "sistem kullanıcı hesaplarını oluşturmaz (yedek "
+                     "hesap sayısı belirtilirse onların hesabı bu adımda "
+                     "açılır).")
         lines.append("")
 
         if has_otp:
-            lines.append(" PIN anahtarı KURULU kişisel hesaplar:")
-            lines.extend(f"    - {u}" for u in has_otp)
-        else:
-            lines.append("Henüz kişisel PIN anahtarı kayıtlı değil.")
-
+            lines.append("PIN anahtarı kurulu kişisel hesaplar:")
+            for u in has_otp:
+                lines.append(f"  - {u}")
+            lines.append("")
         if missing_otp:
-            lines.append("")
-            lines.append(" Kişisel hesabı olan ama PIN anahtarı OLMAYAN kullanıcılar:")
-            lines.extend(f"    - {u}" for u in missing_otp)
-            lines.append("")
+            lines.append("PIN anahtarı OLMAYAN kişisel hesaplar:")
+            for u in missing_otp:
+                lines.append(f"  - {u}")
             lines.append(
-                "“Açılışta parola temizliği” adımı aktifken bu hesaplar "
-                "tahtaya hiç giremez. "
-                "Anahtar üretmek için aşağıdaki metin kutusuna AD SOYAD "
-                "biçiminde tam isimleri (ya da var olan kullanıcı adlarını) "
-                "yazın."
+                "  \"Açılışta parola temizliği\" adımı etkinken bu "
+                "hesaplar tahtaya hiç giremez. Anahtar üretmek için "
+                "aşağıdaki listeye adlarını yazın."
             )
-
-        if orphan_secrets:
             lines.append("")
+        if orphan_secrets:
             lines.append(
-                " Sistemde hesabı olmayan PIN kayıtları "
+                "Sistemde hesabı kalmayan PIN kayıtları "
                 f"(hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
             )
-
-        # Geri alma durumu
-        extra_users = get_extra_users()
-
-        lines.append("")
-        lines.append("─" * 50)
-        lines.append("Kullanıcı Yönetimi")
-        lines.append("─" * 50)
-
-        if extra_users:
-            lines.append(f"️ Fazladan Kullanıcı Hesapları ({len(extra_users)} adet):")
-            lines.extend(f"    - {user}" for user in extra_users[:10])
-            if len(extra_users) > 10:
-                lines.append(f"    - ... ve {len(extra_users) - 10} tane daha")
             lines.append("")
-            lines.append("️ Bu hesaplar varsayılan sistem kullanıcıları değil!")
-            lines.append("> 'Fazladan Hesapları Sil' (onaylı) butonu ile kaldırabilirsiniz")
-            lines.append("   Sistem yalnızca etapadmin, ogrenci, ogretmen hesaplarıyla kalacak")
-        else:
-            lines.append(" Sadece varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)")
 
-        return "\n".join(lines) if lines else "Henüz hiç kişisel hesap yok."
+        lines.append("Kullanıcı yönetimi")
+        if extra_users:
+            head = extra_users[:10]
+            more = len(extra_users) - len(head)
+            lines.append(
+                f"  Fazladan kullanıcı hesabı : {len(extra_users)} adet"
+            )
+            for u in head:
+                lines.append(f"    - {u}")
+            if more > 0:
+                lines.append(f"    - ... ve {more} tane daha")
+            lines.append(
+                "  \"Fazladan Hesapları Sil\" düğmesi ile bunları "
+                "kaldırabilirsiniz; sistemde yalnız etapadmin, "
+                "ogrenci ve ogretmen kalır."
+            )
+        else:
+            lines.append(
+                "  Sistemde yalnız varsayılan kullanıcılar mevcut "
+                "(etapadmin, ogrenci, ogretmen)."
+            )
+        return "\n".join(lines)
 
     # -----------------------------------------------------------------
     # Uygula

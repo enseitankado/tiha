@@ -475,30 +475,29 @@ class AhenkResetModule(Module):
             "Bu adımda yapılacaklar:",
             f"  - Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
             (
-                "  - ahenk paketi zaten kurulu — yeniden kurulmayacak."
+                "  - ahenk paketi zaten kurulu - yeniden kurulmayacak."
                 if ahenk_kurulu
-                else "  - ahenk paketi kurulu DEĞİL — apt update + apt install -y ahenk"
+                else "  - ahenk paketi kurulu DEĞİL - apt update + apt install -y ahenk"
                      " çalıştırılacak, ahenk.service enable edilecek."
             ),
             f"  - {RECLAIM_SCRIPT}",
             f"  - {RECLAIM_SERVICE} (Type=oneshot, Before=ahenk.service)",
             f"  - systemctl enable {RECLAIM_SERVICE_NAME}",
             "",
-            "Bu wizard'da ahenk credential'larına DOKUNULMAZ — kaynak "
+            "Bu wizard'da ahenk credential'larına DOKUNULMAZ - kaynak "
             "tahta normal çalışmaya devam eder. Tüm credential temizliği "
             "klonun ilk açılışında, boot servisi tarafından yapılır.",
             "",
             "Klon makinedeki davranış (her boot, ahenk'ten önce):",
-            "  ┌── İmza dosyası yok ───────- çık (klon değil/uygulanmamış)",
-            "  ├── MAC eşit ────────────────- çık (kaynak tahta)",
-            "  └── MAC farklı (klon)",
-            "       │",
-            "       ├── API hatası ─────────- bu boot atla, sonraki dene",
-            "       ├── Kayıtlı ────────────- ahenk credential temizle,",
-            "       │                          ahenk restart, servis disable",
-            "       └── Kayıtsız ───────────- ahenk credential temizle,",
-            "                                   ahenk disable, servis disable",
-            "                                   (kullanıcı eta-register'la kayıt yapar)",
+            "  - İmza dosyası yok             -> çık (klon değil / uygulanmamış)",
+            "  - MAC eşit                     -> çık (kaynak tahta)",
+            "  - MAC farklı (klon):",
+            "      - API hatası               -> bu boot atla, sonraki dene",
+            "      - Kayıtlı                  -> ahenk credential temizle,",
+            "                                    ahenk restart, servis disable",
+            "      - Kayıtsız                 -> ahenk credential temizle,",
+            "                                    ahenk disable, servis disable",
+            "                                    (kullanıcı eta-register'la kayıt yapar)",
             "",
             "Geri al: boot servisi + imza dosyası kaldırılır; ahenk paketi",
             "TiHA kurduysa apt-get purge ile sökülür, daha önce kuruluysa korunur.",
