@@ -173,7 +173,7 @@ class RemoteSyslogModule(Module):
         "sunucusuna DAYANIKLI BİÇİMDE gönderir. 50 tahtalı bir okulun "
         "loglarını tek bir arayüzden izleyebilir, olay/arıza taramasını "
         "saniyeler içinde yapabilirsiniz.\n\n"
-        " Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka "
+        "Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka "
         "uygulayın. Aksi hâlde imajdan klonlanan tüm tahtalar aynı hostname "
         "ile log gönderir; merkezi sunucudaki kayıtları tahta tahta ayırt "
         "edemezsiniz. Hostname adımı her klona kendi MAC adresinden türeyen "
@@ -187,7 +187,7 @@ class RemoteSyslogModule(Module):
         "kuyruk) kullanan gelişmiş bir yapılandırma dosyası yazılır. Paket "
         "güncellemesi gelirse yapılandırmanız korunur, geri almak da o tek "
         "dosyayı silmek kadar kolaydır.\n\n"
-        " Log sunucusu tahtalarla aynı ağda olmalı. Okulda tahtalar ve "
+        "Log sunucusu tahtalarla aynı ağda olmalı. Okulda tahtalar ve "
         "kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır; "
         "log sunucusunu bu ağa konumlandırmalısınız. İdari ağdan log "
         "sunucusuna erişim olmaz — bu bilinçli bir güvenlik kısıtıdır."
@@ -223,9 +223,9 @@ class RemoteSyslogModule(Module):
                     try:
                         size = qf.stat().st_size
                         total_size += size
-                        lines.append(f"   • {qf.name}: {size:,} bytes")
+                        lines.append(f"   - {qf.name}: {size:,} bytes")
                     except OSError:
-                        lines.append(f"   • {qf.name}: (okunamadı)")
+                        lines.append(f"   - {qf.name}: (okunamadı)")
                 lines.append(f"   Toplam kuyruk boyutu: {total_size:,} bytes")
                 lines.append("")
 
@@ -244,11 +244,11 @@ class RemoteSyslogModule(Module):
             lines.append("Henüz TiHA'ya ait dayanıklı log yapılandırması yok.")
             lines.append("")
             lines.append("Bu adımda şunlar yapılacak:")
-            lines.append(f"• {RSYSLOG_CONF} dosyasına gelişmiş yapılandırma yazılacak")
-            lines.append("• Disk-assisted queue (disk destekli kuyruk) etkinleştirilecek")
-            lines.append("• Uzak sunucu offline olduğunda loglar yerel diskte biriktirilecek")
-            lines.append("• Sunucu geri geldiğinde birikmiş loglar otomatik gönderilecek")
-            lines.append("• rsyslog servisi yeniden başlatılacak")
+            lines.append(f"- {RSYSLOG_CONF} dosyasına gelişmiş yapılandırma yazılacak")
+            lines.append("- Disk-assisted queue (disk destekli kuyruk) etkinleştirilecek")
+            lines.append("- Uzak sunucu offline olduğunda loglar yerel diskte biriktirilecek")
+            lines.append("- Sunucu geri geldiğinde birikmiş loglar otomatik gönderilecek")
+            lines.append("- rsyslog servisi yeniden başlatılacak")
 
         return "\n".join(lines)
 

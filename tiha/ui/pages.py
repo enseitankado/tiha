@@ -335,9 +335,10 @@ class ModulePage(Gtk.Box):
             log.warning("preview başarısız %s: %s", self.module.id, exc)
         if preview_text:
             # Uzun önizleme → scroll'lu metin kutusu; kısa önizleme → label.
-            # Tablo görünümlü (çok satırlı, hizalanmış) önizlemelerde
-            # satır kırmıyoruz; yatay kaydırma çubuğu alsın.
-            is_tabular = "  ─" in preview_text or "KULLANICI" in preview_text
+            # Modülünde `preview_tabular = True` bildirilmedikçe uzun
+            # metinler word-wrap yapılır; böylece yatay kaydırma çubuğu
+            # gereksiz yere oluşmaz (Türkçe uzun cümleler için önemli).
+            is_tabular = bool(getattr(self.module, "preview_tabular", False))
             if preview_text.count("\n") > 6 or len(preview_text) > 500:
                 self._preview_widget = _scrolled_textview(
                     preview_text, monospace=True,

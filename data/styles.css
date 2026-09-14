@@ -208,12 +208,23 @@ label.tiha-rationale {
 }
 
 /* Kaydırma çubuğu — yalnız gerektiğinde görünür, dikkat çekmeden.
-   Trough (oluk) saydam: sayfa "kaydırılabilir görünmesin" diye. Slider
+   Yatay ve dikey çubukların KALINLIĞI birbirine eşit (12px). Trough
+   (oluk) saydam: sayfa "kaydırılabilir görünmesin" diye. Slider
    yalnızca içerik gerçekten taşınca tutamak olarak çıkar. */
 scrolledwindow scrollbar {
     background: transparent;
     border: none;
+}
+
+/* Dikey çubuk — genişlik 12px */
+scrolledwindow scrollbar.vertical,
+scrolledwindow scrollbar.vertical trough {
     min-width: 12px;
+}
+
+/* Yatay çubuk — yükseklik 12px (dikeydeki genişlikle eşit) */
+scrolledwindow scrollbar.horizontal,
+scrolledwindow scrollbar.horizontal trough {
     min-height: 12px;
 }
 
@@ -222,13 +233,22 @@ scrolledwindow scrollbar trough {
     border: none;
 }
 
+/* Slider'ın "kalınlığı" hem yatay hem dikeyde eşit (8px) */
 scrolledwindow scrollbar slider {
     background: alpha(@theme_fg_color, 0.32);
     border-radius: 8px;
-    min-width: 8px;
-    min-height: 32px;
     border: none;
     margin: 2px;
+}
+
+scrolledwindow scrollbar.vertical slider {
+    min-width: 8px;
+    min-height: 32px;
+}
+
+scrolledwindow scrollbar.horizontal slider {
+    min-height: 8px;
+    min-width: 32px;
 }
 
 scrolledwindow scrollbar slider:hover {

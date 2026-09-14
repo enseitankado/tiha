@@ -262,6 +262,97 @@ def ensure_ogretmenler_group() -> bool:
     return False
 
 
+# EBA QR ile yeni açılan öğretmen hesaplarını `ogretmenler` grubuna
+# otomatik ekleyen sistem servisi. /etc/passwd izlenir, yeni bir kayıt
+# oluştuğunda script çalışır ve öğretmen kriterlerine uyan yeni
+# hesapları gruba dahil eder. `dpkg` paket kurulumu sırasında oluşan
+# hesaplar (dahili) UID < 1000 olduğu için filtrelenir.
+AUTO_GROUP_SCRIPT = Path("/usr/local/sbin/tiha-auto-teacher-group.sh")
+AUTO_GROUP_SERVICE = Path("/etc/systemd/system/tiha-auto-teacher-group.service")
+AUTO_GROUP_PATH_UNIT = Path("/etc/systemd/system/tiha-auto-teacher-group.path")
+
+AUTO_GROUP_SCRIPT_CONTENT = """#!/bin/bash
+# TiHA — EBA QR ile yeni açılan öğretmen hesabını ogretmenler grubuna ekler.
+# /etc/passwd her değiştiğinde tetiklenir. Sadece UID >= 1000 ve
+# ogretmenler grubunda olmayan hesapları hedefler; sistem hesaplarına
+# (etapadmin, ogrenci, ogretmen, root, nobody vb.) dokunmaz.
+set -eu
+EXCLUDE="etapadmin ogrenci ogretmen root nobody guest"
+while IFS=: read -r user _ uid _ _ _ _; do
+    [ "$uid" -ge 1000 ] || continue
+    [ "$uid" -lt 60000 ] || continue
+    for skip in $EXCLUDE; do
+        [ "$user" = "$skip" ] && continue 2
+    done
+    # Zaten gruba üye mi?
+    if id -nG "$user" 2>/dev/null | tr ' ' '\\n' | grep -qx ogretmenler; then
+        continue
+    fi
+    /usr/sbin/usermod -a -G ogretmenler "$user" 2>/dev/null || true
+    logger -t tiha-auto-teacher-group "Kullanıcı '$user' ogretmenler grubuna eklendi."
+done < /etc/passwd
+"""
+
+AUTO_GROUP_SERVICE_CONTENT = """[Unit]
+Description=TiHA — Yeni öğretmen hesabını ogretmenler grubuna ekle
+Documentation=https://github.com/enseitankado/tiha
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tiha-auto-teacher-group.sh
+"""
+
+AUTO_GROUP_PATH_CONTENT = """[Unit]
+Description=TiHA — /etc/passwd izleyip yeni öğretmen hesabını ogretmenler grubuna ekle
+
+[Path]
+PathModified=/etc/passwd
+Unit=tiha-auto-teacher-group.service
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def install_auto_group_service() -> bool:
+    """Auto-group servisini kurar. `ogretmenler` grubunun varlığını
+    çağıran taraf garantiler. Başarıda True."""
+    try:
+        AUTO_GROUP_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
+        AUTO_GROUP_SCRIPT.write_text(AUTO_GROUP_SCRIPT_CONTENT, encoding="utf-8")
+        AUTO_GROUP_SCRIPT.chmod(0o755)
+        AUTO_GROUP_SERVICE.write_text(AUTO_GROUP_SERVICE_CONTENT, encoding="utf-8")
+        AUTO_GROUP_PATH_UNIT.write_text(AUTO_GROUP_PATH_CONTENT, encoding="utf-8")
+    except OSError as exc:
+        log.warning("auto-group servis dosyaları yazılamadı: %s", exc)
+        return False
+    run_cmd(["systemctl", "daemon-reload"], check=False)
+    en = run_cmd(
+        ["systemctl", "enable", "--now", "tiha-auto-teacher-group.path"],
+        check=False,
+    )
+    if not en.ok:
+        log.warning("auto-group path unit enable edilemedi: %s", en.stderr.strip())
+        return False
+    # Kurulum anında zaten mevcut olan öğretmen hesapları varsa bir kez tetikle
+    run_cmd(["systemctl", "start", "tiha-auto-teacher-group.service"], check=False)
+    return True
+
+
+def uninstall_auto_group_service() -> None:
+    """Auto-group servisini kaldırır (undo yolu)."""
+    run_cmd(
+        ["systemctl", "disable", "--now", "tiha-auto-teacher-group.path"],
+        check=False,
+    )
+    for p in (AUTO_GROUP_PATH_UNIT, AUTO_GROUP_SERVICE, AUTO_GROUP_SCRIPT):
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
+    run_cmd(["systemctl", "daemon-reload"], check=False)
+
+
 def create_user(username: str, full_name: str = "") -> bool:
     """TiHA dahili yedek kullanıcı oluşturma (useradd + usermod -L).
 
@@ -657,14 +748,14 @@ class OTPSecretsModule(Module):
 
         if has_otp:
             lines.append(" PIN anahtarı KURULU kişisel hesaplar:")
-            lines.extend(f"    • {u}" for u in has_otp)
+            lines.extend(f"    - {u}" for u in has_otp)
         else:
             lines.append("Henüz kişisel PIN anahtarı kayıtlı değil.")
 
         if missing_otp:
             lines.append("")
             lines.append(" Kişisel hesabı olan ama PIN anahtarı OLMAYAN kullanıcılar:")
-            lines.extend(f"    • {u}" for u in missing_otp)
+            lines.extend(f"    - {u}" for u in missing_otp)
             lines.append("")
             lines.append(
                 "“Açılışta parola temizliği” adımı aktifken bu hesaplar "
@@ -691,9 +782,9 @@ class OTPSecretsModule(Module):
 
         if extra_users:
             lines.append(f"️ Fazladan Kullanıcı Hesapları ({len(extra_users)} adet):")
-            lines.extend(f"    • {user}" for user in extra_users[:10])
+            lines.extend(f"    - {user}" for user in extra_users[:10])
             if len(extra_users) > 10:
-                lines.append(f"    • ... ve {len(extra_users) - 10} tane daha")
+                lines.append(f"    - ... ve {len(extra_users) - 10} tane daha")
             lines.append("")
             lines.append("️ Bu hesaplar varsayılan sistem kullanıcıları değil!")
             lines.append("> 'Fazladan Hesapları Sil' (onaylı) butonu ile kaldırabilirsiniz")
@@ -711,7 +802,6 @@ class OTPSecretsModule(Module):
         params = params or {}
         raw_list: str = params.get("teacher_names", "")
         reserve: int = int(params.get("reserve_count", 0) or 0)
-        csv_path_str: str = (params.get("teachers_csv_path") or "").strip()
         include_etapadmin: bool = str(
             params.get("include_etapadmin", "False")
         ).lower() in ("true", "1", "yes", "on")
@@ -721,47 +811,11 @@ class OTPSecretsModule(Module):
         make_group_pin: bool = str(
             params.get("make_group_pin", "False")
         ).lower() in ("true", "1", "yes", "on")
+        auto_group_new_teachers: bool = str(
+            params.get("auto_group_new_teachers", "False")
+        ).lower() in ("true", "1", "yes", "on")
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
-
-        # CSV'den içe aktarma — ilk sütun ad-soyad. Header satırı ve
-        # tamamen boş satırlar atlanır. Yinelenenler korunur (alttaki
-        # işlemler normalizasyonla zaten teklikleştirir).
-        if csv_path_str:
-            from pathlib import Path as _P
-            csv_path = _P(csv_path_str).expanduser()
-            if not csv_path.is_file():
-                return ApplyResult(
-                    False,
-                    f"CSV dosyası bulunamadı: {csv_path}",
-                )
-            try:
-                import csv as _csv
-                with csv_path.open("r", encoding="utf-8-sig", newline="") as fh:
-                    reader = _csv.reader(fh)
-                    added = 0
-                    for row in reader:
-                        if not row:
-                            continue
-                        name = row[0].strip()
-                        if not name:
-                            continue
-                        # Header satırı tespiti — sayı yoksa ve "ad" benzeri
-                        # bir başlıksa atla.
-                        low = name.lower()
-                        if added == 0 and any(s in low for s in
-                                              ("ad soyad", "adi soyadi",
-                                               "name", "isim")):
-                            continue
-                        teacher_names.append(name)
-                        added += 1
-                if progress:
-                    progress(f"📋 CSV'den {added} isim eklendi: {csv_path}")
-            except (OSError, UnicodeDecodeError) as exc:
-                return ApplyResult(
-                    False,
-                    f"CSV okunamadı: {exc}",
-                )
 
         # Yedek hesaplar — toplu-kullanici-olustur.py'nin normalizasyonu
         # 'Ogretmen 01' → 'ogretmen01' verir.
@@ -979,12 +1033,26 @@ class OTPSecretsModule(Module):
                 "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
             )
 
+        # Yeni öğretmen hesaplarını ogretmenler grubuna otomatik ekleyen
+        # sistem servisini kur (checkbox işaretliyse).
+        auto_group_service_installed = False
+        if auto_group_new_teachers:
+            ensure_ogretmenler_group()
+            if install_auto_group_service():
+                auto_group_service_installed = True
+                if progress:
+                    progress("\nOtomatik grup ekleme servisi kuruldu — "
+                             "EBA QR ile yeni açılan öğretmen hesapları "
+                             "ogretmenler grubuna otomatik dahil edilecek.")
+
         # Greeter cache bilgisini ekle
         summary_parts = [f"{len(new_users)} PIN anahtarı üretildi ve {OTP_SECRETS_FILE} dosyasına yazıldı."]
         if greeter_cache_applied:
             summary_parts.append("Greeter cache güncellendi ve otomatik çalıştırma ayarlandı.")
         elif total_users >= MIN_USERS_FOR_CACHE:
             summary_parts.append("Greeter cache kurulumu tamamlanamadı.")
+        if auto_group_service_installed:
+            summary_parts.append("Yeni öğretmen hesabı → ogretmenler grubu servis kuruldu.")
 
         return ApplyResult(
             success=True,
@@ -997,6 +1065,7 @@ class OTPSecretsModule(Module):
                 "used_tool": bool(cli_script),
                 "greeter_cache_applied": greeter_cache_applied,
                 "total_users": total_users,
+                "auto_group_service_installed": auto_group_service_installed,
             },
         )
 
@@ -1255,6 +1324,9 @@ class OTPSecretsModule(Module):
         created = data.get("created_users", []) or []
         passed = data.get("passed_names", []) or []
         cli_script = _eta_otp_cli_bulk_script()
+
+        # Auto-group izleme servisi kurulduysa kaldır (idempotent).
+        uninstall_auto_group_service()
 
         removed: list[str] = []
         if created:

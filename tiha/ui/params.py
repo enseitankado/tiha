@@ -53,22 +53,13 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "AHMET KARA"
             ),
             "help": (
-                "İsimleri BÜYÜK HARFLERLE girin, her satıra bir kişi. Boş "
+                "İsimleri BÜYÜK HARFLERLE girin, her satıra bir kişi. "
+                "Ad ve soyadların öğretmenin MEBBIS'te kayıtlı olduğu "
+                "biçimle birebir aynı yazılması önemlidir; harf atlanması "
+                "veya küçük bir yazım farkı sonrasında öğretmenin PIN "
+                "koduyla oturum açamamasına neden olur. Alan boş "
                 "bırakılabilir; yalnızca yedek hesap üretmek de mümkündür. "
                 "Örnek satırlar tıklayıp yazmaya başladığınızda silinir."
-            ),
-        },
-        {
-            "key": "teachers_csv_path",
-            "label": "Öğretmen CSV dosyası (opsiyonel)",
-            "type": "text",
-            "required": False,
-            "placeholder": "/home/etapadmin/Belgeler/ogretmenler.csv",
-            "help": (
-                "Bir CSV dosyası yolu verirseniz oradaki isimler "
-                "yukarıdaki listeye eklenir. İlk sütun ad-soyad olmalı "
-                "(boş bırakılabilir veya header satırı olabilir, atlanır). "
-                "Örn: AYŞE YILMAZ,32A1,5. Sınıf"
             ),
         },
         {
@@ -109,16 +100,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "step": 1,
             "help": (
                 "Sonradan okula atanacak öğretmenler için ogretmen01, "
-                "ogretmen02 … biçiminde boş hesap. "
-                "Bu hesaplar sistem üzerinde gerçekten oluşturulur: "
-                "useradd ile ev dizini açılır, EBA QR ile aynı standart "
-                "cihaz gruplarına (ses, USB, kamera, yazıcı vb.) eklenir "
-                "ve parola kilitli tutulur (yalnız OTP/QR ile giriş)."
+                "ogretmen02 … biçiminde boş hesaplar hazırlar. Bu adımda "
+                "yerel makine üzerinde her yedek hesap için ev dizini "
+                "açılır (useradd ile), hesap EBA QR / eta-usb-login ile "
+                "aynı standart cihaz gruplarına (ses, USB, kamera, yazıcı "
+                "vb.) eklenir ve ogretmenler grubuna üye yapılır; "
+                "böylece imaj alındığında bu hesaplar tüm klon tahtalara "
+                "birlikte gider. Parola kilitli tutulur — hesaplar yalnız "
+                "OTP/QR ile açılır."
             ),
         },
         {
             "key": "make_group_pin",
-            "label": "Yedek hesaplar için ortak PIN oluştur (@ogretmenler grup-PIN)",
+            "label": "Ogretmenler grubu kullanıcıları için ortak PIN oluştur",
             "type": "bool",
             "required": False,
             "default": "False",
@@ -127,11 +121,27 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # sensitive halini senkronlar.
             "enable_when_reserve_positive": True,
             "help": (
-                "İşaretlenirse 'ogretmenler' grubu (yoksa) oluşturulur, "
-                "bu adımda açılan ogretmenX yedek hesapları bu gruba "
-                "eklenir ve gruba özel bir '@ogretmenler' PIN anahtarı "
-                "üretilir (eta-otp-lock @grup mekanizması). PIN kartı "
-                "çıktısında ayrı bir 'ORTAK PIN' kartı olarak görünür."
+                "İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' "
+                "PIN anahtarı üretilir (eta-otp-lock @grup mekanizması). "
+                "Bu ortak PIN, gruba üye tüm hesaplara (bu adımda açılan "
+                "ogretmenX yedek hesapları dahil) giriş için kullanılabilir. "
+                "PIN kartı çıktısında ayrı bir 'ORTAK PIN' kartı olarak "
+                "görünür."
+            ),
+        },
+        {
+            "key": "auto_group_new_teachers",
+            "label": "Yeni öğretmen hesaplarını ogretmenler grubuna üye yap",
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "help": (
+                "İşaretlenirse imaja, /etc/passwd'i izleyen küçük bir "
+                "sistem servisi gömülür. EBA QR ile bir öğretmen tahtaya "
+                "ilk kez oturum açtığında oluşturulan yeni yerel hesap, "
+                "otomatik olarak ogretmenler grubuna dahil edilir. "
+                "Böylece '@ogretmenler' ortak PIN'i (varsa) bu yeni "
+                "hesaplarda da çalışır."
             ),
         },
         {
@@ -141,7 +151,11 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "action": "remove_extra_users_action",
             "style": "destructive",
             "visible_when": "can_remove_extra_users",
-            "help": "Varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) dışındaki tüm fazladan kullanıcıları siler. Bu işlem onay gerektirir.",
+            "help": (
+                "Etap Pardus'daki varsayılan kullanıcılar (etapadmin, "
+                "ogrenci, ogretmen) dışındaki tüm fazladan kullanıcıları "
+                "siler. Bu işlem onay gerektirir."
+            ),
         },
     ],
     "m05_samba_share": [

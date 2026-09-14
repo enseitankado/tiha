@@ -259,8 +259,8 @@ class SystemUpdateModule(Module):
                 "📦 Bekleyen yükseltme sayısı tespit edilemedi (apt erişilemedi).",
                 "",
                 "Uygula çalıştırıldığında:",
-                "• Repository sorunları düzeltilir",
-                "• apt update > full-upgrade > autoremove > clean"
+                "- Repository sorunları düzeltilir",
+                "- apt update > full-upgrade > autoremove > clean"
             ])
         elif count == 0:
             preview_lines.extend([
@@ -274,9 +274,9 @@ class SystemUpdateModule(Module):
                 f"📦 {count} paket için yükseltme bekleniyor.",
                 "",
                 "Uygula çalıştırıldığında:",
-                "• Repository sorunları düzeltilir",
-                "• apt update > full-upgrade > autoremove > clean",
-                "• Uzun sürebilir"
+                "- Repository sorunları düzeltilir",
+                "- apt update > full-upgrade > autoremove > clean",
+                "- Uzun sürebilir"
             ])
 
         return "\n".join(preview_lines)

@@ -191,15 +191,15 @@ class HostnameModule(Module):
             "  3) tiha-hostname.service kurulur ve etkinleştirilir.",
             "",
             "Her açılışta tahta:",
-            "  • MAC adresini okur (kablolu NIC'ten)",
-            "  • 'etap-XXXXXX' hostname'i üretir (MAC'in son 6 hanesi)",
-            "  • hostname ve /etc/hosts güncellenir",
-            "  • Zaten doğruysa değişiklik yapmaz",
+            "  - MAC adresini okur (kablolu NIC'ten)",
+            "  - 'etap-XXXXXX' hostname'i üretir (MAC'in son 6 hanesi)",
+            "  - hostname ve /etc/hosts güncellenir",
+            "  - Zaten doğruysa değişiklik yapmaz",
             "",
             "Avantajlar:",
-            "  • Ağ kartı değişse bile hostname dinamik güncellenir",
-            "  • Her açılışta MAC'e göre benzersizlik garantilenir",
-            "  • Hostname çakışması riski minimize edilir",
+            "  - Ağ kartı değişse bile hostname dinamik güncellenir",
+            "  - Her açılışta MAC'e göre benzersizlik garantilenir",
+            "  - Hostname çakışması riski minimize edilir",
         ]
         return "\n".join(lines)
 

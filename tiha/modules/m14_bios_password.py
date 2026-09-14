@@ -681,24 +681,24 @@ class BiosPasswordModule(Module):
                 " Faz 1 farkı: BIOS'ta ayrı bir 'parola ne zaman sorulsun' "
                 "byte'ı yok.",
                 "  Koruma seçiminize göre eta-112 parolaları şöyle ayarlar:",
-                "    • Yalnız BIOS ayarlarına girilirken (setup)  >  "
+                "    - Yalnız BIOS ayarlarına girilirken (setup)  >  "
                 "sadece yönetici parolası",
-                "    • Her açılışta (always)                      >  "
+                "    - Her açılışta (always)                      >  "
                 "yönetici + kullanıcı parolasına aynı değer",
                 "",
             ])
         lines.extend([
             "Bu adımda yapılacaklar:",
-            f"  • Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
-            f"  • eta-112 > {BUNDLED_ETA_112}",
-            f"  • Boot scripti > {FIRST_BOOT_SCRIPT} (chmod 700, parola gömülü)",
-            f"  • Systemd unit > {FIRST_BOOT_SERVICE}",
-            f"  • systemctl enable {FIRST_BOOT_SERVICE_NAME}",
+            f"  - Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
+            f"  - eta-112 > {BUNDLED_ETA_112}",
+            f"  - Boot scripti > {FIRST_BOOT_SCRIPT} (chmod 700, parola gömülü)",
+            f"  - Systemd unit > {FIRST_BOOT_SERVICE}",
+            f"  - systemctl enable {FIRST_BOOT_SERVICE_NAME}",
             "",
             "Klon makinedeki davranış (yalnızca ilk açılışta):",
-            "  ┌── Sentinel mevcut ────────► çık (zaten yapıldı)",
-            "  ├── İmza yok ──────────────► çık (klon değil/uygulanmamış)",
-            "  ├── MAC eşit ──────────────► çık (kaynak tahta)",
+            "  ┌── Sentinel mevcut ────────- çık (zaten yapıldı)",
+            "  ├── İmza yok ──────────────- çık (klon değil/uygulanmamış)",
+            "  ├── MAC eşit ──────────────- çık (kaynak tahta)",
             "  └── MAC farklı (klon)",
             "       └── eta-112 set --yonetici PASS",
             "             > sentinel yaz, servisi disable et, parola scriptini sil",

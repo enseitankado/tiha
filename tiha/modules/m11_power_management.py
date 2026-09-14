@@ -75,8 +75,13 @@ class CountdownWindow(Gtk.Window):
         self.set_border_width(20)
         self.set_skip_taskbar_hint(False)
 
+        self.total_seconds = total_seconds
         self.remaining = total_seconds
         self.exit_code = 0
+        # Pencerenin sağ üstteki X ile kapatılması kapatmayı tetiklemesin —
+        # bunun yerine sayaç sıfırdan başlasın. delete-event True dönerek
+        # yok etmeyi engelliyoruz.
+        self.connect("delete-event", self._on_delete_event)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self.add(vbox)
@@ -135,6 +140,25 @@ class CountdownWindow(Gtk.Window):
     def _on_shutdown_now(self, _btn):
         self.exit_code = 0
         self._quit()
+
+    def _on_delete_event(self, _win, _event):
+        # Sağ üst X: kullanıcı "buradayım" diyor.
+        # 1) X11 idle sayacını sıfırla (xset ile best-effort) — böylece
+        #    ana servis bir sonraki tetiklemede idle'ı sıfırdan sayar.
+        # 2) exit_code=1 (postpone) ile kapan — servis 10 dk boyunca
+        #    yeni popup açmaz; kullanıcı bu süre içinde aktifse zaten
+        #    idle eşiği aşılmaz.
+        try:
+            import subprocess as _sp
+            _sp.run(["xset", "s", "reset"],
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=2)
+            _sp.run(["xset", "dpms", "force", "on"],
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=2)
+        except Exception:
+            pass
+        self.exit_code = 1
+        self._quit()
+        return False  # yok etmeye izin ver (pencere kapansın)
 
     def _quit(self, *_args):
         Gtk.main_quit()
@@ -567,7 +591,7 @@ class PowerManagementModule(Module):
 
                 lines = [
                     status,
-                    f"• Servis durumu: {'🟢 çalışıyor' if eta_service_running else '🔴 durdurulmuş'}",
+                    f"- Servis durumu: {'🟢 çalışıyor' if eta_service_running else '🔴 durdurulmuş'}",
                     "",
                     " Mevcut yapılandırma:"
                 ]
@@ -625,10 +649,10 @@ class PowerManagementModule(Module):
             return (
                 f"⚙️ Henüz yapılandırılmamış (kontrol: {current_time})\n\n"
                 "Bu adım şunları yapacak:\n"
-                "• ETA-shutdown konfigürasyonu oluşturacak\n"
-                "• 2 dakika uyarı diyalogu ekleyecek\n"
-                "• Sabit saat ve idle tabanlı kapatma modları sunacak\n"
-                "• eta-shutdown.service'i aktifleştirecek\n\n"
+                "- ETA-shutdown konfigürasyonu oluşturacak\n"
+                "- 2 dakika uyarı diyalogu ekleyecek\n"
+                "- Sabit saat ve idle tabanlı kapatma modları sunacak\n"
+                "- eta-shutdown.service'i aktifleştirecek\n\n"
                 "🔄 Adım her açılışta güncel durumu kontrol eder"
             )
 

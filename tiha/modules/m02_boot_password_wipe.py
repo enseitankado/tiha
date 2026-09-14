@@ -132,7 +132,7 @@ class BootPasswordWipeModule(Module):
         "servisi kurar. Böylece tahtaya dokunarak yazılan ve sızdırılan "
         "herhangi bir parola bir sonraki açılışta işe yaramaz; tahta "
         "yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\n"
-        " Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
+        "Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
         "Teknik bakım erişimi (yerel yönetim, SSH) her zaman korunur."
     )
 
@@ -141,56 +141,55 @@ class BootPasswordWipeModule(Module):
         otp_users = _otp_registered_users()
         extras = extra_users()
 
-        # Tablo: KULLANICI | TÜR | PIN | NOT
-        rows: list[tuple[str, str, str, str]] = []
-        rows.append(("etapadmin", "yönetici", "—", "DOKUNULMAZ (bakım erişimi korunur)"))
+        # m08 stiliyle: hizalı key-value başlık, sonra girintili dash liste.
+        # Tablo görünümü kullanılmıyor — yatay kaydırma oluşmasın diye satır
+        # kırılabilen serbest metin biçimindedir.
+        lines: list[str] = []
+        lines.append(
+            f"Servis durumu : {'zaten kurulu, yeniden yazılacak' if existing else 'kurulacak ve etkinleştirilecek'}"
+        )
+        lines.append("")
+        lines.append(
+            "Bu servis her açılışta, root ve etapadmin dışındaki hesapların "
+            "parolasını kriptografik olarak rastgele bir değere çevirir. Bu "
+            "hesaplarda parola YAZARAK giriş yapılamaz — yalnız EBA-QR, PIN "
+            "veya USB bellek ile giriş yapılabilir."
+        )
+        lines.append("")
+        lines.append("DOKUNULMAZ (bakım erişimi korunur):")
+        lines.append("  - root")
+        lines.append("  - etapadmin")
+        lines.append("")
 
-        for u in ("ogretmen", "ogrenci"):
-            if _user_exists(u):
-                rows.append((u, "ortak", "—", "parola ile giriş yapılamaz (ortak hesap)"))
+        # Ortak hesaplar
+        ortak = [u for u in ("ogretmen", "ogrenci") if _user_exists(u)]
+        if ortak:
+            lines.append("Ortak hesaplar — parola yazarak giriş yapılamayacak:")
+            for u in ortak:
+                lines.append(f"  - {u}")
+            lines.append("")
 
+        # Kişisel hesaplar
         missing: list[str] = []
-        for u in extras:
-            if u in otp_users:
-                rows.append((u, "kişisel", " var", "EBA-QR / PIN / USB ile girer"))
-            else:
-                rows.append((u, "kişisel", " yok", "bu servis aktifken tahtaya GİREMEZ"))
-                missing.append(u)
-
-        # Kolon genişliklerini dinamik hesapla
-        user_w = max(10, max(len(r[0]) for r in rows) + 1)
-        kind_w = 10
-        otp_w  = 8
-
-        def fmt(u: str, k: str, o: str, n: str) -> str:
-            return f"  {u:<{user_w}} {k:<{kind_w}} {o:<{otp_w}} {n}"
-
-        out: list[str] = []
-        out.append("Bu servis her açılışta, etapadmin dışındaki hesapların parolasını rastgele değere çevirir.")
-        out.append("")
-        out.append(fmt("KULLANICI", "TÜR", "PIN", "DURUM / NOT"))
-        out.append("  " + "─" * (user_w + kind_w + otp_w + 32))
-        for r in rows:
-            out.append(fmt(*r))
+        if extras:
+            lines.append("Kişisel hesaplar — parola yazarak giriş yapılamayacak:")
+            for u in extras:
+                if u in otp_users:
+                    lines.append(f"  - {u}  (PIN anahtarı var — EBA-QR / PIN / USB ile girer)")
+                else:
+                    lines.append(f"  - {u}  (PIN anahtarı yok — bu hesap parola yazarak giremez)")
+                    missing.append(u)
+            lines.append("")
 
         if missing:
-            out.append("")
-            out.append(
-                f" DİKKAT — {len(missing)} kişisel hesabın PIN anahtarı yok: "
-                + ", ".join(missing)
-            )
-            out.append(
-                "   Bu servisi etkinleştirdikten sonra tahtaya GİREMEZLER. "
-                "“Öğretmen PIN anahtarları” adımına gidip onlar için de "
+            lines.append(
+                f"DİKKAT: {len(missing)} kişisel hesabın PIN anahtarı yok "
+                f"({', '.join(missing)}). Bu servis etkinken bu hesaplara "
+                "parola yazarak da PIN ile de giriş yapılamaz. Önce "
+                "\"Öğretmen PIN anahtarları\" adımına dönüp onlar için de "
                 "PIN anahtarı üretin."
             )
-
-        out.append("")
-        out.append(
-            "Durum: " + ("servis zaten kurulu, yeniden yazılacak."
-                         if existing else "servis kurulacak ve etkinleştirilecek.")
-        )
-        return "\n".join(out)
+        return "\n".join(lines)
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         try:

@@ -64,9 +64,9 @@ class TimeSyncModule(Module):
         # Dosya yoksa kullanıcıyı şaşırtacak "(yok)" yerine ne yapılacağı anlatılır.
         return (
             "TiHA özel NTP yapılandırması henüz yok. Bu adım şunları yapar:\n"
-            f"  • {TIMESYNCD_CONF} içerisine NTP=... ve FallbackNTP=... yazar\n"
-            "  • saat dilimini Europe/Istanbul (varsayılan) olarak ayarlar\n"
-            "  • timedatectl set-ntp true + systemd-timesyncd restart"
+            f"  - {TIMESYNCD_CONF} içerisine NTP=... ve FallbackNTP=... yazar\n"
+            "  - saat dilimini Europe/Istanbul (varsayılan) olarak ayarlar\n"
+            "  - timedatectl set-ntp true + systemd-timesyncd restart"
         )
 
     def apply(self, params=None, progress=None) -> ApplyResult:
