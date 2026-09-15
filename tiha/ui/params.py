@@ -183,10 +183,28 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "action": "remove_extra_users_action",
             "style": "destructive",
             "visible_when": "can_remove_extra_users",
+            "confirm": {
+                "title": "Fazladan hesaplar silinsin mi?",
+                "message": (
+                    "Varsayılan hesaplar (etapadmin, ogrenci, ogretmen) "
+                    "dışındaki tüm kullanıcılar, ev dizinleriyle birlikte "
+                    "silinecek.\n\n"
+                    "Ayrıca karşılığı kalmayan PIN kayıtları "
+                    "/etc/otp-secrets.json'dan temizlenecek — hesabı "
+                    "olmayan bir anahtar kullanılamaz ama imaja okunabilir "
+                    "bir sır olarak giderdi. Grup anahtarları (@...) ve "
+                    "varsayılan hesapların kayıtları korunur.\n\n"
+                    "Silme öncesi PIN dosyasının yedeği alınır. Devam "
+                    "edilsin mi?"
+                ),
+            },
             "help": (
                 "Etap Pardus'daki varsayılan kullanıcılar (etapadmin, "
                 "ogrenci, ogretmen) dışındaki tüm fazladan kullanıcıları "
-                "siler. Bu işlem onay gerektirir."
+                "siler ve karşılığı kalmayan PIN kayıtlarını temizler. "
+                "Fazladan hesap olmasa bile, geride kalmış yetim PIN "
+                "kayıtları varsa bu düğme onları temizlemek için görünür. "
+                "Bu işlem onay gerektirir."
             ),
         },
     ],
