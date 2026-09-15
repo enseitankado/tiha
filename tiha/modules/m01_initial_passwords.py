@@ -18,9 +18,18 @@ varsayılan/önceden bilinen parolaların imajda kalmaması için.
 Teknik not: Bu modül `chpasswd` yerine doğrudan `/etc/shadow` dosyasını
 düzenler; böylece PAM politikaları ve AppArmor kısıtlamalarından etkilenmez.
 
+GNOME anahtarlığı: Shadow'a doğrudan yazmanın bir yan etkisi vardır —
+`pam_gnome_keyring.so` hiç çalışmadığı için kullanıcının anahtarlığı eski
+parolayla şifreli kalır ve girişte asla geçilemeyen "parola artık giriş
+anahtarlığınızla uyuşmuyor" diyaloğu çıkar. Bu modül, parolasını
+değiştirdiği her kullanıcının bayatlamış anahtarlığını kenara alır;
+böylece ilk girişte yenisi yeni parolayla otomatik oluşur. Ayrıntılı
+gerekçe: :mod:`tiha.core.keyring`.
+
 Geri al. Apply öncesi alınan `/etc/shadow` yedeği yerine yazılır;
 böylece root, etapadmin ve ogretmen başta olmak üzere tüm hesapların
-parolası `apply` öncesi haline döner.
+parolası `apply` öncesi haline döner. Kenara alınan anahtarlıklar da
+yerlerine konur — eski shadow ile birlikte yeniden geçerli olurlar.
 """
 
 from __future__ import annotations
@@ -32,6 +41,11 @@ import subprocess
 import time
 from pathlib import Path
 
+from ..core.keyring import (
+    describe_keyrings,
+    quarantine_stale_keyrings,
+    restore_quarantined_keyrings,
+)
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.privilege import invoking_username
@@ -43,6 +57,13 @@ SHADOW = Path("/etc/shadow")
 
 # Sistem kullanıcıları (silinebilir)
 REMOVABLE_USERS = {"ogrenci", "ogretmen"}
+
+# Kenara alınan anahtarlıkların modül durum dizini içindeki yeri.
+KEYRING_BACKUP_SUBDIR = "keyrings"
+
+# Önizlemede anahtarlık durumu gösterilecek hesaplar — bu modülün
+# parolasını değiştirebildiği hesapların tamamı.
+KEYRING_PREVIEW_USERS = ("root", "etapadmin", "ogretmen")
 
 
 def _generate_password_hash(password: str) -> str:
@@ -213,12 +234,19 @@ class InitialPasswordsModule(Module):
     sidebar_title = "Yerel hesaplar"
     apply_hint = (
         "Parolalar SHA-512 hash olarak doğrudan /etc/shadow'a yazılır. "
-        "Doldurduğunuz alanlara göre ilgili hesapların parolaları ayarlanır."
+        "Doldurduğunuz alanlara göre ilgili hesapların parolaları ayarlanır; "
+        "eski parolayla şifreli kalan GNOME anahtarlıkları kenara alınır."
     )
     rationale = (
         "root, etapadmin veya ogretmen hesaplarından istediğinizin parolasını "
         "belirleyin. Hangi alanları doldurursanız sadece o hesapların parolası "
-        "değişir; diğerlerine dokunulmaz."
+        "değişir; diğerlerine dokunulmaz.\n\n"
+        "Parola değişen hesabın GNOME anahtarlığı eski parolayla şifreli "
+        "kaldığı için girişte 'Bilgisayara giriş yapmak için kullandığınız "
+        "parola artık giriş anahtarlığınızla uyuşmuyor' diyaloğu çıkar ve "
+        "doğru parola bile kabul edilmez (anahtarlık eski parolayı bekler). "
+        "Bu adım bayatlayan anahtarlığı kenara alır; ilk girişte yenisi yeni "
+        "parolayla otomatik oluşturulur. Geri alma dosyaları yerine koyar."
     )
     extra_links = [
         {"label": "Kullanıcılar ve Gruplar uygulamasını aç", "action": "launch_users_admin_gui_action"},
@@ -234,6 +262,27 @@ class InitialPasswordsModule(Module):
             lines.append(f"    - {user}: {status}")
         if not any(user_status.values()):
             lines.append("    (ogrenci ve ogretmen zaten yok)")
+
+        # Parola değişince bayatlayacak anahtarlıklar — kullanıcının
+        # "ne olacak?" sorusunu uygulamadan önce cevaplamak için.
+        keyring_lines: list[str] = []
+        for username in KEYRING_PREVIEW_USERS:
+            if not user_exists(username):
+                continue
+            entries = describe_keyrings(username)
+            if entries:
+                keyring_lines.append(f"    - {username}: {', '.join(entries)}")
+
+        if keyring_lines:
+            lines.append("")
+            lines.append("Mevcut GNOME anahtarlıkları:")
+            lines.extend(keyring_lines)
+            lines.append("")
+            lines.append("    Parola korumalı olanlar yeni parolayla açılamaz.")
+            lines.append("    Parolası değişen hesapta bu adım onları kenara alır;")
+            lines.append("    ilk girişte yenisi otomatik oluşur, geri alma")
+            lines.append("    dosyaları yerine koyar. Parolasız anahtarlıklar")
+            lines.append("    parola değişiminden etkilenmez, dokunulmaz.")
 
         return "\n".join(lines)
 
@@ -294,6 +343,21 @@ class InitialPasswordsModule(Module):
             # ogretmen hesabı kilitliyse parola ile giriş yapılabilmesi için aç
             _unlock_user("ogretmen")
 
+        # Parolası gerçekten değişen her hesabın anahtarlığı artık
+        # açılamaz durumdadır. Eski parolayı bilmediğimiz için yeniden
+        # şifrelemek mümkün değil; dosyayı kenara alırız, böylece
+        # pam_gnome_keyring bir sonraki girişte yenisini yeni parolayla
+        # kurar. Silmiyoruz: undo eski shadow'u geri koyduğunda bu
+        # anahtarlıklar tekrar geçerli hâle gelir.
+        keyring_backup_root = state / KEYRING_BACKUP_SUBDIR
+        keyrings_moved: dict[str, list[str]] = {}
+        for username, ok in results.items():
+            if not ok:
+                continue
+            moved = quarantine_stale_keyrings(username, keyring_backup_root)
+            if moved:
+                keyrings_moved[username] = moved
+
         details_lines = []
         if removed_users:
             details_lines.append("Silinen ortak hesaplar: " + ", ".join(removed_users))
@@ -303,6 +367,23 @@ class InitialPasswordsModule(Module):
             details_lines.append(f"{user} parolası: {'atandı' if success else 'ATANAMADI'}")
             if not success:
                 failed_users.append(user)
+
+        if keyrings_moved:
+            details_lines.append("")
+            details_lines.append("Bayatlayan GNOME anahtarlıkları kenara alındı:")
+            for username, names in keyrings_moved.items():
+                details_lines.append(f"  - {username}: {', '.join(names)}")
+            details_lines.append(
+                "Kenara alınmasaydı ilgili kullanıcı girişte 'parola artık giriş "
+                "anahtarlığınızla uyuşmuyor' diyaloğuyla karşılaşır ve doğru "
+                "parolayı yazsa bile geçemezdi."
+            )
+            details_lines.append(
+                "Yeni anahtarlık, kullanıcının ilk girişinde yeni parolayla "
+                "otomatik oluşturulur. Değişikliğin etkili olması için oturumu "
+                "kapatıp açmak (ya da tahtayı yeniden başlatmak) gerekir."
+            )
+            details_lines.append(f"Yedek: {keyring_backup_root}")
 
         # Başarısız olan kullanıcılar için bilgi
         if failed_users:
@@ -328,12 +409,18 @@ class InitialPasswordsModule(Module):
         if password_parts:
             summary_parts.append(f"{'/'.join(password_parts)} parolaları atandı")
 
+        keyring_count = sum(len(names) for names in keyrings_moved.values())
+        if keyring_count:
+            summary_parts.append(
+                f"{keyring_count} bayat anahtarlık dosyası kenara alındı"
+            )
+
         return ApplyResult(
             success=overall,
             summary="; ".join(summary_parts) + "." if overall and summary_parts
                     else "Bazı işlemler başarısız oldu, ayrıntılara bakın.",
             details="\n".join(details_lines),
-            data={"removed_users": removed_users}
+            data={"removed_users": removed_users, "keyrings_moved": keyrings_moved}
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
@@ -352,13 +439,28 @@ class InitialPasswordsModule(Module):
 
         try:
             restore_file(backup, SHADOW)
-            summary_parts = ["Önceki /etc/shadow durumu geri yüklendi"]
-            if restored_users:
-                summary_parts.append(f"{len(restored_users)} kullanıcı geri yüklendi: {', '.join(restored_users)}")
-            return ApplyResult(True, "; ".join(summary_parts) + ".")
         except OSError as exc:
             log.error("Shadow geri yükleme hatası: %s", exc)
             return ApplyResult(False, f"Geri yükleme başarısız: {exc}")
+
+        # Parolalar eski hâline döndüğü için kenara alınan anahtarlıklar
+        # yeniden açılabilir durumda; yerlerine koyuyoruz. Shadow geri
+        # yüklenemediyse buraya hiç gelinmez — eski parolayla şifreli bir
+        # anahtarlığı yeni parolanın yanına bırakmak sorunu geri getirirdi.
+        keyring_backup_root = state / KEYRING_BACKUP_SUBDIR
+        restored_keyrings: dict[str, list[str]] = {}
+        for username in data.get("keyrings_moved") or {}:
+            names = restore_quarantined_keyrings(username, keyring_backup_root)
+            if names:
+                restored_keyrings[username] = names
+
+        summary_parts = ["Önceki /etc/shadow durumu geri yüklendi"]
+        if restored_users:
+            summary_parts.append(f"{len(restored_users)} kullanıcı geri yüklendi: {', '.join(restored_users)}")
+        keyring_count = sum(len(names) for names in restored_keyrings.values())
+        if keyring_count:
+            summary_parts.append(f"{keyring_count} anahtarlık dosyası yerine konuldu")
+        return ApplyResult(True, "; ".join(summary_parts) + ".")
 
     # -----------------------------------------------------------------
     # Sistem Kullanıcı Yönetimi Fonksiyonları
