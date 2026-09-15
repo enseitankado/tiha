@@ -33,6 +33,20 @@ olarak aracın toplu-kullanici-olustur.py betiğini çağırır; böylece:
 
 Araç indirilemediyse TiHA dahili pyotp tabanlı yedek yolu kullanır.
 
+Mevcut anahtarlar korunur
+Adım, /etc/otp-secrets.json içinde anahtarı zaten bulunan hiçbir hesaba
+dokunmaz — ne dahili yol ne de eta-otp-cli çağrılır (aracın ``olustur``
+komutu mevcut kaydı sorgusuz üzerine yazıyor). Böylece adım aynı listeyle
+yeniden uygulandığında yalnızca eksikler tamamlanır ve öğretmenlerin
+telefonundaki anahtarlar geçerli kalır. Aynı koruma yedek hesapların
+ortak grup-PIN'i için de geçerlidir.
+
+Yazdırılabilir kâğıt
+Adım sonunda üretilen HTML kâğıt, yalnız o turda üretilenleri değil
+sistemdeki BÜTÜN anahtarları içerir; bu turda üretilenler "YENİ"
+etiketiyle işaretlenir. Kâğıt etapadmin oturumunda tarayıcıda açılır ve
+"Dosyaya kaydet…" düğmesi onu HTML olarak kaydeder.
+
 Neden gerekir?
 Pardus ETAP'ın kendi PIN üretici uygulaması (eta-otp-lock) kullanıcının
 yerel parolasını ister. "Açılışta parola temizliği" adımı uygulanırsa o
@@ -429,6 +443,28 @@ def save_secrets(secrets: dict[str, str]) -> None:
     os.chown(OTP_SECRETS_FILE, 0, 0)
 
 
+def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
+    """PIN kâğıdının başlığında görünecek ad.
+
+    Kâğıt artık sistemdeki bütün anahtarları bastığı için, bu turda
+    girilmemiş (daha önce oluşturulmuş) hesapların adı ``display_of``
+    haritasında bulunmaz. Onlar için passwd GECOS alanındaki ad/soyad
+    kullanılır; o da yoksa kullanıcı adının kendisi yazılır.
+    """
+    if user in display_of:
+        return display_of[user]
+    if user.startswith("@"):
+        return f"{user[1:]} grubu — ORTAK PIN"
+
+    import pwd as _pwd
+    try:
+        gecos = _pwd.getpwnam(user).pw_gecos.split(",")[0].strip()
+    except KeyError:
+        # Anahtarı var ama sistem hesabı yok (hesap sonradan silinmiş).
+        return f"{user} (sistemde hesap yok)"
+    return gecos or user
+
+
 def otpauth_url(username: str, secret: str) -> str:
     """Google Authenticator/Authy vb.'in kabul ettiği otpauth:// URL'si."""
     issuer_enc = quote(OTP_ISSUER)
@@ -641,9 +677,14 @@ class OTPSecretsModule(Module):
     title = "Öğretmen PIN anahtarları"
     sidebar_title = "Toplu pin anahtarı"
     apply_hint = (
-        "Listedeki ve yedek hesaplar için PIN anahtarları üretilir."
+        "Listedeki ve yedek hesaplar için PIN anahtarları üretilir. "
+        "Anahtarı zaten olan hesaplara dokunulmaz; yalnızca eksikler "
+        "tamamlanır. Çıktı, sistemdeki tüm anahtarları içeren "
+        "yazdırılabilir bir HTML kâğıdıdır."
     )
-    save_filename = "ogretmen-pin-anahtarlari.txt"
+    # "Dosyaya kaydet…" yazdırılabilir kâğıdı kaydeder; biçim HTML.
+    # apply() gerçek dosya adını (zaman damgalı) result üzerinden verir.
+    save_filename = "ogretmen-pin-kagitlari.html"
     streams_output = True
     rationale = (
         "Her öğretmen için 6 haneli pin kodu üreten anahtarları toplu "
@@ -731,6 +772,11 @@ class OTPSecretsModule(Module):
                      "sistem kullanıcı hesaplarını oluşturmaz (yedek "
                      "hesap sayısı belirtilirse onların hesabı bu adımda "
                      "açılır).")
+        lines.append("")
+        lines.append("Not: Anahtarı zaten olan hesaplara dokunulmaz — "
+                     "yalnızca eksikler tamamlanır. Öğretmenlerin "
+                     "telefonundaki anahtarlar geçerli kalır, adımı "
+                     "güvenle yeniden uygulayabilirsiniz.")
         lines.append("")
 
         if has_otp:
@@ -826,11 +872,20 @@ class OTPSecretsModule(Module):
         backup_file(OTP_SECRETS_FILE, state)
         before_secrets = set(load_secrets().keys())
 
+        # Hâlihazırda anahtarı olan hesaplara dokunulmaz: öğretmenin
+        # telefonundaki anahtar geçerli kalsın. Adım aynı listeyle
+        # yeniden uygulandığında yalnızca eksikler tamamlanır.
+        keep_users = set(before_secrets)
+
         cli_script = _eta_otp_cli_bulk_script()
         if cli_script:
-            success = self._apply_with_tool(cli_script, teacher_names, progress)
+            success = self._apply_with_tool(
+                cli_script, teacher_names, progress, keep_users
+            )
         else:
-            success = self._apply_with_internal(teacher_names, progress)
+            success = self._apply_with_internal(
+                teacher_names, progress, keep_users
+            )
 
         if not success:
             return ApplyResult(
@@ -891,22 +946,32 @@ class OTPSecretsModule(Module):
                     run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
                     if progress:
                         progress(f"  + {u}")
-                after_secrets[group_key] = pyotp.random_base32()
-                save_secrets(after_secrets)
-                group_secret_is_new = True
-                if progress:
-                    progress(f"\nOrtak grup-PIN uretildi: {group_key} — "
-                             "onceki grup-PIN gecersizdir, telefonlara "
-                             "yeniden ekletin.")
+                if group_key in after_secrets:
+                    # Mevcut grup-PIN'i yenilemek telefonlardaki anahtarı
+                    # geçersiz kılardı; koruyoruz.
+                    if progress:
+                        progress(f"\nMevcut ortak grup-PIN korundu: {group_key} "
+                                 "— telefonlardaki anahtar geçerli kalır.")
+                else:
+                    after_secrets[group_key] = pyotp.random_base32()
+                    save_secrets(after_secrets)
+                    group_secret_is_new = True
+                    if progress:
+                        progress(f"\nOrtak grup-PIN uretildi: {group_key}")
         elif make_group_pin and reserve == 0:
             if progress:
                 progress("\n'Yedek hesaplar icin ortak PIN' isaretli ama "
                          "yedek hesap sayisi 0 — akis atlandi.")
 
-        if not new_users and not group_secret_is_new:
+        # Listede olup anahtarı zaten bulunan hesaplar — dokunulmadı.
+        _normalize = _eta_otp_cli_normalize if cli_script else normalize_username
+        requested_users = {u for u in (_normalize(n) for n in teacher_names) if u}
+        preserved_users = sorted(requested_users & keep_users)
+
+        if not new_users and not group_secret_is_new and not preserved_users:
             return ApplyResult(
                 False,
-                "Hiç yeni kullanıcı oluşmadı — hepsi zaten vardı olabilir.",
+                "Hiç PIN anahtarı üretilemedi.",
                 details=f"Mevcut kayıt sayısı: {len(after_secrets)}",
             )
         # Grup secret'ı da PIN kartı listesine dahil et
@@ -970,6 +1035,12 @@ class OTPSecretsModule(Module):
         report_lines: list[str] = []
         report_lines.append("─" * 76)
         report_lines.append(f"  {len(new_users)} hesap için PIN anahtarı üretildi.")
+        if preserved_users:
+            report_lines.append(
+                f"  {len(preserved_users)} hesabın mevcut anahtarı korundu "
+                "(yeniden üretilmedi)."
+            )
+        report_lines.append(f"  Toplam PIN kaydı: {len(after_secrets)}")
         report_lines.append(f"  Dosya: {OTP_SECRETS_FILE}")
         report_lines.append(f"  Üretici: Issuer = \"{OTP_ISSUER}\", 6 hane, 30 sn periyot.")
         if cli_script:
@@ -984,6 +1055,15 @@ class OTPSecretsModule(Module):
             report_lines.append(f"     Kullanıcı adı : {user}")
             report_lines.append(f"     PIN anahtarı  : {secret}")
             report_lines.append(f"     otpauth URL   : {url}")
+        if preserved_users:
+            report_lines.append("")
+            report_lines.append("─" * 76)
+            report_lines.append(
+                "  Mevcut anahtarı korunan hesaplar (dokunulmadı — "
+                "telefondaki anahtar geçerli):"
+            )
+            for user in preserved_users:
+                report_lines.append(f"     · {user}")
         report_lines.append("")
         report_lines.append("─" * 76)
         report_lines.append(
@@ -994,27 +1074,40 @@ class OTPSecretsModule(Module):
         )
         copyable = "\n".join(report_lines)
 
-        # Yazdırılabilir HTML kâğıt — her öğretmen için tek satırlık kart.
-        # Tarayıcıda açılır, Ctrl+P ile yazdırılır ya da PDF olarak kaydedilir.
-        html_path = self._write_printable_paper(
-            new_users=sorted(new_users),
+        # Yazdırılabilir HTML kâğıt — sistemdeki BÜTÜN anahtarlar için
+        # birer kart. Yalnız bu turda üretilenleri göstermek, adım
+        # yeniden uygulandığında ya da liste parça parça girildiğinde
+        # eksik bir çıktı veriyordu; öğretmene teslim edilecek kâğıt
+        # setinin tamamı tek dosyada olmalı. Bu turda üretilenler "YENİ"
+        # etiketiyle işaretlenir.
+        all_users = sorted(after_secrets)
+        html_path, html_text = self._write_printable_paper(
+            all_users=all_users,
+            new_users=set(new_users),
             secrets=after_secrets,
             display_of=display_of,
             state_dir=state,
         )
         if html_path and progress:
-            progress(f"🖨️ Yazdırılabilir kâğıt: {html_path}")
+            progress(f"🖨️ Yazdırılabilir kâğıt ({len(all_users)} anahtar): {html_path}")
 
-        details = (
-            f"{len(new_users)} hesap için anahtar üretildi. Tam liste aşağıda; "
-            "'Panoya kopyala' veya 'Dosyaya kaydet…' ile alın."
+        details_parts = [f"{len(new_users)} hesap için anahtar üretildi."]
+        if preserved_users:
+            details_parts.append(
+                f"{len(preserved_users)} hesabın mevcut anahtarı korundu."
+            )
+        details_parts.append(
+            "Bu turda üretilenlerin listesi aşağıda; 'Panoya kopyala' ile alın."
         )
+        details = " ".join(details_parts)
         if html_path:
             details += (
-                f"\n\n🖨️ Yazdırılabilir öğretmen kâğıdı:\n"
+                f"\n\n🖨️ Yazdırılabilir öğretmen kâğıdı — "
+                f"sistemdeki {len(all_users)} anahtarın tamamı:\n"
                 f"  {html_path}\n"
                 "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin.\n"
-                "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
+                "  (Etapadmin oturumunda otomatik açılmayı denedik.)\n"
+                "  'Dosyaya kaydet…' bu kâğıdı HTML olarak kaydeder."
             )
 
         # Yeni öğretmen hesaplarını ogretmenler grubuna otomatik ekleyen
@@ -1030,7 +1123,20 @@ class OTPSecretsModule(Module):
                              "ogretmenler grubuna otomatik dahil edilecek.")
 
         # Greeter cache bilgisini ekle
-        summary_parts = [f"{len(new_users)} PIN anahtarı üretildi ve {OTP_SECRETS_FILE} dosyasına yazıldı."]
+        if new_users:
+            summary_parts = [
+                f"{len(new_users)} PIN anahtarı üretildi ve "
+                f"{OTP_SECRETS_FILE} dosyasına yazıldı."
+            ]
+        else:
+            summary_parts = [
+                "Yeni anahtar gerekmedi; listedeki hesapların anahtarı "
+                "zaten vardı ve korundu."
+            ]
+        if preserved_users and new_users:
+            summary_parts.append(
+                f"{len(preserved_users)} hesabın mevcut anahtarına dokunulmadı."
+            )
         if greeter_cache_applied:
             summary_parts.append("Greeter cache güncellendi ve otomatik çalıştırma ayarlandı.")
         elif total_users >= MIN_USERS_FOR_CACHE:
@@ -1043,9 +1149,15 @@ class OTPSecretsModule(Module):
             summary=" ".join(summary_parts),
             details=details,
             copyable=copyable,
+            # "Dosyaya kaydet…" ekrandaki metin raporunu değil,
+            # yazdırılabilir HTML kâğıdı kaydeder: teslim edilecek çıktı
+            # bu, ve tarayıcıda/yazıcıda doğru görünen biçim de bu.
+            save_payload=html_text,
+            save_filename=(html_path.name if html_path else None),
             data={
                 "passed_names": teacher_names,
                 "created_users": sorted(new_users),
+                "preserved_users": preserved_users,
                 "used_tool": bool(cli_script),
                 "greeter_cache_applied": greeter_cache_applied,
                 "total_users": total_users,
@@ -1056,14 +1168,23 @@ class OTPSecretsModule(Module):
     def _write_printable_paper(
         self,
         *,
-        new_users: list[str],
+        all_users: list[str],
+        new_users: set[str],
         secrets: dict[str, str],
         display_of: dict[str, str],
         state_dir: Path,
-    ) -> Path | None:
-        """Her öğretmen için yazdırılabilir bir kart içeren HTML dosyası
-        oluşturur. Best-effort xdg-open ile aktif kullanıcı oturumunda
-        tarayıcıda açar."""
+    ) -> tuple[Path | None, str | None]:
+        """Sistemdeki her PIN anahtarı için yazdırılabilir bir kart içeren
+        HTML dosyası oluşturur.
+
+        ``all_users`` kâğıda basılacak anahtarların tamamıdır; bu turda
+        üretilenler (``new_users``) "YENİ" etiketiyle işaretlenir, böylece
+        yönetici hangi kâğıtları yeni teslim etmesi gerektiğini görür.
+
+        Dosya yolunu ve HTML içeriğini döner — içerik "Dosyaya kaydet…"
+        butonunda yeniden kullanılır. Best-effort xdg-open ile aktif
+        kullanıcı oturumunda tarayıcıda açılır.
+        """
         from datetime import datetime as _dt
         from html import escape as _esc
         import subprocess as _sp
@@ -1072,9 +1193,10 @@ class OTPSecretsModule(Module):
         out = state_dir / f"ogretmen-pin-kagitlari-{ts}.html"
 
         cards: list[str] = []
-        for user in new_users:
+        for user in all_users:
             secret = secrets.get(user, "")
-            display = display_of.get(user, "(yedek hesap)")
+            display = _paper_display_name(user, display_of)
+            is_new = user in new_users
             grouped = " ".join(secret[i:i + 4] for i in range(0, len(secret), 4))
             url = otpauth_url(user, secret)
             is_group = user.startswith("@")
@@ -1113,10 +1235,11 @@ class OTPSecretsModule(Module):
       <li>Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir;
           tahta giriş ekranında bu PIN'i girersiniz.</li>
     </ol>'''
+            badge = '<span class="badge">YENİ</span>' if is_new else ""
             cards.append(f'''
-<article class="card{' group' if is_group else ''}">
+<article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}">
   <header>
-    <h2>{_esc(display)}</h2>
+    <h2>{_esc(display)}{badge}</h2>
     {user_line}
   </header>
   <section class="secret">
@@ -1148,7 +1271,20 @@ class OTPSecretsModule(Module):
     border-radius: 6px;
     background: #fafafa;
   }}
+  .card.fresh {{ border-color: #2e7d32; background: #f3f9f3; }}
   .card h2 {{ margin: 0 0 4px 0; font-size: 14pt; }}
+  .badge {{
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 9px;
+    background: #2e7d32;
+    color: #fff;
+    font-size: 8pt;
+    font-weight: 600;
+    vertical-align: middle;
+    letter-spacing: 0.5px;
+  }}
   .card .user {{ font-size: 10pt; color: #555; margin-bottom: 8px; }}
   .secret .label {{ font-size: 9pt; color: #555; }}
   .secret .key {{
@@ -1176,7 +1312,9 @@ class OTPSecretsModule(Module):
 </head><body>
 <h1>Öğretmen PIN Kâğıtları</h1>
 <div class="meta">
-  Oluşturulma: {ts.replace("-", " ")} · Toplam: {len(new_users)} kâğıt ·
+  Oluşturulma: {ts.replace("-", " ")} ·
+  Toplam: {len(all_users)} kâğıt ({len(new_users)} tanesi bu turda üretildi,
+  <span class="badge">YENİ</span> etiketli) ·
   TiHA tarafından üretildi · Issuer: <em>{_esc(OTP_ISSUER)}</em>
 </div>
 {"".join(cards)}
@@ -1189,7 +1327,7 @@ class OTPSecretsModule(Module):
             out.chmod(0o644)
         except OSError as exc:
             log.warning("Yazdırılabilir kâğıt oluşturulamadı: %s", exc)
-            return None
+            return None, html
 
         # Best-effort: aktif grafik oturumda tarayıcıyı aç
         try:
@@ -1206,12 +1344,22 @@ class OTPSecretsModule(Module):
         except (OSError, ImportError) as exc:
             log.debug("xdg-open atlandı: %s", exc)
 
-        return out
+        return out, html
 
     def _apply_with_tool(
-        self, script: Path, names: list[str], progress: ProgressCallback | None,
+        self,
+        script: Path,
+        names: list[str],
+        progress: ProgressCallback | None,
+        keep_users: set[str],
     ) -> bool:
-        """otp-cli.py aracını kullanarak sadece PIN anahtarları üret (kullanıcı oluşturmadan)."""
+        """otp-cli.py aracını kullanarak sadece PIN anahtarları üret (kullanıcı oluşturmadan).
+
+        ``keep_users`` içindeki hesaplar için araç hiç çağrılmaz: aracın
+        ``olustur`` komutu mevcut anahtarı sorgusuz üzerine yazar
+        (``ayarlar[kullanici] = yeni_anahtar``), bu da öğretmenin
+        telefonundaki anahtarı geçersiz kılardı.
+        """
         if progress:
             progress("enseitankado/eta-otp-cli aracı çalıştırılıyor (sadece OTP anahtarları)…")
 
@@ -1223,6 +1371,8 @@ class OTPSecretsModule(Module):
 
         # Her kullanıcı için olustur komutunu çalıştır (sadece OTP anahtarı)
         success_count = 0
+        attempted = 0
+        kept_count = 0
         total_count = len(names)
 
         for idx, full_name in enumerate(names, 1):
@@ -1230,6 +1380,14 @@ class OTPSecretsModule(Module):
             if not username:
                 continue
 
+            if username in keep_users:
+                kept_count += 1
+                if progress:
+                    progress(f"  {idx}/{total_count}: {full_name} → {username} "
+                             "— mevcut anahtar korundu, dokunulmadı")
+                continue
+
+            attempted += 1
             if progress:
                 progress(f"  {idx}/{total_count}: {full_name} → {username}")
 
@@ -1248,14 +1406,27 @@ class OTPSecretsModule(Module):
                     progress(f"    ✗ Hata: {username}")
 
         if progress:
-            progress(f"Tamamlandı: {success_count}/{total_count} OTP anahtarı oluşturuldu")
+            progress(f"Tamamlandı: {success_count}/{attempted} yeni OTP anahtarı "
+                     f"üretildi, {kept_count} mevcut anahtar korundu")
 
+        # Üretilecek yeni anahtar yoksa bu bir hata değil: adımın aynı
+        # listeyle yeniden uygulanması olağan bir durumdur.
+        if attempted == 0:
+            return True
         return success_count > 0
 
     def _apply_with_internal(
-        self, names: list[str], progress: ProgressCallback | None,
+        self,
+        names: list[str],
+        progress: ProgressCallback | None,
+        keep_users: set[str],
     ) -> bool:
-        """Aracın olmadığı durumda TiHA'nın kendi pyotp yolu."""
+        """Aracın olmadığı durumda TiHA'nın kendi pyotp yolu.
+
+        ``keep_users`` içindeki hesapların anahtarına dokunulmaz; sistem
+        hesabı yine garantilenir (``create_user`` var olanı bozmaz, en
+        çok ad/soyad alanını günceller).
+        """
         if progress:
             progress("Dahili pyotp yolu kullanılıyor.")
 
@@ -1265,6 +1436,10 @@ class OTPSecretsModule(Module):
             if not user:
                 continue
             create_user(user, full_name=name)
+            if user in keep_users:
+                if progress:
+                    progress(f"  • {user} ({name}): mevcut PIN anahtarı korundu")
+                continue
             secrets[user] = pyotp.random_base32()
             if progress:
                 progress(f"  • {user} ({name}): PIN anahtarı üretildi")

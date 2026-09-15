@@ -1102,10 +1102,22 @@ class ModulePage(Gtk.Box):
             btn_row.pack_start(copy_btn, False, False, 0)
 
             save_btn = Gtk.Button(label="Dosyaya kaydet…")
-            default_name = self.module.save_filename or f"tiha-{self.module.id}.txt"
+            # Modül kaydedilecek içeriği ayrıca verdiyse (ör. m03'ün
+            # yazdırılabilir HTML kâğıdı) ekrandaki metin yerine onu
+            # kaydediyoruz; dosya adının uzantısı biçimi belirler.
+            save_text = (
+                result.save_payload
+                if result.save_payload is not None
+                else (result.copyable or "")
+            )
+            default_name = (
+                result.save_filename
+                or self.module.save_filename
+                or f"tiha-{self.module.id}.txt"
+            )
             save_btn.connect(
                 "clicked",
-                lambda *_: self._save_to_file(result.copyable or "", default_name),
+                lambda *_: self._save_to_file(save_text, default_name),
             )
             btn_row.pack_start(save_btn, False, False, 0)
             box.pack_start(btn_row, False, False, 0)
@@ -1257,6 +1269,18 @@ class ModulePage(Gtk.Box):
         dlg.set_current_name(default_name)
         dlg.set_do_overwrite_confirmation(True)
 
+        # Biçim, önerilen dosya adının uzantısından gelir. Diyaloğu o
+        # uzantıyla sınırlıyoruz; kullanıcı adı değiştirse de uzantı
+        # aşağıda geri eklenir, böylece dosya her zaman beklenen
+        # biçimde açılır (ör. HTML kâğıt tarayıcıda).
+        forced_suffix = Path(default_name).suffix
+        if forced_suffix:
+            html_filter = Gtk.FileFilter()
+            label = forced_suffix.lstrip(".").upper()
+            html_filter.set_name(f"{label} dosyası (*{forced_suffix})")
+            html_filter.add_pattern(f"*{forced_suffix}")
+            dlg.add_filter(html_filter)
+
         # Etapadmin ev dizinini varsayılan konum yap
         try:
             etap_home = _pwd.getpwnam("etapadmin").pw_dir
@@ -1271,6 +1295,8 @@ class ModulePage(Gtk.Box):
         response = dlg.run()
         if response == Gtk.ResponseType.ACCEPT:
             path = dlg.get_filename()
+            if forced_suffix and not path.lower().endswith(forced_suffix.lower()):
+                path += forced_suffix
             try:
                 Path(path).write_text(text, encoding="utf-8")
                 # Dosya root tarafından yazıldı; etapadmin ev dizinindeyse

@@ -44,6 +44,16 @@ class ApplyResult:
     copyable: str | None = None      # UI'da "Kopyala" butonu ile sunulacak metin
     data: dict = field(default_factory=dict)  # undo için modülün sakladığı durum
 
+    # "Dosyaya kaydet…" butonunun yazacağı içerik. ``None`` ise
+    # ``copyable`` kaydedilir. Kaydedilmesi gereken şey ekranda
+    # gösterilenden farklı olduğunda doldurulur — ör. ekranda düz metin
+    # özet dururken dosyaya yazdırılabilir HTML kâğıdın kaydedilmesi.
+    save_payload: str | None = None
+    # Kaydetme diyaloğunda önerilecek dosya adı. Boşsa modülün
+    # ``save_filename`` sınıf alanına düşülür. Uzantısı kaydetme
+    # biçimini de belirler: UI bu uzantıyı filtreler ve zorlar.
+    save_filename: str | None = None
+
 
 class Module:
     """Tüm modüllerin türediği taban sınıf."""
