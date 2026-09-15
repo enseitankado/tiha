@@ -24,6 +24,13 @@ Normal iş akışımız şöyledir:
    silinir. Yaklaşımı virt-sysprep, cloud-init clean, BleachBit ve
    benzeri açık kaynak araçlardan esinlenir.
 
+   GNOME anahtarlıkları da bu kapsamdadır ve iki nedenle silinir: hem
+   makineye özgü sırlar (Chrome Safe Storage anahtarı, kayıtlı
+   parolalar, PKCS#11 deposu) imajla bütün tahtalara dağılmasın, hem de
+   klon tahtada parola yeniden tanımlandığında "parola artık giriş
+   anahtarlığınızla uyuşmuyor" hatası doğmasın. Gerekçenin ayrıntısı
+   :mod:`tiha.core.keyring` içindedir.
+
 **Ahenk kimliği** bu adımdan önce ayrı bir adımda
 (``m12_ahenk_reset``) ele alınır — orada klon-yeniden-talep
 mekanizması (boot servisi + MAC imzası) kurulur; credential temizliği
@@ -42,6 +49,7 @@ import shutil
 from pathlib import Path
 
 from ..core.image_info import IMAGE_INFO_FILE, write_image_info
+from ..core.keyring import purge_keyrings
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.undo import Journal
@@ -349,6 +357,15 @@ class ImageSanitizeModule(Module):
             "    - bayat kilit dosyaları da silinir (Chromium türevlerinde\n"
             "      SingletonLock/Socket/Cookie, Firefox'ta lock + .parentlock);\n"
             "      aksi hâlde klonlanmış tahtada tarayıcı açılmayı reddedebilir\n"
+            "  - GNOME anahtarlıkları (~/.local/share/keyrings)\n"
+            "    - Chrome Safe Storage anahtarı, uygulamaların kaydettiği\n"
+            "      parolalar ve PKCS#11 sertifika deposu; imajla kopyalanırsa\n"
+            "      aynı sır bütün tahtalara dağılır (parolasız anahtarlıklar\n"
+            "      diskte düz metin tutulduğu için doğrudan okunabilir)\n"
+            "    - klon tahtada parola yeniden tanımlandığında anahtarlık eski\n"
+            "      parolada kalır ve girişte asla geçilemeyen 'parola artık\n"
+            "      giriş anahtarlığınızla uyuşmuyor' diyaloğu çıkar\n"
+            "    - her tahta ilk girişinde kendi anahtarlığını otomatik üretir\n"
             "  - /tmp ve /var/tmp içerikleri\n"
             "  - Kullanılmayan diller için yerelleştirme dosyaları\n"
             f"    ({', '.join(KEEP_LOCALES)} dışındakiler /usr/share/locale altından silinir)\n\n"
@@ -562,6 +579,7 @@ class ImageSanitizeModule(Module):
         history_total = 0
         trash_total = 0
         browser_total = 0
+        keyring_total = 0
         for home in homes:
             # Geçmiş dosyaları
             for hist in history_files:
@@ -580,6 +598,14 @@ class ImageSanitizeModule(Module):
             # Tarayıcı önbellek + kişisel veri (Firefox, Chrome, Edge,
             # Brave, Chromium, Vivaldi, Opera, Yandex)
             browser_total += _clean_browser_data(home)
+            # GNOME anahtarlıkları. İki ayrı nedenle silinir: (1) makineye
+            # özgü sırlar taşır (Chrome Safe Storage anahtarı, kayıtlı
+            # uygulama parolaları, PKCS#11 deposu) ve imajla bütün
+            # tahtalara aynen dağılır; (2) klon tahtada parola yeniden
+            # tanımlandığı anda anahtarlık eski parolada kaldığı için
+            # "parola artık giriş anahtarlığınızla uyuşmuyor" diyaloğu
+            # doğar. Silinen anahtarlık ilk girişte otomatik oluşur.
+            keyring_total += purge_keyrings(home)
         ops.append(
             f"{len(homes)} ev dizininde: {history_total} geçmiş dosyası "
             f"silindi, {cache_subdirs_total} cache öğesi temizlendi, "
@@ -589,6 +615,11 @@ class ImageSanitizeModule(Module):
             ops.append(
                 f"Tarayıcılardan (Firefox/Chrome/Edge/Brave/...) "
                 f"{browser_total} önbellek/veri öğesi silindi"
+            )
+        if keyring_total:
+            ops.append(
+                f"{keyring_total} GNOME anahtarlık dosyası silindi "
+                f"(ilk girişte yenisi oluşur; klonda parola uyuşmazlığı olmaz)"
             )
 
         # ===== 10) /tmp ve /var/tmp ===================================
