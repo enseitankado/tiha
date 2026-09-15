@@ -474,6 +474,35 @@ class ModulePage(Gtk.Box):
 
         return grid
 
+    def _refresh_dynamic_defaults(self) -> None:
+        """``default_from``'lu alanları sistemin güncel durumundan tazeler.
+
+        Form sayfaları uygulama açılışında bir kez kuruluyor. Bir buton
+        işlemi sistemi değiştirdiğinde (ör. fazladan hesaplar silindi,
+        anahtarlar boşaltıldı) kutuda işlem öncesinin sayısı kalıyordu.
+
+        Yalnız buton işlemlerinden sonra çağrılır; sayfa her açılışta
+        çağrılsaydı kullanıcının elle girdiği değeri silerdi.
+        """
+        schema = params_schema.get(self.module.id) or []
+        for field in schema:
+            source = field.get("default_from")
+            if not source:
+                continue
+            provider = getattr(self.module, source, None)
+            if not callable(provider):
+                continue
+            try:
+                value = provider()
+            except Exception as exc:
+                log.warning("default_from tazelenemedi (%s): %s", source, exc)
+                continue
+            widget = self._fields.get(field["key"])
+            if isinstance(widget, Gtk.SpinButton):
+                widget.set_value(float(value or 0))
+            elif isinstance(widget, Gtk.Entry):
+                widget.set_text("" if value is None else str(value))
+
     def _refresh_conditional_fields(self) -> None:
         """``visible_when``'lı alanların görünürlüğünü tazeler.
 
@@ -927,6 +956,12 @@ class ModulePage(Gtk.Box):
         self.result_holder.pack_start(self._working_row, False, False, 0)
         self.result_holder.show_all()
 
+        # Konsola da adım satırı düş — apply yolunda olduğu gibi. Buton
+        # işlemleri (hesap silme, anahtar silme) sistemi kalıcı olarak
+        # değiştiriyor; terminal dökümünde izi kalmalı.
+        label = button.get_label() if button is not None else ""
+        console.step(f"{self.module.title} — {label}" if label else self.module.title)
+
         # Canlı çıktıyı modalda göster
         self._open_stream_dialog(f"{self.module.title} — çalışıyor")
 
@@ -979,12 +1014,20 @@ class ModulePage(Gtk.Box):
                 if isinstance(combo, Gtk.ComboBoxText):
                     # params.py'daki option sırası: [0]=setup, [1]=always
                     combo.set_active(0 if prot == "setup" else 1)
+        # Terminale sonuç satırı — apply yolundaki davranışın aynısı.
+        if result.success:
+            console.ok(result.summary)
+        else:
+            console.fail(result.summary)
         self._show_result(result)
         if result.warning:
             self._show_warning_dialog(result.warning)
         # Buton işlemi sistem durumunu değiştirmiş olabilir — önizlemeyi
         # ve "visible_when" şartlı alanların görünürlüğünü tazele.
         self._refresh_after_action()
+        # Sistemden okunan varsayılanları da tazele: hesaplar silindiyse
+        # "yedek hesap sayısı" kutusunda eski sayı kalmasın.
+        self._refresh_dynamic_defaults()
 
     def run_apply(self) -> None:
         if self._applying:

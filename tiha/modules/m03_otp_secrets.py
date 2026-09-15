@@ -497,6 +497,26 @@ def _admin_ids() -> tuple[int, int] | None:
     return None
 
 
+# Silme/listeleme çıktılarında en başta görünmesi gereken kayıtlar.
+# Bunlar tek bir öğretmene değil tahtanın tamamına ait ortak/yönetici
+# anahtarlarıdır; bir listede gözden kaçmamaları gerekir.
+PRIORITY_SECRET_USERS = ("@ogretmenler", "ogretmen", "etapadmin")
+
+
+def order_secret_users(users) -> list[str]:
+    """Ortak ve yönetici anahtarlarını başa alan sıralama.
+
+    Önce ``@ogretmenler`` (grup ortak PIN'i), ``ogretmen`` (ortak hesap)
+    ve ``etapadmin`` (sistem yöneticisi) — hangileri varsa bu sırayla.
+    Kalanlar alfabetik. Yüzlerce öğretmenlik bir listede bu üçünün
+    arada kaybolmaması için.
+    """
+    present = set(users)
+    head = [u for u in PRIORITY_SECRET_USERS if u in present]
+    rest = sorted(present - set(PRIORITY_SECRET_USERS))
+    return head + rest
+
+
 # Anahtar taşıyan dosyaların izinleri. Kâğıtlar ve otp-secrets.json
 # yedeği düz metin PIN anahtarı taşır; dosya root'a, okuma hakkı da
 # yalnız yönetici grubuna aittir. Dizin de listelenemez olmalı, aksi
@@ -1811,7 +1831,7 @@ class OTPSecretsModule(Module):
                 details=f"{OTP_SECRETS_FILE} boş ya da mevcut değil.",
             )
 
-        users = sorted(secrets)
+        users = order_secret_users(secrets)
         state = self.ensure_state_dir()
         harden_secret_store(state)
         backup = backup_file(OTP_SECRETS_FILE, state)
