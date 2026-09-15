@@ -685,7 +685,16 @@ class ModulePage(Gtk.Box):
             checkbox.set_active(is_checked)
 
             # Checkbox değişikliklerini dinle ve ilgili alanları aktif/pasif yap
-            def on_checkbox_toggled(cb, field_key=field["key"]):
+            def on_checkbox_toggled(cb, field_key=field["key"],
+                                    deselects=tuple(field.get("deselects", ()))):
+                # Bu kutu seçildiğinde, şemada çelişkili işaretlenmiş
+                # kutuların işareti kaldırılır (tek yönlü: geri
+                # işaretlemek kullanıcının tercihidir).
+                if cb.get_active():
+                    for other_key in deselects:
+                        other = self._fields.get(other_key)
+                        if isinstance(other, Gtk.CheckButton) and other.get_active():
+                            other.set_active(False)
                 self._update_conditional_fields(field_key, cb.get_active())
 
             checkbox.connect("toggled", on_checkbox_toggled)
@@ -1181,25 +1190,34 @@ class ModulePage(Gtk.Box):
             )
             box.pack_start(warn_box, False, False, 0)
 
-        if result.details:
-            # Uzun ayrıntı → scroll'lu kutu
-            if result.details.count("\n") > 6 or len(result.details) > 500:
+        # Ayrıntı ve kopyalanabilir rapor TEK alanda gösterilir. Ayrı
+        # kutular hâlindeyken aynı bilgiler (üretilen/korunan sayıları)
+        # iki kez görünüyordu; birleşik metin ayrıntının bulunduğu
+        # yerde, yani sonuç kutusunun hemen altında durur.
+        report = "\n\n".join(
+            part for part in (result.details, result.copyable) if part
+        )
+        if report:
+            # Rapor hizalı çerçeveler içeriyorsa monospace şart.
+            if result.copyable:
                 box.pack_start(
-                    _scrolled_textview(result.details, height=160),
+                    _scrolled_textview(report, monospace=True, height=260),
+                    False, False, 0,
+                )
+            elif report.count("\n") > 6 or len(report) > 500:
+                box.pack_start(
+                    _scrolled_textview(report, height=160),
                     False, False, 0,
                 )
             else:
-                box.pack_start(_wrapping_label(result.details, selectable=True), False, False, 0)
+                box.pack_start(_wrapping_label(report, selectable=True), False, False, 0)
 
         if result.copyable:
-            box.pack_start(
-                _scrolled_textview(result.copyable, monospace=True, height=160),
-                False, False, 0,
-            )
             # Buton satırı: panoya kopyala + dosyaya kaydet
             btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             copy_btn = Gtk.Button(label="Panoya kopyala")
-            copy_btn.connect("clicked", lambda *_: self._copy_to_clipboard(result.copyable or ""))
+            # Ekranda görünen birleşik metni kopyalar.
+            copy_btn.connect("clicked", lambda *_: self._copy_to_clipboard(report))
             btn_row.pack_start(copy_btn, False, False, 0)
 
             save_btn = Gtk.Button(label="Dosyaya kaydet…")

@@ -135,6 +135,11 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "False",
+            # Ortak grup-PIN ile ortak 'ogretmen' hesabının PIN'i aynı
+            # ihtiyaca iki ayrı yerden cevap veriyor; ikisini birlikte
+            # üretmek gereksiz bir ikinci ortak sır demek. Grup-PIN
+            # seçilince hesap PIN'inin işareti kalkar.
+            "deselects": ["include_ogretmen"],
             "help": (
                 "İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' "
                 "PIN anahtarı üretilir (eta-otp-lock @grup mekanizması). "

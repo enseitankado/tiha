@@ -1292,28 +1292,28 @@ class OTPSecretsModule(Module):
         if html_path and progress:
             progress(f"🖨️ Yazdırılabilir kâğıt ({len(all_users)} anahtar): {html_path}")
 
-        details_parts = [f"{len(new_users)} hesap için anahtar üretildi."]
-        if changed_users:
-            details_parts.append(
-                f"DİKKAT: {len(changed_users)} hesabın mevcut anahtarı değişti."
-            )
-        if preserved_users:
-            details_parts.append(
-                f"{len(preserved_users)} hesabın mevcut anahtarı korundu."
-            )
-        details_parts.append(
-            "Bu turda üretilenlerin listesi aşağıda; 'Panoya kopyala' ile alın."
-        )
-        details = " ".join(details_parts)
+        # details, UI'da aşağıdaki metin raporuyla TEK alanda birleşerek
+        # gösteriliyor. Bu yüzden burada sayıları yinelemiyoruz —
+        # üretilen/korunan/değişen sayıları hem tek satırlık özette hem
+        # raporun başlığında zaten var. Buraya yalnız raporda olmayan
+        # bilgi yazılır: kâğıdın nerede olduğu ve ne yapılacağı.
+        details_lines: list[str] = []
         if html_path:
-            details += (
-                f"\n\n🖨️ Yazdırılabilir öğretmen kâğıdı — "
-                f"sistemdeki {len(all_users)} anahtarın tamamı:\n"
-                f"  {html_path}\n"
-                "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin.\n"
-                "  (Etapadmin oturumunda otomatik açılmayı denedik.)\n"
+            details_lines.append(
+                f"🖨️ Yazdırılabilir öğretmen kâğıdı — "
+                f"sistemdeki {len(all_users)} anahtarın tamamı:"
+            )
+            details_lines.append(f"  {html_path}")
+            details_lines.append(
+                "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin."
+            )
+            details_lines.append(
+                "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
+            )
+            details_lines.append(
                 "  'Dosyaya kaydet…' bu kâğıdı HTML olarak kaydeder."
             )
+        details = "\n".join(details_lines)
 
         # Greeter cache bilgisini ekle
         if new_users:
