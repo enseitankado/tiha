@@ -95,6 +95,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "spin",
             "required": False,
             "default": "0",
+            # Sistemde ogretmen01 … ogretmenNN varsa kutu NN ile dolu
+            # gelsin; yönetici farkında olmadan yeni hesap açmasın.
+            "default_from": "suggested_reserve_count",
             "min": 0,
             "max": 999,
             "step": 1,
@@ -111,37 +114,66 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
         {
-            "key": "make_group_pin",
-            "label": "Ogretmenler grubu kullanıcıları için ortak PIN oluştur",
+            "key": "add_teachers_to_group",
+            "label": "Öğretmen hesaplarını ogretmenler grubuna ekle",
             "type": "bool",
             "required": False,
-            "default": "False",
-            # Bu seçenek yalnızca yedek hesap sayısı > 0 iken anlamlı.
-            # pages.py, `reserve_count` spin'inin değeriyle bu kutunun
-            # sensitive halini senkronlar.
-            "enable_when_reserve_positive": True,
+            "default": "True",
             "help": (
-                "İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' "
-                "PIN anahtarı üretilir (eta-otp-lock @grup mekanizması). "
-                "Bu ortak PIN, gruba üye tüm hesaplara (bu adımda açılan "
-                "ogretmenX yedek hesapları dahil) giriş için kullanılabilir. "
-                "PIN kartı çıktısında ayrı bir 'ORTAK PIN' kartı olarak "
-                "görünür."
+                "Bu adımın yönettiği öğretmen hesaplarını (listedekiler ve "
+                "yedek hesaplar) 'ogretmenler' grubuna üye yapar. Ayrıca "
+                "imaja /etc/passwd'i izleyen küçük bir sistem servisi "
+                "gömülür: EBA QR ile bir öğretmen tahtaya ilk kez oturum "
+                "açtığında oluşan yeni yerel hesap da otomatik olarak gruba "
+                "dahil edilir. Grup üyeliği, aşağıdaki '@ogretmenler' ortak "
+                "PIN'inin çalışması için ön koşuldur."
             ),
         },
         {
-            "key": "auto_group_new_teachers",
-            "label": "Yeni öğretmen hesaplarını ogretmenler grubuna üye yap",
+            "key": "make_group_pin",
+            "label": "Ogretmenler grubu için ortak PIN oluştur",
             "type": "bool",
             "required": False,
             "default": "False",
+            # Ortak grup-PIN ile ortak 'ogretmen' hesabının PIN'i aynı
+            # ihtiyaca iki ayrı yerden cevap veriyor; ikisini birlikte
+            # üretmek gereksiz bir ikinci ortak sır demek. Grup-PIN
+            # seçilince hesap PIN'inin işareti kalkar.
+            "deselects": ["include_ogretmen"],
             "help": (
-                "İşaretlenirse imaja, /etc/passwd'i izleyen küçük bir "
-                "sistem servisi gömülür. EBA QR ile bir öğretmen tahtaya "
-                "ilk kez oturum açtığında oluşturulan yeni yerel hesap, "
-                "otomatik olarak ogretmenler grubuna dahil edilir. "
-                "Böylece '@ogretmenler' ortak PIN'i (varsa) bu yeni "
-                "hesaplarda da çalışır."
+                "İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' "
+                "PIN anahtarı üretilir (eta-otp-lock @grup mekanizması). "
+                "Bu ortak PIN, gruba üye tüm hesaplara giriş için "
+                "kullanılabilir; PIN kâğıdında ayrı bir 'ORTAK PIN' kartı "
+                "olarak çıkar. Zaten bir ortak PIN varsa korunur, "
+                "yenilenmez. Tek tek öğretmen PIN'lerinden daha zayıf bir "
+                "izdir (herkes aynı kodu kullanır), bu yüzden varsayılan "
+                "olarak kapalıdır."
+            ),
+        },
+        {
+            "key": "purge_all_secrets",
+            "label": "Tüm PIN Anahtarlarını Sil",
+            "type": "button",
+            "action": "purge_all_secrets_action",
+            "style": "destructive",
+            "visible_when": "can_purge_secrets",
+            "confirm": {
+                "title": "Tüm PIN anahtarları silinsin mi?",
+                "message": (
+                    "/etc/otp-secrets.json içindeki BÜTÜN PIN anahtarları "
+                    "silinecek ve bu anahtarları taşıyan yazdırılabilir "
+                    "kâğıtlar da kaldırılacak.\n\n"
+                    "Dağıtılmış anahtarlar geçersiz olur: telefonlardaki "
+                    "kayıtlarla artık tahtaya giriş yapılamaz.\n\n"
+                    "Silme öncesi bir yedek alınır. Devam edilsin mi?"
+                ),
+            },
+            "help": (
+                "Kaynak imajı temiz bir sayfadan hazırlamak için (ör. test "
+                "amaçlı üretilmiş anahtarları imaja taşımamak) tüm PIN "
+                "anahtarlarını siler. Onay ister; silme öncesi dosyanın "
+                "yedeği modülün durum dizinine alınır."
             ),
         },
         {
