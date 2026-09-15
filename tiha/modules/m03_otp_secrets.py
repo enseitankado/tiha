@@ -443,6 +443,40 @@ def save_secrets(secrets: dict[str, str]) -> None:
     os.chown(OTP_SECRETS_FILE, 0, 0)
 
 
+def _paper_owner_ids() -> tuple[int, int] | None:
+    """PIN kâğıdının sahibi olacak kullanıcının (uid, gid) çifti.
+
+    Kâğıt 0600 yazıldığı için onu tarayıcıda açacak kullanıcının sahibi
+    olması gerekir. Önce aktif grafik oturumun kullanıcısı, o yoksa
+    TiHA'yı sudo/pkexec ile başlatan kullanıcı denenir. İkisi de
+    bulunamazsa ``None`` döner ve dosya root'ta 0600 olarak kalır —
+    sızdırmamak, açılabilir olmaktan önemli.
+    """
+    import pwd as _pwd
+
+    from ..core.privilege import invoking_username
+    from ..core.utils import _find_active_graphical_session
+
+    candidates: list[str] = []
+    try:
+        env = _find_active_graphical_session()
+        if env and env.get("USER"):
+            candidates.append(env["USER"])
+    except OSError as exc:
+        log.debug("Grafik oturum bulunamadı: %s", exc)
+    candidates.append(invoking_username())
+
+    for name in candidates:
+        if not name or name == "root":
+            continue
+        try:
+            entry = _pwd.getpwnam(name)
+        except KeyError:
+            continue
+        return entry.pw_uid, entry.pw_gid
+    return None
+
+
 def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
     """PIN kâğıdının başlığında görünecek ad.
 
@@ -1323,8 +1357,16 @@ class OTPSecretsModule(Module):
         try:
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(html, encoding="utf-8")
-            # Etapadmin'in açabilmesi için izinleri açık tut
-            out.chmod(0o644)
+            # Kâğıt, sistemdeki BÜTÜN PIN anahtarlarını düz metin olarak
+            # taşıyor — otp-secrets.json kadar gizli. Dosya 0644 ile
+            # yazılırsa tahtadaki her öğretmen hesabı bütün öğretmenlerin
+            # anahtarını okuyabilir. O yüzden yalnız sahibine açıyoruz;
+            # tarayıcıda açabilmesi için sahipliği masaüstü kullanıcısına
+            # veriyoruz (kullanıcı bulunamazsa root'ta 0600 kalır).
+            out.chmod(0o600)
+            owner = _paper_owner_ids()
+            if owner is not None:
+                os.chown(out, *owner)
         except OSError as exc:
             log.warning("Yazdırılabilir kâğıt oluşturulamadı: %s", exc)
             return None, html

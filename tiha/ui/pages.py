@@ -1299,6 +1299,13 @@ class ModulePage(Gtk.Box):
                 path += forced_suffix
             try:
                 Path(path).write_text(text, encoding="utf-8")
+                # Kaydedilen içerik gizli olabilir (PIN anahtarları,
+                # parolalar). Root umask'ı 0644 verir; başka hesapların
+                # okumasını engellemek için sahibine kısıtlıyoruz.
+                try:
+                    os.chmod(path, 0o600)
+                except OSError:
+                    pass
                 # Dosya root tarafından yazıldı; etapadmin ev dizinindeyse
                 # sahipliği etapadmin'e çevir ki kullanıcı kolayca açabilsin.
                 try:
