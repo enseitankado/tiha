@@ -3,3 +3,6 @@
 # install.sh dağıtım paketlerini tercih eder, böylece sisteme pip bulaşmaz.
 pyotp>=2.6.0
 PyGObject>=3.42
+# PIN kâğıdındaki QR kodları (apt: python3-qrcode).
+# Yoksa kâğıt QR'sız üretilir, anahtar metni yine yazılı olur.
+qrcode>=7.0

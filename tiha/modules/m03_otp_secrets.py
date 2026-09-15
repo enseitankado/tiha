@@ -44,8 +44,26 @@ ortak grup-PIN'i için de geçerlidir.
 Yazdırılabilir kâğıt
 Adım sonunda üretilen HTML kâğıt, yalnız o turda üretilenleri değil
 sistemdeki BÜTÜN anahtarları içerir; bu turda üretilenler "YENİ"
-etiketiyle işaretlenir. Kâğıt etapadmin oturumunda tarayıcıda açılır ve
-"Dosyaya kaydet…" düğmesi onu HTML olarak kaydeder.
+etiketiyle işaretlenir. Her kartta anahtarın QR kodu satır içi SVG
+olarak gömülüdür — öğretmen elle anahtar girmek zorunda kalmaz ve kâğıt
+çevrimdışı açılır (bkz. :mod:`tiha.core.qr`). otpauth:// URL'si kâğıtta
+yazılı değildir: uzun, okunmaz ve yanlış kopyalanmaya açıktır; taşıyıcısı
+QR kodudur. Kâğıt etapadmin oturumunda tarayıcıda açılır ve "Dosyaya
+kaydet…" düğmesi onu HTML olarak kaydeder.
+
+Dosya izinleri
+Kâğıtlar ve otp-secrets.json yedeği düz metin PIN anahtarı taşır. Adımın
+durum dizini (0750) ve içindeki dosyalar (0640) root'a ait, okuma hakkı
+yalnız yönetici grubunda olacak şekilde kilitlenir; tahtadaki öğretmen ve
+öğrenci hesapları bunları göremez. Geçmişte gevşek izinle yazılmış
+dosyalar da adım her çalıştığında düzeltilir.
+
+Değişen anahtar uyarısı
+Tasarım gereği hiçbir mevcut anahtar değişmez. Yine de her turda önceki
+değerlerle karşılaştırılır; bir anahtar değişmişse yönetici hem canlı
+çıktıda hem sonuç kutusunda hem de modal bir uyarı diyaloğuyla
+bilgilendirilir — değişen bir anahtar o öğretmenin telefonundaki kaydı
+sessizce geçersiz kılar.
 
 Neden gerekir?
 Pardus ETAP'ın kendi PIN üretici uygulaması (eta-otp-lock) kullanıcının
@@ -84,6 +102,7 @@ from ..core.async_state import AsyncValue
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import OTP_SECRETS_FILE, VAR_ROOT
+from ..core.qr import qr_svg, qrcode_available
 from ..core.utils import (
     backup_file,
     restore_file,
@@ -443,13 +462,14 @@ def save_secrets(secrets: dict[str, str]) -> None:
     os.chown(OTP_SECRETS_FILE, 0, 0)
 
 
-def _paper_owner_ids() -> tuple[int, int] | None:
-    """PIN kâğıdının sahibi olacak kullanıcının (uid, gid) çifti.
+def _admin_ids() -> tuple[int, int] | None:
+    """Tahtanın yöneticisi olan kullanıcının (uid, gid) çifti.
 
-    Kâğıt 0600 yazıldığı için onu tarayıcıda açacak kullanıcının sahibi
-    olması gerekir. Önce aktif grafik oturumun kullanıcısı, o yoksa
-    TiHA'yı sudo/pkexec ile başlatan kullanıcı denenir. İkisi de
-    bulunamazsa ``None`` döner ve dosya root'ta 0600 olarak kalır —
+    Anahtar taşıyan dosyaları bu kullanıcının grubuna açıyoruz: kâğıdı
+    tarayıcıda açan yönetici okuyabilsin, tahtadaki öğretmen/öğrenci
+    hesapları okuyamasın. Önce aktif grafik oturumun kullanıcısı, o
+    yoksa TiHA'yı sudo/pkexec ile başlatan kullanıcı denenir. İkisi de
+    bulunamazsa ``None`` döner ve dosyalar root'a kapalı kalır —
     sızdırmamak, açılabilir olmaktan önemli.
     """
     import pwd as _pwd
@@ -475,6 +495,54 @@ def _paper_owner_ids() -> tuple[int, int] | None:
             continue
         return entry.pw_uid, entry.pw_gid
     return None
+
+
+# Anahtar taşıyan dosyaların izinleri. Kâğıtlar ve otp-secrets.json
+# yedeği düz metin PIN anahtarı taşır; dosya root'a, okuma hakkı da
+# yalnız yönetici grubuna aittir. Dizin de listelenemez olmalı, aksi
+# hâlde dosya adları (öğretmen adları) sızar.
+SECRET_FILE_MODE = 0o640
+SECRET_DIR_MODE = 0o750
+
+
+def harden_secret_store(state_dir: Path) -> int:
+    """Anahtar taşıyan durum dizinini ve içindeki dosyaları kilitler.
+
+    Dizin 0750, dosyalar 0640 yapılır; sahip root, grup ise yönetici
+    kullanıcının grubu olur. Böylece yönetici kâğıdı tarayıcıda açıp
+    okuyabilir ama değiştiremez, diğer hesaplar hiç göremez.
+
+    Geçmişte gevşek izinle (0644) yazılmış dosyalar da bu çağrıyla
+    düzeltilir; düzeltilen dosya sayısı döner.
+    """
+    admin = _admin_ids()
+    gid = admin[1] if admin is not None else 0
+
+    try:
+        os.chown(state_dir, 0, gid)
+        state_dir.chmod(SECRET_DIR_MODE)
+    except OSError as exc:
+        log.warning("Durum dizini kilitlenemedi %s: %s", state_dir, exc)
+
+    try:
+        entries = list(state_dir.iterdir())
+    except OSError as exc:
+        log.warning("Durum dizini listelenemedi %s: %s", state_dir, exc)
+        return 0
+
+    fixed = 0
+    for path in entries:
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            # "Başkalarına açık mı?" — düzeltilen dosyayı saymak için.
+            if path.stat().st_mode & 0o007:
+                fixed += 1
+            os.chown(path, 0, gid)
+            path.chmod(SECRET_FILE_MODE)
+        except OSError as exc:
+            log.warning("Dosya izni düzeltilemedi %s: %s", path, exc)
+    return fixed
 
 
 def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
@@ -629,6 +697,38 @@ def remove_greeter_setup() -> bool:
     return success
 
 
+# Yedek hesap adlarının deseni. İki normalizasyon yolu farklı ad
+# üretiyor: eta-otp-cli "ogretmen01", dahili yol "ogretmen.01".
+RESERVE_USER_RE = re.compile(r"^ogretmen\.?(\d+)$")
+
+
+def count_reserve_accounts() -> int:
+    """Sistemde hazır duran yedek hesapların "kaçıncıya kadar" gittiği.
+
+    ogretmen01 … ogretmen10 varsa 10 döner. En büyük indeksi
+    kullanıyoruz (adet değil): yedek hesaplar toplu açıldığı için
+    indeks aralığı kesintisizdir ve "bu tahtada 10 yedek hesap
+    hazırlanmış" bilgisini doğru yansıtan sayı budur. Böylece adım
+    yeniden uygulandığında kutu dolu gelir ve yönetici farkında
+    olmadan yeni hesap açmaz.
+    """
+    import pwd as _pwd
+
+    highest = 0
+    try:
+        entries = _pwd.getpwall()
+    except OSError as exc:
+        log.warning("Kullanıcı listesi okunamadı: %s", exc)
+        return 0
+    for entry in entries:
+        if not 1000 <= entry.pw_uid < 60000:
+            continue
+        match = RESERVE_USER_RE.match(entry.pw_name)
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return highest
+
+
 def get_extra_users() -> list[str]:
     """Varsayılan kullanıcılar dışındaki UID >= 1000 kullanıcıları döndürür."""
     import pwd
@@ -713,8 +813,8 @@ class OTPSecretsModule(Module):
     apply_hint = (
         "Listedeki ve yedek hesaplar için PIN anahtarları üretilir. "
         "Anahtarı zaten olan hesaplara dokunulmaz; yalnızca eksikler "
-        "tamamlanır. Çıktı, sistemdeki tüm anahtarları içeren "
-        "yazdırılabilir bir HTML kâğıdıdır."
+        "tamamlanır. Çıktı, sistemdeki tüm anahtarları QR kodlarıyla "
+        "birlikte içeren yazdırılabilir bir HTML kâğıdıdır."
     )
     # "Dosyaya kaydet…" yazdırılabilir kâğıdı kaydeder; biçim HTML.
     # apply() gerçek dosya adını (zaman damgalı) result üzerinden verir.
@@ -793,6 +893,11 @@ class OTPSecretsModule(Module):
             f"PIN anahtarlı hesap  : {len(has_otp)}/{len(personal_users)}"
         )
         lines.append(f"Toplam PIN kaydı     : {len(existing)}")
+        lines.append(
+            "QR kodları           : "
+            + ("kâğıda gömülecek" if qrcode_available()
+               else "ATLANACAK (python3-qrcode kurulu değil)")
+        )
         if user_count >= MIN_USERS_FOR_CACHE:
             greeter_state = (
                 "kurulu"
@@ -875,8 +980,17 @@ class OTPSecretsModule(Module):
         make_group_pin: bool = str(
             params.get("make_group_pin", "False")
         ).lower() in ("true", "1", "yes", "on")
-        auto_group_new_teachers: bool = str(
-            params.get("auto_group_new_teachers", "False")
+        # Öğretmen hesaplarını ogretmenler grubuna ekle. Varsayılan açık:
+        # grup üyeliği olmadan '@ogretmenler' ortak PIN'i işe yaramaz ve
+        # EBA QR ile açılan hesaplar gruba hiç girmez.
+        # Eski presetlerde bu anahtar "auto_group_new_teachers" adıyla
+        # geçiyordu; okunmaya devam ediyor ki sahadaki preset dosyaları
+        # sessizce başka bir davranışa kaymasın.
+        add_teachers_to_group: bool = str(
+            params.get(
+                "add_teachers_to_group",
+                params.get("auto_group_new_teachers", "True"),
+            )
         ).lower() in ("true", "1", "yes", "on")
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
@@ -903,8 +1017,15 @@ class OTPSecretsModule(Module):
             )
 
         state = self.ensure_state_dir()
+        # Anahtar taşıyan dosyalar yalnız yöneticiye açık olmalı. Bu
+        # çağrı hem dizini kilitler hem daha önce gevşek izinle yazılmış
+        # eski kâğıtları düzeltir.
+        harden_secret_store(state)
         backup_file(OTP_SECRETS_FILE, state)
-        before_secrets = set(load_secrets().keys())
+        # Yalnız anahtar adları değil DEĞERLERİ de saklanır: sonda
+        # hangi hesabın anahtarının değiştiğini karşılaştırabilmek için.
+        before_map = load_secrets()
+        before_secrets = set(before_map)
 
         # Hâlihazırda anahtarı olan hesaplara dokunulmaz: öğretmenin
         # telefonundaki anahtar geçerli kalsın. Adım aynı listeyle
@@ -963,44 +1084,86 @@ class OTPSecretsModule(Module):
         after_secrets = load_secrets()
         new_users = [u for u in after_secrets if u not in before_secrets]
 
-        # Yedek hesap grup-PIN akışı — checkbox işaretli + reserve > 0 +
-        # en az bir ogretmenX hesabı oluşturuldu koşulu.
-        group_key = f"@{OGRETMENLER_GROUP}"
-        group_secret_is_new = False
-        if make_group_pin and reserve > 0 and created_reserve_usernames:
-            if not ensure_ogretmenler_group():
-                if progress:
-                    progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
-                             "grup-PIN akisi iptal edildi.")
-            else:
-                if progress:
-                    progress(f"\n{len(created_reserve_usernames)} yedek hesap "
-                             f"'{OGRETMENLER_GROUP}' grubuna ekleniyor...")
-                for u in created_reserve_usernames:
-                    run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
-                    if progress:
-                        progress(f"  + {u}")
-                if group_key in after_secrets:
-                    # Mevcut grup-PIN'i yenilemek telefonlardaki anahtarı
-                    # geçersiz kılardı; koruyoruz.
-                    if progress:
-                        progress(f"\nMevcut ortak grup-PIN korundu: {group_key} "
-                                 "— telefonlardaki anahtar geçerli kalır.")
-                else:
-                    after_secrets[group_key] = pyotp.random_base32()
-                    save_secrets(after_secrets)
-                    group_secret_is_new = True
-                    if progress:
-                        progress(f"\nOrtak grup-PIN uretildi: {group_key}")
-        elif make_group_pin and reserve == 0:
-            if progress:
-                progress("\n'Yedek hesaplar icin ortak PIN' isaretli ama "
-                         "yedek hesap sayisi 0 — akis atlandi.")
-
         # Listede olup anahtarı zaten bulunan hesaplar — dokunulmadı.
         _normalize = _eta_otp_cli_normalize if cli_script else normalize_username
         requested_users = {u for u in (_normalize(n) for n in teacher_names) if u}
         preserved_users = sorted(requested_users & keep_users)
+
+        # ===== ogretmenler grubu =====================================
+        # Grup üyeliği artık yedek hesap sayısına bağlı değil: bu adımın
+        # yönettiği bütün öğretmen hesapları (listeden gelenler + yedek
+        # hesaplar) gruba alınır ve gelecekte EBA QR ile açılacaklar için
+        # izleyici servis kurulur.
+        group_key = f"@{OGRETMENLER_GROUP}"
+        group_secret_is_new = False
+        grouped_users: list[str] = []
+        auto_group_service_installed = False
+
+        if add_teachers_to_group:
+            if not ensure_ogretmenler_group():
+                if progress:
+                    progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
+                             "grup uyeligi atlandi.")
+            else:
+                targets = sorted(requested_users | set(created_reserve_usernames))
+                if progress:
+                    progress(f"\nOgretmen hesaplari '{OGRETMENLER_GROUP}' "
+                             "grubuna ekleniyor...")
+                for u in targets:
+                    # etapadmin bir öğretmen hesabı değil; ortak PIN'in
+                    # yönetici hesabına da geçmesi istenmez.
+                    if u == "etapadmin" or not user_exists(u):
+                        continue
+                    run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
+                    grouped_users.append(u)
+                    if progress:
+                        progress(f"  + {u}")
+                if not grouped_users and progress:
+                    progress("  (gruba eklenecek mevcut hesap yok)")
+                # Sonradan EBA QR ile açılacak hesaplar için izleyici servis
+                if install_auto_group_service():
+                    auto_group_service_installed = True
+                    if progress:
+                        progress("\nOtomatik grup ekleme servisi kuruldu — "
+                                 "EBA QR ile sonradan acilan ogretmen "
+                                 "hesaplari da gruba dahil edilecek.")
+
+        if make_group_pin:
+            if not ensure_ogretmenler_group():
+                if progress:
+                    progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
+                             "grup-PIN akisi iptal edildi.")
+            elif group_key in after_secrets:
+                # Mevcut grup-PIN'i yenilemek telefonlardaki anahtarı
+                # geçersiz kılardı; koruyoruz.
+                if progress:
+                    progress(f"\nMevcut ortak grup-PIN korundu: {group_key} "
+                             "— telefonlardaki anahtar geçerli kalir.")
+            else:
+                after_secrets[group_key] = pyotp.random_base32()
+                save_secrets(after_secrets)
+                group_secret_is_new = True
+                if progress:
+                    progress(f"\nOrtak grup-PIN uretildi: {group_key}")
+
+
+        # ===== Madde: değişen anahtarlar =============================
+        # Tasarım gereği hiçbir mevcut anahtar değişmemeli. Yine de her
+        # turda karşılaştırıp değişen olursa yöneticiyi MUTLAKA uyarırız:
+        # değişen bir anahtar, o öğretmenin telefonundaki kaydı sessizce
+        # geçersiz kılar ve bunu fark etmenin başka yolu yoktur.
+        changed_users = sorted(
+            user for user, secret in after_secrets.items()
+            if user in before_map and before_map[user] != secret
+        )
+        if changed_users and progress:
+            progress("\n" + "!" * 60)
+            progress(f"UYARI: {len(changed_users)} hesabin PIN anahtari DEGISTI.")
+            for user in changed_users:
+                progress(f"  ! {user}")
+            progress("Bu hesaplarin telefonundaki eski kayit artik "
+                     "calismaz; yeni kagidi teslim edin.")
+            progress("!" * 60)
 
         if not new_users and not group_secret_is_new and not preserved_users:
             return ApplyResult(
@@ -1074,6 +1237,11 @@ class OTPSecretsModule(Module):
                 f"  {len(preserved_users)} hesabın mevcut anahtarı korundu "
                 "(yeniden üretilmedi)."
             )
+        if changed_users:
+            report_lines.append(
+                f"  DİKKAT: {len(changed_users)} hesabın anahtarı DEĞİŞTİ — "
+                "eski kayıtları çalışmaz."
+            )
         report_lines.append(f"  Toplam PIN kaydı: {len(after_secrets)}")
         report_lines.append(f"  Dosya: {OTP_SECRETS_FILE}")
         report_lines.append(f"  Üretici: Issuer = \"{OTP_ISSUER}\", 6 hane, 30 sn periyot.")
@@ -1082,13 +1250,11 @@ class OTPSecretsModule(Module):
         report_lines.append("─" * 76)
         for idx, user in enumerate(sorted(new_users), 1):
             secret = after_secrets[user]
-            url = otpauth_url(user, secret)
             display = display_of.get(user, "(yedek hesap)")
             report_lines.append("")
             report_lines.append(f"[{idx:02d}]  {display}")
             report_lines.append(f"     Kullanıcı adı : {user}")
             report_lines.append(f"     PIN anahtarı  : {secret}")
-            report_lines.append(f"     otpauth URL   : {url}")
         if preserved_users:
             report_lines.append("")
             report_lines.append("─" * 76)
@@ -1102,9 +1268,10 @@ class OTPSecretsModule(Module):
         report_lines.append("─" * 76)
         report_lines.append(
             "Kullanım: öğretmenler bu anahtarı Google Authenticator vb.\n"
-            "uygulamaya manuel girebilir ya da otpauth URL'sini çevrimdışı\n"
-            "bir QR üreticide taratabilir. Anahtarları yalnızca özelden\n"
-            "(şifreli mesaj, gizli dağıtım listesi) teslim edin."
+            "uygulamaya elle girebilir; daha kolayı, yazdırılabilir\n"
+            "kâğıttaki QR kodunu uygulamayla taratmaktır. Anahtarları\n"
+            "yalnızca özelden (şifreli mesaj, gizli dağıtım listesi)\n"
+            "teslim edin."
         )
         copyable = "\n".join(report_lines)
 
@@ -1126,6 +1293,10 @@ class OTPSecretsModule(Module):
             progress(f"🖨️ Yazdırılabilir kâğıt ({len(all_users)} anahtar): {html_path}")
 
         details_parts = [f"{len(new_users)} hesap için anahtar üretildi."]
+        if changed_users:
+            details_parts.append(
+                f"DİKKAT: {len(changed_users)} hesabın mevcut anahtarı değişti."
+            )
         if preserved_users:
             details_parts.append(
                 f"{len(preserved_users)} hesabın mevcut anahtarı korundu."
@@ -1143,18 +1314,6 @@ class OTPSecretsModule(Module):
                 "  (Etapadmin oturumunda otomatik açılmayı denedik.)\n"
                 "  'Dosyaya kaydet…' bu kâğıdı HTML olarak kaydeder."
             )
-
-        # Yeni öğretmen hesaplarını ogretmenler grubuna otomatik ekleyen
-        # sistem servisini kur (checkbox işaretliyse).
-        auto_group_service_installed = False
-        if auto_group_new_teachers:
-            ensure_ogretmenler_group()
-            if install_auto_group_service():
-                auto_group_service_installed = True
-                if progress:
-                    progress("\nOtomatik grup ekleme servisi kuruldu — "
-                             "EBA QR ile yeni açılan öğretmen hesapları "
-                             "ogretmenler grubuna otomatik dahil edilecek.")
 
         # Greeter cache bilgisini ekle
         if new_users:
@@ -1175,6 +1334,10 @@ class OTPSecretsModule(Module):
             summary_parts.append("Greeter cache güncellendi ve otomatik çalıştırma ayarlandı.")
         elif total_users >= MIN_USERS_FOR_CACHE:
             summary_parts.append("Greeter cache kurulumu tamamlanamadı.")
+        if grouped_users:
+            summary_parts.append(
+                f"{len(grouped_users)} hesap {OGRETMENLER_GROUP} grubuna eklendi."
+            )
         if auto_group_service_installed:
             summary_parts.append("Yeni öğretmen hesabı → ogretmenler grubu servis kuruldu.")
 
@@ -1188,10 +1351,22 @@ class OTPSecretsModule(Module):
             # bu, ve tarayıcıda/yazıcıda doğru görünen biçim de bu.
             save_payload=html_text,
             save_filename=(html_path.name if html_path else None),
+            warning=(
+                "Bu adımda {n} hesabın PIN anahtarı DEĞİŞTİ:\n\n{liste}\n\n"
+                "Bu hesapların telefonlarındaki eski kayıt artık "
+                "çalışmaz. Yeni PIN kâğıdını bu öğretmenlere mutlaka "
+                "yeniden teslim edin.".format(
+                    n=len(changed_users),
+                    liste=", ".join(changed_users),
+                )
+                if changed_users else None
+            ),
             data={
                 "passed_names": teacher_names,
                 "created_users": sorted(new_users),
                 "preserved_users": preserved_users,
+                "changed_users": changed_users,
+                "grouped_users": grouped_users,
                 "used_tool": bool(cli_script),
                 "greeter_cache_applied": greeter_cache_applied,
                 "total_users": total_users,
@@ -1232,7 +1407,19 @@ class OTPSecretsModule(Module):
             display = _paper_display_name(user, display_of)
             is_new = user in new_users
             grouped = " ".join(secret[i:i + 4] for i in range(0, len(secret), 4))
-            url = otpauth_url(user, secret)
+            # QR, otpauth:// URL'sini taşır — öğretmen elle anahtar
+            # girmek zorunda kalmaz. URL'nin kendisi kâğıtta yazılı
+            # DEĞİL: uzun, okunmaz ve yanlış kopyalanmaya açık.
+            svg = qr_svg(otpauth_url(user, secret))
+            if svg:
+                qr_block = (
+                    '  <aside class="qr">\n'
+                    f'    {svg}\n'
+                    '    <div class="qr-label">Uygulamayla taratın</div>\n'
+                    '  </aside>'
+                )
+            else:
+                qr_block = ""
             is_group = user.startswith("@")
             if is_group:
                 user_line = (
@@ -1243,11 +1430,11 @@ class OTPSecretsModule(Module):
                 instructions = f'''    <ol>
       <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
           bir uygulama kurun.</li>
-      <li>Uygulamada <em>"+ Anahtar ekle"</em> > <em>"Anahtarı manuel
-          gir"</em>'i seçin.</li>
+      <li>Uygulamada <em>"+ Anahtar ekle"</em> &gt; <em>"QR kodu tara"</em>'yı
+          seçip yandaki kodu taratın. QR okunamazsa <em>"Anahtarı manuel
+          gir"</em> ile yukarıdaki anahtarı yazın.</li>
       <li>Hesap adı olarak <em>istediğiniz</em> bir etiket yazın
           (örn. <code>Sınıf-PIN</code>).</li>
-      <li>Anahtarı 4'lü gruplar hâlinde yukarıdaki kutudan kopyalayın.</li>
       <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
       <li>Kaydedin. Bu PIN, tahtada <strong>{_esc(user[1:])}</strong>
           grubuna üye herhangi bir hesabın giriş ekranında
@@ -1261,10 +1448,10 @@ class OTPSecretsModule(Module):
                 instructions = f'''    <ol>
       <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
           bir uygulama kurun.</li>
-      <li>Uygulamada <em>"+ Anahtar ekle"</em> > <em>"Anahtarı manuel
-          gir"</em>'i seçin.</li>
-      <li>Hesap adı olarak yazın: <code>{_esc(user)}</code></li>
-      <li>Anahtarı 4'lü gruplar hâlinde yukarıdaki kutudan kopyalayın.</li>
+      <li>Uygulamada <em>"+ Anahtar ekle"</em> &gt; <em>"QR kodu tara"</em>'yı
+          seçip yandaki kodu taratın. QR okunamazsa <em>"Anahtarı manuel
+          gir"</em> ile yukarıdaki anahtarı ve hesap adı olarak
+          <code>{_esc(user)}</code> yazın.</li>
       <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
       <li>Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir;
           tahta giriş ekranında bu PIN'i girersiniz.</li>
@@ -1272,20 +1459,20 @@ class OTPSecretsModule(Module):
             badge = '<span class="badge">YENİ</span>' if is_new else ""
             cards.append(f'''
 <article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}">
-  <header>
-    <h2>{_esc(display)}{badge}</h2>
-    {user_line}
-  </header>
-  <section class="secret">
-    <div class="label">PIN anahtarı (telefonunuza manuel girin):</div>
-    <div class="key">{_esc(grouped)}</div>
-  </section>
-  <section class="instructions">
+  <div class="body">
+    <header>
+      <h2>{_esc(display)}{badge}</h2>
+      {user_line}
+    </header>
+    <section class="secret">
+      <div class="label">PIN anahtarı (QR okunmazsa elle girin):</div>
+      <div class="key">{_esc(grouped)}</div>
+    </section>
+    <section class="instructions">
 {instructions}
-  </section>
-  <footer class="otpauth">
-    <small>otpauth URL: <code>{_esc(url)}</code></small>
-  </footer>
+    </section>
+  </div>
+{qr_block}
 </article>
 ''')
 
@@ -1336,8 +1523,11 @@ class OTPSecretsModule(Module):
   }}
   .instructions ol {{ font-size: 10pt; margin: 0; padding-left: 20px; }}
   .instructions li {{ margin: 2px 0; }}
-  .otpauth {{ margin-top: 8px; }}
-  .otpauth code {{ font-size: 7pt; color: #888; word-break: break-all; }}
+  .card {{ display: flex; gap: 16px; align-items: flex-start; }}
+  .card > .body {{ flex: 1; min-width: 0; }}
+  .qr {{ flex: 0 0 auto; text-align: center; }}
+  .qr svg {{ display: block; border: 1px solid #ddd; border-radius: 4px; }}
+  .qr .qr-label {{ font-size: 8pt; color: #555; margin-top: 4px; }}
   @media print {{
     body {{ margin: 8mm; }}
     .card {{ break-inside: avoid; }}
@@ -1358,15 +1548,9 @@ class OTPSecretsModule(Module):
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(html, encoding="utf-8")
             # Kâğıt, sistemdeki BÜTÜN PIN anahtarlarını düz metin olarak
-            # taşıyor — otp-secrets.json kadar gizli. Dosya 0644 ile
-            # yazılırsa tahtadaki her öğretmen hesabı bütün öğretmenlerin
-            # anahtarını okuyabilir. O yüzden yalnız sahibine açıyoruz;
-            # tarayıcıda açabilmesi için sahipliği masaüstü kullanıcısına
-            # veriyoruz (kullanıcı bulunamazsa root'ta 0600 kalır).
-            out.chmod(0o600)
-            owner = _paper_owner_ids()
-            if owner is not None:
-                os.chown(out, *owner)
+            # taşıyor — otp-secrets.json kadar gizli. Dizinin tamamını
+            # tek yerden kilitliyoruz (bkz. harden_secret_store).
+            harden_secret_store(out.parent)
         except OSError as exc:
             log.warning("Yazdırılabilir kâğıt oluşturulamadı: %s", exc)
             return None, html
@@ -1591,6 +1775,95 @@ class OTPSecretsModule(Module):
     # -----------------------------------------------------------------
     # Ek Kullanıcı Yönetimi Fonksiyonları
     # -----------------------------------------------------------------
+
+    def suggested_reserve_count(self) -> int:
+        """Yedek hesap kutusunun açılışta görüneceği değer.
+
+        Sistemde ogretmen01 … ogretmen10 duruyorsa kutu 10 gelir; adım
+        yeniden uygulandığında yönetici farkında olmadan 11. hesabı
+        açmaz, mevcut hesaplar da (anahtarlarıyla birlikte) korunur.
+        """
+        return count_reserve_accounts()
+
+    def can_purge_secrets(self) -> bool:
+        """'Tüm PIN anahtarlarını sil' düğmesi görünsün mü?"""
+        return bool(load_secrets())
+
+    def purge_all_secrets_action(
+        self, params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
+        """Sistemdeki bütün OTP anahtarlarını siler.
+
+        Kaynak imaj hazırlanırken temiz bir sayfadan başlamak (ör. test
+        amaçlı üretilmiş anahtarları imaja taşımamak) için gerekir.
+        Kullanıcı onayı UI tarafında alınır — bu geri alınamaz bir
+        işlemdir ve anahtarların dağıtılmış kopyaları geçersiz olur.
+
+        Silme öncesi ``otp-secrets.json`` yedeklenir; kâğıtlar da eski
+        anahtarları taşıdığı için birlikte silinir.
+        """
+        secrets = load_secrets()
+        if not secrets:
+            return ApplyResult(
+                False,
+                "Silinecek PIN anahtarı yok.",
+                details=f"{OTP_SECRETS_FILE} boş ya da mevcut değil.",
+            )
+
+        users = sorted(secrets)
+        state = self.ensure_state_dir()
+        harden_secret_store(state)
+        backup = backup_file(OTP_SECRETS_FILE, state)
+
+        if progress:
+            progress(f"{len(users)} PIN anahtari siliniyor...")
+            for user in users:
+                progress(f"  - {user}")
+
+        save_secrets({})
+
+        # Kâğıtlar silinen anahtarları düz metin taşıyor; onları geride
+        # bırakmak silme işlemini anlamsız kılar.
+        removed_papers = 0
+        for paper in state.glob("ogretmen-pin-kagitlari-*.html"):
+            try:
+                paper.unlink()
+                removed_papers += 1
+            except OSError as exc:
+                log.warning("Kâğıt silinemedi %s: %s", paper, exc)
+
+        harden_secret_store(state)
+
+        details = [
+            f"{len(users)} anahtar silindi: {', '.join(users)}",
+            f"{OTP_SECRETS_FILE} artık boş.",
+        ]
+        if removed_papers:
+            details.append(
+                f"{removed_papers} yazdırılabilir kâğıt da silindi "
+                "(silinen anahtarları içeriyordu)."
+            )
+        if backup is not None:
+            details.append(f"Silme öncesi yedek: {backup}")
+        details.append(
+            "Dağıtılmış anahtarlar artık geçersiz. Öğretmenlerin PIN ile "
+            "giriş yapabilmesi için adımı yeniden uygulayıp yeni kâğıtları "
+            "teslim etmeniz gerekir."
+        )
+
+        return ApplyResult(
+            True,
+            f"{len(users)} PIN anahtarı silindi; dosya boşaltıldı.",
+            details="\n".join(details),
+            warning=(
+                f"{len(users)} PIN anahtarı silindi. Bu anahtarların "
+                "telefonlardaki kayıtları artık çalışmaz. Öğretmenlerin "
+                "PIN ile giriş yapabilmesi için adımı yeniden uygulayıp "
+                "yeni kâğıtları teslim etmelisiniz."
+            ),
+            data={"purged_users": users},
+        )
 
     def can_remove_extra_users(self) -> bool:
         """Fazladan hesapları sil düğmesinin aktif olup olmayacağını belirler."""

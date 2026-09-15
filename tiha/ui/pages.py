@@ -256,6 +256,11 @@ class ModulePage(Gtk.Box):
         self.set_margin_end(_PAGE_MARGIN + 4)
         self._fields: dict[str, Gtk.Widget] = {}
         self._stream_buffer: Gtk.TextBuffer | None = None
+        # Canlı çıktı modali ve parçaları — ilk akışta kurulur.
+        self._stream_dialog: Gtk.Dialog | None = None
+        self._stream_status: Gtk.Label | None = None
+        self._stream_spinner: Gtk.Spinner | None = None
+        self._stream_close_btn: Gtk.Button | None = None
         self._applying: bool = False
         self._auto_applied: bool = False
         self.post_apply_callback = None  # Set by main_window if needed
@@ -357,20 +362,9 @@ class ModulePage(Gtk.Box):
             form = self._build_form(schema)
             self.pack_start(form, False, False, 0)
 
-        # Canlı akış alanı (başlangıçta gizli)
-        self.stream_scroll = Gtk.ScrolledWindow()
-        self.stream_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        self.stream_scroll.set_min_content_height(220)
-        self.stream_scroll.set_max_content_height(240)
-        self.stream_view = Gtk.TextView()
-        self.stream_view.set_editable(False)
-        self.stream_view.set_cursor_visible(False)
-        self.stream_view.set_monospace(True)
-        self.stream_view.get_style_context().add_class("tiha-stream")
-        self._stream_buffer = self.stream_view.get_buffer()
-        self.stream_scroll.add(self.stream_view)
-        self.stream_scroll.set_no_show_all(True)
-        self.pack_start(self.stream_scroll, False, False, 0)
+        # Canlı akış artık sayfada değil, geniş bir modalda gösterilir
+        # (bkz. _open_stream_dialog). Sayfada yer tutmasına gerek yok.
+        self.stream_view: Gtk.TextView | None = None
 
         # Sonuç kutusu
         self.result_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -560,6 +554,21 @@ class ModulePage(Gtk.Box):
         kind = field.get("type", "text")
         default = field.get("default", "")
 
+        # "default_from" bir modül methodunu işaret ediyorsa varsayılanı
+        # oradan al. Sistemin o anki durumuna göre dolu gelmesi gereken
+        # alanlar için (ör. m03 yedek hesap sayısı) gerekir.
+        source = field.get("default_from")
+        if source:
+            provider = getattr(self.module, source, None)
+            if callable(provider):
+                try:
+                    value = provider()
+                except Exception as exc:
+                    log.warning("default_from başarısız (%s): %s", source, exc)
+                else:
+                    if value is not None:
+                        default = str(value)
+
         # Remote Syslog modülü için mevcut yapılandırmayı kontrol et ve form alanlarını doldur
         if self.module.id == "m06_remote_syslog":
             try:
@@ -635,21 +644,11 @@ class ModulePage(Gtk.Box):
             spin.set_adjustment(adj)
             spin.set_numeric(True)
             spin.set_digits(0)
-            # m03: reserve_count > 0 iken make_group_pin checkbox'ı
-            # sensitive olsun; 0 iken pasif ve işaretsiz gözüksün.
-            if (self.module.id == "m03_otp_secrets"
-                    and field.get("key") == "reserve_count"):
-                def _sync_group_pin_sensitivity(sb):
-                    target = self._fields.get("make_group_pin")
-                    if not isinstance(target, Gtk.CheckButton):
-                        return
-                    positive = int(sb.get_value()) > 0
-                    target.set_sensitive(positive)
-                    if not positive:
-                        target.set_active(False)
-                spin.connect("value-changed", _sync_group_pin_sensitivity)
-                # İlk render'dan sonra checkbox var olduğunda tetikle.
-                GLib.idle_add(lambda s=spin: (_sync_group_pin_sensitivity(s) or False))
+            # Not: m03'te "ortak PIN" kutusu eskiden yedek hesap sayısı
+            # 0 iken pasifleştiriliyordu. Artık grup üyeliği yedek
+            # hesaplara bağlı değil (listedeki öğretmenler de gruba
+            # giriyor), dolayısıyla ortak PIN her durumda anlamlı ve
+            # kutu her zaman seçilebilir.
             return spin
 
         if kind == "select":
@@ -667,7 +666,12 @@ class ModulePage(Gtk.Box):
             if field.get("style") == "destructive":
                 btn.get_style_context().add_class("destructive-action")
 
-            def on_button_clicked(_btn, action=field.get("action")):
+            def on_button_clicked(_btn, action=field.get("action"),
+                                  confirm=field.get("confirm")):
+                # Geri alınamaz butonlar şemada bir "confirm" bloğu
+                # taşır; onay alınmadan action çalıştırılmaz.
+                if confirm and not self._confirm_action(confirm):
+                    return
                 if action and hasattr(self.module, action):
                     self._run_button_action(action, button=_btn)
 
@@ -914,10 +918,8 @@ class ModulePage(Gtk.Box):
         self.result_holder.pack_start(self._working_row, False, False, 0)
         self.result_holder.show_all()
 
-        # Stream alanını gerçekten görünür kıl ve içini boşalt
-        self._stream_buffer.set_text("")
-        self.stream_scroll.set_no_show_all(False)
-        self.stream_scroll.show_all()
+        # Canlı çıktıyı modalda göster
+        self._open_stream_dialog(f"{self.module.title} — çalışıyor")
 
         def progress_callback(text: str) -> None:
             GLib.idle_add(self._append_stream_line, text)
@@ -951,6 +953,7 @@ class ModulePage(Gtk.Box):
         thread.start()
 
     def _on_button_action_complete(self, result: ApplyResult) -> None:
+        self._finish_stream_dialog(result.summary, result.success)
         self._applying = False
         if getattr(self, "_active_button", None) is not None:
             self._active_button.set_sensitive(True)
@@ -968,6 +971,8 @@ class ModulePage(Gtk.Box):
                     # params.py'daki option sırası: [0]=setup, [1]=always
                     combo.set_active(0 if prot == "setup" else 1)
         self._show_result(result)
+        if result.warning:
+            self._show_warning_dialog(result.warning)
         # Buton işlemi sistem durumunu değiştirmiş olabilir — önizlemeyi
         # ve "visible_when" şartlı alanların görünürlüğünü tazele.
         self._refresh_after_action()
@@ -999,9 +1004,7 @@ class ModulePage(Gtk.Box):
         self.result_holder.show_all()
 
         if self.module.streams_output:
-            self._stream_buffer.set_text("")
-            self.stream_scroll.set_no_show_all(False)
-            self.stream_scroll.show_all()
+            self._open_stream_dialog(f"{self.module.title} — uygulanıyor")
 
         thread = threading.Thread(
             target=self._apply_thread_body,
@@ -1029,6 +1032,87 @@ class ModulePage(Gtk.Box):
 
         GLib.idle_add(self._apply_thread_done, result)
 
+    # ---------------- Canlı çıktı modali ----------------
+    # Çıktı eskiden sayfanın içindeki ~220 px'lik bir alana akıyordu;
+    # uzun apt/useradd çıktılarında okunmuyor ve sayfayı kaydırmak
+    # gerekiyordu. Artık adım uygulanırken geniş bir modal açılıp akış
+    # oraya yazılır; iş bitene kadar kapatılamaz.
+
+    def _open_stream_dialog(self, title: str) -> None:
+        """Canlı çıktı modalını açar (varsa yeniden kullanır)."""
+        if self._stream_dialog is not None:
+            self._stream_buffer.set_text("")
+            self._stream_status.set_text("Çalışıyor… lütfen bekleyin.")
+            self._stream_spinner.start()
+            self._stream_close_btn.set_sensitive(False)
+            self._stream_dialog.present()
+            return
+
+        dlg = Gtk.Dialog(
+            title=title,
+            transient_for=self.get_toplevel(),
+            modal=True,
+        )
+        dlg.set_default_size(920, 620)
+        dlg.set_resizable(True)
+
+        content = dlg.get_content_area()
+        content.set_spacing(8)
+        content.set_margin_top(12)
+        content.set_margin_bottom(12)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        status_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._stream_spinner = Gtk.Spinner()
+        self._stream_spinner.start()
+        status_row.pack_start(self._stream_spinner, False, False, 0)
+        self._stream_status = Gtk.Label(label="Çalışıyor… lütfen bekleyin.")
+        self._stream_status.set_xalign(0.0)
+        self._stream_status.set_line_wrap(True)
+        status_row.pack_start(self._stream_status, True, True, 0)
+        content.pack_start(status_row, False, False, 0)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        self.stream_view = Gtk.TextView()
+        self.stream_view.set_editable(False)
+        self.stream_view.set_cursor_visible(False)
+        self.stream_view.set_monospace(True)
+        self.stream_view.get_style_context().add_class("tiha-stream")
+        self._stream_buffer = self.stream_view.get_buffer()
+        scroll.add(self.stream_view)
+        content.pack_start(scroll, True, True, 0)
+
+        self._stream_close_btn = dlg.add_button("Kapat", Gtk.ResponseType.CLOSE)
+        self._stream_close_btn.set_sensitive(False)
+
+        def on_response(_dlg, _response):
+            # İş sürerken kapatmaya izin vermiyoruz.
+            if self._applying:
+                return
+            _dlg.hide()
+
+        def on_delete(_dlg, _event):
+            return self._applying  # True: kapanmayı engelle
+
+        dlg.connect("response", on_response)
+        dlg.connect("delete-event", on_delete)
+
+        self._stream_dialog = dlg
+        dlg.show_all()
+
+    def _finish_stream_dialog(self, summary: str, success: bool) -> None:
+        """Akış bittiğinde modalı kapatılabilir hâle getirir."""
+        if self._stream_dialog is None:
+            return
+        self._stream_spinner.stop()
+        prefix = "Tamamlandı" if success else "BAŞARISIZ"
+        self._stream_status.set_text(f"{prefix} — {summary}")
+        self._stream_close_btn.set_sensitive(True)
+        self._stream_close_btn.grab_focus()
+
     def _append_stream_line(self, line: str) -> bool:
         if self._stream_buffer is None:
             return False
@@ -1040,6 +1124,7 @@ class ModulePage(Gtk.Box):
 
     def _apply_thread_done(self, result: ApplyResult) -> bool:
         self._applying = False
+        self._finish_stream_dialog(result.summary, result.success)
         # "Çalışıyor" göstergesini kaldır (result_holder temizlenecek)
         entry = JournalEntry.new(self.module.id, self.module.title)
         entry.summary = result.summary
@@ -1053,6 +1138,10 @@ class ModulePage(Gtk.Box):
         else:
             console.fail(result.summary)
         self._show_result(result)
+        if result.warning:
+            # "Mutlaka uyarılsın": sayfadaki blok kaydırılıp kaçırılabilir,
+            # modal kaçırılamaz.
+            self._show_warning_dialog(result.warning)
         # Apply de sistem durumunu değiştirmiş olabilir — aynı tazelemeyi
         # buradan da çalıştır.
         self._refresh_after_action()
@@ -1079,6 +1168,18 @@ class ModulePage(Gtk.Box):
             "tiha-result-ok" if result.success else "tiha-result-fail"
         )
         box.pack_start(_wrapping_label(result.summary, selectable=True), False, False, 0)
+
+        # Kaçırılmaması gereken uyarı: hem sayfada vurgulu bir blok, hem
+        # de aşağıda modal bir diyalog. Sonuç kutusu başarı renginde
+        # olduğu için uyarı kendi sınıfıyla ayrışır.
+        if result.warning:
+            warn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            warn_box.get_style_context().add_class("tiha-result-fail")
+            warn_box.pack_start(
+                _wrapping_label(f"⚠ {result.warning}", selectable=True),
+                False, False, 0,
+            )
+            box.pack_start(warn_box, False, False, 0)
 
         if result.details:
             # Uzun ayrıntı → scroll'lu kutu
@@ -1317,6 +1418,42 @@ class ModulePage(Gtk.Box):
                 self._toast(f"Dosyaya kaydedildi: {path}")
             except OSError as exc:
                 self._toast(f"Dosya yazılamadı: {exc}", error=True)
+        dlg.destroy()
+
+    def _confirm_action(self, spec: dict) -> bool:
+        """Geri alınamaz bir işlem öncesi evet/hayır onayı ister.
+
+        ``spec`` şemadan gelir: ``title`` ve ``message``. Varsayılan
+        yanıt "Hayır" — yanlışlıkla Enter'a basmak işlemi başlatmaz.
+        """
+        dlg = Gtk.MessageDialog(
+            transient_for=self.get_toplevel(),
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text=spec.get("title", "Emin misiniz?"),
+        )
+        message = spec.get("message")
+        if message:
+            dlg.format_secondary_text(message)
+        dlg.set_default_response(Gtk.ResponseType.NO)
+        response = dlg.run()
+        dlg.destroy()
+        return response == Gtk.ResponseType.YES
+
+    def _show_warning_dialog(self, message: str) -> None:
+        """Kullanıcının kaçırmaması gereken uyarıyı modal olarak gösterir."""
+        dlg = Gtk.MessageDialog(
+            transient_for=self.get_toplevel(),
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK,
+            text="Dikkat edilmesi gereken bir durum var",
+        )
+        dlg.format_secondary_text(message)
+        dlg.run()
         dlg.destroy()
 
     def _toast(self, message: str, error: bool = False) -> None:

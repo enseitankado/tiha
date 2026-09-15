@@ -44,6 +44,12 @@ class ApplyResult:
     copyable: str | None = None      # UI'da "Kopyala" butonu ile sunulacak metin
     data: dict = field(default_factory=dict)  # undo için modülün sakladığı durum
 
+    # Kullanıcının kaçırmaması gereken uyarı. Doluysa UI hem sonuç
+    # kutusunda vurgulu bir blok gösterir hem de bir uyarı diyaloğu
+    # açar — "gördüyse görmüştür" yetmeyen durumlar için (ör. bir
+    # öğretmenin PIN anahtarının değişmiş olması).
+    warning: str | None = None
+
     # "Dosyaya kaydet…" butonunun yazacağı içerik. ``None`` ise
     # ``copyable`` kaydedilir. Kaydedilmesi gereken şey ekranda
     # gösterilenden farklı olduğunda doldurulur — ör. ekranda düz metin

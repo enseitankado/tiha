@@ -45,7 +45,9 @@ fi
 
 # --- 3) Gerekli paketler ---------------------------------------------------
 c_info "Gerekli sistem paketleri kontrol ediliyor..."
-# python3-qrcode eta-otp-cli için gerekli (QR kod üretimi)
+# python3-qrcode: PIN kâğıdındaki QR kodları TiHA tarafından buradan
+# üretilir (eta-otp-cli de aynı paketi kullanır). Yoksa kâğıt QR'sız
+# çıkar, anahtar metni yine yazılı olur.
 REQUIRED=(python3 python3-gi gir1.2-gtk-3.0 python3-pyotp python3-qrcode tar curl policykit-1)
 MISSING=()
 for pkg in "${REQUIRED[@]}"; do
