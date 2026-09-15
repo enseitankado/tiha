@@ -497,6 +497,34 @@ def _admin_ids() -> tuple[int, int] | None:
     return None
 
 
+# eta-otp-lock'un grup mekanizması: '@' ile başlayan kayıtlar bir
+# kullanıcıya değil bir gruba aittir (ör. '@ogretmenler') ve gruba üye
+# tüm hesaplarda geçerlidir. Tasarımı gereği karşılığında bir sistem
+# hesabı YOKTUR; bu yüzden "hesabı kalmayan kayıt" taramalarında
+# yetim sayılmamaları gerekir.
+GROUP_SECRET_PREFIX = "@"
+
+
+def is_group_secret(key: str) -> bool:
+    """Kayıt bir grup anahtarı mı (kullanıcı anahtarı değil)?"""
+    return key.startswith(GROUP_SECRET_PREFIX)
+
+
+def orphan_secret_users(secrets, existing_users) -> list[str]:
+    """Sistemde karşılığı kalmayan kullanıcı anahtarlarını döner.
+
+    Grup anahtarları (``@...``) ve varsayılan hesaplar (etapadmin,
+    ogretmen, ogrenci) hariç tutulur: ilki hiç hesap istemez, ikincisi
+    işletim sistemiyle gelir ve silinmesi beklenmez.
+    """
+    return sorted(
+        key for key in secrets
+        if not is_group_secret(key)
+        and key not in existing_users
+        and key not in DEFAULT_SYSTEM_USERS
+    )
+
+
 # Silme/listeleme çıktılarında en başta görünmesi gereken kayıtlar.
 # Bunlar tek bir öğretmene değil tahtanın tamamına ait ortak/yönetici
 # anahtarlarıdır; bir listede gözden kaçmamaları gerekir.
@@ -887,10 +915,10 @@ class OTPSecretsModule(Module):
         )
         has_otp = [u for u in personal_users if u in existing]
         missing_otp = [u for u in personal_users if u not in existing]
-        orphan_secrets = sorted(
-            u for u in existing
-            if u not in personal_users and u not in standard_or_admin
-        )
+        # Grup anahtarları kendi başlığı altında; yetim listesine
+        # karışmaları "hesap silinmiş" diye yanlış alarm veriyordu.
+        group_secrets = sorted(u for u in existing if is_group_secret(u))
+        orphan_secrets = orphan_secret_users(existing, set(personal_users))
         current_time = datetime.datetime.now().strftime("%H:%M")
 
         tool_available = _eta_otp_cli_available.get_async()
@@ -953,10 +981,20 @@ class OTPSecretsModule(Module):
                 "aşağıdaki listeye adlarını yazın."
             )
             lines.append("")
+        if group_secrets:
+            lines.append(
+                "Grup PIN anahtarları (kullanıcı hesabı gerektirmez; "
+                f"gruba üye tüm hesaplarda geçerli): {', '.join(group_secrets)}"
+            )
+            lines.append("")
         if orphan_secrets:
             lines.append(
-                "Sistemde hesabı kalmayan PIN kayıtları "
-                f"(hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
+                f"Sistemde hesabı kalmayan PIN kayıtları ({len(orphan_secrets)} "
+                f"adet — hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
+            )
+            lines.append(
+                "  Bu kayıtlar kullanılamaz; imaja gitmemeleri için "
+                "\"Fazladan Hesapları Sil\" düğmesi onları da temizler."
             )
             lines.append("")
 
@@ -1885,9 +1923,76 @@ class OTPSecretsModule(Module):
             data={"purged_users": users},
         )
 
+    def _purge_orphan_secrets(
+        self, progress: ProgressCallback | None = None,
+    ) -> list[str]:
+        """Sistemde karşılığı kalmayan PIN kayıtlarını dosyadan siler.
+
+        Grup anahtarları (``@...``) ve varsayılan hesaplar korunur.
+        Silme öncesi ``otp-secrets.json`` yedeklenir. Silinen kayıt
+        adlarını (önemli olanlar başta) döner.
+        """
+        import pwd as _pwd
+
+        secrets = load_secrets()
+        if not secrets:
+            return []
+
+        try:
+            existing_users = {
+                entry.pw_name for entry in _pwd.getpwall()
+            }
+        except OSError as exc:
+            log.warning("Kullanıcı listesi okunamadı, yetim taraması "
+                        "atlandı: %s", exc)
+            return []
+
+        orphans = orphan_secret_users(secrets, existing_users)
+        if not orphans:
+            return []
+
+        state = self.ensure_state_dir()
+        harden_secret_store(state)
+        backup_file(OTP_SECRETS_FILE, state)
+
+        if progress:
+            progress(f"\nKarsiligi kalmayan {len(orphans)} PIN kaydi "
+                     "temizleniyor...")
+        for user in orphans:
+            del secrets[user]
+            if progress:
+                progress(f"  - {user}")
+
+        save_secrets(secrets)
+        harden_secret_store(state)
+        log.info("%d yetim PIN kaydı silindi", len(orphans))
+        return order_secret_users(orphans)
+
     def can_remove_extra_users(self) -> bool:
-        """Fazladan hesapları sil düğmesinin aktif olup olmayacağını belirler."""
-        return bool(get_extra_users())
+        """Fazladan hesapları sil düğmesi görünsün mü?
+
+        Fazladan hesap YOKKEN de karşılığı kalmayan PIN kayıtları
+        kalmış olabilir (hesaplar daha önce silinmiş, anahtarları
+        dosyada durmuş). Düğme o durumda da görünmeli, yoksa yetim
+        kayıtları temizlemenin yolu kalmıyor.
+        """
+        if get_extra_users():
+            return True
+        return bool(self._orphan_secret_names())
+
+    def _orphan_secret_names(self) -> list[str]:
+        """Sistemde karşılığı kalmayan PIN kayıtlarının adları."""
+        import pwd as _pwd
+
+        secrets = load_secrets()
+        if not secrets:
+            return []
+        try:
+            existing_users = {entry.pw_name for entry in _pwd.getpwall()}
+        except OSError as exc:
+            log.warning("Kullanıcı listesi okunamadı: %s", exc)
+            return []
+        return orphan_secret_users(secrets, existing_users)
 
     def remove_extra_users_action(
         self, params: dict | None = None,
@@ -1900,12 +2005,27 @@ class OTPSecretsModule(Module):
         değil, doğrudan sonuç ayrıntılarına yazılır.
         """
         extra_users = get_extra_users()
+        orphan_names = self._orphan_secret_names()
 
-        if not extra_users:
+        if not extra_users and not orphan_names:
             return ApplyResult(
                 False,
-                "Silinecek fazladan kullanıcı bulunamadı.",
-                details="Sistemde sadece varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) mevcut."
+                "Silinecek fazladan kullanıcı ya da yetim PIN kaydı bulunamadı.",
+                details="Sistemde sadece varsayılan kullanıcılar (etapadmin, "
+                        "ogrenci, ogretmen) mevcut ve tüm PIN kayıtlarının "
+                        "karşılığı var."
+            )
+
+        # Silinecek hesap yok ama yetim kayıt var: yalnız temizlik yap.
+        if not extra_users:
+            purged = self._purge_orphan_secrets(progress=progress)
+            return ApplyResult(
+                True,
+                f"Fazladan hesap yoktu; karşılığı kalmayan {len(purged)} "
+                "PIN kaydı temizlendi.",
+                details="Silinen kayıtlar (imaja ölü sır gitmesin):\n"
+                        + "\n".join(f"  · {u}" for u in purged),
+                data={"removed_users": [], "purged_secrets": purged},
             )
 
         if progress:
@@ -1915,6 +2035,12 @@ class OTPSecretsModule(Module):
             )
 
         success, removed, errors = reset_to_default_users(progress=progress)
+
+        # Hesabı gitmiş kayıtların anahtarı dosyada kalırsa imaja ölü
+        # sır olarak gider: kullanılamaz ama okunabilir. Hesapları
+        # sildikten sonra karşılığı kalmayan kayıtları da temizliyoruz.
+        # Grup anahtarları ve varsayılan hesaplar korunur.
+        purged_secrets = self._purge_orphan_secrets(progress=progress)
 
         # Detay metni — hem başarılı hem başarısız kayıtları topla
         detail_parts: list[str] = []
@@ -1929,6 +2055,14 @@ class OTPSecretsModule(Module):
                 err_indented = "\n      ".join(err.splitlines()) or "(boş çıktı)"
                 detail_parts.append(f"  ✗ {u}\n      {err_indented}")
 
+        if purged_secrets:
+            detail_parts.append("")
+            detail_parts.append(
+                f"Karşılığı kalmayan {len(purged_secrets)} PIN kaydı da "
+                "silindi (imaja ölü sır gitmesin):"
+            )
+            detail_parts.extend(f"  · {u}" for u in purged_secrets)
+
         if success:
             detail_parts.append("")
             detail_parts.append(
@@ -1939,11 +2073,16 @@ class OTPSecretsModule(Module):
                 "  • ogrenci (ortak hesap)",
                 "  • ogretmen (ortak hesap)",
             ])
+            summary = (f"{len(removed)} fazladan kullanıcı silindi, "
+                       "sistem varsayılan durumuna getirildi.")
+            if purged_secrets:
+                summary += f" {len(purged_secrets)} yetim PIN kaydı temizlendi."
             return ApplyResult(
                 True,
-                f"{len(removed)} fazladan kullanıcı silindi, "
-                "sistem varsayılan durumuna getirildi.",
+                summary,
                 details="\n".join(detail_parts),
+                data={"removed_users": removed,
+                      "purged_secrets": purged_secrets},
             )
         else:
             failed_count = len(errors)
