@@ -62,102 +62,179 @@ log = get_logger(__name__)
 # rsyslog kuyruk dosyalarının saklandığı dizin
 RSYSLOG_QUEUE_DIR = Path("/var/lib/rsyslog")
 
+# Uzak log sunucusu erişilemez durumdayken tahtanın yerelde tutacağı
+# maksimum log hacmi. Hedef: en kötü senaryoda (kapsamlı profil, yoğun
+# olaylı gün) bile 3 aydan az olmamak. Ölçümler:
+#   - Bakım profili   : ~5-8 MB/gün  → 2 GB ≈ 250-400 gün
+#   - Kapsamlı profil : ~15-25 MB/gün → 2 GB ≈ 80-130 gün
+#   - Güvenlik profil : ~1-2 MB/gün  → 2 GB ≈ 1000+ gün
+# 2 GB tavanı 240 GB'lık tahta diskinin %1'inden azdır; sistem
+# çalışmasını etkileyecek bir dolma riski oluşturmaz.
+QUEUE_MAX_DISK_SPACE = "2g"
+# Bellek kuyruğu kapasitesi (mesaj sayısı). Bu sayıdan sonra rsyslog
+# kuyruğu disk'e taşımaya başlar. 100 000, ~ birkaç saatlik yoğun
+# trafiği bellekte tutar; uzun süreli kesintide disk'e devrolur.
+QUEUE_MEMORY_SIZE = "100000"
 
-def _parse_config() -> tuple[str, int, str] | None:
-    """Mevcut TiHA rsyslog yapılandırmasından host, port, protokol değerlerini çıkarır.
 
-    Returns:
-        (host, port, protocol) tuple eğer geçerli yapılandırma varsa, yoksa None.
-    """
+# Log kapsamı profilleri — kullanıcının seçimi rsyslog selector'larına
+# çevrilir. Ayrıntı: iletilecek olayların facility/severity kümesi.
+LOG_PROFILES = {
+    "bakim": {
+        "label": "Bakım (önerilen)",
+        "selectors": [
+            "auth,authpriv.*",
+            "kern.warning",
+            "daemon.notice",
+            "syslog.*",
+            "local0,local1,local2,local3,local4,local5,local6,local7.*",
+        ],
+    },
+    "kapsamli": {
+        "label": "Kapsamlı",
+        "selectors": ["*.*"],
+    },
+    "guvenlik": {
+        "label": "Yalnız güvenlik",
+        "selectors": [
+            "auth,authpriv.*",
+            "kern.err",
+            "daemon.err",
+        ],
+    },
+}
+
+# Yapılandırma dosyasının içine gömdüğümüz manşet — form'da mevcut
+# profili yeniden yükleyebilmek için _parse_config bunu okur.
+_PROFILE_MARKER_PREFIX = "# TIHA_PROFILE="
+
+
+def _profile_key(label_or_key: str | None) -> str:
+    """Form combobox label'ından profil anahtarını çıkar. Bilinmeyen
+    değerlerde varsayılan 'bakim' döner."""
+    if not label_or_key:
+        return "bakim"
+    s = label_or_key.strip().lower()
+    if s in LOG_PROFILES:
+        return s
+    if s.startswith("kapsam") or "her mesaj" in s:
+        return "kapsamli"
+    if s.startswith("yalnız") or s.startswith("yalniz") or "güvenlik" in s or "guvenlik" in s:
+        return "guvenlik"
+    return "bakim"
+
+
+def _parse_config() -> dict | None:
+    """Mevcut TiHA rsyslog yapılandırmasından host, port, protokol ve
+    profil değerlerini çıkarır. Geriye ``None`` veya ``{"host":str,
+    "port":int, "proto":str, "profile":str}`` döner."""
     if not RSYSLOG_CONF.exists():
         return None
 
     try:
         content = RSYSLOG_CONF.read_text(encoding="utf-8")
-
-        # target="host" satırını bul
-        host = ""
-        for line in content.splitlines():
-            if "target=" in line:
-                # target="hostname" formatındaki satırı parse et
-                import re
-                match = re.search(r'target="([^"]+)"', line)
-                if match:
-                    host = match.group(1)
-                    break
-
-        # port="514" satırını bul
-        port = 514
-        for line in content.splitlines():
-            if "port=" in line:
-                import re
-                match = re.search(r'port="([^"]+)"', line)
-                if match:
-                    try:
-                        port = int(match.group(1))
-                    except ValueError:
-                        pass
-                    break
-
-        # protocol="udp" satırını bul
-        proto = "udp"
-        for line in content.splitlines():
-            if "protocol=" in line:
-                import re
-                match = re.search(r'protocol="([^"]+)"', line)
-                if match:
-                    proto = match.group(1).lower()
-                    break
-
-        if host:  # En azından host bulunmalı
-            return (host, port, proto)
-
     except (OSError, UnicodeDecodeError):
-        pass
+        return None
 
-    return None
+    import re
+    host = ""
+    port = 514
+    proto = "udp"
+    profile = "bakim"
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(_PROFILE_MARKER_PREFIX):
+            candidate = stripped[len(_PROFILE_MARKER_PREFIX):].strip()
+            if candidate in LOG_PROFILES:
+                profile = candidate
+            continue
+        if not host and "target=" in stripped:
+            m = re.search(r'target="([^"]+)"', stripped)
+            if m:
+                host = m.group(1)
+        if "port=" in stripped:
+            m = re.search(r'port="([^"]+)"', stripped)
+            if m:
+                try:
+                    port = int(m.group(1))
+                except ValueError:
+                    pass
+        if "protocol=" in stripped:
+            m = re.search(r'protocol="([^"]+)"', stripped)
+            if m:
+                proto = m.group(1).lower()
+
+    if not host:
+        return None
+    return {"host": host, "port": port, "proto": proto, "profile": profile}
 
 
-def _render(host: str, port: int, proto: str) -> str:
-    """Dayanıklı log iletimi için gelişmiş rsyslog yapılandırması oluşturur.
+def _render(host: str, port: int, proto: str, profile: str = "bakim") -> str:
+    """Dayanıklı log iletimi için rsyslog yapılandırması üretir.
 
-    Bu yapılandırma disk-assisted queue kullanarak uzak sunucu offline
-    olduğunda logları yerel diskte tutar, sunucu geri geldiğinde gönderir.
+    Disk destekli kuyruk (uzak sunucu offline olsa da kayıp yok) tek bir
+    ruleset içinde tanımlanır; profil kararı sadece bu ruleset'e hangi
+    facility.severity satırlarının yönlendirileceğini belirler.
     """
-    # UDP için `@`, TCP için `@@` önekleri rsyslog standardıdır.
-    prefix = "@@" if proto.lower() == "tcp" else "@"
+    profile = _profile_key(profile)
+    prof = LOG_PROFILES[profile]
 
-    return f"""# TiHA — Dayanıklı merkezi log sunucusuna iletim
-# Uzak sunucu offline olduğunda loglar kaybolmaz — diskette sıralanır.
+    selector_col_width = 60
+    call_lines = []
+    for sel in prof["selectors"]:
+        pad = " " * max(1, selector_col_width - len(sel))
+        call_lines.append(f"{sel}{pad}call tiha_remote")
+    call_block = "\n".join(call_lines)
+
+    # DHCP ile IP alan bir log sunucusuna gönderim yapıyorsak, rsyslog'un
+    # bağlantı başında yaptığı DNS çözümlemesi ömür boyu cache'lenmemeli.
+    # RebindInterval her N mesajda socket'i kapatıp yeniden açar; bu
+    # sırada getaddrinfo yeniden çağrılır ve güncel IP alınır. UDP için
+    # ayrı parametre adı kullanılır. 60 mesaj = düşük hacimli tahtada
+    # ortalama 5-15 dakikada bir taze çözümleme.
+    rebind_line = (
+        'UDP.RebindInterval="60"'
+        if proto.lower() == "udp"
+        else 'RebindInterval="60"'
+    )
+
+    return f"""# TiHA - Dayanıklı merkezi log iletimi
+# Profil: {prof['label']}
+{_PROFILE_MARKER_PREFIX}{profile}
+#
+# Uzak sunucu offline olduğunda loglar kaybolmaz - diskte sıralanır.
 # Sunucu geri geldiğinde birikmiş loglar otomatik gönderilir.
+# Her 60 mesajda socket yeniden kurulur (DHCP ile IP alan sunucu için).
+# Yerel disk tavanı: {QUEUE_MAX_DISK_SPACE} - en kötü senaryoda 3+ ay kayıt.
 
-# Queue dizinini oluştur (rsyslog otomatik oluşturmayabilir)
 $CreateDirs on
 $Umask 0000
 
-# Ana kural: Tüm logları uzak sunucuya gönder
-*.* action(
-    type="omfwd"
-    target="{host}"
-    port="{port}"
-    protocol="{proto}"
-    # Dayanıklı kuyruk ayarları:
-    queue.type="LinkedList"           # Bellek+disk hybrid kuyruk
-    queue.filename="tiha_remote"      # Disk dosya adı: /var/lib/rsyslog/tiha_remote*
-    queue.saveonshutdown="on"         # Kapatmada disk'e yaz
-    queue.maxdiskspace="100m"         # Maks disk kullanımı 100MB
-    queue.size="10000"                # Bellek kuyruğu boyutu
-    queue.discardseverity="0"         # Hiçbir seviyeyi atma (emergency=0)
-    queue.checkpointinterval="10"     # Her 10 mesajda bir disk'e yaz
-    # Yeniden deneme ayarları:
-    action.resumeretrycount="-1"      # Sürekli dene (hiç vazgeçme)
-    action.resumeinterval="30"        # Her 30 saniyede bir dene
-    action.resumeintervalmultiplier="2"  # Başarısızlık artışı (en fazla 10 dakika)
-    action.resumeintervalmax="600"    # En fazla 10 dakika bekle
-)
+# Ortak kuyruk + iletim ruleset'i. Profile göre seçilen selector
+# satırları (aşağıda) bu ruleset'i çağırır; kuyruk paylaşılır.
+ruleset(name="tiha_remote"
+        queue.filename="tiha_remote"
+        queue.type="LinkedList"
+        queue.saveonshutdown="on"
+        queue.maxdiskspace="{QUEUE_MAX_DISK_SPACE}"
+        queue.size="{QUEUE_MEMORY_SIZE}"
+        queue.discardseverity="0"
+        queue.checkpointinterval="10") {{
+    action(type="omfwd"
+           target="{host}"
+           port="{port}"
+           protocol="{proto}"
+           {rebind_line}
+           action.resumeretrycount="-1"
+           action.resumeinterval="30"
+           action.resumeintervalmultiplier="2"
+           action.resumeintervalmax="600")
+}}
 
-# Kuyruk durumu hakkında bilgi ver (isteğe bağlı, debug için)
-# $MainMsgQueueTimeoutShutdown 10000"""
+# Profile göre iletilen olaylar
+{call_block}
+"""
 
 
 class RemoteSyslogModule(Module):
@@ -179,10 +256,12 @@ class RemoteSyslogModule(Module):
         "edemezsiniz. Hostname adımı her klona kendi MAC adresinden türeyen "
         "benzersiz bir ad verir.\n\n"
         "KRİTİK AVANTAJ: Bu modül HİÇ LOG KAYBI OLMAYAN gelişmiş "
-        "yapılandırma kullanır. Uzak log sunucusu saatlerce hatta günlerce "
+        "yapılandırma kullanır. Uzak log sunucusu haftalarca hatta aylarca "
         "erişilemez durumda olsa bile (elektrik kesintisi, ağ bakımı, "
-        "sunucu arızası), tahta loglarını yerel diskte biriktirir. Sunucu "
-        "geri geldiğinde birikmiş tüm loglar otomatik olarak gönderilir.\n\n"
+        "sunucu arızası), tahta loglarını yerel diskte biriktirir — "
+        "yerel tavan 2 GB olduğundan en kötü profilde bile 3 aydan uzun "
+        "yerel kayıt tutulur. Sunucu geri geldiğinde birikmiş tüm loglar "
+        "otomatik olarak gönderilir.\n\n"
         "Bunun için /etc/rsyslog.d/ altına disk-assisted queue (disk destekli "
         "kuyruk) kullanan gelişmiş bir yapılandırma dosyası yazılır. Paket "
         "güncellemesi gelirse yapılandırmanız korunur, geri almak da o tek "
@@ -219,8 +298,12 @@ class RemoteSyslogModule(Module):
             + (f"var ({RSYSLOG_CONF})" if config_exists else "yok")
         )
         if parsed:
-            host, port, proto = parsed
-            lines.append(f"Log sunucusu         : {host}:{port} ({proto})")
+            lines.append(
+                f"Log sunucusu         : {parsed['host']}:{parsed['port']} ({parsed['proto']})"
+            )
+            prof = LOG_PROFILES.get(parsed.get("profile", "bakim"))
+            if prof:
+                lines.append(f"Log profili          : {prof['label']}")
         lines.append(f"Kuyruk dizini        : {RSYSLOG_QUEUE_DIR}")
         if queue_files:
             lines.append(
@@ -263,7 +346,17 @@ class RemoteSyslogModule(Module):
         params = params or {}
         host = (params.get("syslog_host") or "").strip()
         port = int(params.get("syslog_port") or 514)
-        proto = (params.get("syslog_proto") or "udp").strip().lower()
+        proto = (params.get("syslog_proto") or "tcp").strip().lower()
+        profile = _profile_key(params.get("log_profile"))
+        install_smart = str(
+            params.get("install_smart_monitoring", "False")
+        ).lower() in ("true", "1", "yes", "on")
+        install_node_exporter = str(
+            params.get("install_node_exporter", "False")
+        ).lower() in ("true", "1", "yes", "on")
+        node_exporter_listen = (
+            params.get("node_exporter_listen") or ":9100"
+        ).strip()
         if not host:
             return ApplyResult(False, "Merkezi log sunucusu adresi (IP/isim) boş.")
 
@@ -272,56 +365,189 @@ class RemoteSyslogModule(Module):
             ["apt-get", "install", "-y", "rsyslog"],
             env={"DEBIAN_FRONTEND": "noninteractive"},
         )
-        # rsyslog çoğunlukla zaten kuruludur; kurulumu kontrol etmek yeter.
         del install  # susturucu
 
         # Kuyruk dizinini oluştur (rsyslog otomatik oluşturmayabilir)
         try:
             RSYSLOG_QUEUE_DIR.mkdir(mode=0o755, parents=True, exist_ok=True)
-            # rsyslog kullanıcısının yazabilmesi için sahiplik ayarla
             run_cmd(["chown", "-R", "syslog:adm", str(RSYSLOG_QUEUE_DIR)])
         except OSError as exc:
             log.warning("rsyslog kuyruk dizini oluşturulamadı: %s", exc)
 
-        # Gelişmiş yapılandırmayı yaz. /etc/rsyslog.d/ bazı kurulumlarda
-        # (rsyslog paketi yoksa veya minimal sistemde) yok olabilir;
-        # apt-get install çıkışı kontrol edilmediği için defansif olarak
-        # parent dizini garantiliyoruz.
+        # Disk sağlığı + sıcaklık izleme paketleri
+        smart_state = "atlandı"
+        if install_smart:
+            if progress:
+                progress(
+                    "Disk sağlığı ve sıcaklık izleme paketleri kuruluyor "
+                    "(smartmontools, lm-sensors)..."
+                )
+            pkg = run_cmd(
+                ["apt-get", "install", "-y", "smartmontools", "lm-sensors"],
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+                timeout=300,
+            )
+            if pkg.ok:
+                # sensors-detect etkileşimli — tüm sorulara varsayılan
+                # (Enter=yes) ile devam edecek şekilde çağırıyoruz.
+                run_cmd(
+                    ["bash", "-lc", "yes '' | sensors-detect --auto || true"],
+                    timeout=120,
+                    check=False,
+                )
+                run_cmd(
+                    ["systemctl", "enable", "--now", "smartd"], check=False,
+                )
+                smart_state = (
+                    "kuruldu (smartd çalışıyor; sensors-detect otomatik "
+                    "modülleri yükledi)"
+                )
+                if progress:
+                    progress(
+                        "smartd etkinleştirildi, sıcaklık modülleri "
+                        "yüklendi."
+                    )
+            else:
+                smart_state = "kurulum başarısız (paket yöneticisi hatası)"
+                if progress:
+                    progress(
+                        "smartmontools/lm-sensors kurulamadı — adım devam ediyor."
+                    )
+
+        # Metrik izleme — Prometheus node_exporter
+        node_exporter_state = "atlandı"
+        if install_node_exporter:
+            if progress:
+                progress("Metrik izleme paketi (prometheus-node-exporter) indiriliyor...")
+            pkg_ne = run_cmd(
+                ["apt-get", "install", "-y", "prometheus-node-exporter"],
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+                timeout=300,
+            )
+            if pkg_ne.ok:
+                if progress:
+                    progress("Paket kuruldu; dinleme adresi yazılıyor...")
+                # /etc/default/prometheus-node-exporter'ın ARGS satırını
+                # yaz — dinleme adresini bu dosyadan alır.
+                defaults_file = Path(
+                    "/etc/default/prometheus-node-exporter"
+                )
+                try:
+                    if defaults_file.exists():
+                        content = defaults_file.read_text(encoding="utf-8")
+                    else:
+                        content = ""
+                    new_lines = []
+                    args_written = False
+                    for line in content.splitlines():
+                        if line.startswith("ARGS="):
+                            new_lines.append(
+                                f'ARGS="--web.listen-address={node_exporter_listen}"'
+                            )
+                            args_written = True
+                        else:
+                            new_lines.append(line)
+                    if not args_written:
+                        new_lines.append(
+                            f'ARGS="--web.listen-address={node_exporter_listen}"'
+                        )
+                    defaults_file.write_text(
+                        "\n".join(new_lines) + "\n", encoding="utf-8",
+                    )
+                    if progress:
+                        progress(
+                            f"Dinleme adresi ayarlandı: {node_exporter_listen}"
+                        )
+                except OSError as exc:
+                    log.warning(
+                        "node_exporter defaults dosyası yazılamadı: %s", exc,
+                    )
+                    if progress:
+                        progress(
+                            "Uyarı: dinleme adresi dosyası yazılamadı; "
+                            "servis varsayılan port ile açılacak."
+                        )
+                if progress:
+                    progress("Servis etkinleştiriliyor ve başlatılıyor...")
+                run_cmd(
+                    ["systemctl", "restart", "prometheus-node-exporter"],
+                    check=False,
+                )
+                run_cmd(
+                    ["systemctl", "enable", "prometheus-node-exporter"],
+                    check=False,
+                )
+                node_exporter_state = (
+                    f"kuruldu (dinleme adresi {node_exporter_listen}; "
+                    "Prometheus sunucusu buradan scrape yapabilir)"
+                )
+                if progress:
+                    progress(
+                        f"Metrik izleme aktif — {node_exporter_listen} adresinde dinliyor."
+                    )
+            else:
+                node_exporter_state = (
+                    "kurulum başarısız (prometheus-node-exporter paketi "
+                    "yüklenemedi)"
+                )
+                if progress:
+                    progress(
+                        "Metrik izleme kurulumu başarısız (paket yöneticisi hatası); "
+                        "log iletim akışı devam ediyor."
+                    )
+
+        # rsyslog yapılandırmasını yaz
         try:
             RSYSLOG_CONF.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-            config_content = _render(host, port, proto)
+            config_content = _render(host, port, proto, profile=profile)
             RSYSLOG_CONF.write_text(config_content, encoding="utf-8")
             RSYSLOG_CONF.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"rsyslog ek yapılandırma dosyası yazılamadı: {exc}")
+            return ApplyResult(
+                False,
+                f"rsyslog ek yapılandırma dosyası yazılamadı: {exc}",
+            )
 
         # rsyslog'u yeniden başlat
         restart = run_cmd(["systemctl", "restart", "rsyslog"])
         if not restart.ok:
-            return ApplyResult(False, "rsyslog yeniden başlatılamadı.",
-                               details=restart.stderr)
+            return ApplyResult(
+                False, "rsyslog yeniden başlatılamadı.",
+                details=restart.stderr,
+            )
 
-        # rsyslog'un çalıştığından emin ol
         status = run_cmd(["systemctl", "is-active", "rsyslog"])
         if not status.ok:
-            return ApplyResult(False, "rsyslog servisi çalıştırılamadı.",
-                               details="systemctl status rsyslog komutuyla kontrol edin.")
+            return ApplyResult(
+                False, "rsyslog servisi çalıştırılamadı.",
+                details="systemctl status rsyslog komutuyla kontrol edin.",
+            )
 
+        prof = LOG_PROFILES[profile]
         return ApplyResult(
             True,
-            f"Dayanıklı log iletimi {host}:{port}/{proto.upper()} için kuruldu.",
+            f"Dayanıklı log iletimi {host}:{port}/{proto.upper()} için kuruldu "
+            f"({prof['label']}).",
             details=(
-                f"✓ Gelişmiş yapılandırma: {RSYSLOG_CONF}\n"
-                f"✓ Kuyruk dizini: {RSYSLOG_QUEUE_DIR}\n"
-                f"✓ Hedef: {host}:{port} ({proto.upper()})\n\n"
-                "Özellikler:\n"
-                "• Uzak sunucu offline → loglar yerel diskte birikir\n"
-                "• Sunucu geri gelince → birikmiş loglar otomatik gönderilir\n"
-                "• Maksimum kuyruk boyutu: 100 MB\n"
-                "• Yeniden deneme aralığı: 30-600 saniye\n\n"
-                f"Test: sunucu tarafında 'tcpdump -n -i any port {port}' ya da "
-                "rsyslog sunucusunda gelen kayıtlara bakabilirsiniz."
+                f"Yapılandırma dosyası : {RSYSLOG_CONF}\n"
+                f"Kuyruk dizini        : {RSYSLOG_QUEUE_DIR}\n"
+                f"Hedef                : {host}:{port} ({proto.upper()})\n"
+                f"Log profili          : {prof['label']}\n"
+                f"Disk/sıcaklık izleme : {smart_state}\n"
+                f"Metrik izleme (node) : {node_exporter_state}\n\n"
+                "Kuyruk özellikleri:\n"
+                "  - Uzak sunucu offline: loglar yerel diskte birikir\n"
+                "  - Sunucu geri gelince: birikmiş loglar otomatik gönderilir\n"
+                f"  - Yerel disk tavanı: {QUEUE_MAX_DISK_SPACE.upper()} "
+                "(en kötü profilde bile 3+ ay yerel kayıt)\n"
+                "  - Yeniden deneme aralığı: 30-600 saniye\n\n"
+                f"Test: sunucu tarafında 'tcpdump -n -i any port {port}' ile "
+                "gelen kayıtları görebilirsiniz."
             ),
+            data={
+                "install_smart_monitoring": install_smart,
+                "install_node_exporter": install_node_exporter,
+            },
         )
 
     def test_log_server_action(self, progress=None) -> ApplyResult:
@@ -346,13 +572,14 @@ class RemoteSyslogModule(Module):
                 "Önce bu adımı bir kez uygulayın (Uygula düğmesi)."
             )
             if progress:
-                progress(f"❌ {msg}")
+                progress(msg)
             return ApplyResult(False, msg)
 
-        host, port, proto = cfg
-        proto = proto.lower()
+        host = cfg["host"]
+        port = cfg["port"]
+        proto = cfg["proto"].lower()
         if progress:
-            progress(f"📋 Hedef: {host}:{port} ({proto.upper()})")
+            progress(f"Hedef: {host}:{port} ({proto.upper()})")
             progress(f"DNS çözülmesi deneniyor: {host}…")
 
         try:
@@ -361,7 +588,7 @@ class RemoteSyslogModule(Module):
         except _socket.gaierror as exc:
             msg = f"DNS çözümleme başarısız ({host}): {exc}"
             if progress:
-                progress(f"❌ {msg}")
+                progress(f"{msg}")
             return ApplyResult(False, msg)
 
         resolved = addrinfo[0][4][0] if addrinfo else host
@@ -381,7 +608,7 @@ class RemoteSyslogModule(Module):
                     "Sunucu kapalı veya ağ engelliyor olabilir."
                 )
                 if progress:
-                    progress(f"❌ {msg}")
+                    progress(f"{msg}")
                 return ApplyResult(False, msg)
             ok_msg = f"✓ TCP bağlantı kuruldu ({host}:{port})."
             if progress:
@@ -404,7 +631,7 @@ class RemoteSyslogModule(Module):
         except (OSError, _socket.timeout) as exc:
             msg = f"UDP mesajı gönderilemedi ({host}:{port}): {exc}"
             if progress:
-                progress(f"❌ {msg}")
+                progress(f"{msg}")
             return ApplyResult(False, msg)
         ok_msg = f"✓ UDP mesajı gönderildi ({host}:{port})."
         if progress:

@@ -242,8 +242,74 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Protokol",
             "type": "select",
             "required": False,
-            "default": "udp",
-            "options": ["udp", "tcp"],
+            "default": "tcp",
+            "options": ["tcp", "udp"],
+        },
+        {
+            "key": "log_profile",
+            "label": "Log profili",
+            "type": "select",
+            "required": False,
+            "default": "Bakım (önerilen)",
+            "options": [
+                "Bakım (önerilen)",
+                "Kapsamlı",
+                "Yalnız güvenlik",
+            ],
+            "help": (
+                "Merkezi sunucuya iletilecek olayların kapsamını seçin. "
+                "Bakım: donanım uyarıları (kern.warning), servis "
+                "hataları/notice (daemon.notice), kimlik doğrulama "
+                "(auth/authpriv), TiHA + Ahenk servisleri (local0-7). "
+                "Öğretmen davranışı ve tarayıcı içeriği iletilmez. "
+                "Kapsamlı: her mesaj gönderilir; ayıklama için, kalıcı "
+                "olarak açık tutmayın. Yalnız güvenlik: minimum trafik, "
+                "sadece kimlik ve kritik hatalar."
+            ),
+        },
+        {
+            "key": "install_smart_monitoring",
+            "label": "Disk sağlığı + sıcaklık izleme paketlerini kur",
+            "type": "bool",
+            "required": False,
+            "default": "True",
+            "help": (
+                "İşaretlenirse smartmontools (SMART disk izleme) ve "
+                "lm-sensors (sıcaklık okuma) paketleri kurulur; smartd "
+                "servisi etkinleştirilir ve sensors-detect otomatik "
+                "çalıştırılır. Bu araçlar 'daemon' facility'sine log "
+                "yazar; Bakım veya Kapsamlı profil seçilmişse "
+                "otomatik olarak merkezi sunucuya iletilir. Böylece "
+                "disk arızası ve aşırı ısınma erkenden görünür."
+            ),
+        },
+        {
+            "key": "install_node_exporter",
+            "label": "Metrik izleme",
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "help": (
+                "İşaretlenirse prometheus-node-exporter paketi kurulup "
+                "9100 numaralı porta bağlanır. Merkezi Prometheus "
+                "sunucusu buradan CPU, RAM, disk, sıcaklık, ağ ve boot "
+                "metriklerini toplar; Grafana panosunda onlarca tahtanın "
+                "sağlığı tek ekrandan izlenir."
+            ),
+        },
+        {
+            "key": "node_exporter_listen",
+            "label": "Metrik dinleme adresi",
+            "type": "text",
+            "required": False,
+            "default": ":9100",
+            "enable_when_field": "install_node_exporter",
+            "help": (
+                "Varsayılan ':9100' — tüm ağ arayüzlerinde dinler; "
+                "Prometheus scrape'i yapar. Güvenlik sıkı istenirse "
+                "'127.0.0.1:9100' yazın (sadece localhost dinler; "
+                "Prometheus ile arada SSH tünel gerekir)."
+            ),
         },
         {
             "key": "test_log_server",
