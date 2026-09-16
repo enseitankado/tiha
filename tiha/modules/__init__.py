@@ -20,6 +20,7 @@ from .m11_power_management import PowerManagementModule
 from .m12_ahenk_reset import AhenkResetModule
 from .m13_password_dialog import PasswordDialogModule
 from .m14_bios_password import BiosPasswordModule
+from .m17_performance import PerformanceModule
 
 
 def all_modules() -> list[Module]:
@@ -30,6 +31,9 @@ def all_modules() -> list[Module]:
     önbelleği + log temizliğinden önce tamamlanması gerekir; aksi
     hâlde sanitize sonrası ahenk indirme tekrarı / log kirlenmesi
     olur. Sanitize wizard akışının son adımı olmaya devam eder.
+
+    m17 (Başarım) de eta-light-mode paketini kurabildiği için aynı
+    nedenle sanitize'dan önce gelir.
     """
     return [
         SystemUpdateModule(),
@@ -43,6 +47,7 @@ def all_modules() -> list[Module]:
         TimeSyncModule(),
         HostnameModule(),
         PowerManagementModule(),
+        PerformanceModule(),
         AhenkResetModule(),
         BiosPasswordModule(),
         ImageSanitizeModule(),

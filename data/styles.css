@@ -202,6 +202,20 @@ textview.tiha-placeholder text selection {
     padding: 10px 12px;
 }
 
+/* Gerçek donanımda henüz doğrulanmamış (deneysel) adımların uyarı şeridi */
+.tiha-experimental-banner {
+    background: alpha(#f0ad00, 0.16);
+    border-left: 3px solid #d18f00;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+/* Form içindeki bölüm başlıkları (params şemasında "heading" alanı) */
+.tiha-form-section {
+    font-weight: 700;
+    margin-top: 10px;
+}
+
 /* Açıklama etiketlerinde satır arası boşluk */
 label.tiha-rationale {
     margin-bottom: 4px;

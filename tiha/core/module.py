@@ -94,6 +94,9 @@ class Module:
     doc_url: str = ""
     # Yukarıdaki bağlantının görünür etiketi. Boşsa varsayılan kullanılır.
     doc_label: str = ""
+    # ``True`` ise adım gerçek tahta donanımında henüz doğrulanmamıştır;
+    # UI başlığın altında "Deneysel" uyarı şeridi gösterir.
+    experimental: bool = False
 
     # --- Yardımcılar ------------------------------------------------------
 

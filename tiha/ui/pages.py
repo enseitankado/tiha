@@ -300,6 +300,15 @@ class ModulePage(Gtk.Box):
         else:
             self.pack_start(heading_lbl, False, False, 0)
 
+        if self.module.experimental:
+            banner = _wrapping_label(
+                "Deneysel: Bu adım gerçek tahta donanımında henüz "
+                "doğrulanmadı. Önce tek bir tahtada deneyin; sorun görürseniz "
+                "\"Bu adımı geri al\" ile eski duruma dönün.",
+                klass="tiha-experimental-banner",
+            )
+            self.pack_start(banner, False, False, 0)
+
         rationale_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         rationale_lbl = _wrapping_label(rationale_text, klass="tiha-rationale")
         rationale_container.pack_start(rationale_lbl, False, False, 0)
@@ -431,6 +440,13 @@ class ModulePage(Gtk.Box):
         grid = Gtk.Grid(column_spacing=12, row_spacing=6)
         row_idx = 0
         for field in schema:
+            # Bölüm başlığı: değer taşımaz, iki sütuna yayılan kalın etiket.
+            if field.get("type") == "heading":
+                section = _wrapping_label(field["label"], klass="tiha-form-section")
+                grid.attach(section, 0, row_idx, 2, 1)
+                row_idx += 1
+                continue
+
             # Şartlı görünürlük: visible_when bir modül methodunu işaret
             # ediyorsa, başlangıç görünürlüğünü ondan al. Widget'lar
             # daima oluşturulur ve _conditional_field_widgets'ta saklanır;
@@ -529,7 +545,12 @@ class ModulePage(Gtk.Box):
             "idle_enabled": ["idle_minute"]
         }
 
-        related_fields = field_relationships.get(checkbox_key, [])
+        related_fields = list(field_relationships.get(checkbox_key, []))
+        # Şemada bir kutu ``enables`` listesi taşıyorsa, işaretsizken o
+        # alanlar pasifleşir (ör. m17: hafif mod kapalıyken alt ayarları).
+        for field in params_schema.get(self.module.id) or []:
+            if field.get("key") == checkbox_key:
+                related_fields += field.get("enables", [])
 
         for field_key in related_fields:
             widget = self._fields.get(field_key)
@@ -914,6 +935,8 @@ class ModulePage(Gtk.Box):
         params: dict = {}
         missing: list[str] = []
         for field in schema:
+            if field.get("type") == "heading":
+                continue
             key = field["key"]
             widget = self._fields.get(key)
             if widget is None:

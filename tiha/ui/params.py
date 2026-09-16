@@ -1,6 +1,9 @@
 """Modül başına kullanıcıdan alınacak parametre şemaları.
 
-Alan tipleri: ``text``, ``password``, ``number``, ``textarea``, ``select``.
+Alan tipleri: ``text``, ``password``, ``number``, ``textarea``, ``select``,
+``bool``, ``spin``, ``button``, ``file`` ve değer taşımayan bölüm başlığı
+``heading``. ``bool`` alanı ``enables`` listesi taşıyabilir: kutu
+işaretsizken listedeki alanlar pasifleşir.
 """
 
 from __future__ import annotations
@@ -359,6 +362,103 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "max": 180,
             "step": 1,
             "help": "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika.",
+        },
+    ],
+    "m17_performance": [
+        {"label": "Oturum kalıntıları", "type": "heading"},
+        {
+            "key": "kill_user_processes",
+            "label": "Eski oturum kalıntılarını temizle",
+            "type": "bool",
+            "default": "True",
+            "help": (
+                "Öğretmen oturumunu kapattığında o oturumdan kalan bütün "
+                "süreçler (kapatılmadan bırakılan Firefox/Chrome ve alt "
+                "süreçleri dahil) sonlandırılır. Tahta yeniden başlatılınca "
+                "etkin olur. Aynı kullanıcının SSH gibi başka açık "
+                "oturumlarına dokunulmaz; root hariç tutulur."
+            ),
+        },
+        {
+            "key": "terminate_lingering",
+            "label": "Şu an asılı kalmış oturumları da kapat",
+            "type": "bool",
+            "default": "True",
+            "help": (
+                "Kapanmış ama süreçleri hâlâ çalışan (closing) öğretmen "
+                "oturumları hemen sonlandırılır. Açık (aktif) oturumlara "
+                "dokunulmaz. Asılı oturumlar yukarıdaki önizlemede listelenir."
+            ),
+        },
+        {"label": "ETA Hafif Mod (eta-light-mode)", "type": "heading"},
+        {
+            "key": "light_mode_enabled",
+            "label": "Hafif modu tüm kullanıcılara uygula",
+            "type": "bool",
+            "default": "False",
+            "enables": [
+                "lm_effects", "lm_compositor", "lm_thumbnails",
+                "lm_directory_counts", "lm_app_monitoring",
+                "lm_low_resolution", "lm_low_refresh_rate",
+            ],
+            "help": (
+                "Paket yoksa kurulur. Seçilen ayarlar her kullanıcıya oturum "
+                "açılışında uygulanır; kullanıcı kendi oturumunda değiştirse "
+                "de bir sonraki girişte yeniden uygulanır. Kişisel ayarlar "
+                "geri al ile otomatik eski hâline dönmez."
+            ),
+        },
+        {
+            "key": "lm_effects",
+            "label": "Pencere ve menü animasyonlarını kapat",
+            "type": "bool",
+            "default": "True",
+            "help": "Menü, pencere ve diyaloglar daha çabuk açılır hissi verir.",
+        },
+        {
+            "key": "lm_compositor",
+            "label": "Tam ekran pencereleri doğrudan çiz",
+            "type": "bool",
+            "default": "True",
+            "help": "Tam ekran video ve sunumlarda yükü azaltır; ekran yırtılması görülebilir.",
+        },
+        {
+            "key": "lm_thumbnails",
+            "label": "Resim ve video önizlemelerini kapat",
+            "type": "bool",
+            "default": "True",
+            "help": "Çok dosyalı USB/klasör açılışındaki yoğun işlemci ve disk yükünü kaldırır.",
+        },
+        {
+            "key": "lm_directory_counts",
+            "label": "Klasör öğesi sayımını kapat",
+            "type": "bool",
+            "default": "True",
+        },
+        {
+            "key": "lm_app_monitoring",
+            "label": "Uygulama kullanım izlemesini kapat",
+            "type": "bool",
+            "default": "True",
+        },
+        {
+            "key": "lm_low_resolution",
+            "label": "Çözünürlüğü 1600x900'e düşür",
+            "type": "bool",
+            "default": "False",
+            "help": (
+                "Grafik yükünü ~%30 azaltır ama yazı ve kalem çizgisi "
+                "bulanıklaşır. Büyüyen arayüzü dengelemek için yazı boyutu "
+                "ve dosya ikonları da küçültülür. Her kullanıcının ilk "
+                "girişinde ekran kısa süre kararabilir."
+            ),
+        },
+        {
+            "key": "lm_low_refresh_rate",
+            "label": "Yenileme hızını 50 Hz'e düşür",
+            "type": "bool",
+            "default": "False",
+            "help": "Hareketli içerikte yükü ~%17 azaltır; kalem gecikmesi ~3 ms artar.",
         },
     ],
     "m14_bios_password": [
