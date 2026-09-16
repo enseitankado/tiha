@@ -1847,6 +1847,26 @@ class OTPSecretsModule(Module):
         """'Tüm PIN anahtarlarını sil' düğmesi görünsün mü?"""
         return bool(load_secrets())
 
+    def label_purge_all_secrets(self) -> str:
+        """'Tüm PIN Anahtarlarını Sil' düğmesinin dinamik etiketi.
+        Adımın her aksiyonundan sonra yeniden hesaplanır."""
+        n = len(load_secrets())
+        return f"Tüm PIN Anahtarlarını Sil ({n} anahtar)"
+
+    def label_remove_extra_users(self) -> str:
+        """'Fazladan Hesapları Sil' düğmesinin dinamik etiketi.
+        Silinecek hesap sayısı ve karşılığında düşecek yetim PIN
+        anahtar sayısı gösterilir."""
+        extras = get_extra_users()
+        secrets = load_secrets()
+        # extras arasında PIN kaydı olan hesap sayısı — silme onunla
+        # birlikte otp-secrets.json'dan da bu kayıtları düşürür.
+        matching_keys = sum(1 for u in extras if u in secrets)
+        return (
+            f"Fazladan Hesapları Sil "
+            f"({len(extras)} hesap, {matching_keys} anahtar)"
+        )
+
     def purge_all_secrets_action(
         self, params: dict | None = None,
         progress: ProgressCallback | None = None,
