@@ -307,6 +307,20 @@ class InitialPasswordsModule(Module):
         if teacher_pw and len(teacher_pw) < 8:
             return ApplyResult(False, "ogretmen parolası en az 8 karakter olmalıdır.")
 
+        # Yaygın parola listesi kontrolü — SecLists top10k. UI'da canlı
+        # uyarı gösterilmiş olsa da apply zamanında sunucu tarafı
+        # doğrulama olarak reddediyoruz.
+        from ..core.password_strength import is_common
+        for lbl, pw in (
+            ("root", root_pw), ("etapadmin", admin_pw), ("ogretmen", teacher_pw),
+        ):
+            if pw and is_common(pw):
+                return ApplyResult(
+                    False,
+                    f"{lbl} parolası en yaygın 10.000 parola arasında; "
+                    "farklı bir parola seçin.",
+                )
+
         state = self.ensure_state_dir()
         # Önce /etc/shadow yedeği al — undo için tek başına yeterli.
         backup_file(SHADOW, state)
