@@ -447,18 +447,10 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "süreçler (kapatılmadan bırakılan Firefox/Chrome ve alt "
                 "süreçleri dahil) sonlandırılır. Tahta yeniden başlatılınca "
                 "etkin olur. Aynı kullanıcının SSH gibi başka açık "
-                "oturumlarına dokunulmaz; root hariç tutulur."
-            ),
-        },
-        {
-            "key": "terminate_lingering",
-            "label": "Şu an asılı kalmış oturumları da kapat",
-            "type": "bool",
-            "default": "True",
-            "help": (
-                "Kapanmış ama süreçleri hâlâ çalışan (closing) öğretmen "
-                "oturumları hemen sonlandırılır. Açık (aktif) oturumlara "
-                "dokunulmaz. Asılı oturumlar yukarıdaki önizlemede listelenir."
+                "oturumlarına dokunulmaz; root hariç tutulur. Bu ayar "
+                "system-wide logind yapılandırmasıdır; klon tahtaya sonradan "
+                "eklenen hesaplar dahil, root dışındaki tüm kullanıcılara "
+                "otomatik uygulanır."
             ),
         },
         {"label": "ETA Hafif Mod (eta-light-mode)", "type": "heading"},
@@ -473,10 +465,13 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "lm_low_resolution", "lm_low_refresh_rate",
             ],
             "help": (
-                "Paket yoksa kurulur. Seçilen ayarlar her kullanıcıya oturum "
-                "açılışında uygulanır; kullanıcı kendi oturumunda değiştirse "
-                "de bir sonraki girişte yeniden uygulanır. Kişisel ayarlar "
-                "geri al ile otomatik eski hâline dönmez."
+                "Paket yoksa kurulur. Seçilen ayarlar system-wide olarak "
+                "/etc/eta-light-mode/settings.json'a ve /etc/xdg/autostart'a "
+                "yazılır; her kullanıcıya (klon tahtaya sonradan eklenen "
+                "hesaplar dahil) oturum açılışında uygulanır. Kullanıcı "
+                "kendi oturumunda değiştirse de bir sonraki girişte yeniden "
+                "uygulanır. Kişisel ayarlar geri al ile otomatik eski "
+                "hâline dönmez."
             ),
         },
         {

@@ -14,9 +14,9 @@ Ne yapar?
    de cgroup'ta kaldığı için yakalanır). systemd 252'de logind
    yapılandırmayı yeniden okuyamaz (``CanReload=no``) ve çalışan grafik
    oturumun altında yeniden başlatılması riskli olduğundan ayar **bir
-   sonraki açılışta** etkin olur. İsteğe bağlı olarak şu an ``closing``
-   durumunda asılı kalmış oturumlar ``loginctl terminate-session`` ile
-   hemen kapatılır.
+   sonraki açılışta** etkin olur. Bu bir system-wide logind ayarıdır;
+   klon tahtaya sonradan eklenen hesaplar dahil, root dışındaki bütün
+   kullanıcılara otomatik uygulanır.
 
 2. **ETA Hafif Mod.** Pardus'un ``eta-light-mode`` paketi (yoksa)
    kurulur ve paketin "Tüm kullanıcılara uygula" düzeni kurulur:
@@ -50,7 +50,6 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import time
 from pathlib import Path
 
 from ..core.logger import get_logger
@@ -362,10 +361,9 @@ class PerformanceModule(Module):
     ) -> ApplyResult:
         p = dict(params or {})
         kill_processes = _as_bool(p.get("kill_user_processes"))
-        terminate_now = _as_bool(p.get("terminate_lingering"))
         light_mode = _as_bool(p.get("light_mode_enabled"))
 
-        if not (kill_processes or terminate_now or light_mode):
+        if not (kill_processes or light_mode):
             return ApplyResult(False, "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı.")
 
         def say(line: str) -> None:
@@ -392,9 +390,6 @@ class PerformanceModule(Module):
                 data["session_cleanup"] = True
             else:
                 failures.append(text)
-
-        if terminate_now:
-            summary.append(self._terminate_lingering(say))
 
         if light_mode:
             keys = [
@@ -457,33 +452,6 @@ class PerformanceModule(Module):
         say("systemd-logind yapılandırmayı yeniden okuyamıyor (systemd 252); "
             "ayar bir sonraki açılışta etkin olacak.")
         return True, "Oturum kalıntı temizliği yapılandırıldı (yeniden başlatınca etkin)."
-
-    def _terminate_lingering(self, say) -> str:
-        say("\n==== Asılı kalmış oturumlar ====")
-        lingering = _lingering_sessions()
-        if not lingering:
-            say("Asılı oturum yok.")
-            return "Asılı oturum bulunmadı."
-        freed = 0
-        closed = []
-        for s in lingering:
-            say(f"Sonlandırılıyor: {s['name']} (oturum {s['id']}) ~{_mb(s['anon'])}")
-            r = run_cmd(["loginctl", "terminate-session", s["id"]], timeout=15)
-            if r.ok:
-                freed += s["anon"]
-                closed.append(s["id"])
-            else:
-                say(f"  ✗ {r.stderr.strip() or 'terminate-session başarısız'}")
-        # terminate-session asenkrondur; süreçlerin gerçekten gittiğini
-        # kısa süre izleyip raporla.
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            remaining = {s["id"] for s in _lingering_sessions()} & set(closed)
-            if not remaining:
-                break
-            time.sleep(1)
-        say(f"Kapatılan oturum: {len(closed)}, serbest kalan bellek ~{_mb(freed)}")
-        return f"{len(closed)} asılı oturum kapatıldı (~{_mb(freed)})."
 
     def _apply_light_mode(
         self, original: dict, keys: list[str], say, warnings: list[str],
