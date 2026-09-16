@@ -536,6 +536,19 @@ class ModulePage(Gtk.Box):
             if widget:
                 widget.set_sensitive(is_active)
 
+        # Genel şema mekanizması: bir alanın schema'sında
+        # ``enable_when_field: "<checkbox_key>"`` varsa, ilgili checkbox
+        # durumuna göre widget'ın sensitive halini senkronla. Böylece
+        # metrik izleme checkbox'ı pasifken "Metrik dinleme adresi"
+        # kutusu da pasif görünür.
+        schema = params_schema.get(self.module.id) or []
+        for f in schema:
+            if f.get("enable_when_field") != checkbox_key:
+                continue
+            widget = self._fields.get(f["key"])
+            if widget is not None:
+                widget.set_sensitive(is_active)
+
     def _refresh_preview(self) -> None:
         """Önizleme metnini yeniden üretip aynı widget'a yazar."""
         if self._preview_widget is None:
@@ -575,9 +588,35 @@ class ModulePage(Gtk.Box):
             _apply_line_spacing(self._preview_widget)
 
     def _refresh_after_action(self) -> None:
-        """Apply / buton işlemi sonrası önizleme + şartlı alan tazeleme."""
+        """Apply / buton işlemi sonrası önizleme + şartlı alan + dinamik
+        button etiketi tazeleme."""
         self._refresh_preview()
         self._refresh_conditional_fields()
+        self._refresh_button_labels()
+
+    def _refresh_button_labels(self) -> None:
+        """Her button widget'ının `label_from` provider'ı varsa etiketini
+        modülün metodundan güncel değere göre yeniden hesaplar. Etiketler
+        adımın her aksiyonundan sonra güncel kalır."""
+        for key, widget in list(self._fields.items()):
+            if not isinstance(widget, Gtk.Button):
+                continue
+            provider_name = getattr(widget, "_label_from", None)
+            if not provider_name:
+                continue
+            provider = getattr(self.module, provider_name, None)
+            if not callable(provider):
+                continue
+            try:
+                new_label = provider()
+            except Exception as exc:
+                log.warning(
+                    "label_from tazeleme başarısız (%s): %s",
+                    provider_name, exc,
+                )
+                continue
+            if isinstance(new_label, str) and new_label:
+                widget.set_label(new_label)
 
     def _make_field(self, field: dict) -> Gtk.Widget:
         kind = field.get("type", "text")
@@ -598,22 +637,27 @@ class ModulePage(Gtk.Box):
                     if value is not None:
                         default = str(value)
 
-        # Remote Syslog modülü için mevcut yapılandırmayı kontrol et ve form alanlarını doldur
+        # Remote Syslog modülü için mevcut yapılandırmayı okuyup formu
+        # ön-doldur. _parse_config dict döner: {"host","port","proto","profile"}.
         if self.module.id == "m06_remote_syslog":
             try:
-                # _parse_config fonksiyonunu modül içinden çağır
-                from ..modules.m06_remote_syslog import _parse_config
+                from ..modules.m06_remote_syslog import (
+                    _parse_config, LOG_PROFILES,
+                )
                 config = _parse_config()
                 if config:
-                    host, port, proto = config
                     if field["key"] == "syslog_host":
-                        default = host
+                        default = config.get("host", "")
                     elif field["key"] == "syslog_port":
-                        default = str(port)
+                        default = str(config.get("port", 514))
                     elif field["key"] == "syslog_proto":
-                        default = proto
+                        default = config.get("proto", "udp")
+                    elif field["key"] == "log_profile":
+                        prof_key = config.get("profile", "bakim")
+                        prof = LOG_PROFILES.get(prof_key)
+                        if prof:
+                            default = prof["label"]
             except Exception:
-                # Hata varsa varsayılan değerleri kullan
                 pass
 
         # BIOS yönetici parolası — adıma girişte gösterme. Kullanıcı
@@ -691,9 +735,26 @@ class ModulePage(Gtk.Box):
             return combo
 
         if kind == "button":
-            btn = Gtk.Button(label=field.get("label", "Button"))
+            initial_label = field.get("label", "Button")
+            # Etiket dinamikse (label_from), initial label'ı da o metottan al.
+            label_from = field.get("label_from")
+            if label_from:
+                provider = getattr(self.module, label_from, None)
+                if callable(provider):
+                    try:
+                        dyn = provider()
+                        if isinstance(dyn, str) and dyn:
+                            initial_label = dyn
+                    except Exception as exc:
+                        log.warning(
+                            "label_from başarısız (%s): %s", label_from, exc,
+                        )
+            btn = Gtk.Button(label=initial_label)
             if field.get("style") == "destructive":
                 btn.get_style_context().add_class("destructive-action")
+            # Refresh mekanizması için provider referansını widget'a bağla.
+            if label_from:
+                btn._label_from = label_from  # type: ignore[attr-defined]
 
             def on_button_clicked(_btn, action=field.get("action"),
                                   confirm=field.get("confirm")):
@@ -883,6 +944,47 @@ class ModulePage(Gtk.Box):
                 entry.connect("icon-press", on_icon_press)
         if kind == "number":
             entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
+
+        # Parola alanının altına canlı güç göstergesi
+        # (şemada "strength_below": True ise). Kullanıcı yazarken
+        # score_password çağrılır, etiket renklenir. UI thread'ini
+        # bloklamamak için skorlama basit tutuldu (blacklist
+        # lookup O(1), skor O(n)).
+        if field.get("strength_below"):
+            from ..core.password_strength import score_password
+
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            box.pack_start(entry, False, False, 0)
+            strength_lbl = Gtk.Label(xalign=0)
+            strength_lbl.set_use_markup(True)
+            strength_lbl.set_line_wrap(True)
+            strength_lbl.get_style_context().add_class("tiha-rationale")
+            box.pack_start(strength_lbl, False, False, 0)
+
+            def _update(_e, lbl=strength_lbl):
+                s = score_password(entry.get_text())
+                if not entry.get_text():
+                    lbl.set_markup("")
+                    return
+                colors = ("#c62828", "#e65100", "#f9a825",
+                          "#2e7d32", "#1b5e20")
+                color = colors[s.score]
+                main = (
+                    f'<span foreground="{color}"><b>Güç: '
+                    f'{GLib.markup_escape_text(s.label)} '
+                    f'({s.score}/4)</b></span>'
+                )
+                if s.warnings:
+                    warn = GLib.markup_escape_text(" ".join(s.warnings))
+                    lbl.set_markup(f'{main}  <small>{warn}</small>')
+                else:
+                    lbl.set_markup(main)
+
+            entry.connect("changed", _update)
+            _update(entry)  # ilk render (boş → boş etiket)
+
+            box._entry = entry  # type: ignore[attr-defined]
+            return box
         return entry
 
     def _field_value(self, key: str, field: dict) -> str:
@@ -906,6 +1008,10 @@ class ModulePage(Gtk.Box):
             return str(widget.get_active())  # True/False → "True"/"False"
         if kind == "file":
             # _make_field bunu HBox yaptı; içindeki Entry'e referans tuttuk
+            return widget._entry.get_text()  # type: ignore[attr-defined]
+        # strength_below ile sarmalanmış password kutusu — inner entry
+        # box._entry olarak saklandı.
+        if isinstance(widget, Gtk.Box) and hasattr(widget, "_entry"):
             return widget._entry.get_text()  # type: ignore[attr-defined]
         return widget.get_text()
 
@@ -997,7 +1103,12 @@ class ModulePage(Gtk.Box):
         thread.start()
 
     def _on_button_action_complete(self, result: ApplyResult) -> None:
-        self._finish_stream_dialog(result.summary, result.success)
+        self._finish_stream_dialog(
+            result.summary,
+            result.success,
+            details=result.details or "",
+            copyable=result.copyable or "",
+        )
         self._applying = False
         if getattr(self, "_active_button", None) is not None:
             self._active_button.set_sensitive(True)
@@ -1055,8 +1166,10 @@ class ModulePage(Gtk.Box):
         self.result_holder.pack_start(self._working_row, False, False, 0)
         self.result_holder.show_all()
 
-        if self.module.streams_output:
-            self._open_stream_dialog(f"{self.module.title} — uygulanıyor")
+        # Tüm adımlarda: canlı çıktı / sonuç için modal aç. Modül akış
+        # yayınlamıyorsa modal boş kalır ve iş bitince özet + detay
+        # oraya yazılır. Kapat düğmesi iş bitene kadar pasif kalır.
+        self._open_stream_dialog(f"{self.module.title} — uygulanıyor")
 
         thread = threading.Thread(
             target=self._apply_thread_body,
@@ -1155,13 +1268,52 @@ class ModulePage(Gtk.Box):
         self._stream_dialog = dlg
         dlg.show_all()
 
-    def _finish_stream_dialog(self, summary: str, success: bool) -> None:
-        """Akış bittiğinde modalı kapatılabilir hâle getirir."""
+    def _finish_stream_dialog(
+        self,
+        summary: str,
+        success: bool,
+        *,
+        details: str = "",
+        copyable: str = "",
+    ) -> None:
+        """Akış bittiğinde modalı kapatılabilir hâle getirir.
+
+        Modül akış yayınlamadıysa (ya da yaydıysa bile), sonuç
+        özeti + varsa ayrıntı ve kopyalanabilir rapor modal'ın metin
+        alanına da eklenir; kullanıcı modalı kapatmadan önce tüm
+        çıktıyı orada görsün, gerekirse kopyalasın diye.
+        """
         if self._stream_dialog is None:
             return
         self._stream_spinner.stop()
         prefix = "Tamamlandı" if success else "BAŞARISIZ"
         self._stream_status.set_text(f"{prefix} — {summary}")
+
+        if self._stream_buffer is not None:
+            end = self._stream_buffer.get_end_iter()
+            start = self._stream_buffer.get_start_iter()
+            has_content = self._stream_buffer.get_char_count() > 0
+            report = "\n\n".join(
+                part.strip() for part in (details, copyable) if part and part.strip()
+            )
+            trailing = f"\n───\nSonuç: {summary}\n"
+            if report:
+                trailing += "\n" + report + "\n"
+            if not has_content:
+                # Akış yayınlanmadıysa baştan yaz — çirkin ayraç olmasın.
+                self._stream_buffer.set_text(
+                    f"Sonuç: {summary}\n"
+                    + (("\n" + report + "\n") if report else "")
+                )
+            else:
+                self._stream_buffer.insert(end, trailing)
+            # En alta kaydır
+            end = self._stream_buffer.get_end_iter()
+            mark = self._stream_buffer.get_insert()
+            self._stream_buffer.place_cursor(end)
+            if self.stream_view is not None:
+                self.stream_view.scroll_mark_onscreen(mark)
+
         self._stream_close_btn.set_sensitive(True)
         self._stream_close_btn.grab_focus()
 
@@ -1176,7 +1328,12 @@ class ModulePage(Gtk.Box):
 
     def _apply_thread_done(self, result: ApplyResult) -> bool:
         self._applying = False
-        self._finish_stream_dialog(result.summary, result.success)
+        self._finish_stream_dialog(
+            result.summary,
+            result.success,
+            details=result.details or "",
+            copyable=result.copyable or "",
+        )
         # "Çalışıyor" göstergesini kaldır (result_holder temizlenecek)
         entry = JournalEntry.new(self.module.id, self.module.title)
         entry.summary = result.summary
@@ -1284,7 +1441,15 @@ class ModulePage(Gtk.Box):
             btn_row.pack_start(save_btn, False, False, 0)
             box.pack_start(btn_row, False, False, 0)
 
-        if result.success and self.module.undo_supported:
+        # "Bu adımı geri al" düğmesi yalnızca günlükte HÂLÂ geri
+        # alınabilir (applied statüsünde) bir kayıt varsa gösterilir.
+        # Aksi hâlde başarılı bir undo sonrası bile düğme yeniden çizilip
+        # tıklanınca "kayıt bulunamadı" hatasına yol açıyordu.
+        if (
+            result.success
+            and self.module.undo_supported
+            and self.journal.last_applied(self.module.id) is not None
+        ):
             undo_btn = Gtk.Button(label="Bu adımı geri al")
             undo_btn.get_style_context().add_class("destructive-action")
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
