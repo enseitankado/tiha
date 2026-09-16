@@ -20,6 +20,8 @@ from .m11_power_management import PowerManagementModule
 from .m12_ahenk_reset import AhenkResetModule
 from .m13_password_dialog import PasswordDialogModule
 from .m14_bios_password import BiosPasswordModule
+from .m15_wake_on_lan import WakeOnLanModule
+from .m16_grub_protection import GrubProtectionModule
 
 
 def all_modules() -> list[Module]:
@@ -43,7 +45,9 @@ def all_modules() -> list[Module]:
         TimeSyncModule(),
         HostnameModule(),
         PowerManagementModule(),
+        WakeOnLanModule(),
         AhenkResetModule(),
         BiosPasswordModule(),
+        GrubProtectionModule(),
         ImageSanitizeModule(),
     ]

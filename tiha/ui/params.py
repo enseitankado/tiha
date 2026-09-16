@@ -496,6 +496,77 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
     ],
+    "m15_wake_on_lan": [
+        {
+            "key": "enable_wol_listen",
+            "label": "Ağ kartını magic packet dinleme moduna al",
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "help": (
+                "İşaretlenirse imaja bir systemd servisi gömülür. Her "
+                "boot'ta bu servis birincil ağ kartını Wake-on-LAN "
+                "dinleme moduna alır (ethtool wol g). Bilgisayar "
+                "kapatıldığında kart magic packet dinlemede kalır; "
+                "merkez bilgisayardan 'wakeonlan <MAC>' komutuyla tahta "
+                "uzaktan açılabilir. Ayar kalıcı olmadığı için her "
+                "boot'ta yeniden yazılır. İşaretli değilse hiçbir "
+                "servis kurulmaz ve tahta uzaktan uyandırılamaz."
+            ),
+        },
+    ],
+    "m16_grub_protection": [
+        {
+            "key": "enable_grub_lock",
+            "label": "GRUB koruması etkin",
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "help": (
+                "İşaretlenirse GRUB önyükleme menüsünde 'e' (düzenle) "
+                "kipine girildiğinde ya da GRUB shell'ine ('c' tuşu) "
+                "düşüldüğünde aşağıdaki 'GRUB yönetici parolası' "
+                "alanına yazılan parola sorulur. Recovery girdisi de "
+                "menüden kaldırılır. Boot akışının kendisi bu "
+                "parolayı sormaz; yalnız menüye elle müdahale eden "
+                "kişi görür.\n\n"
+                "Neden gerekli? GRUB varsayılan olarak fiziksel "
+                "klavye erişimi olan herkese kernel komut satırını "
+                "düzenleme hakkı verir. Buraya 'init=/bin/bash' "
+                "yazılırsa sistem doğrudan root shell açar; oradan "
+                "da parola değiştirmek, diski okumak, tahtayı kalıcı "
+                "olarak ele geçirmek mümkündür. Bu kutucuk o vektörü "
+                "tek bir hash ile tüm klonlarda kapatır.\n\n"
+                "Nasıl çalışır? Adım, aşağıya yazdığınız parolanın "
+                "PBKDF2-SHA512 hash'ini /etc/grub.d/01_tiha_grub_password "
+                "içine yazar; /etc/grub.d/10_linux'ta menü girdilerine "
+                "--unrestricted bayrağı ekler (menü seçilirken parola "
+                "sorulmasın diye); /etc/default/grub'da "
+                "GRUB_DISABLE_RECOVERY=\"true\" yapar; update-grub "
+                "çalıştırır. Hash imaja gömüldüğü için aynı parola tüm "
+                "klonlarda geçerli olur; düz parola sistemde tutulmaz."
+            ),
+        },
+        {
+            "key": "grub_password",
+            "label": "GRUB yönetici parolası",
+            "type": "password",
+            "show_toggle": True,
+            "required": False,
+            "default": "",
+            "enable_when_field": "enable_grub_lock",
+            "help": (
+                "GRUB menü kipine ('e' tuşu) ya da GRUB shell'ine "
+                "('c' tuşu) girmeye çalışan kullanıcıdan istenecek "
+                "parola. Bu adımda girdiğiniz metnin PBKDF2-SHA512 "
+                "hash'i /etc/grub.d/01_tiha_grub_password içine "
+                "yazılır ve klon imajına gömülür; düz parola "
+                "sistemde tutulmaz. Kutucuk işaretsizken bu alan "
+                "pasiftir. Aynı parolayı bütün klonlar kullanır — "
+                "operatörün hatırlaması gereken tek bir parola olur."
+            ),
+        },
+    ],
 }
 
 
