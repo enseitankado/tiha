@@ -202,19 +202,23 @@ class WakeOnLanModule(Module):
         "modunda tutar. Böylece bakımcı merkez bilgisayarından tahtaya "
         "'magic packet' göndererek kapalı tahtayı uzaktan açabilir; sabah "
         "07:50'de tüm sınıflar açılmış hâlde 09:00 dersine hazır bekler.\n\n"
-        "Bu adımın çalışması için üç katman gerekir: (1) BIOS/UEFI'de "
-        "\"Wake on LAN\" seçeneğinin AÇIK olması — böylece bilgisayar "
-        "kapatıldığında ağ kartına standby güç verilir; (2) Linux tarafında "
-        "ethtool ile magic packet dinleme modu yazılması — TiHA'nın bu "
-        "adımda kurduğu servis her boot'ta bu ayarı tazeler çünkü bu ayar "
-        "kalıcı değildir; (3) Ethernet kablosunun takılı olması ve "
-        "switch portunun kapalı bilgisayara güç kesilmemesi.\n\n"
-        "BIOS ayarı imaj klonlamayla taşınmaz (BIOS ayarları anakartın "
-        "CMOS'unda tutulur, disk imajından bağımsızdır). Faz 2 Vestel "
-        "modellerinde fabrika ayarı olarak WoL genelde AÇIK gelir; sahada "
-        "her tahta için bir kez BIOS'a girip kontrol edilmesi önerilir. "
-        "Linux katmanı ise bu adımın kurduğu systemd servisi ile her "
-        "klonda otomatik hazır olur.\n\n"
+        "Bu adımın çalışması için üç katman gerekir: (1) BIOS/UEFI setup'ta "
+        "'Wake on LAN' (veya 'WOL') AÇIK; 'Power On by PCI-E' AÇIK; ve — "
+        "en kritik nokta — 'ErP' ile 'Deep Sleep' KAPALI olmalı. ErP veya "
+        "Deep Sleep açık bırakılırsa BIOS, tahta kapatıldığında ağ kartına "
+        "standby gücü kesecek şekilde davranır ve magic packet duyulmaz "
+        "(Linux WoL doğru olsa bile tahta uyanmaz). (2) Linux tarafında "
+        "ethtool ile magic packet dinleme modu yazılmalı — bu ayar kalıcı "
+        "olmadığı için TiHA'nın bu adımda kurduğu servis her boot'ta "
+        "yeniden yazar. (3) Ethernet kablosu takılı olmalı ve switch, "
+        "kapalı bilgisayarın portuna güç kesmemelidir.\n\n"
+        "BIOS ayarları imaj klonlamayla taşınmaz (CMOS'ta tutulur, disk "
+        "imajından bağımsızdır) — her tahta için bir kez elle yapılır. "
+        "Faz 2 Vestel modellerinde fabrika ayarı olarak WoL genelde AÇIK "
+        "gelir; ancak ErP/Deep Sleep açık gelebilir, bu yüzden sahada "
+        "her tahta için BIOS'a girip bu iki seçeneğin KAPALI olduğunu "
+        "doğrulamak gerekir. Linux katmanı ise bu adımın kurduğu systemd "
+        "servisi ile her klonda otomatik hazır olur.\n\n"
         "Merkezden uyandırma için bakımcı kendi bilgisayarında "
         "'wakeonlan <mac>' veya 'etherwake <mac>' komutunu kullanır. "
         "TiHA merkez betiği yazmaz; bakımcının kendi tarafında bir cron "
@@ -256,10 +260,18 @@ class WakeOnLanModule(Module):
             "uyandırılabilir."
         )
         lines.append("")
-        lines.append("Hatırlatma: BIOS'ta \"Wake on LAN\" seçeneği AÇIK olmalı.")
-        lines.append("Faz 2 Vestel'de fabrika ayarı genelde açık; klon başına")
-        lines.append("bir kez doğrulanması önerilir. Bu ayar disk imajıyla")
-        lines.append("taşınmaz (CMOS'ta tutulur, anakart başına).")
+        lines.append("BIOS setup'ta yapılması gereken ayarlar")
+        lines.append("(disk imajıyla taşınmaz, her tahtada bir kez elle):")
+        lines.append("  - 'Wake on LAN' / 'WOL'          → Enabled")
+        lines.append("  - 'Power On by PCI-E' / 'PCIe Wake' → Enabled")
+        lines.append("  - 'ErP' / 'ErP Ready'            → Disabled")
+        lines.append("  - 'Deep Sleep'                   → Disabled")
+        lines.append("")
+        lines.append("Kritik: ErP veya Deep Sleep AÇIK bırakılırsa BIOS")
+        lines.append("kapatma sonrası ağ kartına standby gücü kesilir ve")
+        lines.append("magic packet duyulmaz — Linux tarafındaki WoL doğru")
+        lines.append("olsa bile tahta uyanmaz. Faz 2 Vestel'de WoL fabrika")
+        lines.append("ayarı genelde açık; ErP/Deep Sleep ise açık gelebilir.")
         return "\n".join(lines)
 
     def apply(

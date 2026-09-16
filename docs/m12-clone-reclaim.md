@@ -1,6 +1,6 @@
 # 12. Adım — Klon-yeniden-talep (Ahenk)
 
-Bu belge, TiHA'nın 12. adımı `m12_ahenk_reset` (sihirbazda **"Klon Yeniden
+Bu belge, TiHA'nın 13. adımı `m12_ahenk_reset` (sihirbazda **"Klon Yeniden
 Talep"**) ile imaja gömülen *klon tespiti + Ahenk yeniden talep* akışını
 açıklar.
 
