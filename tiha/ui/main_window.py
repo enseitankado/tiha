@@ -33,6 +33,221 @@ log = get_logger(__name__)
 CSS_PATH = Path(__file__).resolve().parents[2] / "data" / "styles.css"
 
 
+# "Emeği Geçenler" diyaloğundaki bölümler ve satırlar. Her satır:
+# (görünen ad, url, lisans, açıklama). URL boşsa ad kalın metin olarak
+# çıkar, tıklanamaz.
+_CREDITS_SECTIONS: tuple[dict, ...] = (
+    {
+        "title": "Geliştirici",
+        "items": (
+            (
+                "Özgür Koca",
+                "https://github.com/enseitankado",
+                "—",
+                "TiHA'nın tasarımı, kodu ve sürdürülmesi.",
+            ),
+        ),
+    },
+    {
+        "title": "Pardus ve ETAP ekosistemi",
+        "items": (
+            (
+                "Pardus",
+                "https://www.pardus.org.tr/",
+                "Karışık (özgür yazılım)",
+                "Ulusal GNU/Linux dağıtımı; TiHA doğrudan Pardus ETAP 23 üzerine yazıldı.",
+            ),
+            (
+                "Pardus / ETAP kaynakları",
+                "https://github.com/pardus",
+                "GPL-3.0+",
+                "eta-* paketlerinin ortak deposu.",
+            ),
+            (
+                "eta-otp-lock",
+                "https://github.com/pardus/eta-otp-lock",
+                "GPL-3.0+",
+                "Öğretmen PIN mekanizması, @grup PIN'i, pam_otp; Öğretmen PIN adımının temeli.",
+            ),
+            (
+                "eta-otp-cli",
+                "https://github.com/pardus/eta-otp-cli",
+                "GPL-3.0+",
+                "eta-otp-lock'un komut satırı arayüzü.",
+            ),
+            (
+                "eta-112",
+                "https://github.com/pardus/eta-112",
+                "GPL-3.0+",
+                "Vestel Faz 2 BIOS'una supervisor parola yazan araç; BIOS parolası adımı bunu kullanır.",
+            ),
+            (
+                "eta-light-mode",
+                "https://github.com/pardus/eta-light-mode",
+                "GPL-3.0+",
+                "Düşük donanımlı tahtalar için hafif arayüz modu.",
+            ),
+            (
+                "Ahenk / Lider",
+                "https://github.com/Pardus-LiderAhenk",
+                "GPL-3.0+",
+                "Merkezi tahta yönetim istemcisi ve sunucusu; klon sonrası kayıt yenileme buna teslim eder.",
+            ),
+        ),
+    },
+    {
+        "title": "Sistem araçları",
+        "items": (
+            (
+                "Debian",
+                "https://www.debian.org/",
+                "Karışık (DFSG)",
+                "Pardus'un tabanı.",
+            ),
+            (
+                "systemd",
+                "https://systemd.io/",
+                "LGPL-2.1+",
+                "logind, servisler, path unit'ları; birçok adım bu altyapıyı kullanır.",
+            ),
+            (
+                "GNU GRUB",
+                "https://www.gnu.org/software/grub/",
+                "GPL-3.0+",
+                "PBKDF2 parola hash mekanizması (GRUB koruması adımı).",
+            ),
+            (
+                "rsyslog",
+                "https://www.rsyslog.com/",
+                "GPL-3.0 / LGPL-3.0",
+                "Dayanıklı merkezi log iletiminin belkemiği.",
+            ),
+            (
+                "Prometheus node_exporter",
+                "https://github.com/prometheus/node_exporter",
+                "Apache-2.0",
+                "Opsiyonel metrik dışa aktarımı (CPU, RAM, disk, sıcaklık, ağ, boot).",
+            ),
+            (
+                "smartmontools",
+                "https://www.smartmontools.org/",
+                "GPL-2.0+",
+                "SMART disk sağlığı izleme.",
+            ),
+            (
+                "lm-sensors",
+                "https://github.com/lm-sensors/lm-sensors",
+                "LGPL-2.1+",
+                "Sıcaklık okuma.",
+            ),
+            (
+                "ethtool",
+                "https://mj.ucw.cz/sw/ethtool/",
+                "GPL-2.0",
+                "Wake-on-LAN dinleme modunun anahtarı.",
+            ),
+        ),
+    },
+    {
+        "title": "Arayüz ve dil",
+        "items": (
+            (
+                "Python 3",
+                "https://www.python.org/",
+                "PSF-2.0",
+                "TiHA'nın dili.",
+            ),
+            (
+                "GTK 3",
+                "https://www.gtk.org/",
+                "LGPL-2.1+",
+                "Sihirbaz penceresi, form alanları, canlı çıktı modali.",
+            ),
+            (
+                "PyGObject",
+                "https://pygobject.gnome.org/",
+                "LGPL-2.1+",
+                "GTK'nın Python bağlaması.",
+            ),
+        ),
+    },
+    {
+        "title": "Veri kümeleri ve algoritmalar",
+        "items": (
+            (
+                "SecLists",
+                "https://github.com/danielmiessler/SecLists",
+                "MIT",
+                "En yaygın 10.000 parolanın listesi (Daniel Miessler ve katkıcılar); Kullanıcı parolaları adımı bunu kullanır.",
+            ),
+            (
+                "zxcvbn",
+                "https://github.com/dropbox/zxcvbn",
+                "MIT",
+                "Parola gücü skorlama fikri (Dropbox); TiHA basit bir uyarlamasını çalıştırır.",
+            ),
+        ),
+    },
+    {
+        "title": "Yapay zekâ desteği",
+        "items": (
+            (
+                "Claude & Claude Code",
+                "https://claude.com/claude-code",
+                "Ticari servis (Anthropic)",
+                "Kod tasarımı, mimari kararlar, çok sayıda modülün iskeleti ve bu diyaloğun kendisi de dahil geliştirmede eşlik etti.",
+            ),
+        ),
+    },
+    {
+        "title": "Hedef platform ve saha",
+        "items": (
+            (
+                "Vestel Faz 2 E-Tahta",
+                "",
+                "Donanım",
+                "TiHA'nın öncelikli hedef donanımı; her modül bu donanımda doğrulanır.",
+            ),
+            (
+                "MEB EBA programı",
+                "https://www.eba.gov.tr/",
+                "Devlet programı",
+                "İhtiyacın kaynağı; PIN, sanitize ve klonlama akışları bu programın günlük gerçeklerine göre biçimlendi.",
+            ),
+            (
+                "Öğretmenler ve okul yöneticileri",
+                "",
+                "Saha",
+                "Geri bildirim ve saha testi için.",
+            ),
+        ),
+    },
+    {
+        "title": "TiHA'ya ulaşmak",
+        "items": (
+            (
+                "Kaynak kodu",
+                "https://github.com/enseitankado/tiha",
+                "GPL-3.0+",
+                "Kaynak kodu, sürüm geçmişi ve dokümantasyon.",
+            ),
+            (
+                "Hata bildirimi ve öneri",
+                "https://github.com/enseitankado/tiha/issues",
+                "GitHub Issues",
+                "Doğrudan GitHub üzerinden.",
+            ),
+            (
+                "E-posta",
+                "mailto:ozgur.koca@linux.org.tr",
+                "İletişim",
+                "Sorun, öneri ya da geri bildirim için doğrudan yazabilirsiniz.",
+            ),
+        ),
+    },
+)
+
+
 class TiHAWindow(Gtk.Window):
     """Ana pencere — eta stilinde kompakt ve dokunmatik-uyumlu."""
 
@@ -235,157 +450,63 @@ class TiHAWindow(Gtk.Window):
 
     def _show_credits_dialog(self) -> None:
         """TiHA'nın omzunda durduğu açık kaynak projeler, veri kümeleri
-        ve ekipler için teşekkür diyaloğu."""
+        ve ekipler için teşekkür diyaloğu — bölümlü, ızgara tabanlı,
+        her satırda lisans rozetiyle."""
         dlg = Gtk.Dialog(title="Emeği Geçenler", transient_for=self, modal=True)
         dlg.add_button("Kapat", Gtk.ResponseType.CLOSE)
-        dlg.set_default_size(720, 620)
+        dlg.set_default_size(820, 660)
 
         content = dlg.get_content_area()
-        content.set_spacing(6)
-        content.set_margin_top(12)
-        content.set_margin_bottom(12)
-        content.set_margin_start(14)
-        content.set_margin_end(14)
+        content.set_spacing(0)
+        content.set_margin_top(0)
+        content.set_margin_bottom(0)
+        content.set_margin_start(0)
+        content.set_margin_end(0)
 
-        intro = Gtk.Label(xalign=0)
-        intro.set_line_wrap(True)
-        intro.set_max_width_chars(88)
-        intro.set_markup(
-            "<b>TiHA</b>, kendisi küçük bir Python sihirbazı olsa da "
-            "büyük ve olgun bir açık kaynak ekosistemin omuzlarında "
-            "duruyor. Aşağıdaki proje, ekip ve topluluklara — her "
-            "adımın altında görünmeyen emek verenlere — teşekkür "
-            "eder."
+        # --- Başlık bandı ---
+        header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        header.set_margin_top(18)
+        header.set_margin_bottom(14)
+        header.set_margin_start(22)
+        header.set_margin_end(22)
+
+        title_lbl = Gtk.Label(xalign=0)
+        title_lbl.set_markup(
+            '<span size="xx-large" weight="bold">Emeği Geçenler</span>'
         )
-        content.pack_start(intro, False, False, 0)
+        header.pack_start(title_lbl, False, False, 0)
 
+        subtitle = Gtk.Label(xalign=0)
+        subtitle.set_line_wrap(True)
+        subtitle.set_max_width_chars(96)
+        subtitle.set_markup(
+            '<span foreground="#4b5563">TiHA, kendisi küçük bir Python '
+            'sihirbazı olsa da büyük ve olgun bir açık kaynak ekosistemin '
+            'omuzlarında duruyor. Aşağıdaki proje, veri kümesi ve '
+            'topluluklara — her adımın altında görünmeyen emek verenlere '
+            '— teşekkür eder.</span>'
+        )
+        header.pack_start(subtitle, False, False, 0)
+        content.pack_start(header, False, False, 0)
+
+        # İnce ayırıcı çizgi
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        content.pack_start(sep, False, False, 0)
+
+        # --- Bölümler için ScrolledWindow ---
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.set_shadow_type(Gtk.ShadowType.IN)
+        scrolled.set_shadow_type(Gtk.ShadowType.NONE)
         scrolled.set_vexpand(True)
 
-        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        body.set_margin_top(10)
-        body.set_margin_bottom(10)
-        body.set_margin_start(12)
-        body.set_margin_end(12)
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        body.set_margin_top(18)
+        body.set_margin_bottom(20)
+        body.set_margin_start(22)
+        body.set_margin_end(22)
 
-        def link(url: str, text: str) -> str:
-            return (
-                f'<a href="{GLib.markup_escape_text(url)}">'
-                f'{GLib.markup_escape_text(text)}</a>'
-            )
-
-        def section(title: str, entries: list[str]) -> None:
-            head = Gtk.Label(xalign=0)
-            head.set_markup(
-                f'<b><span size="large">{GLib.markup_escape_text(title)}</span></b>'
-            )
-            body.pack_start(head, False, False, 0)
-            for entry in entries:
-                lbl = Gtk.Label(xalign=0)
-                lbl.set_line_wrap(True)
-                lbl.set_max_width_chars(88)
-                lbl.set_use_markup(True)
-                lbl.set_track_visited_links(False)
-                lbl.set_markup(f"• {entry}")
-                lbl.connect("activate-link", self._on_credits_link)
-                body.pack_start(lbl, False, False, 0)
-
-        section("Geliştirici", [
-            (
-                "<b>Özgür Koca</b> — TiHA'nın tasarımı, kodu ve sürdürülmesi. "
-                + link("https://github.com/enseitankado", "github.com/enseitankado")
-            ),
-        ])
-
-        section("Pardus ve ETAP ekosistemi", [
-            link("https://www.pardus.org.tr/", "Pardus")
-            + " — ulusal GNU/Linux dağıtımı; TiHA doğrudan Pardus ETAP 23 "
-              "üzerine yazıldı.",
-            link("https://github.com/pardus", "Pardus GitHub organizasyonu")
-            + " — ETAP entegrasyonlarının kaynağı.",
-            "<b>eta-otp-lock, eta-otp-cli</b> — öğretmen PIN mekanizması, "
-            "@grup PIN'i ve pam_otp; TiHA'nın Öğretmen PIN adımının temeli.",
-            "<b>eta-112</b> — Vestel Faz 2 BIOS'una supervisor parola yazan "
-            "araç; BIOS yönetici parolası adımı bunu kullanır.",
-            "<b>eta-light-mode</b> — düşük donanımlı tahtalar için hafif "
-            "arayüz modu; Başarım adımı bu paketin sistem geneli kurulumunu "
-            "yönetir.",
-            "<b>Ahenk / Lider</b> — merkezi tahta yönetim istemcisi; TiHA "
-            "klon sonrası kayıt yenileme sırasında bu istemciye teslim eder.",
-        ])
-
-        section("Kullanılan sistem araçları", [
-            link("https://www.debian.org/", "Debian") + " — Pardus'un tabanı.",
-            link("https://systemd.io/", "systemd") + " — logind, servisler, "
-            "path unit'ları; birçok adım bu altyapıyı kullanır.",
-            link("https://www.gnu.org/software/grub/", "GNU GRUB")
-            + " — GRUB koruması adımı için pbkdf2 hash mekanizması.",
-            link("https://www.rsyslog.com/", "rsyslog")
-            + " — dayanıklı merkezi log iletiminin belkemiği.",
-            link("https://prometheus.io/docs/guides/node-exporter/", "Prometheus node_exporter")
-            + " — opsiyonel metrik izleme.",
-            link("https://www.smartmontools.org/", "smartmontools")
-            + " ve "
-            + link("https://github.com/lm-sensors/lm-sensors", "lm-sensors")
-            + " — disk sağlığı ve sıcaklık izleme.",
-            link("https://mj.ucw.cz/sw/ethtool/", "ethtool")
-            + " — Wake-on-LAN dinleme modunun anahtarı.",
-            link("https://en.wikipedia.org/wiki/Wake-on-LAN", "Wake-on-LAN")
-            + " — Magic Packet standardı.",
-        ])
-
-        section("Arayüz ve dil", [
-            link("https://www.python.org/", "Python 3") + " — TiHA'nın dili.",
-            link("https://www.gtk.org/", "GTK 3") + " ve "
-            + link("https://pygobject.gnome.org/", "PyGObject")
-            + " — sihirbaz penceresi, form alanları, canlı çıktı modali.",
-        ])
-
-        section("Veri kümeleri ve algoritmalar", [
-            link(
-                "https://github.com/danielmiessler/SecLists",
-                "SecLists",
-            )
-            + " (Daniel Miessler ve katkıcılar) — en yaygın 10.000 "
-              "parolanın listesi; Kullanıcı parolaları adımının "
-              "\"yaygın parola engeli\" bunu kullanır.",
-            link("https://github.com/dropbox/zxcvbn", "zxcvbn")
-            + " (Dropbox) — parola gücü skorlamasının fikri; TiHA basit "
-              "bir uyarlamasını çalıştırır.",
-        ])
-
-        section("Yapay zekâ desteği", [
-            link("https://www.anthropic.com/", "Anthropic Claude")
-            + " ve "
-            + link("https://claude.com/claude-code", "Claude Code")
-            + " — kod tasarımı, mimari kararlar, çok sayıda modülün "
-              "iskeleti ve bu diyaloğun kendisi de dahil TiHA'nın "
-              "geliştirme sürecinin büyük kısmında eşlik etti.",
-        ])
-
-        section("Hedef platform ve saha", [
-            "<b>Vestel Faz 2 E-Tahta</b> — TiHA'nın öncelikli hedef "
-            "donanımı; her modül bu donanımda doğrulanır.",
-            "<b>Millî Eğitim Bakanlığı E-Tahta / EBA programı</b> — "
-            "TiHA'yı ortaya çıkaran ihtiyacın kaynağı; PIN, sanitize "
-            "ve klonlama akışları bu programın günlük gerçeklerine göre "
-            "biçimlendi.",
-            "<b>Tahtayı gündelik kullanan öğretmenler ve okul "
-            "yöneticileri</b> — geri bildirim ve saha testi için.",
-        ])
-
-        section("Kısaca", [
-            "TiHA'nın kaynak kodu ve sürüm geçmişi: "
-            + link("https://github.com/enseitankado/tiha",
-                   "github.com/enseitankado/tiha"),
-            "Hata bildirimi ve öneri: "
-            + link("https://github.com/enseitankado/tiha/issues",
-                   "github.com/enseitankado/tiha/issues"),
-            "Sorun, öneri ya da geri bildirim için doğrudan e-posta: "
-            "ozgur.koca@linux.org.tr",
-        ])
+        for sect in _CREDITS_SECTIONS:
+            body.pack_start(self._credits_section(sect), False, False, 0)
 
         scrolled.add(body)
         content.pack_start(scrolled, True, True, 0)
@@ -393,6 +514,66 @@ class TiHAWindow(Gtk.Window):
         dlg.show_all()
         dlg.run()
         dlg.destroy()
+
+    def _credits_section(self, section: dict) -> Gtk.Widget:
+        """Bir bölümü (başlık + üç sütunlu ızgara) render eder."""
+        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+
+        head = Gtk.Label(xalign=0)
+        head.set_markup(
+            f'<span size="large" weight="bold">'
+            f'{GLib.markup_escape_text(section["title"])}</span>'
+        )
+        wrap.pack_start(head, False, False, 0)
+
+        # İnce alt çizgi
+        thin = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        thin.set_margin_bottom(4)
+        wrap.pack_start(thin, False, False, 0)
+
+        grid = Gtk.Grid()
+        grid.set_column_spacing(16)
+        grid.set_row_spacing(8)
+        for row_idx, (name, url, license_txt, desc) in enumerate(section["items"]):
+            # 0. sütun: ad — varsa bağlantı, yoksa kalın metin
+            name_lbl = Gtk.Label(xalign=0)
+            name_lbl.set_use_markup(True)
+            name_lbl.set_track_visited_links(False)
+            name_lbl.set_valign(Gtk.Align.START)
+            if url:
+                name_lbl.set_markup(
+                    f'<a href="{GLib.markup_escape_text(url)}">'
+                    f'<span weight="bold">{GLib.markup_escape_text(name)}</span></a>'
+                )
+                name_lbl.connect("activate-link", self._on_credits_link)
+            else:
+                name_lbl.set_markup(
+                    f'<span weight="bold">{GLib.markup_escape_text(name)}</span>'
+                )
+            grid.attach(name_lbl, 0, row_idx, 1, 1)
+
+            # 1. sütun: lisans rozeti — küçük, monospace, gri arka planlı
+            lic_lbl = Gtk.Label(xalign=0)
+            lic_lbl.set_valign(Gtk.Align.START)
+            lic_lbl.set_markup(
+                f'<span background="#eef2f7" foreground="#334155" '
+                f'font_desc="Monospace 9"> '
+                f'{GLib.markup_escape_text(license_txt)}'
+                f' </span>'
+            )
+            grid.attach(lic_lbl, 1, row_idx, 1, 1)
+
+            # 2. sütun: açıklama — sarılabilen ana metin
+            desc_lbl = Gtk.Label(xalign=0)
+            desc_lbl.set_line_wrap(True)
+            desc_lbl.set_max_width_chars(56)
+            desc_lbl.set_hexpand(True)
+            desc_lbl.set_valign(Gtk.Align.START)
+            desc_lbl.set_markup(GLib.markup_escape_text(desc))
+            grid.attach(desc_lbl, 2, row_idx, 1, 1)
+
+        wrap.pack_start(grid, False, False, 0)
+        return wrap
 
     def _on_credits_link(self, _label, uri: str) -> bool:
         """Credits diyaloğundaki bağlantıları kullanıcının X oturumundaki
