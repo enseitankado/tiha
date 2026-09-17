@@ -991,12 +991,17 @@ class ModulePage(Gtk.Box):
             strength_lbl.set_use_markup(True)
             strength_lbl.set_line_wrap(True)
             strength_lbl.get_style_context().add_class("tiha-rationale")
+            # Boşken hem show_all'a takılmasın hem de dikey yer kaplayıp
+            # yardım metnini parola kutusundan uzağa itmesin: default'ta
+            # gizli; parola yazıldığında görünür olur.
+            strength_lbl.set_no_show_all(True)
             box.pack_start(strength_lbl, False, False, 0)
 
             def _update(_e, lbl=strength_lbl):
                 s = score_password(entry.get_text())
                 if not entry.get_text():
                     lbl.set_markup("")
+                    lbl.set_visible(False)
                     return
                 colors = ("#c62828", "#e65100", "#f9a825",
                           "#2e7d32", "#1b5e20")
@@ -1011,9 +1016,10 @@ class ModulePage(Gtk.Box):
                     lbl.set_markup(f'{main}  <small>{warn}</small>')
                 else:
                     lbl.set_markup(main)
+                lbl.set_visible(True)
 
             entry.connect("changed", _update)
-            _update(entry)  # ilk render (boş → boş etiket)
+            _update(entry)  # ilk render (boş → gizli etiket)
 
             box._entry = entry  # type: ignore[attr-defined]
             return box
