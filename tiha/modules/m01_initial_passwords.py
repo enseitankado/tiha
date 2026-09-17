@@ -6,10 +6,12 @@ Ne yapar?
   bırakılırsa hesaba dokunulmaz).
 - İsteğe bağlı olarak `ogretmen`/`ogrenci` ortak hesaplarını sistemden
   tamamen siler.
-- İsteğe bağlı olarak "yedek hesap sayısı" kadar ``ogretmenNN`` biçiminde
+- İsteğe bağlı olarak "yedek hesap sayısı" kadar ``ogretmenN`` biçiminde
   boş yerel hesap açar (useradd + EBA standart cihaz grupları +
-  parola kilitli). PIN anahtarları için "Öğretmen PIN anahtarları"
-  adımı ayrıca gerekir; o adım bu hesapları da otomatik yakalar.
+  parola kilitli). Eski kurulumlardan kalma ``ogretmen0N`` /
+  ``ogretmen.N`` biçimindeki hesaplara dokunulmaz; o slot mevcut
+  sayılır. PIN anahtarları için "Öğretmen PIN anahtarları" adımı
+  ayrıca gerekir; o adım bu hesapları da otomatik yakalar.
 - Parolalar SHA-512 hash olarak doğrudan `/etc/shadow` dosyasına yazılır.
 
 Diğer hesaplara dokunulmaz; bu adım kimseyi kilitlemez.
@@ -261,10 +263,11 @@ class InitialPasswordsModule(Module):
     def suggested_reserve_count(self) -> int:
         """"Yedek hesap sayısı" kutusunun açılışta görüneceği değer.
 
-        Sistemde ogretmen01 … ogretmen10 duruyorsa kutu 10 gelir; adım
+        Sistemde ogretmen1 … ogretmen10 duruyorsa kutu 10 gelir; adım
         yeniden uygulandığında yönetici farkında olmadan 11. hesabı
         açmaz, mevcut hesaplar da (m03'ün PIN anahtarlarıyla birlikte)
-        korunur.
+        korunur. Eski kurulumlardaki 'ogretmen01' biçimi de aynı
+        sayaça girer.
         """
         # Lazy import: m03 heavy imports (pyotp, requests). m01 açılışta
         # yavaşlamasın diye burada import ediyoruz.
@@ -291,7 +294,7 @@ class InitialPasswordsModule(Module):
         lines.append("Yedek hesaplar:")
         if existing_reserve > 0:
             lines.append(
-                f"    - Sistemde ogretmen01 … ogretmen{existing_reserve:02d} "
+                f"    - Sistemde ogretmen1 … ogretmen{existing_reserve} "
                 f"hazır ({existing_reserve} yedek hesap)."
             )
             lines.append(
@@ -303,9 +306,9 @@ class InitialPasswordsModule(Module):
         else:
             lines.append("    - Sistemde henüz yedek hesap yok.")
             lines.append(
-                "      Kutuya yazacağınız sayı kadar ogretmen01 … "
-                "biçiminde hesap açılır; PIN anahtarları 'Öğretmen "
-                "PIN anahtarları' adımında üretilir."
+                "      Kutuya yazacağınız sayı kadar ogretmen1, "
+                "ogretmen2 … biçiminde hesap açılır; PIN anahtarları "
+                "'Öğretmen PIN anahtarları' adımında üretilir."
             )
 
         # Parola değişince bayatlayacak anahtarlıklar — kullanıcının
@@ -448,19 +451,35 @@ class InitialPasswordsModule(Module):
                 progress(f"\n{reserve} yedek hesap hazırlanıyor "
                          "(useradd + EBA cihaz grupları + parola kilitli)…")
             for i in range(1, reserve + 1):
-                # eta-otp-cli konvansiyonu: 'ogretmenNN'. Aynı ad m03'ün
-                # dış-araç yolunun normalize ettiği ada birebir uyuyor.
-                username = f"ogretmen{i:02d}"
-                full_name = f"Ogretmen {i:02d}"
-                already_existed = user_exists(username)
-                if create_user(username, full_name=full_name):
-                    if already_existed:
-                        skipped_reserve.append(username)
-                    else:
-                        created_reserve.append(username)
+                # Yeni konvansiyon: sıfır önekli değil, sade 'ogretmenN'
+                # ("Ogretmen N" display'i eta-otp-cli tarafından da aynı
+                # sonuca normalize edilir). Eski kurulumlardan kalma
+                # 'ogretmen0N', 'ogretmen.N' veya 'ogretmen.0N' hesapları
+                # da varsa mevcut kabul et — o slotu yeniden açma.
+                username = f"ogretmen{i}"
+                full_name = f"Ogretmen {i}"
+                legacy_variants = (
+                    f"ogretmen{i:02d}",
+                    f"ogretmen.{i}",
+                    f"ogretmen.{i:02d}",
+                )
+                existing_variant: str | None = None
+                if user_exists(username):
+                    existing_variant = username
+                else:
+                    for v in legacy_variants:
+                        if user_exists(v):
+                            existing_variant = v
+                            break
+                if existing_variant:
+                    skipped_reserve.append(existing_variant)
                     if progress:
-                        marker = "≈" if already_existed else "+"
-                        progress(f"  {marker} {username}")
+                        progress(f"  ≈ {existing_variant}")
+                    continue
+                if create_user(username, full_name=full_name):
+                    created_reserve.append(username)
+                    if progress:
+                        progress(f"  + {username}")
                 else:
                     if progress:
                         progress(f"  ✗ {username} oluşturulamadı")

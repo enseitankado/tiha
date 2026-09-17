@@ -6,9 +6,9 @@ hesabı oluşturur (zaten varsa geçer), her hesaba kriptografik olarak
 güvenli bir PIN kodu (zaman tabanlı TOTP) BASE32 anahtarı atar ve
 bu anahtarları Pardus ETAP'ın PAM modülünün okuduğu
 /etc/otp-secrets.json dosyasına yazar. Sistemde önceden oluşturulmuş
-yedek hesaplar (ogretmen01 …) da otomatik olarak PIN listesine
-eklenir; yedek hesap ÜRETME işlemi artık "Kullanıcı parolaları"
-adımının işi.
+yedek hesaplar (ogretmen1 …; eski kurulumlarda ogretmen01) otomatik
+olarak PIN listesine eklenir; yedek hesap ÜRETME işlemi artık
+"Kullanıcı parolaları" adımının işi.
 
 LightDM greeter cache desteği:
 50+ kullanıcı oluşturulduğunda, LightDM'in tüm kullanıcıları gösterebilmesi
@@ -958,9 +958,10 @@ class OTPSecretsModule(Module):
 
         lines.append("Not: Bu adım yalnız OTP anahtarları oluşturur; "
                      "sistem kullanıcı hesaplarını oluşturmaz. Yedek "
-                     "hesaplar (ogretmen01 …) 'Kullanıcı parolaları' "
-                     "adımında oluşturulur; bu adım sistemde bulduğu "
-                     "yedek hesapları otomatik olarak PIN listesine ekler.")
+                     "hesaplar (ogretmen1, ogretmen2 …) 'Kullanıcı "
+                     "parolaları' adımında oluşturulur; bu adım sistemde "
+                     "bulduğu yedek hesapları otomatik olarak PIN "
+                     "listesine ekler.")
         lines.append("")
         lines.append("Not: Anahtarı zaten olan hesaplara dokunulmaz — "
                      "yalnızca eksikler tamamlanır. Öğretmenlerin "
@@ -1054,14 +1055,26 @@ class OTPSecretsModule(Module):
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
 
-        # Yedek hesaplar (ogretmen01 … ogretmenNN) artık m01
+        # Yedek hesaplar (ogretmen1 … ogretmenN, eski kurulumlarda
+        # ogretmen01 / ogretmen.N / ogretmen.01 biçimi de olabilir) m01
         # "Kullanıcı parolaları" adımında oluşturuluyor. Burada yalnızca
-        # sistemde bulduklarımızı PIN listesine ekliyoruz — display adı
-        # 'Ogretmen NN' olarak veriyoruz ki hem eta-otp-cli hem dahili
-        # normalize yolu doğru kullanıcıya erişsin.
+        # sistemde bulduklarımızı yakalıyoruz: her indeks için hangi
+        # varyant varsa onu (normalize edilmiş kullanıcı adı olarak
+        # birebir) PIN üretim listesine ekliyoruz. Aynı liste grup
+        # üyeliği hedefleri için de sonra kullanılıyor.
         reserve_existing = count_reserve_accounts()
+        reserve_usernames: list[str] = []
         for i in range(1, reserve_existing + 1):
-            teacher_names.append(f"Ogretmen {i:02d}")
+            for candidate in (
+                f"ogretmen{i}",
+                f"ogretmen{i:02d}",
+                f"ogretmen.{i}",
+                f"ogretmen.{i:02d}",
+            ):
+                if user_exists(candidate):
+                    reserve_usernames.append(candidate)
+                    teacher_names.append(candidate)
+                    break
 
         # Opsiyonel: etapadmin için de PIN üret. Sistem yöneticisi
         # parolasını paylaşmadan birine sadece o anlık 6 haneli PIN'i
@@ -1116,16 +1129,8 @@ class OTPSecretsModule(Module):
                 details="Ayrıntı için /var/log/tiha/tiha.log dosyasına bakın.",
             )
 
-        # Yedek hesap kullanıcı adlarını topla (m01 tarafında oluşturulmuş
-        # olabilir; sistemde hem 'ogretmenNN' hem eski 'ogretmen.NN' varsa
-        # her ikisini de yakala). Grup üyeliği ve auto-group izleyici bu
-        # listeyi hedef alır.
-        reserve_usernames: list[str] = []
-        for i in range(1, reserve_existing + 1):
-            for candidate in (f"ogretmen{i:02d}", f"ogretmen.{i:02d}"):
-                if user_exists(candidate):
-                    reserve_usernames.append(candidate)
-                    break
+        # reserve_usernames yukarıda apply girişinde hesaplandı; grup
+        # üyeliği ve auto-group izleyici aşağıda o listeyi kullanır.
 
         # Her hesap için passwd GECOS (ad/soyad) alanını yaz.
         self._apply_gecos(teacher_names, cli_used=bool(cli_script), progress=progress)

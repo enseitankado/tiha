@@ -51,13 +51,15 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "max": 999,
             "step": 1,
             "help": (
-                "Sonradan okula atanacak öğretmenler için ogretmen01, "
-                "ogretmen02 … biçiminde boş hesaplar hazırlar. Her yedek "
+                "Sonradan okula atanacak öğretmenler için ogretmen1, "
+                "ogretmen2 … biçiminde boş hesaplar hazırlar. Her yedek "
                 "hesap için ev dizini açılır (useradd), hesap EBA QR / "
                 "eta-usb-login ile aynı standart cihaz gruplarına (ses, "
                 "USB, kamera, yazıcı vb.) eklenir ve parola kilitli "
-                "tutulur. İmaj alındığında bu hesaplar tüm klon "
-                "tahtalara birlikte gider. PIN anahtarları için "
+                "tutulur. Eski kurulumlardan kalma ogretmen01 / "
+                "ogretmen.1 biçimindeki hesaplar da mevcut sayılır — "
+                "üzerine yazılmaz. İmaj alındığında bu hesaplar tüm "
+                "klon tahtalara birlikte gider. PIN anahtarları için "
                 "\"Öğretmen PIN anahtarları\" adımı gerekir; o adım bu "
                 "hesapları da otomatik olarak PIN üretim listesine "
                 "ekler."
