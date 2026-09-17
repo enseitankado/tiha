@@ -216,6 +216,15 @@ textview.tiha-placeholder text selection {
     margin-top: 10px;
 }
 
+/* Salt okunur alanlar ("readonly"): değer modülden gelir, kullanıcı
+   yalnızca görür/kopyalar. Düzenlenebilir kutulardan ayrışsın diye
+   soluk zemin. */
+entry.tiha-readonly {
+    background-image: none;
+    background-color: alpha(#000000, 0.04);
+    color: alpha(currentColor, 0.85);
+}
+
 /* Açıklama etiketlerinde satır arası boşluk */
 label.tiha-rationale {
     margin-bottom: 4px;

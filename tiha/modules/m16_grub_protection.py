@@ -18,8 +18,11 @@ kapatır.
 Nasıl çalışır?
 - Kullanıcının form alanına yazdığı parolanın PBKDF2-SHA512 hash'i
   ``/etc/grub.d/01_tiha_grub_password`` içine yazılır; superuser
-  ``tiha`` tanımlanır. GRUB açılışta bu dosyayı okuduğu için ``e``
-  kipi ve GRUB shell bu parolayı sorar.
+  ``etapadmin`` tanımlanır. GRUB açılışta bu dosyayı okuduğu için ``e``
+  kipi ve GRUB shell önce kullanıcı adını, sonra bu parolayı sorar.
+  Ad formda salt okunur bir alanda gösterilir; GRUB superuser'ı
+  sistemdeki ``etapadmin`` hesabından bağımsızdır, yalnız operatörün
+  tanıdık bir ad yazması için aynı seçilmiştir.
 - ``/etc/grub.d/10_linux`` içindeki ``CLASS="..."`` satırına
   ``--unrestricted`` bayrağı eklenir. Böylece menü girdisi seçilirken
   parola sorulmaz; sadece ``e`` düzenlemesi ve GRUB shell parolalıdır.
@@ -54,7 +57,11 @@ GRUB_LOCKDOWN_INCLUDE = Path("/etc/grub.d/01_tiha_grub_password")
 GRUB_LINUX_SCRIPT = Path("/etc/grub.d/10_linux")
 GRUB_DEFAULTS = Path("/etc/default/grub")
 
-SUPERUSER = "tiha"
+# GRUB superuser adı. Sistemdeki etapadmin hesabıyla ilgisi yoktur
+# (GRUB kendi kullanıcı listesini tutar); operatör açılış ekranında
+# tanıdık bir ad yazsın diye aynı seçildi. Formda salt okunur alanda
+# gösterilir — bkz. params.py "grub_username".
+SUPERUSER = "etapadmin"
 PBKDF2_ITERATIONS = 10000
 
 # Debian 12 (Pardus ETAP 23) /etc/grub.d/10_linux'ün 34. satırında
@@ -141,7 +148,7 @@ class GrubProtectionModule(Module):
         "üzerinden de açıktır.\n\n"
         "Bu adım aşağıdaki 'GRUB yönetici parolası' alanına "
         "yazdığınız parolayı PBKDF2-SHA512 hash'i olarak GRUB'a "
-        "tanımlar (superuser adı: ``tiha``), menü girdilerini "
+        "tanımlar (kullanıcı adı: ``etapadmin``), menü girdilerini "
         "``--unrestricted`` işaretler ve recovery girdisini kapatır. "
         "Boot akışı bu parolayı sormaz; yalnız kullanıcı menüde "
         "``e`` (düzenle) kipine girdiğinde ya da GRUB shell'ine "
@@ -152,6 +159,13 @@ class GrubProtectionModule(Module):
         "hiçbir değişiklik yapmaz. Düz parola sistemde tutulmaz; "
         "imaja yalnız hash gömülür."
     )
+
+    def superuser_name(self) -> str:
+        """Formdaki salt okunur "GRUB kullanıcı adı" alanının değeri
+        (params.py → ``default_from``). Tek kaynak burasıdır; ad
+        değişirse form, önizleme ve GRUB'a yazılan dosya birlikte
+        değişir."""
+        return SUPERUSER
 
     def preview(self) -> str:
         include_exists = GRUB_LOCKDOWN_INCLUDE.exists()

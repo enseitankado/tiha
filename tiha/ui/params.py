@@ -1,9 +1,11 @@
 """Modül başına kullanıcıdan alınacak parametre şemaları.
 
 Alan tipleri: ``text``, ``password``, ``number``, ``textarea``, ``select``,
-``bool``, ``spin``, ``button``, ``file`` ve değer taşımayan bölüm başlığı
-``heading``. ``bool`` alanı ``enables`` listesi taşıyabilir: kutu
-işaretsizken listedeki alanlar pasifleşir.
+``bool``, ``spin``, ``button``, ``file``, değeri modülden gelen ve
+kullanıcının değiştiremediği ``readonly`` (değerini ``default_from``
+sağlar) ve değer taşımayan bölüm başlığı ``heading``. ``bool`` alanı
+``enables`` listesi taşıyabilir: kutu işaretsizken listedeki alanlar
+pasifleşir.
 """
 
 from __future__ import annotations
@@ -629,9 +631,10 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": (
                 "İşaretlenirse GRUB önyükleme menüsünde 'e' (düzenle) "
                 "kipine girildiğinde ya da GRUB shell'ine ('c' tuşu) "
-                "düşüldüğünde GRUB önce KULLANICI ADI sorar — bu adımda "
-                "sabittir: tiha — ardından aşağıdaki 'GRUB yönetici "
-                "parolası' alanına yazılan parolayı ister. "
+                "düşüldüğünde GRUB önce KULLANICI ADI sorar — aşağıdaki "
+                "salt okunur 'GRUB kullanıcı adı' kutusundaki değer — "
+                "ardından 'GRUB yönetici parolası' alanına yazılan "
+                "parolayı ister. "
                 "Recovery girdisi de "
                 "menüden kaldırılır. Boot akışının kendisi bu "
                 "parolayı sormaz; yalnız menüye elle müdahale eden "
@@ -654,6 +657,22 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             ),
         },
         {
+            "key": "grub_username",
+            "label": "GRUB kullanıcı adı",
+            "type": "readonly",
+            "required": False,
+            # Tek kaynak modüldeki SUPERUSER sabiti.
+            "default_from": "superuser_name",
+            "help": (
+                "GRUB, parolayı sormadan önce bir kullanıcı adı ister "
+                "('Enter username:'). Açılış ekranında bu kutudaki adı "
+                "yazacaksınız. Değer adımın kendisi tarafından belirlenir, "
+                "değiştirilemez; GRUB'ın kendi kullanıcı listesinde tanımlı "
+                "bir addır, sistemdeki etapadmin hesabıyla ve onun "
+                "parolasıyla ilgisi yoktur."
+            ),
+        },
+        {
             "key": "grub_password",
             "label": "GRUB yönetici parolası",
             "type": "password",
@@ -665,8 +684,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "GRUB menü kipine ('e' tuşu) ya da GRUB shell'ine "
                 "('c' tuşu) girmeye çalışan kullanıcıdan istenecek "
                 "parola. GRUB ekranında önce 'Enter username:' çıkar; "
-                "oraya tiha yazılır (GRUB superuser adı — bu adımda "
-                "sabittir), sonra bu parola girilir. "
+                "oraya yukarıdaki 'GRUB kullanıcı adı' kutusundaki ad "
+                "yazılır, sonra bu parola girilir. "
                 "Bu adımda girdiğiniz metnin PBKDF2-SHA512 "
                 "hash'i /etc/grub.d/01_tiha_grub_password içine "
                 "yazılır ve klon imajına gömülür; düz parola "

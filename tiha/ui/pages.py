@@ -756,6 +756,17 @@ class ModulePage(Gtk.Box):
             # kutu her zaman seçilebilir.
             return spin
 
+        if kind == "readonly":
+            # Değeri modül belirler (sabit ya da ``default_from``);
+            # kullanıcı yalnızca görür ve kopyalayabilir, değiştiremez.
+            # Örn. m16'da GRUB'ın soracağı superuser adı.
+            entry = Gtk.Entry()
+            entry.set_text(default)
+            entry.set_editable(False)
+            entry.set_hexpand(True)
+            entry.get_style_context().add_class("tiha-readonly")
+            return entry
+
         if kind == "select":
             combo = Gtk.ComboBoxText()
             for opt in field.get("options", []):
