@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tiha"
-version = "0.1.17"
+version = "0.1.18"
 description = "Tahta İmaj Hazırlık Aracı — Pardus ETAP etkileşimli tahtaları imaj alınmaya hazırlar"
 readme = "README.md"
 requires-python = ">=3.11"
