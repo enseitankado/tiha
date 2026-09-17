@@ -1053,6 +1053,22 @@ class OTPSecretsModule(Module):
             )
         ).lower() in ("true", "1", "yes", "on")
 
+        # Grup PIN'i pam_otp tarafından yalnızca kullanıcı '/etc/group'
+        # üyesiyse doğrulanır. Kullanıcı make_group_pin işaretleyip
+        # add_teachers_to_group'u işaretsiz bıraktıysa PIN üretilir ama
+        # kimse gruba girmediği için giriş yapılamaz. Bu bir UX tuzağı;
+        # burada sessizce iki bayrağı birlikte etkinleştiriyoruz —
+        # kullanıcı grup PIN istediyse üyelik zaten kaçınılmaz ön koşul.
+        if make_group_pin and not add_teachers_to_group:
+            add_teachers_to_group = True
+            if progress:
+                progress(
+                    "Not: Grup PIN'i seçili — öğretmen hesaplarını "
+                    f"'{OGRETMENLER_GROUP}' grubuna ekleme otomatik "
+                    "etkinleştirildi (PAM grup PIN'ini yalnız gruba "
+                    "üye kullanıcıya kabul ediyor)."
+                )
+
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
 
         # Yedek hesaplar (ogretmen1 … ogretmenN, eski kurulumlarda
