@@ -126,9 +126,9 @@ class GrubProtectionModule(Module):
     sidebar_title = "GRUB koruması"
     streams_output = True
     apply_hint = (
-        "GRUB menüsünde `e` düzenleme kipi ve GRUB shell, siz "
-        "buraya yazdığınız parolanın arkasına alınır; recovery "
-        "girdisi kaldırılır."
+        f"GRUB menüsünde `e` düzenleme kipi ve GRUB shell, kullanıcı adı "
+        f"`{SUPERUSER}` + buraya yazdığınız parolanın arkasına alınır; "
+        f"recovery girdisi kaldırılır."
     )
     rationale = (
         "GRUB açılış menüsünde ``e`` tuşu kernel komut satırının "
@@ -184,15 +184,17 @@ class GrubProtectionModule(Module):
             f"Recovery girdisi       : "
             f"{'zaten kapalı' if recovery_disabled else 'kapatılacak'}"
         )
-        lines.append(f"Superuser adı          : {SUPERUSER}")
+        lines.append(f"Superuser (kullanıcı adı): {SUPERUSER}")
         lines.append(
             f"Hash algoritması       : PBKDF2-SHA512, "
             f"{PBKDF2_ITERATIONS} iterasyon, 64 bayt salt"
         )
         lines.append("")
-        lines.append("Sorulacak parola:")
-        lines.append("  - 'e' kipine ('e' tuşu)  → tanımlanan superuser (tiha) parolası")
-        lines.append("  - GRUB shell'e ('c' tuşu) → aynı superuser parolası")
+        lines.append(
+            "GRUB önce 'Enter username:' sorar, sonra parolayı ister:"
+        )
+        lines.append(f"  - 'e' kipine ('e' tuşu)  → kullanıcı adı: {SUPERUSER}, sonra parola")
+        lines.append(f"  - GRUB shell'e ('c' tuşu) → kullanıcı adı: {SUPERUSER}, sonra parola")
         lines.append("  - Recovery girdisi       → menüde yer almaz")
         lines.append("")
         lines.append("Klonlarda:")
@@ -317,17 +319,18 @@ class GrubProtectionModule(Module):
 
         return ApplyResult(
             True,
-            "GRUB koruması etkinleştirildi.",
+            f"GRUB koruması etkinleştirildi — kullanıcı adı: {SUPERUSER}",
             details=(
-                f"Superuser        : {SUPERUSER}\n"
+                f"Kullanıcı adı    : {SUPERUSER}\n"
                 f"Include          : {GRUB_LOCKDOWN_INCLUDE}\n"
                 f"10_linux yedeği  : {linux_backup}\n"
                 f"grub yedeği      : {defaults_backup}\n\n"
                 "Bir sonraki açılıştan itibaren `e` düzenleme kipi ve\n"
-                "GRUB komut satırı, formda girdiğiniz parolayı sorar.\n"
-                "Boot akışının kendisi bu parolayı sormaz. Aynı hash\n"
-                "bu tahtadan alınacak tüm klonlarda geçerlidir. Düz\n"
-                "parola sistemde tutulmaz."
+                "GRUB komut satırı önce 'Enter username:' sorar —\n"
+                f"buraya {SUPERUSER} yazılır — ardından formda\n"
+                "girdiğiniz parolayı ister. Boot akışının kendisi bu\n"
+                "parolayı sormaz. Aynı hash bu tahtadan alınacak tüm\n"
+                "klonlarda geçerlidir. Düz parola sistemde tutulmaz."
             ),
             data={
                 "linux_backup": str(linux_backup),
