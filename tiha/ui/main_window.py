@@ -38,10 +38,12 @@ class TiHAWindow(Gtk.Window):
 
     # Pardus ETAP ekranları genellikle 1920x1080 dokunmatik paneller;
     # pencere onun %60'ı kadar açılır, kullanıcı isterse büyütür.
+    # 17 adım sığdığı için sidebar'da kaydırma çubuğu oluşmasın diye
+    # yükseklik biraz artırıldı; genişlik dokunmadı.
     DEFAULT_WIDTH = 1100
-    DEFAULT_HEIGHT = 720
+    DEFAULT_HEIGHT = 820
     MIN_WIDTH = 840
-    MIN_HEIGHT = 560
+    MIN_HEIGHT = 640
 
     def __init__(self) -> None:
         super().__init__(title="TiHA — Tahta İmaj Hazırlık Aracı")
