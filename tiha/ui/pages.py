@@ -132,34 +132,45 @@ _WELCOME_FEATURES_TITLE = "Bu sihirbazda neler bulacaksınız?"
 _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
     ("Sistem güncellemesi",
      "paketleri imaj öncesi günceller."),
-    ("Yerel hesap parolaları",
-     "root, etapadmin ve öğretmen parolalarını siz belirler."),
+    ("Kullanıcı parolaları",
+     "root, etapadmin ve öğretmen parolalarını canlı güç göstergesi ve "
+     "yaygın parola engeliyle siz belirler."),
     ("Her açılışta parola temizliği",
      "tahta yeniden başladığında yerel parolalar otomatik sıfırlanır "
      "(opsiyonel sertleştirme)."),
     ("Öğretmen PIN anahtarları",
-     "merkezi olarak üretilip imaja gömülür; her tahtaya tek tek "
-     "kurmaktan kurtarır."),
+     "merkezi olarak üretilip imaja gömülür; ortak grup PIN'i seçeneği "
+     "de vardır — her tahtaya tek tek kurmaktan kurtarır."),
     ("EBA QR parola diyalogu",
      "ilk girişte çıkan parola sorusu kapatılır."),
     ("SSH sunucusu",
      "uzaktan komut/dosya erişimi."),
     ("Samba dosya paylaşımı",
      "pencere açmadan dosya alıp verme."),
-    ("Dayanıklı merkezi log",
-     "tahta logları kaybolmadan toplanır."),
+    ("Dayanıklı merkezi log iletimi",
+     "profil seçimi (Bakım/Kapsamlı/Yalnız güvenlik), disk sağlığı ve "
+     "sıcaklık izleme, opsiyonel Prometheus metrik dışa aktarımı."),
     ("Zaman senkronu (NTP)",
      "saat sapması olmaz."),
     ("Dinamik hostname",
      "her tahta benzersiz ad alır."),
     ("Otomatik kapanma",
      "unutulan tahta belli süre sonra kapanır."),
+    ("Uzaktan uyandırma (Wake-on-LAN)",
+     "kapalı tahtayı merkezden magic packet ile açar; BIOS'ta "
+     "yapılacak somut ayarlar önizlemede listelenir."),
+    ("Başarım (Deneysel)",
+     "oturum kalıntılarını temizler, ETA Hafif Mod'u tüm kullanıcılara "
+     "uygular."),
     ("Otomatik Ahenk Kaydı",
      "klonlanan tahta Lider'e kendi kimliğiyle yeniden kayıt olur."),
     ("BIOS yönetici parolası",
      "desteklenen donanımda klonun ilk açılışında tek seferlik "
      "ayarlanır."),
-    ("İmaj sanitize",
+    ("GRUB koruması",
+     "'e' düzenleme ve GRUB shell parola arkasına alınır; "
+     "init=/bin/bash saldırı vektörü kapatılır."),
+    ("İmaj için sanitize",
      "tekil kimlikler sıfırlanır, tarayıcı kilitleri ve izler silinir; "
      "tahta imaj alınmaya hazır."),
 )
