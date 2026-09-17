@@ -56,6 +56,10 @@ log = get_logger(__name__)
 GRUB_LOCKDOWN_INCLUDE = Path("/etc/grub.d/01_tiha_grub_password")
 GRUB_LINUX_SCRIPT = Path("/etc/grub.d/10_linux")
 GRUB_DEFAULTS = Path("/etc/default/grub")
+# Üretilmiş menü. Koruma başka bir araçla kurulmuş olabileceği için
+# durumu yalnız kendi include dosyamıza bakarak değil buradan da
+# okuruz (bkz. lockdown_active).
+GRUB_GENERATED_CFG = Path("/boot/grub/grub.cfg")
 
 # GRUB superuser adı. Sistemdeki etapadmin hesabıyla ilgisi yoktur
 # (GRUB kendi kullanıcı listesini tutar); operatör açılış ekranında
@@ -133,9 +137,10 @@ class GrubProtectionModule(Module):
     sidebar_title = "GRUB koruması"
     streams_output = True
     apply_hint = (
-        f"GRUB menüsünde `e` düzenleme kipi ve GRUB shell, kullanıcı adı "
-        f"`{SUPERUSER}` + buraya yazdığınız parolanın arkasına alınır; "
-        f"recovery girdisi kaldırılır."
+        f"İşaretliyken: `e` düzenleme kipi ve GRUB shell, kullanıcı adı "
+        f"`{SUPERUSER}` + buraya yazdığınız parolanın arkasına alınır, "
+        f"recovery girdisi kaldırılır. İşaretsizken: varsa mevcut koruma "
+        f"kaldırılır, GRUB eski hâline döner."
     )
     rationale = (
         "GRUB açılış menüsünde ``e`` tuşu kernel komut satırının "
@@ -155,10 +160,24 @@ class GrubProtectionModule(Module):
         "(``c`` tuşu) düştüğünde adımda tanımladığınız bu parola "
         "sorulur. Aynı hash bütün klonlara aynen taşınır; operatör "
         "tek bir parolayı hatırlar.\n\n"
-        "Kutucuk işaretsizken parola alanı pasif kalır ve adım "
-        "hiçbir değişiklik yapmaz. Düz parola sistemde tutulmaz; "
-        "imaja yalnız hash gömülür."
+        "Kutucuk adıma girildiğinde sistemin o anki durumunu gösterir: "
+        "GRUB zaten korumalıysa işaretli gelir. İşaretini kaldırıp "
+        "uygularsanız koruma kaldırılır ve GRUB yedeklerden eski hâline "
+        "döndürülür. Koruma etkinken parola alanını boş bırakıp "
+        "uygularsanız mevcut parola korunur. Düz parola sistemde "
+        "tutulmaz; imaja yalnız hash gömülür."
     )
+
+    def lockdown_active(self) -> bool:
+        """GRUB şu an parola korumalı mı? Form kutucuğu bu değerle
+        açılır (params.py → ``default_from``), böylece adıma girildiğinde
+        kutucuk sistemin gerçek durumunu gösterir.
+
+        Önce TiHA'nın kendi include dosyasına, sonra üretilmiş menüye
+        bakarız — koruma başka bir araçla da kurulmuş olabilir."""
+        if "set superusers=" in _read_text(GRUB_LOCKDOWN_INCLUDE):
+            return True
+        return "password_pbkdf2" in _read_text(GRUB_GENERATED_CFG)
 
     def superuser_name(self) -> str:
         """Formdaki salt okunur "GRUB kullanıcı adı" alanının değeri
@@ -225,13 +244,41 @@ class GrubProtectionModule(Module):
         enabled = str(
             params.get("enable_grub_lock", "False")
         ).lower() in ("true", "1", "yes", "on")
+
+        def emit(line: str) -> None:
+            if progress:
+                progress(line)
+
+        # Kutucuk işaretsiz uygulanırsa bu bir "kapat" talebidir: koruma
+        # varsa kaldırılır, yoksa yapacak iş yoktur.
         if not enabled:
-            return ApplyResult(
-                True,
-                "GRUB koruması kutucuğu işaretli değil — adım atlandı.",
-            )
+            if not self.lockdown_active():
+                return ApplyResult(
+                    True,
+                    "GRUB koruması kutucuğu işaretli değil ve koruma zaten "
+                    "yok — değişiklik yapılmadı.",
+                )
+            emit("Kutucuk işaretsiz — mevcut GRUB koruması kaldırılıyor…")
+            result = self._remove_protection(emit)
+            if result.success:
+                result.data = {"removed": True}
+            return result
 
         password = (params.get("grub_password") or "").strip()
+        # Koruma zaten etkinken parola kutusu boş bırakıldıysa: operatör
+        # yalnız adımdan geçiyordur, mevcut parolayı bozmayalım.
+        if not password and self.lockdown_active():
+            return ApplyResult(
+                True,
+                "GRUB koruması zaten etkin; parola alanı boş bırakıldığı için "
+                "mevcut parola korundu.",
+                details=(
+                    f"Kullanıcı adı    : {SUPERUSER}\n"
+                    "Parolayı değiştirmek isterseniz alana yeni parolayı\n"
+                    "yazıp adımı tekrar uygulayın. Korumayı kaldırmak için\n"
+                    "kutucuğun işaretini kaldırıp uygulayın."
+                ),
+            )
         if not password:
             return ApplyResult(
                 False,
@@ -253,10 +300,6 @@ class GrubProtectionModule(Module):
                     "yapılamasa da 8 karakterin altına düşülmemelidir."
                 ),
             )
-
-        def emit(line: str) -> None:
-            if progress:
-                progress(line)
 
         state_dir = self.ensure_state_dir()
         linux_backup = state_dir / "10_linux.bak"
@@ -354,24 +397,53 @@ class GrubProtectionModule(Module):
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
+        # Bu kayıt zaten bir "kaldırma" işlemiyse geri alınacak koruma yok;
+        # yeniden kurmak parola ister.
+        if data.get("removed"):
+            return ApplyResult(
+                True,
+                "Bu adım korumayı kaldırmıştı; geri alınacak değişiklik yok. "
+                "Yeniden kurmak için kutucuğu işaretleyip parola girin.",
+            )
+        return self._remove_protection(data=data)
+
+    # ------------------------------------------------------------------
+    # Ortak kaldırma yolu — "kutucuk işaretsiz uygulandı" ve "geri al"
+    # aynı işi yapar: include silinir, yedekler geri yüklenir (yoksa yama
+    # elle sökülür), update-grub çalıştırılır.
+    # ------------------------------------------------------------------
+
+    def _remove_protection(
+        self,
+        emit: ProgressCallback | None = None,
+        data: dict | None = None,
+    ) -> ApplyResult:
+        data = data or {}
         state_dir = self.state_dir
         linux_backup = Path(data.get("linux_backup") or state_dir / "10_linux.bak")
         defaults_backup = Path(
             data.get("defaults_backup") or state_dir / "grub.defaults.bak"
         )
 
+        def say(line: str) -> None:
+            if emit:
+                emit(line)
+
+        say(f"{GRUB_LOCKDOWN_INCLUDE} siliniyor…")
         try:
             GRUB_LOCKDOWN_INCLUDE.unlink(missing_ok=True)
         except OSError as exc:
             log.warning("Include silinemedi: %s", exc)
 
         if linux_backup.exists():
+            say("10_linux yedekten geri yükleniyor…")
             try:
                 shutil.copy2(linux_backup, GRUB_LINUX_SCRIPT)
             except OSError as exc:
                 log.warning("10_linux geri yüklenemedi: %s", exc)
         else:
             # Yedek yoksa yamayı elle sök.
+            say("10_linux yedeği yok — --unrestricted yaması sökülüyor…")
             try:
                 txt = _read_text(GRUB_LINUX_SCRIPT)
                 if CLASS_REPLACE in txt:
@@ -383,11 +455,29 @@ class GrubProtectionModule(Module):
                 log.warning("10_linux geri döndürülemedi: %s", exc)
 
         if defaults_backup.exists():
+            say("/etc/default/grub yedekten geri yükleniyor…")
             try:
                 shutil.copy2(defaults_backup, GRUB_DEFAULTS)
             except OSError as exc:
                 log.warning("grub varsayılanları geri yüklenemedi: %s", exc)
+        else:
+            # Yedek yoksa recovery satırını Debian varsayılanına (yorumlu)
+            # çeviririz; özgün değeri bilemeyiz, en yakın tahmin budur.
+            say("/etc/default/grub yedeği yok — recovery satırı yoruma alınıyor…")
+            try:
+                txt = _read_text(GRUB_DEFAULTS)
+                if 'GRUB_DISABLE_RECOVERY="true"' in txt:
+                    GRUB_DEFAULTS.write_text(
+                        txt.replace(
+                            'GRUB_DISABLE_RECOVERY="true"',
+                            '#GRUB_DISABLE_RECOVERY="true"',
+                        ),
+                        encoding="utf-8",
+                    )
+            except OSError as exc:
+                log.warning("recovery satırı geri alınamadı: %s", exc)
 
+        say("update-grub çalıştırılıyor…")
         r = run_cmd(["update-grub"])
         if not r.ok:
             return ApplyResult(

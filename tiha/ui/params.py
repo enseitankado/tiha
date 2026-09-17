@@ -160,7 +160,13 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "olarak çıkar. Zaten bir ortak PIN varsa korunur, "
                 "yenilenmez. Tek tek öğretmen PIN'lerinden daha zayıf bir "
                 "izdir (herkes aynı kodu kullanır), bu yüzden varsayılan "
-                "olarak kapalıdır."
+                "olarak kapalıdır.\n\n"
+                "ÖN KOŞUL: PAM grup PIN'ini yalnız 'ogretmenler' grubunun "
+                "ÜYESİ olan hesaplara kabul eder. Bu kutu işaretlenince "
+                "'Öğretmen hesaplarını ogretmenler grubuna ekle' kutusu "
+                "işaretsiz olsa bile TiHA öğretmen hesaplarını sessizce "
+                "gruba ekler — aksi halde üretilen ortak PIN hiçbir "
+                "hesapta çalışmaz."
             ),
         },
         {
@@ -628,7 +634,18 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "False",
+            # Kutucuk adıma girildiğinde sistemin gerçek durumunu
+            # göstersin: GRUB zaten korumalıysa işaretli açılır.
+            "default_from": "lockdown_active",
             "help": (
+                "Kutucuk, adıma girildiğinde sistemin o anki durumunu "
+                "gösterir; GRUB zaten korumalıysa işaretli gelir. "
+                "İŞARETİ KALDIRIP UYGULARSANIZ koruma kaldırılır: "
+                "01_tiha_grub_password silinir, 10_linux ve "
+                "/etc/default/grub yedeklerinden geri yüklenir, "
+                "update-grub çalıştırılır — recovery girdisi de geri "
+                "gelir. Koruma etkinken parola alanını boş bırakıp "
+                "uygularsanız mevcut parola korunur.\n\n"
                 "İşaretlenirse GRUB önyükleme menüsünde 'e' (düzenle) "
                 "kipine girildiğinde ya da GRUB shell'ine ('c' tuşu) "
                 "düşüldüğünde GRUB önce KULLANICI ADI sorar — aşağıdaki "
