@@ -5,7 +5,10 @@ Alan tipleri: ``text``, ``password``, ``number``, ``textarea``, ``select``,
 kullanıcının değiştiremediği ``readonly`` (değerini ``default_from``
 sağlar) ve değer taşımayan bölüm başlığı ``heading``. ``bool`` alanı
 ``enables`` listesi taşıyabilir: kutu işaretsizken listedeki alanlar
-pasifleşir.
+pasifleşir. Ek olarak ``deselects`` (bu kutu işaretlenince
+listedeki kutuların işareti kaldırılır) ve simetriği ``selects``
+(bu kutu işaretlenince listedeki ön-koşul kutuları da otomatik
+işaretlenir) bayrakları da desteklenir.
 """
 
 from __future__ import annotations
@@ -152,6 +155,11 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # üretmek gereksiz bir ikinci ortak sır demek. Grup-PIN
             # seçilince hesap PIN'inin işareti kalkar.
             "deselects": ["include_ogretmen"],
+            # PAM grup-PIN'i yalnız gruba üye kullanıcılara kabul ediyor;
+            # bu bayrak işaretlenince "Öğretmen hesaplarını ogretmenler
+            # grubuna ekle" kutusu da otomatik işaretlenir, kullanıcı bağı
+            # UI'dan görür.
+            "selects": ["add_teachers_to_group"],
             "help": (
                 "İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' "
                 "PIN anahtarı üretilir (eta-otp-lock @grup mekanizması). "
@@ -164,9 +172,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "ÖN KOŞUL: PAM grup PIN'ini yalnız 'ogretmenler' grubunun "
                 "ÜYESİ olan hesaplara kabul eder. Bu kutu işaretlenince "
                 "'Öğretmen hesaplarını ogretmenler grubuna ekle' kutusu "
-                "işaretsiz olsa bile TiHA öğretmen hesaplarını sessizce "
-                "gruba ekler — aksi halde üretilen ortak PIN hiçbir "
-                "hesapta çalışmaz."
+                "da otomatik olarak işaretlenir — aksi halde üretilen "
+                "ortak PIN hiçbir hesapta çalışmayacağı için. Manuel "
+                "olarak geri kaldırmayın; iki bayrak birlikte çalışır."
             ),
         },
         {

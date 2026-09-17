@@ -819,15 +819,25 @@ class ModulePage(Gtk.Box):
 
             # Checkbox değişikliklerini dinle ve ilgili alanları aktif/pasif yap
             def on_checkbox_toggled(cb, field_key=field["key"],
-                                    deselects=tuple(field.get("deselects", ()))):
-                # Bu kutu seçildiğinde, şemada çelişkili işaretlenmiş
-                # kutuların işareti kaldırılır (tek yönlü: geri
-                # işaretlemek kullanıcının tercihidir).
+                                    deselects=tuple(field.get("deselects", ())),
+                                    selects=tuple(field.get("selects", ()))):
+                # Bu kutu seçildiğinde:
+                #   * `deselects` listesindeki çelişkili kutuların işareti
+                #     kaldırılır (tek yönlü: geri işaretlemek kullanıcının
+                #     tercihidir).
+                #   * `selects` listesindeki gerekli-ön-koşul kutuları
+                #     otomatik işaretlenir. Bu, teknik olarak ancak beraber
+                #     çalışan kombinasyonların (ör. grup PIN'i + gruba
+                #     üyelik) UI'da eşleşik görünmesi için.
                 if cb.get_active():
                     for other_key in deselects:
                         other = self._fields.get(other_key)
                         if isinstance(other, Gtk.CheckButton) and other.get_active():
                             other.set_active(False)
+                    for other_key in selects:
+                        other = self._fields.get(other_key)
+                        if isinstance(other, Gtk.CheckButton) and not other.get_active():
+                            other.set_active(True)
                 self._update_conditional_fields(field_key, cb.get_active())
 
             checkbox.connect("toggled", on_checkbox_toggled)
