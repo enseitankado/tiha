@@ -5,9 +5,10 @@ Girdiğiniz öğretmen ad-soyad listesinden her öğretmen için bir kullanıcı
 hesabı oluşturur (zaten varsa geçer), her hesaba kriptografik olarak
 güvenli bir PIN kodu (zaman tabanlı TOTP) BASE32 anahtarı atar ve
 bu anahtarları Pardus ETAP'ın PAM modülünün okuduğu
-/etc/otp-secrets.json dosyasına yazar. Ayrıca isteğe bağlı olarak,
-sonradan okula atanacak öğretmenler için belirlediğiniz sayıda yedek
-hesap (ogretmen01, ogretmen02 …) oluşturur.
+/etc/otp-secrets.json dosyasına yazar. Sistemde önceden oluşturulmuş
+yedek hesaplar (ogretmen01 …) da otomatik olarak PIN listesine
+eklenir; yedek hesap ÜRETME işlemi artık "Kullanıcı parolaları"
+adımının işi.
 
 LightDM greeter cache desteği:
 50+ kullanıcı oluşturulduğunda, LightDM'in tüm kullanıcıları gösterebilmesi
@@ -956,9 +957,10 @@ class OTPSecretsModule(Module):
         lines.append("")
 
         lines.append("Not: Bu adım yalnız OTP anahtarları oluşturur; "
-                     "sistem kullanıcı hesaplarını oluşturmaz (yedek "
-                     "hesap sayısı belirtilirse onların hesabı bu adımda "
-                     "açılır).")
+                     "sistem kullanıcı hesaplarını oluşturmaz. Yedek "
+                     "hesaplar (ogretmen01 …) 'Kullanıcı parolaları' "
+                     "adımında oluşturulur; bu adım sistemde bulduğu "
+                     "yedek hesapları otomatik olarak PIN listesine ekler.")
         lines.append("")
         lines.append("Not: Anahtarı zaten olan hesaplara dokunulmaz — "
                      "yalnızca eksikler tamamlanır. Öğretmenlerin "
@@ -1028,7 +1030,6 @@ class OTPSecretsModule(Module):
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         params = params or {}
         raw_list: str = params.get("teacher_names", "")
-        reserve: int = int(params.get("reserve_count", 0) or 0)
         include_etapadmin: bool = str(
             params.get("include_etapadmin", "False")
         ).lower() in ("true", "1", "yes", "on")
@@ -1053,9 +1054,13 @@ class OTPSecretsModule(Module):
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
 
-        # Yedek hesaplar — toplu-kullanici-olustur.py'nin normalizasyonu
-        # 'Ogretmen 01' → 'ogretmen01' verir.
-        for i in range(1, reserve + 1):
+        # Yedek hesaplar (ogretmen01 … ogretmenNN) artık m01
+        # "Kullanıcı parolaları" adımında oluşturuluyor. Burada yalnızca
+        # sistemde bulduklarımızı PIN listesine ekliyoruz — display adı
+        # 'Ogretmen NN' olarak veriyoruz ki hem eta-otp-cli hem dahili
+        # normalize yolu doğru kullanıcıya erişsin.
+        reserve_existing = count_reserve_accounts()
+        for i in range(1, reserve_existing + 1):
             teacher_names.append(f"Ogretmen {i:02d}")
 
         # Opsiyonel: etapadmin için de PIN üret. Sistem yöneticisi
@@ -1070,8 +1075,12 @@ class OTPSecretsModule(Module):
         if not teacher_names:
             return ApplyResult(
                 False,
-                "Liste boş — öğretmen eklemediniz ve yedek hesap sayısı 0.",
-                details="Lütfen en az bir isim girin veya yedek hesap sayısını artırın.",
+                "Liste boş — öğretmen eklemediniz ve sistemde yedek hesap yok.",
+                details=(
+                    "Lütfen en az bir isim girin ya da 'Kullanıcı "
+                    "parolaları' adımında 'Yedek hesap sayısı' kutusuna "
+                    "sıfırdan büyük bir değer yazıp o adımı uygulayın."
+                ),
             )
 
         state = self.ensure_state_dir()
@@ -1107,33 +1116,16 @@ class OTPSecretsModule(Module):
                 details="Ayrıntı için /var/log/tiha/tiha.log dosyasına bakın.",
             )
 
-        # Yedek hesaplar için sistem hesabını GARANTİLE. Dahili yol
-        # (_apply_with_internal) zaten create_user çağırıyor; dış araç
-        # yolu (_apply_with_tool) yalnız OTP anahtarını üretiyor,
-        # sistem hesabı oluşturmuyor.
-        created_reserve_usernames: list[str] = []
-        if reserve > 0 and cli_script:
-            if progress:
-                progress(f"\n{reserve} yedek hesap sistemde oluşturuluyor "
-                         "(useradd + EBA cihaz grupları + parola kilitli)...")
-            for i in range(1, reserve + 1):
-                full_name = f"Ogretmen {i:02d}"
-                username = _eta_otp_cli_normalize(full_name)
-                if not username:
-                    continue
-                if create_user(username, full_name=full_name):
-                    created_reserve_usernames.append(username)
-                    if progress:
-                        progress(f"  + {username}")
-                else:
-                    if progress:
-                        progress(f"  - {username} olusturulamadi")
-        elif reserve > 0:
-            for i in range(1, reserve + 1):
-                full_name = f"Ogretmen {i:02d}"
-                username = normalize_username(full_name)
-                if username and user_exists(username):
-                    created_reserve_usernames.append(username)
+        # Yedek hesap kullanıcı adlarını topla (m01 tarafında oluşturulmuş
+        # olabilir; sistemde hem 'ogretmenNN' hem eski 'ogretmen.NN' varsa
+        # her ikisini de yakala). Grup üyeliği ve auto-group izleyici bu
+        # listeyi hedef alır.
+        reserve_usernames: list[str] = []
+        for i in range(1, reserve_existing + 1):
+            for candidate in (f"ogretmen{i:02d}", f"ogretmen.{i:02d}"):
+                if user_exists(candidate):
+                    reserve_usernames.append(candidate)
+                    break
 
         # Her hesap için passwd GECOS (ad/soyad) alanını yaz.
         self._apply_gecos(teacher_names, cli_used=bool(cli_script), progress=progress)
@@ -1163,7 +1155,7 @@ class OTPSecretsModule(Module):
                     progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
                              "grup uyeligi atlandi.")
             else:
-                targets = sorted(requested_users | set(created_reserve_usernames))
+                targets = sorted(requested_users | set(reserve_usernames))
                 if progress:
                     progress(f"\nOgretmen hesaplari '{OGRETMENLER_GROUP}' "
                              "grubuna ekleniyor...")

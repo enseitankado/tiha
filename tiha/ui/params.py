@@ -38,6 +38,32 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": "Öğretmen hesabı varsa, bu hesap için parola belirleyebilirsiniz. Boş bırakılabilir.",
         },
         {
+            "key": "reserve_count",
+            "label": "Yedek hesap sayısı",
+            "type": "spin",
+            "required": False,
+            "default": "0",
+            # Sistemde ogretmen01 … ogretmenNN varsa kutu NN ile dolu
+            # gelsin; adım yeniden uygulandığında yönetici farkında
+            # olmadan yeni hesap açmaz.
+            "default_from": "suggested_reserve_count",
+            "min": 0,
+            "max": 999,
+            "step": 1,
+            "help": (
+                "Sonradan okula atanacak öğretmenler için ogretmen01, "
+                "ogretmen02 … biçiminde boş hesaplar hazırlar. Her yedek "
+                "hesap için ev dizini açılır (useradd), hesap EBA QR / "
+                "eta-usb-login ile aynı standart cihaz gruplarına (ses, "
+                "USB, kamera, yazıcı vb.) eklenir ve parola kilitli "
+                "tutulur. İmaj alındığında bu hesaplar tüm klon "
+                "tahtalara birlikte gider. PIN anahtarları için "
+                "\"Öğretmen PIN anahtarları\" adımı gerekir; o adım bu "
+                "hesapları da otomatik olarak PIN üretim listesine "
+                "ekler."
+            ),
+        },
+        {
             "key": "remove_student",
             "label": "Öğrenci Hesabını Sil",
             "type": "button",
@@ -93,30 +119,6 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "anahtarı üretilir. Sınıfta parola paylaşmadan geçici "
                 "giriş için kullanışlıdır; hesabın kendi parolası varsa "
                 "onunla giriş yine mümkündür."
-            ),
-        },
-        {
-            "key": "reserve_count",
-            "label": "Yedek hesap sayısı",
-            "type": "spin",
-            "required": False,
-            "default": "0",
-            # Sistemde ogretmen01 … ogretmenNN varsa kutu NN ile dolu
-            # gelsin; yönetici farkında olmadan yeni hesap açmasın.
-            "default_from": "suggested_reserve_count",
-            "min": 0,
-            "max": 999,
-            "step": 1,
-            "help": (
-                "Sonradan okula atanacak öğretmenler için ogretmen01, "
-                "ogretmen02 … biçiminde boş hesaplar hazırlar. Bu adımda "
-                "yerel makine üzerinde her yedek hesap için ev dizini "
-                "açılır (useradd ile), hesap EBA QR / eta-usb-login ile "
-                "aynı standart cihaz gruplarına (ses, USB, kamera, yazıcı "
-                "vb.) eklenir ve ogretmenler grubuna üye yapılır; "
-                "böylece imaj alındığında bu hesaplar tüm klon tahtalara "
-                "birlikte gider. Parola kilitli tutulur — hesaplar yalnız "
-                "OTP/QR ile açılır."
             ),
         },
         {
