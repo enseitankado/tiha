@@ -46,6 +46,12 @@ _CREDITS_SECTIONS: tuple[dict, ...] = (
                 "—",
                 "TiHA'nın tasarımı, kodu ve sürdürülmesi.",
             ),
+            (
+                "tankado.com",
+                "https://tankado.com",
+                "—",
+                "Geliştiricinin kişisel sitesi; yazılar, notlar ve iletişim.",
+            ),
         ),
     },
     {
@@ -185,17 +191,6 @@ _CREDITS_SECTIONS: tuple[dict, ...] = (
                 "https://github.com/dropbox/zxcvbn",
                 "MIT",
                 "Parola gücü skorlama fikri (Dropbox); TiHA basit bir uyarlamasını çalıştırır.",
-            ),
-        ),
-    },
-    {
-        "title": "Yapay zekâ desteği",
-        "items": (
-            (
-                "Claude & Claude Code",
-                "https://claude.com/claude-code",
-                "Ticari servis (Anthropic)",
-                "Kod tasarımı, mimari kararlar, çok sayıda modülün iskeleti ve bu diyaloğun kendisi de dahil geliştirmede eşlik etti.",
             ),
         ),
     },
@@ -540,16 +535,17 @@ class TiHAWindow(Gtk.Window):
             name_lbl.set_use_markup(True)
             name_lbl.set_track_visited_links(False)
             name_lbl.set_valign(Gtk.Align.START)
+            # Tüm adlar aynı font, aynı punto — Pango'nun standart link
+            # stili (mavi + altı çizili). Bold/span sarmalı yok, böylece
+            # eta-otp-lock ile Vestel Faz 2 aynı görünür.
             if url:
                 name_lbl.set_markup(
                     f'<a href="{GLib.markup_escape_text(url)}">'
-                    f'<span weight="bold">{GLib.markup_escape_text(name)}</span></a>'
+                    f'{GLib.markup_escape_text(name)}</a>'
                 )
                 name_lbl.connect("activate-link", self._on_credits_link)
             else:
-                name_lbl.set_markup(
-                    f'<span weight="bold">{GLib.markup_escape_text(name)}</span>'
-                )
+                name_lbl.set_markup(GLib.markup_escape_text(name))
             grid.attach(name_lbl, 0, row_idx, 1, 1)
 
             # 1. sütun: lisans rozeti — küçük, monospace, gri arka planlı
