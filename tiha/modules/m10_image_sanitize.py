@@ -383,7 +383,7 @@ class ImageSanitizeModule(Module):
         # ===== 0) İmaj metadata damgası =================================
         # Sanitize /etc'i korur; bu dosya imaj boyunca kalır.
         # Sahada "bu tahta hangi imajdan, ne zaman?" sorusunun cevabı:
-        #   cat /etc/tiha-image-info.json
+        #   sudo cat /etc/tiha-image-info.json (yalnız root okuyabilir, 0600)
         try:
             write_image_info(Journal())
             ops.append(f"İmaj damgası yazıldı: {IMAGE_INFO_FILE}")

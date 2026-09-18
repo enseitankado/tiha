@@ -12,6 +12,7 @@ from . import __version__
 from .core import console
 from .core.logger import get_logger, log_startup_info, log_shutdown_info
 from .core.paths import LOG_ROOT, ensure_runtime_dirs
+from .core.image_info import protect_image_info
 from .core.privilege import require_root_and_admin
 
 log = get_logger(__name__)
@@ -101,6 +102,8 @@ def main() -> int:
         except OSError as exc:
             print(f"HATA: çalışma dizini oluşturulamadı: {exc}", file=sys.stderr)
             return 3
+        # İmaj damgası yalnız root'a açık olmalı (eski sürümler 0644 yazıyordu).
+        protect_image_info()
         log_startup_info()
         rc = cli_run(cli_argv)
         log_shutdown_info()
@@ -119,6 +122,8 @@ def main() -> int:
         _emergency_dialog(f"Çalışma dizini oluşturulamadı: {exc}")
         print(f"\n  HATA: {exc}\n", file=sys.stderr)
         return 3
+    # İmaj damgası yalnız root'a açık olmalı (eski sürümler 0644 yazıyordu).
+    protect_image_info()
 
     # Detaylı loglama başlat
     log_startup_info()
