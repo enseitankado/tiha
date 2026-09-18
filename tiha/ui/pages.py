@@ -9,6 +9,7 @@ yine kendi ``ScrolledWindow``'larında sabit yükseklikte verilir.
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 import gi
 
@@ -23,6 +24,9 @@ log = get_logger(__name__)
 from ..core.undo import Journal, JournalEntry
 from . import params as params_schema
 from ..core.report_log import REPORT_PARAMS_KEY, ActionLog, redact_params
+# Rapor sayfa yüklenirken içe aktarılır: imaj temizliği /tmp'yi (bootstrap
+# ile gelen TiHA'nın dizini) boşalttıktan sonra geç içe aktarma bulamaz.
+from ..core.report import Report, StepReport, build_report
 
 log = get_logger(__name__)
 
@@ -1887,6 +1891,17 @@ class SummaryPage(Gtk.Box):
         heading = _wrapping_label("Özet", klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
+        # "Bu imajda neler yaptınız" raporu: yapılanlar, adımlar arası
+        # uyarılar ve klon tahtada denenecekler. refresh() her açılışta
+        # yeniden kurar.
+        self.report_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.pack_start(self.report_box, False, False, 0)
+        self._report: Report | None = None
+
+        undo_title = _wrapping_label("Geri alınabilir adımlar", klass="tiha-section-title")
+        undo_title.set_margin_top(12)
+        self.pack_start(undo_title, False, False, 0)
+
         info = _wrapping_label(
             "Bu tahtada geri alınabilir durumdaki adımlar aşağıda "
             "listelenmiştir. Daha önceki bir oturumda uygulanmış olsa bile, "
@@ -1925,6 +1940,7 @@ class SummaryPage(Gtk.Box):
         ``applied`` olan adımlar Geri al düğmesiyle birlikte listelenir;
         ``undone`` net-sıfır etki olduğu için gizlenir; ``failed`` ayırt
         edici renkle (geri al düğmesiz) gösterilir."""
+        self._render_report()
         for child in self.entries_box.get_children():
             self.entries_box.remove(child)
 
@@ -1990,6 +2006,161 @@ class SummaryPage(Gtk.Box):
             self.entries_box.pack_start(card, False, False, 0)
 
         self.entries_box.show_all()
+
+    # --- "Bu imajda neler yaptınız" raporu ---------------------------------
+
+    def _render_report(self) -> None:
+        for child in self.report_box.get_children():
+            self.report_box.remove(child)
+        try:
+            report = build_report(list(self.modules.values()), journal=self.journal)
+        except Exception as exc:  # rapor hatası Özet sayfasını düşürmesin
+            log.warning("Özet raporu kurulamadı: %s", exc)
+            self.report_box.pack_start(
+                _wrapping_label(f"Rapor oluşturulamadı: {exc}", klass="tiha-rationale"),
+                False, False, 0,
+            )
+            self.report_box.show_all()
+            return
+        self._report = report
+
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        card.get_style_context().add_class("tiha-report")
+        card.pack_start(
+            _wrapping_label("Bu imajda neler yaptınız?", klass="tiha-section-title"),
+            False, False, 0,
+        )
+        card.pack_start(_wrapping_label(report.intro, selectable=True), False, False, 0)
+
+        if not report.is_empty:
+            card.pack_start(self._report_steps(report.steps), False, False, 0)
+            if report.warnings:
+                card.pack_start(self._report_warnings(report.warnings), False, False, 0)
+            card.pack_start(self._report_tests(report), False, False, 0)
+
+            closing = _wrapping_label(report.closing, selectable=True)
+            closing.get_style_context().add_class("tiha-report-closing")
+            card.pack_start(closing, False, False, 0)
+
+            buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            copy_btn = Gtk.Button(label="Raporu kopyala")
+            copy_btn.set_tooltip_text(
+                "Raporu düz metin olarak panoya kopyalar; e-postaya ya da "
+                "belgeye yapıştırıp klon testinde yanınızda bulundurabilirsiniz."
+            )
+            copy_btn.connect("clicked", lambda *_: self._copy_report())
+            buttons.pack_start(copy_btn, False, False, 0)
+            save_btn = Gtk.Button(label="Raporu dosyaya kaydet…")
+            save_btn.connect("clicked", lambda *_: self._save_report())
+            buttons.pack_start(save_btn, False, False, 0)
+            card.pack_start(buttons, False, False, 0)
+
+        self.report_box.pack_start(card, False, False, 0)
+        self.report_box.show_all()
+
+    def _bullets(self, lines: list[str], mark: str, klass: str | None = None) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        for line in lines:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            sym = Gtk.Label(label=mark, xalign=0, yalign=0)
+            sym.set_size_request(16, -1)
+            row.pack_start(sym, False, False, 0)
+            lbl = _wrapping_label(line, selectable=True)
+            if klass:
+                lbl.get_style_context().add_class(klass)
+            row.pack_start(lbl, True, True, 0)
+            box.pack_start(row, False, False, 0)
+        return box
+
+    def _report_steps(self, steps: list[StepReport]) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.pack_start(
+            _wrapping_label("Yaptıklarınız", klass="tiha-report-subtitle"), False, False, 0,
+        )
+        for step in steps:
+            title = step.title
+            if step.failed:
+                title += " — BAŞARISIZ"
+            elif step.skipped:
+                title += " — atlandı"
+            elif step.experimental and "deneysel" not in title.lower():
+                title += " (deneysel)"
+            head = _wrapping_label(title, klass="tiha-summary-title")
+            if step.failed:
+                head.get_style_context().add_class("tiha-report-failed")
+            box.pack_start(head, False, False, 0)
+            items = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            items.set_margin_start(12)
+            items.pack_start(self._bullets(step.done, "•"), False, False, 0)
+            if step.notes:
+                items.pack_start(
+                    self._bullets(step.notes, "⚠", "tiha-report-note"), False, False, 0,
+                )
+            box.pack_start(items, False, False, 0)
+        return box
+
+    def _report_warnings(self, warnings: list[str]) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.get_style_context().add_class("tiha-report-warnings")
+        box.pack_start(
+            _wrapping_label("Dikkat: adımlar arası ilişkiler", klass="tiha-report-subtitle"),
+            False, False, 0,
+        )
+        box.pack_start(self._bullets(warnings, "⚠"), False, False, 0)
+        return box
+
+    def _report_tests(self, report: Report) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.pack_start(
+            _wrapping_label("Klon tahtada deneyin", klass="tiha-report-subtitle"),
+            False, False, 0,
+        )
+        box.pack_start(
+            _wrapping_label(
+                "İmajı en az bir tahtaya yazın ve aşağıdakilerin her birini o "
+                "klon tahtada deneyin.",
+                klass="tiha-rationale",
+            ),
+            False, False, 0,
+        )
+        groups = [(s.title, s.tests) for s in report.steps if s.tests]
+        if report.general_tests:
+            groups.append(("Genel", report.general_tests))
+        for title, tests in groups:
+            box.pack_start(_wrapping_label(title, klass="tiha-summary-title"), False, False, 0)
+            items = self._bullets(tests, "☐")
+            items.set_margin_start(12)
+            box.pack_start(items, False, False, 0)
+        return box
+
+    def _copy_report(self) -> None:
+        if self._report is None:
+            return
+        clipboard = Gtk.Clipboard.get_default(self.get_display())
+        clipboard.set_text(self._report.to_text(), -1)
+        clipboard.store()
+
+    def _save_report(self) -> None:
+        if self._report is None:
+            return
+        dlg = Gtk.FileChooserDialog(
+            title="Raporu kaydet",
+            parent=self.get_toplevel() if isinstance(self.get_toplevel(), Gtk.Window) else None,
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dlg.add_buttons("İptal", Gtk.ResponseType.CANCEL, "Kaydet", Gtk.ResponseType.ACCEPT)
+        dlg.set_current_name("tiha-imaj-raporu.txt")
+        dlg.set_do_overwrite_confirmation(True)
+        try:
+            if dlg.run() == Gtk.ResponseType.ACCEPT:
+                try:
+                    Path(dlg.get_filename()).write_text(
+                        self._report.to_text() + "\n", encoding="utf-8",
+                    )
+                except OSError as exc:
+                    log.warning("Rapor kaydedilemedi: %s", exc)
+        finally:
+            dlg.destroy()
 
     def _make_undo_handler(self, module: Module, entry: JournalEntry):
         def _handler(_btn: Gtk.Button) -> None:

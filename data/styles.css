@@ -279,6 +279,41 @@ entry.tiha-readonly {
     color: alpha(currentColor, 0.85);
 }
 
+/* Özet sayfası: "Bu imajda neler yaptınız" raporu */
+.tiha-report {
+    background: alpha(#0d6efd, 0.05);
+    border-left: 3px solid alpha(#0d6efd, 0.55);
+    border-radius: 4px;
+    padding: 12px 14px;
+}
+
+.tiha-report-subtitle {
+    font-weight: 700;
+    margin-top: 8px;
+}
+
+.tiha-report-note {
+    color: #8a5a00;
+}
+
+.tiha-report-failed {
+    color: #a12525;
+}
+
+.tiha-report-warnings {
+    background: alpha(#f0ad00, 0.14);
+    border-left: 3px solid #d18f00;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-top: 6px;
+}
+
+.tiha-report-closing {
+    font-weight: 700;
+    font-size: 11pt;
+    margin-top: 10px;
+}
+
 /* Açıklama etiketlerinde satır arası boşluk */
 label.tiha-rationale {
     margin-bottom: 4px;
