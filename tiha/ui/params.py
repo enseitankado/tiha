@@ -411,6 +411,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "False",
+            "default_from": "auto_shutdown_active",
             "help": "Belirlenen saatte otomatik kapatma yapar.",
         },
         {
@@ -441,6 +442,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "True",
+            "default_from": "idle_shutdown_active",
             "help": "Tahta boşta kalırsa otomatik kapatma yapar.",
         },
         {

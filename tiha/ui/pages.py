@@ -72,6 +72,14 @@ def _count_sentences(text: str) -> int:
     return len(parts)
 
 
+def _as_checked(value: object) -> bool:
+    """Şema varsayılanı metin ("True"), ``default_from`` sağlayıcısı gerçek
+    bool döndürür; onay kutusu ikisini de anlamalı."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+
 def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = False) -> Gtk.Label:
     lbl = Gtk.Label(label=text, xalign=0)
     lbl.set_line_wrap(True)
@@ -501,7 +509,7 @@ class ModulePage(Gtk.Box):
 
         return grid
 
-    def _refresh_dynamic_defaults(self) -> None:
+    def _refresh_dynamic_defaults(self, *, bools_only: bool = False) -> None:
         """``default_from``'lu alanları sistemin güncel durumundan tazeler.
 
         Form sayfaları uygulama açılışında bir kez kuruluyor. Bir buton
@@ -510,11 +518,19 @@ class ModulePage(Gtk.Box):
 
         Yalnız buton işlemlerinden sonra çağrılır; sayfa her açılışta
         çağrılsaydı kullanıcının elle girdiği değeri silerdi.
+
+        ``bools_only`` yalnız onay kutularını tazeler. Uygula/geri al
+        sonrası bu biçimde çağrılır: "özellik açık mı" kutusu sistemin
+        yeni hâlini göstermeli, ama kullanıcının girdiği sayı ve metinler
+        (kapanma saati, boşta süresi, geri sayım) tercihi olarak kalmalı.
         """
         schema = params_schema.get(self.module.id) or []
         for field in schema:
             source = field.get("default_from")
             if not source:
+                continue
+            is_bool = field.get("type") == "bool"
+            if bools_only and not is_bool:
                 continue
             provider = getattr(self.module, source, None)
             if not callable(provider):
@@ -525,10 +541,20 @@ class ModulePage(Gtk.Box):
                 log.warning("default_from tazelenemedi (%s): %s", source, exc)
                 continue
             widget = self._fields.get(field["key"])
-            if isinstance(widget, Gtk.SpinButton):
+            if is_bool:
+                if widget is not None and hasattr(widget, "set_active"):
+                    widget.set_active(_as_checked(value))
+            elif isinstance(widget, Gtk.SpinButton):
                 widget.set_value(float(value or 0))
             elif isinstance(widget, Gtk.Entry):
                 widget.set_text("" if value is None else str(value))
+
+    def _refresh_state_checkboxes(self) -> None:
+        """Uygula/geri al sonrası "durum" kutularını sistemden tazeler.
+
+        Sayısal ve metin alanlarına dokunmaz; onlar kullanıcının tercihi.
+        """
+        self._refresh_dynamic_defaults(bools_only=True)
 
     def _refresh_conditional_fields(self) -> None:
         """``visible_when``'lı alanların görünürlüğünü tazeler.
@@ -813,9 +839,7 @@ class ModulePage(Gtk.Box):
 
         if kind == "bool":
             checkbox = Gtk.CheckButton()
-            # Default değeri kontrol et (string olarak geliyor)
-            is_checked = default.lower() in ("true", "1", "yes", "on")
-            checkbox.set_active(is_checked)
+            checkbox.set_active(_as_checked(default))
 
             # Checkbox değişikliklerini dinle ve ilgili alanları aktif/pasif yap
             def on_checkbox_toggled(cb, field_key=field["key"],
@@ -1415,6 +1439,9 @@ class ModulePage(Gtk.Box):
         # Apply de sistem durumunu değiştirmiş olabilir — aynı tazelemeyi
         # buradan da çalıştır.
         self._refresh_after_action()
+        # "Özellik açık mı" kutuları yeni durumu göstersin; kullanıcının
+        # girdiği sayı/metin alanlarına dokunulmaz.
+        self._refresh_state_checkboxes()
         if self.post_apply_callback is not None:
             try:
                 self.post_apply_callback(result)
@@ -1794,6 +1821,11 @@ class ModulePage(Gtk.Box):
         else:
             console.fail(u_result.summary)
         self._show_result(u_result)
+        # Geri alma sistemi eski hâline döndürdü: önizleme, şartlı alanlar
+        # ve "özellik açık mı" kutuları bunu yansıtmalıydı — yansıtmıyordu.
+        # Sayı/metin alanları kullanıcının tercihi olduğu için korunur.
+        self._refresh_after_action()
+        self._refresh_state_checkboxes()
 
 
 # =========================================================================

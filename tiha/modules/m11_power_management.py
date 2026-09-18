@@ -875,6 +875,22 @@ class PowerManagementModule(Module):
         Yüklü service.py dosyasından okunur; yoksa varsayılan 120."""
         return _current_countdown_seconds()
 
+    # --- Onay kutularının sistemden dolan durumu -------------------------
+    # Bu iki kutu "şu an açık mı" sorusunun cevabıdır, bir tercih değil.
+    # Geri alma eta-shutdown yapılandırmasını sıfırlıyor ama kutular
+    # işaretli kalıyordu; adıma tekrar girildiğinde de sistemde kurulu
+    # olan kapanma kutuda görünmüyordu. Saat, dakika ve geri sayım
+    # süresi kutuları bilinçli olarak dışarıda: onlar kullanıcının
+    # girdiği tercih, sistem durumu değil.
+
+    def auto_shutdown_active(self) -> bool:
+        """Sabit saatte kapanma sistemde açık mı?"""
+        return self.get_current_config().get("auto_enabled") == "True"
+
+    def idle_shutdown_active(self) -> bool:
+        """Boştayken kapanma sistemde açık mı?"""
+        return self.get_current_config().get("idle_enabled") == "True"
+
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
 
