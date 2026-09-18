@@ -17,7 +17,7 @@ anlatıcıları ve adımlar arası denetimler), `tiha/core/report_log.py`
 2. **Yaptıklarınız** — sihirbaz sırasıyla, adım başına ikinci çoğul şahıs,
    geçmiş zaman maddeler ("…ayarladınız", "…oluşturdunuz") ve o adıma özel
    uyarılar (⚠).
-3. **Dikkat: adımlar arası ilişkiler** — sıra, ilişki ve eksik adım
+3. **Dikkat** — adımlar arası sıra, ilişki ve eksik adım
    uyarıları (aşağıdaki tablo).
 4. **Klon tahtada deneyin** — adım başına somut, emir kipinde denetim
    maddeleri (☐) ve her imaj için geçerli genel denetimler.
@@ -53,7 +53,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Öğretmen PIN anahtarları | eta-otp-cli ya da dahili yol, öğretmen listesi, yedek hesaplar, etapadmin/ogretmen için üretildi ya da korundu, yeni/korunan anahtar sayısı, grup PIN'i oluşturuldu ya da korundu, gruba eklenenler, otomatik grup servisi, giriş ekranı önbelleği (≥50 kullanıcı), değişen anahtar, PIN'lerin üretimden sonra silinmesi, fazladan hesap silme, ortak hesabın gruptan çıkarılması |
 | EBA QR parola diyaloğu | kapatıldı / zaten kapalıydı |
 | SSH sunucusu | paket kuruldu / zaten kuruluydu |
-| Samba | paket kuruldu ya da vardı, kullanıcı root ya da başka |
+| Dosya sunucusu | paket kuruldu ya da vardı, kullanıcı root ya da başka |
 | Merkezi log | sunucu, port, TCP/UDP, profil (bakım/kapsamlı/güvenlik), SMART, node_exporter |
 | Zaman eşitlemesi | birincil ve yedek sunucu birleşimleri, saat dilimi, internet havuzu uyarısı |
 | Dinamik hostname | şablon ve önek, önceki ad, geçersiz ya da uzun önek |
@@ -63,7 +63,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Otomatik Ahenk Kaydı | ahenk kuruldu ya da vardı, imzalanan MAC |
 | BIOS parolası | temizleme, yalnız ayarlara girişte, her açılışta, Faz 1 modeli, model adı, kaynak tahtanın BIOS'unun düğmeyle doğrudan değiştirilmesi |
 | GRUB koruması | kuruldu (kurtarma girdisi menüde ve parolalı), eski sürümün kapattığı kurtarma geri açıldı, kurtarma yöneticinin ayarıyla kapalı, kayıtlı açılış varsayılanı sıfırlandı, kaldırıldı, zaten etkindi (parola korundu), etkinleştirilmedi |
-| İmaj için sanitize | uygulandı, boşaltılan alan, hassas TiHA yedeklerinin silinmesi, imaj damgasının yalnız root'a açık olması |
+| İmaj öncesi temizlik | uygulandı, boşaltılan alan, hassas TiHA yedeklerinin silinmesi, imaj damgasının yalnız root'a açık olması |
 
 ## Adımlar arası denetimler
 
@@ -135,7 +135,7 @@ YAPTIKLARINIZ
 ■ SSH sunucusu (root girişi)
   • Tahtaya SSH sunucusunu kurdunuz ve root kullanıcısının ağ üzerinden parolayla oturum açmasına izin verdiniz.
   ! Root parolası ve parolayla SSH girişi bütün klonlarda aynı olacak; parola sızarsa bütün tahtalar uzaktan yönetici erişimine açılır. Erişimi güvenlik duvarı ya da VLAN ile yönetim bilgisayarlarına sınırlayın.
-■ Samba dosya paylaşımı
+■ Dosya sunucusu
   • Samba ile tahtanın tüm diskini (kök '/') ağda \\<tahta-ip>\root adıyla, 'root' kullanıcısı ve parolasıyla tam yazma yetkisiyle paylaştınız.
   ! Samba parolası bütün klonlarda aynı ve paylaşım diskin tamamına root yetkisiyle yazabiliyor; parola sızarsa bütün tahtalar etkilenir. Paylaşıma erişimi yönetim ağıyla sınırlayın.
 ■ Dayanıklı merkezi log iletimi
@@ -173,19 +173,18 @@ YAPTIKLARINIZ
 ■ GRUB koruması
   • GRUB açılış menüsünü korumaya aldınız: menü düzenleme ('e') ve GRUB komut satırı ('c') artık 'etapadmin' GRUB kullanıcı adı ve bu adımda belirlediğiniz GRUB parolasıyla açılıyor. Kurtarma (recovery) girdisi menüde kalıyor ama onu açmak da aynı kullanıcı adı ve parolayı istiyor; 'Gelişmiş seçenekler' alt menüsü de parolalı. Normal açılış parola sormuyor.
   ! GRUB parolası sistemdeki etapadmin parolası değildir ve hiçbir yerden geri okunamaz; bütün klonlarda aynıdır. Türkçe karakter (ç, ğ, ı, ö, ş, ü) içeren bir parola GRUB'ın ABD klavye düzeninde yazılamayabilir.
-■ İmaj için sanitize
+■ İmaj öncesi temizlik
   • İmajı klonlamaya hazırlamak için kimlik temizliği yaptınız: makine kimliğini (machine-id) sıfırladınız, SSH anahtarlarını sildiniz (her klon ilk açılışta kendi anahtarını üretecek), kayıtlı ağ bağlantılarını ve Wi-Fi parolalarını temizlediniz.
   • Günlükleri, APT önbelleğini ve paket listelerini, kabuk geçmişlerini, kullanıcı önbelleklerini, tarayıcı gezinti verilerini (yer imleri korunarak), GNOME anahtarlıklarını ve geçici dosyaları sildiniz; yaklaşık 412.3 MB disk alanı boşalttınız.
   • İmaja /etc/tiha-image-info.json damgasını yazdınız; sahada bu dosyadan imajın sürümü ve uygulanan adımlar görülebilir (yalnız root okuyabilir).
   • TiHA'nın imajla klonlara gidecek hassas yedeklerini (parola değişikliği öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, PIN kâğıtları ve anahtar yedeği) sildiniz; bu yüzden Kullanıcı parolaları ve PIN adımları artık geri alınamaz.
   ! Temizlikten sonra kaynak tahtayı işletim sistemiyle YENİDEN AÇMAYIN: kapatın ve imajı canlı USB'den (Clonezilla vb.) alın. Açarsanız makine kimliği ve SSH anahtarları kaynak tahtada yeniden üretilir ve bütün klonlara aynen gider.
 
-DİKKAT — ADIMLAR ARASI İLİŞKİLER
+DİKKAT
   ! Uzaktan uyandırılan bir tahta, kimse kullanmazsa yaklaşık 15 dakika + 2 dakika sonra giriş ekranında kendiliğinden kapanacak (boşta kapanma giriş ekranında da çalışır). Tahtaları dersten çok önce uyandıracaksanız boşta kalma süresini buna göre seçin.
   ! BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan uyandırmayı açtınız: uzaktan uyandırılan tahtalar BIOS parola ekranında bekleyip işletim sistemine hiç geçmeyecek.
   ! Uzaktan uyandırma her tahtada BIOS ayarı (Wake on LAN açık, ErP ve Deep Sleep kapalı) ister ve BIOS'a yönetici parolası koyduğunuz için bu ayarları yapmak her tahtada o parolayı gerektirecek. BIOS ayarlarını mümkünse parola ayarlanmadan önce yapın.
   ! “BIOS yönetici parolası” ve “Otomatik Ahenk Kaydı” aynı MAC imzasını kullanıyor. BIOS parolası klonun ilk açılışında ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan sonra BIOS'a girerek mutlaka doğrulayın.
-  ! TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara gidecek hassas yedekler var: parola değişikliği öncesi /etc/shadow yedeği, PIN anahtarlarının yedeği ve PIN kâğıtları (bütün anahtarlar QR'lı). İmaj temizliği (sanitize) bunları siler; imajı almadan önce o adımı yeniden çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin.
 
 KLON TAHTADA DENEYİN
 ■ Sistem güncellemesi (apt)
@@ -218,7 +217,7 @@ KLON TAHTADA DENEYİN
   ☐ Klonda `systemctl is-active ssh` çıktısının active olduğunu ve `sudo sshd -T | grep -Ei 'permitrootlogin|passwordauthentication'` çıktısında ikisinin de yes olduğunu doğrulayın (adım, servisin gerçekten ayağa kalktığını denetlemiyor).
   ☐ İki farklı klonda `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` parmak izlerinin FARKLI olduğunu doğrulayın.
   ☐ Öğrenci ya da misafir ağından klonun SSH portuna erişilemediğini doğrulayın.
-■ Samba dosya paylaşımı
+■ Dosya sunucusu
   ☐ Bir Windows bilgisayarda Dosya Gezgini'ne \\<klon-ip>\root yazıp 'root' kullanıcı adı ve parolayla bağlanın; bir dosya oluşturup silerek yazma yetkisini doğrulayın.
   ☐ Klonda `systemctl is-active smbd` çıktısının active olduğunu doğrulayın (adım servisin ayağa kalktığını denetlemiyor).
   ☐ Birkaç klon aynı anda ağdayken Windows'un Ağ görünümünde her tahtanın kendi adıyla göründüğünü, ad çakışması olmadığını doğrulayın.
@@ -272,7 +271,7 @@ KLON TAHTADA DENEYİN
   ☐ Kurtarma kipinden çıkıp tahtayı yeniden başlatın: sonraki açılış normal girdiyle ve parola sormadan gerçekleşmeli (alt menü girdileri açılış varsayılanı olarak kaydedilmez).
   ☐ Parolayı fiziksel bir USB klavyeyle deneyin: GRUB'da dokunmatik ve ekran klavyesi yoktur, klavye düzeni ABD'dir.
   ☐ "Gelişmiş seçenekler" alt menüsünün de parola istediğini doğrulayın; eski çekirdekle açmak gerekirse GRUB parolası gerekir.
-■ İmaj için sanitize
+■ İmaj öncesi temizlik
   ☐ İki farklı klonda `cat /etc/machine-id` ve `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` çıktılarının FARKLI olduğunu doğrulayın.
   ☐ Klonda `ls /etc/ssh/ssh_host_*` ile SSH anahtarlarının üretildiğini ve (SSH kuruluysa) `systemctl is-active ssh` çıktısının active olduğunu doğrulayın.
   ☐ Kablolu ağın klonda kendiliğinden bağlandığını doğrulayın; Wi-Fi kullanılacaksa bağlantıyı yeniden tanımlamanız gerekir (Wi-Fi parolaları imajdan silindi).
