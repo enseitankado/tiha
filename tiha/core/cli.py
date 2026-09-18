@@ -39,6 +39,7 @@ from . import console
 from .logger import get_logger
 from .preset import import_preset
 from .undo import Journal, JournalEntry
+from .report_log import REPORT_PARAMS_KEY, redact_params
 
 log = get_logger(__name__)
 
@@ -174,6 +175,7 @@ def cmd_apply(
         entry.summary = result.summary
         entry.status = "applied" if result.success else "failed"
         entry.data = dict(result.data) if isinstance(result.data, dict) else {}
+        entry.data[REPORT_PARAMS_KEY] = redact_params(mod.id, params)
         journal.record(entry)
 
         if result.success:

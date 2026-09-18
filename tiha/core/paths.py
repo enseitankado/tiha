@@ -16,6 +16,10 @@ ETC_ROOT = Path("/etc/tiha")
 # Alt dizinler
 STATE_DIR = VAR_ROOT / "state"          # Modül başına yedek ve durum klasörleri
 JOURNAL_FILE = VAR_ROOT / "journal.json"  # Yapılan işlemlerin özet defteri
+# Form içi düğme eylemleri (hesap silme, BIOS parolası ayarlama…) günceye
+# girmez — geri alınabilir bir "adım" değiller — ama sistemi kalıcı
+# değiştirirler. Özet raporu onları da anlatabilsin diye ayrı tutulur.
+ACTIONS_FILE = VAR_ROOT / "actions.json"
 LOG_FILE = LOG_ROOT / "tiha.log"         # Ana uygulama log dosyası
 
 # Sistem tarafı entegrasyonlar

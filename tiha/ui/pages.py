@@ -22,6 +22,7 @@ from ..core.module import ApplyResult, Module
 log = get_logger(__name__)
 from ..core.undo import Journal, JournalEntry
 from . import params as params_schema
+from ..core.report_log import REPORT_PARAMS_KEY, ActionLog, redact_params
 
 log = get_logger(__name__)
 
@@ -1124,6 +1125,30 @@ class ModulePage(Gtk.Box):
     # Apply akışı — thread'li + canlı çıktı
     # ------------------------------------------------------------------
 
+    def _record_action(self, result: ApplyResult) -> None:
+        """Düğme eylemini kalıcı eylem kaydına yazar (Özet raporu okur).
+
+        Günceye yazılmaz: düğme eylemi geri alınabilir bir adım değil.
+        """
+        ctx = getattr(self, "_action_ctx", None)
+        self._action_ctx = None
+        if not ctx:
+            return
+        action, label, params = ctx
+        try:
+            ActionLog().record(
+                module_id=self.module.id,
+                title=self.module.title,
+                action=action,
+                label=label,
+                success=bool(result.success),
+                summary=result.summary or "",
+                params=params,
+                data=result.data if isinstance(result.data, dict) else {},
+            )
+        except Exception as exc:  # rapor kaydı işlemi asla bozmasın
+            log.warning("Eylem kaydı yazılamadı: %s", exc)
+
     def _run_button_action(self, action: str, button: Gtk.Button | None = None) -> None:
         """Button action'ını canlı çıktı ve görsel geri bildirimle çalıştırır."""
         if self._applying:
@@ -1166,6 +1191,8 @@ class ModulePage(Gtk.Box):
         # davranır (m14 boş parolayı "temizle" niyeti sayar). GTK widget'larına
         # worker thread'inden erişmek güvenli olmadığı için burada toplarız.
         params, _missing = self._collect_params()
+        # Eylem kaydı (Özet raporu) için tamamlanınca kullanılır.
+        self._action_ctx = (action, label, dict(params))
 
         def worker():
             try:
@@ -1189,6 +1216,7 @@ class ModulePage(Gtk.Box):
         thread.start()
 
     def _on_button_action_complete(self, result: ApplyResult) -> None:
+        self._record_action(result)
         self._finish_stream_dialog(
             result.summary,
             result.success,
@@ -1426,6 +1454,11 @@ class ModulePage(Gtk.Box):
         entry.status = "applied" if result.success else "failed"
         # Modülün bıraktığı undo verisini günceye taşı
         entry.data = dict(result.data) if isinstance(result.data, dict) else {}
+        # Özet raporu hangi seçeneklerle uygulandığını bilsin (parolalar
+        # maskelenir; yalnız "girildi mi" bilgisi kalır).
+        entry.data[REPORT_PARAMS_KEY] = redact_params(
+            self.module.id, self.last_apply_params,
+        )
         self.journal.record(entry)
         # Terminale profesyonel sonuç satırı
         if result.success:
