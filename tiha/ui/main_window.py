@@ -659,8 +659,37 @@ class TiHAWindow(Gtk.Window):
         title.get_style_context().add_class("tiha-sidebar-title")
         subtitle = Gtk.Label(label="Tahta İmaj Hazırlık Aracı", xalign=0)
         subtitle.get_style_context().add_class("tiha-sidebar-subtitle")
-        sidebar_outer.pack_start(title, False, False, 0)
-        sidebar_outer.pack_start(subtitle, False, False, 0)
+        title_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        title_col.pack_start(title, False, False, 0)
+        title_col.pack_start(subtitle, False, False, 0)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        header.pack_start(title_col, True, True, 0)
+        sidebar_outer.pack_start(header, False, False, 0)
+
+        # Simge, iki satırlık metnin (TiHA + alt başlık) toplam yüksekliğini
+        # geçmesin diye boyutu fontun gerçek satır yüksekliğinden hesaplanır.
+        text_px = (
+            title.get_layout().get_pixel_size()[1]
+            + subtitle.get_layout().get_pixel_size()[1]
+        )
+        icon_px = max(24, min(48, text_px or 36))
+        try:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(
+                str(ICON_PATH), icon_px, icon_px,
+            )
+        except GLib.Error as exc:
+            log.warning("Kenar çubuğu simgesi yüklenemedi: %s", exc)
+        else:
+            icon = Gtk.Image.new_from_pixbuf(pixbuf)
+            icon.get_style_context().add_class("tiha-sidebar-icon")
+            # Metin bloğunun CSS dolgularıyla aynı hizada dursun: üstte
+            # başlığın 8px, altta alt başlığın 10px dolgusu.
+            icon.set_valign(Gtk.Align.START)
+            icon.set_margin_top(8)
+            icon.set_margin_start(12)
+            header.pack_start(icon, False, False, 0)
+            header.reorder_child(icon, 0)
 
         # Güncelleme rozeti — async kontrol sonucu geldiğinde belirir.
         self.update_badge = Gtk.Label(xalign=0)

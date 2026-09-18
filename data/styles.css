@@ -8,16 +8,18 @@
     padding: 6px 0;
 }
 
+/* Başlık ve alt başlığın solunda uygulama simgesi durur; aradaki boşluk
+   etiketlerin 8px sol dolgusudur. */
 .tiha-sidebar-title {
     font-size: 13pt;
     font-weight: 700;
-    padding: 8px 12px 2px 12px;
+    padding: 8px 12px 2px 8px;
 }
 
 .tiha-sidebar-subtitle {
     opacity: 0.6;
     font-size: 9pt;
-    padding: 0 12px 10px 12px;
+    padding: 0 12px 10px 8px;
 }
 
 /* Kenar çubuğu adımı (ListBoxRow üzerine uygulanır) */
