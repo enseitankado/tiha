@@ -15,7 +15,8 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
 from .. import __version__
 from ..core.logger import get_logger
@@ -31,6 +32,12 @@ from .pages import ModulePage, SummaryPage, WelcomePage
 log = get_logger(__name__)
 
 CSS_PATH = Path(__file__).resolve().parents[2] / "data" / "styles.css"
+ICON_PATH = Path(__file__).resolve().parents[2] / "data" / "tiha.svg"
+# Yüklenemezse (SVG yükleyicisi yoksa) ETAP temasındaki bu simgeye düşülür.
+FALLBACK_ICON_NAME = "pardus-image-writer"
+# Panel, Alt+Tab ve pencere başlığı farklı boyut ister; her boyutu SVG'den
+# ayrı çizmek, tek büyük resmin küçültülmesinden daha keskin sonuç verir.
+ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
 # "Emeği Geçenler" diyaloğundaki bölümler ve satırlar. Her satır:
@@ -261,10 +268,7 @@ class TiHAWindow(Gtk.Window):
         self.set_default_size(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
         self.set_size_request(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.set_position(Gtk.WindowPosition.CENTER)
-        # Pardus ETAP 'eta' ikon temasında yer alan resmi imaj-yazıcı
-        # simgesi — TiHA'nın amacını (tahta imajı hazırlamak ve
-        # diskten diske yazmak) doğrudan çağrıştırır.
-        self.set_icon_name("pardus-image-writer")
+        self._load_icon()
 
         self._load_css()
 
@@ -608,6 +612,23 @@ class TiHAWindow(Gtk.Window):
             log.warning("xdg-open başarısız: %s", exc)
 
     # ---- Kurulum yardımcıları -------------------------------------------
+
+    def _load_icon(self) -> None:
+        """TiHA'nın kendi simgesi (data/tiha.svg): yapılandırılıp klonlanan
+        tahta destesi. TiHA kurulmadan, indirildiği dizinden çalıştığı için
+        simge tema adıyla değil dosyadan yüklenir."""
+        try:
+            pixbufs = [
+                GdkPixbuf.Pixbuf.new_from_file_at_size(str(ICON_PATH), size, size)
+                for size in ICON_SIZES
+            ]
+        except GLib.Error as exc:
+            log.warning("Uygulama simgesi yüklenemedi (%s): %s", ICON_PATH, exc)
+            self.set_icon_name(FALLBACK_ICON_NAME)
+            return
+        self.set_icon_list(pixbufs)
+        # Diyaloglar (hakkında, uyarılar) da aynı simgeyi taşısın.
+        Gtk.Window.set_default_icon_list(pixbufs)
 
     def _load_css(self) -> None:
         if not CSS_PATH.exists():

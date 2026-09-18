@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TiHA — Tahta İmaj Hazırlık Aracı uygulama simgesi.
+     Katmanlı tahta destesi: yapılandırılıp klonlanan tahtalar.
+     Öndeki tahtada dokunma dalgası (etkileşimli/dokunmatik tahta),
+     köşede dişli (yapılandırma). Renkler Pardus'un kendi simgelerinden
+     (pardus-about.svg): #1F7ECB, #2F9FFE, #6FB8FF, #A9D6FF. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="96" y="28" width="146" height="98" rx="13" fill="#A9D6FF"/>
+  <rect x="107" y="39" width="124" height="76" rx="7" fill="#E8F3FF"/>
+  <rect x="70" y="50" width="146" height="98" rx="13" fill="#6FB8FF"/>
+  <rect x="81" y="61" width="124" height="76" rx="7" fill="#E8F3FF"/>
+  <rect x="20" y="74" width="156" height="104" rx="13" fill="#1F7ECB"/>
+  <rect x="31" y="85" width="134" height="82" rx="7" fill="#FFFFFF"/>
+  <circle cx="98" cy="126" r="9.0" fill="#2F9FFE"/>
+  <path d="M85.9 141.5 A19.68 19.68 0 0 1 85.9 110.5" fill="none" stroke="#2F9FFE" stroke-width="5.7" stroke-linecap="round"/>
+  <path d="M110.1 110.5 A19.68 19.68 0 0 1 110.1 141.5" fill="none" stroke="#2F9FFE" stroke-width="5.7" stroke-linecap="round"/>
+  <path d="M78.8 150.6 A31.159999999999997 31.159999999999997 0 0 1 78.8 101.4" fill="none" stroke="#2F9FFE" stroke-width="5.7" stroke-linecap="round"/>
+  <path d="M117.2 101.4 A31.159999999999997 31.159999999999997 0 0 1 117.2 150.6" fill="none" stroke="#2F9FFE" stroke-width="5.7" stroke-linecap="round"/>
+  <circle cx="196" cy="188" r="54" fill="#FFFFFF"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(0.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(45.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(90.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(135.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(180.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(225.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(270.0 196 188)"/>
+  <rect x="187.7" y="142.0" width="16.6" height="21.2" rx="4.6" fill="#1F7ECB" transform="rotate(315.0 196 188)"/>
+  <circle cx="196" cy="188" r="33.1" fill="#1F7ECB"/>
+  <circle cx="196" cy="188" r="13.2" fill="#FFFFFF"/>
+</svg>
