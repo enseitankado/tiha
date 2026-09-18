@@ -47,15 +47,15 @@ row.tiha-step-failed {
 
 /* İçerik alanı */
 .tiha-heading {
-    font-size: 14pt;
+    font-size: 12pt;
     font-weight: 700;
     margin-bottom: 2px;
 }
 
 .tiha-rationale {
-    font-size: 10pt;
+    font-size: 9pt;
     opacity: 0.75;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 /* Uzun rationale'ı gizleyip açan başlık yanı yardım düğmesi.
@@ -213,7 +213,59 @@ textview.tiha-placeholder text selection {
 /* Form içindeki bölüm başlıkları (params şemasında "heading" alanı) */
 .tiha-form-section {
     font-weight: 700;
-    margin-top: 10px;
+    margin-top: 8px;
+    font-size: 10pt;
+}
+
+/* -------- Kompakt adım formu -----------------------------------
+   Adım şemasından üretilen formlar (Gtk.Grid class="tiha-form")
+   için hafif ve kompakt widget'lar. Log/preview alanları HARİÇ:
+   .tiha-preview / .tiha-stream kendi ölçüleriyle korunuyor.
+
+   Etki alanı sadece bu Grid'in altındaki widget'lar; welcome,
+   summary, credits gibi sayfalar bu class'ı taşımıyor, dokunulmuyor.
+*/
+.tiha-form entry,
+.tiha-form spinbutton,
+.tiha-form spinbutton entry,
+.tiha-form combobox,
+.tiha-form combobox entry {
+    min-height: 24px;
+    padding: 2px 8px;
+    font-size: 10pt;
+}
+.tiha-form combobox button,
+.tiha-form spinbutton button {
+    min-height: 24px;
+    padding: 2px 6px;
+}
+.tiha-form checkbutton {
+    font-size: 10pt;
+    padding: 2px 0;
+    min-height: 22px;
+}
+.tiha-form checkbutton check {
+    min-width: 14px;
+    min-height: 14px;
+}
+.tiha-form button {
+    padding: 4px 12px;
+    font-size: 10pt;
+    min-height: 26px;
+}
+.tiha-form label {
+    font-size: 10pt;
+}
+/* Form içindeki yardım (help) metinleri: alanın altında konum aldığı
+   için biraz daha küçük ve daha soluk. */
+.tiha-form label.tiha-rationale {
+    font-size: 9pt;
+    margin-bottom: 2px;
+}
+/* Textarea (öğretmen listesi vb.) — kutu yüksekliği makul kalsın,
+   font gövde metniyle uyumlu. */
+.tiha-form textview {
+    font-size: 10pt;
 }
 
 /* Salt okunur alanlar ("readonly"): değer modülden gelir, kullanıcı

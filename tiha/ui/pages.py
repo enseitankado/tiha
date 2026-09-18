@@ -456,7 +456,8 @@ class ModulePage(Gtk.Box):
         self.result_holder.pack_start(banner, False, False, 0)
 
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
-        grid = Gtk.Grid(column_spacing=12, row_spacing=6)
+        grid = Gtk.Grid(column_spacing=10, row_spacing=4)
+        grid.get_style_context().add_class("tiha-form")
         row_idx = 0
         for field in schema:
             # Bölüm başlığı: değer taşımaz, iki sütuna yayılan kalın etiket.
