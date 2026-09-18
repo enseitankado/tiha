@@ -6,10 +6,14 @@ Normal iş akışımız şöyledir:
 
     1. Boş tahtaya Pardus ETAP temiz kurulum yapılır.
     2. etapadmin'e geçilir, TiHA bu komutla başlatılır.
-    3. 1–9 arası adımlar uygulanır, ardından klon-yeniden-talep
-       adımı (m12) ve son olarak bu sanitize adımı çalıştırılır.
-    4. Tahta bir kez yeniden başlatılır (servisler test edilir).
-    5. İmaj alma aracıyla (Clonezilla vb.) diskin imajı alınır.
+    3. Adımlar uygulanır; son olarak bu sanitize adımı çalıştırılır.
+    4. Tahta KAPATILIR ve işletim sistemiyle yeniden açılmaz: imaj,
+       canlı USB'den başlatılan bir imaj alma aracıyla (Clonezilla vb.)
+       alınır. Kaynak tahta sanitize'dan sonra açılırsa makine kimliği
+       ve SSH anahtarları o açılışta yeniden üretilir ve imajla bütün
+       klonlara aynen gider; o durumda sanitize yeniden çalıştırılmalıdır.
+    5. Servisleri denemek için imaj önce bir klon tahtaya yazılır ve
+       orada test edilir (bkz. Özet sayfasındaki rapor).
     6. Bu imaj diğer tahtalara uygulanır.
 
 **Bu adım iki iş yapar:**
@@ -52,6 +56,7 @@ from ..core.image_info import IMAGE_INFO_FILE, write_image_info
 from ..core.keyring import purge_keyrings
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
+from ..core.paths import STATE_DIR
 from ..core.undo import Journal
 from ..core.utils import run_cmd
 
@@ -64,6 +69,36 @@ KEEP_LOCALES = ("tr", "en", "C", "POSIX")
 REGEN_SSH_SERVICE = Path("/etc/systemd/system/tiha-first-boot-sshkeys.service")
 REGEN_SSH_SCRIPT = Path("/usr/local/sbin/tiha-first-boot-sshkeys.sh")
 REGEN_SSH_SENTINEL = Path("/var/lib/tiha/first-boot-sshkeys.done")
+
+# TiHA'nın kendi kayıt dizini (/var/lib/tiha) imajla bütün klonlara gider.
+# Klonların ihtiyaç duymadığı ama gizli bilgi taşıyan yedekler sanitize'da
+# silinir. Klonların ihtiyaç duyduğu dosyalara (imaged-mac, günce, diğer
+# adımların yedekleri) dokunulmaz.
+#   - Kullanıcı parolaları: parola değişikliğinden önceki /etc/shadow
+#     yedeği (eski parola özetleri) ve kenara alınmış anahtarlıklar
+#   - PIN anahtarları: bütün anahtarları QR kodlarıyla içeren kâğıtlar ve
+#     otp-secrets.json yedeği. Kâğıt gerekirse PIN adımı yeniden
+#     uygulanarak, anahtarlara dokunmadan yeniden üretilir.
+# Bu yedekler silindiği için o iki adım sanitize'dan sonra geri alınamaz.
+SENSITIVE_STATE = (
+    ("m01_initial_passwords", "shadow"),
+    ("m01_initial_passwords", "keyrings"),
+    ("m03_otp_secrets", "otp-secrets.json"),
+    ("m03_otp_secrets", "ogretmen-pin-kagitlari-*.html"),
+)
+
+
+def _purge_sensitive_state(state_dir: Path = STATE_DIR) -> list[str]:
+    """Hassas TiHA yedeklerini siler; silinenlerin göreli yollarını döner."""
+    removed: list[str] = []
+    for module_dir, pattern in SENSITIVE_STATE:
+        root = state_dir / module_dir
+        if not root.is_dir():
+            continue
+        for match in sorted(root.glob(pattern)):
+            if match.exists() and _rm(match):
+                removed.append(f"{module_dir}/{match.name}")
+    return removed
 
 REGEN_SSH_SCRIPT_CONTENT = f"""#!/bin/bash
 # TiHA — ilk açılışta SSH host anahtarlarını yeniden üretir.
@@ -324,8 +359,10 @@ class ImageSanitizeModule(Module):
 
     def preview(self) -> str:
         return (
-            "Bu adım uygulandıktan sonra (ve ayrıca 'Ahenk kimliği sıfırla'\n"
-            "adımı da çalıştırıldıysa) tahta imaj alınmaya hazırdır.\n"
+            "Bu adım uygulandıktan sonra tahta imaj alınmaya hazırdır.\n"
+            "Tahtayı KAPATIN ve işletim sistemiyle açmadan imajı canlı USB'den\n"
+            "(Clonezilla vb.) alın. Açarsanız makine kimliği ve SSH anahtarları\n"
+            "yeniden üretilir ve bütün klonlara aynen gider.\n\n"
             "Aşağıdaki kategoriler temizlenecek (geri alınamaz):\n\n"
             "Tekil kimlikler (her kopya kendi kimliğini üretir):\n"
             "  - /etc/machine-id ve /var/lib/dbus/machine-id\n"
@@ -333,7 +370,16 @@ class ImageSanitizeModule(Module):
             "  - /etc/NetworkManager/system-connections/*\n"
             "    (kablosuz ağ parolaları dahil bağlantı tanımları)\n"
             "  - DHCP/DHCP6 kira (lease) dosyaları\n"
-            "  - /var/lib/systemd/random-seed\n\n"
+            "  - /var/lib/systemd/random-seed\n"
+            "  - SSH anahtar üretiminin 'yapıldı' işareti\n\n"
+            "TiHA'nın hassas yedekleri (/var/lib/tiha, imaja gider):\n"
+            "  - Parola değişikliğinden önceki /etc/shadow yedeği ve\n"
+            "    kenara alınmış anahtarlıklar\n"
+            "  - PIN kâğıtları (bütün anahtarlar QR kodlarıyla) ve anahtar\n"
+            "    yedeği. Kâğıdı bu adımdan önce yazdırın ya da kaydedin;\n"
+            "    gerekirse PIN adımı yeniden uygulanarak yeniden üretilir.\n"
+            "  - Bu yedekler silindiği için 'Kullanıcı parolaları' ve PIN\n"
+            "    adımları bu adımdan sonra geri alınamaz.\n\n"
             "Not: ahenk (LiderAhenk) ajan kimliği bu adımda dokunulmaz -\n"
             "klon-yeniden-talep mekanizması bir önceki adımda (m12)\n"
             "imaja gömülür; credential temizliği klonun ilk açılışında\n"
@@ -369,8 +415,9 @@ class ImageSanitizeModule(Module):
             "  - /tmp ve /var/tmp içerikleri\n"
             "  - Kullanılmayan diller için yerelleştirme dosyaları\n"
             f"    ({', '.join(KEEP_LOCALES)} dışındakiler /usr/share/locale altından silinir)\n\n"
-            "Uyguladıktan sonra: 'Ahenk kimliği sıfırla' adımını da çalıştırın "
-            "ve ardından imaj alma aracınızı (Clonezilla vb.) açın."
+            "Uyguladıktan sonra: tahtayı kapatın ve imaj alma aracınızı\n"
+            "(Clonezilla vb.) canlı USB'den başlatın. Otomatik Ahenk Kaydı\n"
+            "adımının bu adımdan ÖNCE uygulanmış olması gerekir."
         )
 
     def apply(self, params: dict | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
@@ -403,6 +450,12 @@ class ImageSanitizeModule(Module):
         # SSH host anahtarları + ilk açılışta üretme servisi
         for p in Path("/etc/ssh").glob("ssh_host_*"):
             _rm(p)
+        # İlk açılış servisinin "yapıldı" işareti. Sanitize'dan sonra tahta
+        # bir kez açıldıysa bu işaret oluşmuştur; imajda kalırsa klonlarda
+        # servis hiç çalışmaz ve klonlar SSH anahtarı üretmez.
+        if REGEN_SSH_SENTINEL.exists():
+            _rm(REGEN_SSH_SENTINEL)
+            ops.append(f"SSH anahtar üretimi 'yapıldı' işareti silindi: {REGEN_SSH_SENTINEL}")
         REGEN_SSH_SCRIPT.write_text(REGEN_SSH_SCRIPT_CONTENT, encoding="utf-8")
         REGEN_SSH_SCRIPT.chmod(0o755)
         REGEN_SSH_SERVICE.write_text(REGEN_SSH_SERVICE_CONTENT, encoding="utf-8")
@@ -426,6 +479,15 @@ class ImageSanitizeModule(Module):
         # systemd random-seed (sonraki açılışta yeniden üretilir)
         if _rm(Path("/var/lib/systemd/random-seed")):
             ops.append("systemd random-seed sıfırlandı")
+
+        # ===== 1b) TiHA'nın hassas yedekleri ==========================
+        removed_state = _purge_sensitive_state()
+        if removed_state:
+            ops.append(
+                "TiHA'nın hassas yedekleri silindi: " + ", ".join(removed_state)
+            )
+            if progress:
+                progress(f"  ✓ TiHA'nın hassas yedekleri: {len(removed_state)} öğe")
 
         # ===== 2) APT önbelleği ve paket temizliği ====================
         if progress:
