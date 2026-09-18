@@ -85,6 +85,15 @@ def _as_checked(value: object) -> bool:
     return str(value).strip().lower() in ("true", "1", "yes", "on")
 
 
+def _no_focus_labels(widget: Gtk.Widget) -> None:
+    """Kapsayıcıdaki bütün etiketlerin klavye odağı almasını kapatır."""
+    if isinstance(widget, Gtk.Label):
+        widget.set_can_focus(False)
+    elif isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            _no_focus_labels(child)
+
+
 def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = False) -> Gtk.Label:
     lbl = Gtk.Label(label=text, xalign=0)
     lbl.set_line_wrap(True)
@@ -2056,6 +2065,9 @@ class SummaryPage(Gtk.Box):
             card.pack_start(buttons, False, False, 0)
 
         self.report_box.pack_start(card, False, False, 0)
+        # Seçilebilir etiketler odak alınca bütün metni seçiyor (sayfa açılışta
+        # mavi vurgulu görünüyordu). Fareyle seçim yine çalışır.
+        _no_focus_labels(card)
         self.report_box.show_all()
 
     def _bullets(self, lines: list[str], mark: str, klass: str | None = None) -> Gtk.Box:
