@@ -217,7 +217,9 @@ def build_report(
             experimental=bool(getattr(module, "experimental", False)),
         )
         if ctx.failed:
-            report_steps.narrate_failed(ctx, rep)
+            report_steps.FAILED_NARRATORS.get(
+                module.id, report_steps.narrate_failed,
+            )(ctx, rep)
         else:
             narrator: Narrator = report_steps.NARRATORS.get(module.id, _fallback)
             try:
