@@ -29,6 +29,7 @@ from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.privilege import invoking_username
 from ..core.utils import run_cmd, screen_blank_seconds
+from ..core.utils import _find_active_graphical_session
 
 # Geri sayım diyalogunun görünebilmesi için ekran-blank ile idle eşiği
 # arasında olması gereken minimum güvenlik payı (saniye):
@@ -536,6 +537,174 @@ def service():
 '''
 
 
+# ---------------------------------------------------------------------------
+# Şu anki güç ayarlarını okuma — preview'ün en üstündeki bilgi bloğu.
+# Sistemi değiştirmez; yalnızca xset / gsettings / logind kaynaklarını okur.
+# ---------------------------------------------------------------------------
+
+
+def _fmt_seconds(sec: int | None) -> str:
+    if sec is None:
+        return "okunamadı"
+    if sec <= 0:
+        return "kapalı"
+    if sec >= 60 and sec % 60 == 0:
+        return f"{sec // 60} dk"
+    if sec >= 60:
+        return f"{sec // 60} dk {sec % 60} sn"
+    return f"{sec} sn"
+
+
+def _fmt_microseconds(usec: int | None) -> str:
+    if usec is None:
+        return "okunamadı"
+    if usec <= 0:
+        return "kapalı"
+    return _fmt_seconds(usec // 1_000_000)
+
+
+def _read_current_power_settings() -> list[tuple[str, str]]:
+    """Sistemin şu anki güç yönetimi ayarlarını okuyup (etiket, değer)
+    çiftleri döndürür. Kaynak sırası:
+
+    * ``xset q`` — X11 DPMS zaman aşımları (Standby / Suspend / Off)
+    * ``gsettings`` — Cinnamon/GNOME 'sleep-display' ve 'sleep-inactive'
+    * ``systemctl show systemd-logind`` — IdleAction, IdleActionUSec,
+      HandleLidSwitch, HandlePowerKey
+    """
+    import re as _re
+
+    rows: list[tuple[str, str]] = []
+
+    env = _find_active_graphical_session()
+    sudo_env = (
+        ["sudo", "-u", env["USER"], "env"]
+        + [f"{k}={v}" for k, v in env.items()]
+        if env else None
+    )
+
+    # --- X11 DPMS ---
+    if sudo_env:
+        r = run_cmd(sudo_env + ["xset", "q"], timeout=5)
+        if r.ok:
+            standby = suspend = off = None
+            saver_timeout = None
+            for m in _re.finditer(r"\b(Standby|Suspend|Off):\s*(\d+)", r.stdout):
+                v = int(m.group(2))
+                if m.group(1) == "Standby":
+                    standby = v
+                elif m.group(1) == "Suspend":
+                    suspend = v
+                else:
+                    off = v
+            # Screen Saver bloğu birden fazla satır — 'timeout:' değerini
+            # başlıktan sonra ilk gördüğünde al. DOTALL şart.
+            m = _re.search(r"Screen Saver:.*?timeout:\s*(\d+)", r.stdout, _re.DOTALL)
+            if m:
+                saver_timeout = int(m.group(1))
+            dpms_on = "DPMS is Enabled" in r.stdout
+            rows.append((
+                "X11 ekran koruyucu (Screen Saver)",
+                _fmt_seconds(saver_timeout) if saver_timeout is not None else "okunamadı",
+            ))
+            rows.append((
+                "X11 DPMS (Standby / Suspend / Off)",
+                (
+                    f"{_fmt_seconds(standby)} / "
+                    f"{_fmt_seconds(suspend)} / "
+                    f"{_fmt_seconds(off)}"
+                    + ("" if dpms_on else "  [DPMS kapalı]")
+                ),
+            ))
+
+    # --- Cinnamon / GNOME gsettings ---
+    if sudo_env:
+        schemas_r = run_cmd(sudo_env + ["gsettings", "list-schemas"], timeout=5)
+        loaded = set(schemas_r.stdout.split()) if schemas_r.ok else set()
+        candidate_schemas = [
+            ("Cinnamon", "org.cinnamon.settings-daemon.plugins.power"),
+            ("GNOME", "org.gnome.settings-daemon.plugins.power"),
+        ]
+        for env_label, schema in candidate_schemas:
+            if schema not in loaded:
+                continue
+            def _read(key: str) -> str | None:
+                r = run_cmd(sudo_env + ["gsettings", "get", schema, key], timeout=5)
+                if not r.ok:
+                    return None
+                return r.stdout.strip().replace("uint32 ", "").strip("'")
+            display_ac = _read("sleep-display-ac")
+            display_batt = _read("sleep-display-battery")
+            inactive_ac = _read("sleep-inactive-ac-timeout")
+            inactive_ac_type = _read("sleep-inactive-ac-type")
+            inactive_batt = _read("sleep-inactive-battery-timeout")
+            inactive_batt_type = _read("sleep-inactive-battery-type")
+
+            def _sec(s: str | None) -> int | None:
+                if s is None:
+                    return None
+                try:
+                    return int(s)
+                except ValueError:
+                    return None
+
+            if display_ac is not None or display_batt is not None:
+                rows.append((
+                    f"{env_label}: ekran karartma (AC / batarya)",
+                    f"{_fmt_seconds(_sec(display_ac))} / {_fmt_seconds(_sec(display_batt))}",
+                ))
+            if inactive_ac is not None or inactive_batt is not None:
+                ac_txt = _fmt_seconds(_sec(inactive_ac))
+                batt_txt = _fmt_seconds(_sec(inactive_batt))
+                types = f" ({inactive_ac_type or '-'} / {inactive_batt_type or '-'})"
+                rows.append((
+                    f"{env_label}: askıya alma (AC / batarya)",
+                    f"{ac_txt} / {batt_txt}{types}",
+                ))
+
+    # --- systemd-logind ---
+    r = run_cmd(
+        ["systemctl", "show", "systemd-logind",
+         "--property=IdleAction",
+         "--property=IdleActionUSec",
+         "--property=HandleLidSwitch",
+         "--property=HandleLidSwitchDocked",
+         "--property=HandlePowerKey"],
+        timeout=5,
+    )
+    if r.ok and r.stdout.strip():
+        props: dict[str, str] = {}
+        for line in r.stdout.splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                props[k.strip()] = v.strip()
+        idle_action = props.get("IdleAction", "")
+        idle_usec_raw = props.get("IdleActionUSec", "")
+        try:
+            idle_usec = int(idle_usec_raw)
+        except ValueError:
+            idle_usec = None
+        if idle_action:
+            rows.append((
+                "logind: boşta iken eylem",
+                f"{idle_action}, {_fmt_microseconds(idle_usec)}",
+            ))
+        lid = props.get("HandleLidSwitch")
+        if lid:
+            rows.append(("logind: kapak kapatma", lid))
+        power = props.get("HandlePowerKey")
+        if power:
+            rows.append(("logind: güç tuşu", power))
+
+    if not rows:
+        rows.append((
+            "Kaynak",
+            "Aktif grafik oturum yok ve logind bilgisi alınamadı — "
+            "güç ayarları okunamıyor.",
+        ))
+    return rows
+
+
 class PowerManagementModule(Module):
     id = "m11_power_management"
     title = "Otomatik kapanma"
@@ -562,8 +731,20 @@ class PowerManagementModule(Module):
         result = run_cmd(["systemctl", "is-active", "eta-shutdown"])
         eta_service_running = result.ok and "active" in result.stdout
 
+        # Şu anki güç ayarları — mevcut sistemden okunuyor, TiHA yönetimi
+        # dışındaki her şey (Cinnamon, GNOME, X11 DPMS, logind) burada
+        # görünsün ki bu adım hangi çakışmalara girebileceğini kullanıcı
+        # önden görsün.
+        power_rows = _read_current_power_settings()
+        power_label_width = max((len(label) for label, _ in power_rows), default=0)
+        power_block: list[str] = []
+        power_block.append("Şu anki güç ayarları (bilgi amaçlı, TiHA dışı):")
+        for label, value in power_rows:
+            power_block.append(f"  {label.ljust(power_label_width)} : {value}")
+        power_block.append("")
+
         if not eta_config_exists:
-            lines = [
+            lines = power_block + [
                 f"Durum                : yapılandırılmamış (kontrol {current_time})",
                 "",
                 "Bu adım uygulandığında:",
@@ -585,12 +766,12 @@ class PowerManagementModule(Module):
             timed_minute = config.get("TIMED_MODE", "minute", fallback="0")
             enhanced = ETA_SHUTDOWN_SERVICE_BACKUP.exists()
         except Exception as exc:
-            return (
+            return "\n".join(power_block) + (
                 f"Durum                : yapılandırma okunamadı ({exc})\n"
                 "Sayfa yeniden yüklendiğinde tekrar denenecek."
             )
 
-        lines: list[str] = []
+        lines: list[str] = list(power_block)
         lines.append(
             "Durum                : "
             f"{'TiHA gelişmiş sürüm aktif' if enhanced else 'orijinal eta-shutdown kullanımda'}"
