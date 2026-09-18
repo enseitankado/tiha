@@ -103,17 +103,155 @@ LIGHT_FIELDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("lm_low_refresh_rate", "Yenileme hızı 50 Hz", ("low-refresh-rate",)),
 )
 
+
+# --- Fare imleci (ekran modu değişimi) --------------------------------------
+# Çözünürlük ya da tazeleme frekansı değiştirilip uygulandığında fare imleci
+# görünmez oluyor: odak ve sol/sağ tıklama çalışmayı sürdürüyor, yalnız imleç
+# çizilmiyor; fare çıkarılıp takılınca düzeliyor. Neden, mod değişiminde
+# donanımsal imleç düzlemi yeniden kurulurken imleç görüntüsünün geri
+# yüklenmemesi. Birbirinden bağımsız iki çare sunulur; hangisinin yettiği
+# gerçek tahtada denenecek. Hafif modun çözünürlük/Hz ayarları da aynı
+# tetikleyiciyi kullandığı için bu seçenekler onunla birlikte anlamlıdır.
+CURSOR_XORG_CONF = Path("/etc/X11/xorg.conf.d/20-tiha-imlec.conf")
+CURSOR_SCRIPT = Path("/usr/local/bin/tiha-imlec-tazele.py")
+CURSOR_AUTOSTART = Path("/etc/xdg/autostart/tr.org.tiha.imlec-tazele.desktop")
+XORG_LOG = Path("/var/log/Xorg.0.log")
+
+# Form seçenekleri. ETAP imajında eski xserver-xorg-video-intel (2.99.917)
+# kurulu geliyor ve Intel tahtalarda X onu seçiyor; o sürücünün SWcursor
+# seçeneği de yok. Bu yüzden ilk çare modesetting'e geçmek, ikincisi ona ek
+# olarak donanımsal imleci tamamen kapatmak.
+CURSOR_XORG_OFF = "Kapalı"
+CURSOR_XORG_MODESETTING = "modesetting sürücüsüne geç"
+CURSOR_XORG_SWCURSOR = "modesetting + yazılımsal imleç (SWcursor)"
+CURSOR_XORG_CHOICES = {
+    CURSOR_XORG_OFF: None,
+    CURSOR_XORG_MODESETTING: False,
+    CURSOR_XORG_SWCURSOR: True,
+}
+
+
+def _cursor_xorg_content(swcursor: bool) -> str:
+    """Ekran kartını modesetting'e alan, istenirse donanımsal imleci kapatan
+    Xorg parçası. OutputClass çekirdek sürücüsüne göre eşleştiği için Intel
+    ve AMD tahtalarda tek dosya yeter."""
+    swline = '    Option "SWcursor" "on"\n' if swcursor else ""
+    return (
+        "# TiHA — Başarım (Deneysel) adımı tarafından yazılmıştır.\n"
+        "# Ekran modu (çözünürlük/tazeleme) değiştiğinde fare imlecinin\n"
+        "# görünmez olmasını engeller.\n"
+        'Section "OutputClass"\n'
+        '    Identifier "TiHA imlec duzeltmesi"\n'
+        '    MatchDriver "i915|radeon|amdgpu"\n'
+        '    Driver "modesetting"\n'
+        f"{swline}"
+        "EndSection\n"
+    )
+
+
+# Donanımsal imleci koruyan hafif çare: mod değişiminden sonra imleç
+# boyutunu bir tık oynatıp geri alır, böylece imleç görüntüsü yeniden
+# oluşturulur. Başarım bedeli yok; imleç yalnız bir an kaybolur.
+CURSOR_SCRIPT_CONTENT = """#!/usr/bin/python3
+# TiHA — ekran modu değişiminden sonra fare imlecini tazeler.
+# Muffin'in MonitorsChanged sinyalini dinler; her mod değişiminden kısa
+# süre sonra org.cinnamon.desktop.interface cursor-size değerini bir
+# artırıp geri alır. Bu, masaüstünün imleç görüntüsünü yeniden
+# oluşturmasına ve donanımsal imleç düzlemine yeniden yüklemesine yol
+# açar. Her oturumda XDG autostart ile çalışır.
+from gi.repository import Gio, GLib
+
+DISPLAY_CONFIG = "org.cinnamon.Muffin.DisplayConfig"
+DISPLAY_PATH = "/org/cinnamon/Muffin/DisplayConfig"
+SCHEMA = "org.cinnamon.desktop.interface"
+KEY = "cursor-size"
+# Mod değişimi oturana kadar bekle; art arda gelen sinyaller tek
+# tazelemede birleşsin (çözünürlük ve tazeleme ayrı ayrı uygulanıyor).
+SETTLE_MS = 800
+RESTORE_MS = 300
+
+state = {"timer": 0}
+
+
+def restore(size):
+    settings.set_int(KEY, size)
+    return False
+
+
+def nudge():
+    state["timer"] = 0
+    size = settings.get_int(KEY)
+    settings.set_int(KEY, size + 1)
+    GLib.timeout_add(RESTORE_MS, restore, size)
+    return False
+
+
+def on_monitors_changed(*_args):
+    if state["timer"]:
+        GLib.source_remove(state["timer"])
+    state["timer"] = GLib.timeout_add(SETTLE_MS, nudge)
+
+
+source = Gio.SettingsSchemaSource.get_default()
+if source is None or source.lookup(SCHEMA, True) is None:
+    raise SystemExit(0)  # Cinnamon yok — yapacak iş yok.
+
+settings = Gio.Settings.new(SCHEMA)
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+bus.signal_subscribe(
+    None, DISPLAY_CONFIG, "MonitorsChanged", DISPLAY_PATH, None,
+    Gio.DBusSignalFlags.NONE, on_monitors_changed,
+)
+GLib.MainLoop().run()
+"""
+
+CURSOR_AUTOSTART_CONTENT = """[Desktop Entry]
+Type=Application
+Name=TiHA cursor refresh
+Name[tr]=TiHA imleç tazeleyici
+Comment[tr]=Ekran modu değiştiğinde fare imlecini yeniden çizdirir
+Exec=/usr/local/bin/tiha-imlec-tazele.py
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+"""
+
+
+def _read_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _x_driver() -> str:
+    """Xorg günlüğüne göre en son yüklenen ekran sürücüsü (ör. "intel",
+    "modesetting"). Okunamazsa boş döner — önizlemede bilgi amaçlı."""
+    names = [
+        line.rsplit("/", 1)[-1].replace("_drv.so", "").strip()
+        for line in _read_file(XORG_LOG).splitlines()
+        if "_drv.so" in line and "Loading" in line
+    ]
+    return names[-1] if names else ""
+
+
 # İlk uygulamadan önceki durum ve dosya yedekleri (state_dir altında).
 ORIGINAL_STATE = "original.json"
 BACKUP_NAMES = {
     "logind_dropin": "logind-dropin.conf.orig",
     "light_settings": "light-settings.json.orig",
     "light_autostart": "light-autostart.desktop.orig",
+    "cursor_xorg": "xorg-imlec.conf.orig",
+    "cursor_script": "imlec-tazele.py.orig",
+    "cursor_autostart": "imlec-tazele.desktop.orig",
 }
 BACKUP_TARGETS = {
     "logind_dropin": LOGIND_DROPIN,
     "light_settings": LIGHT_SETTINGS,
     "light_autostart": LIGHT_AUTOSTART,
+    "cursor_xorg": CURSOR_XORG_CONF,
+    "cursor_script": CURSOR_SCRIPT,
+    "cursor_autostart": CURSOR_AUTOSTART,
 }
 
 
@@ -348,6 +486,20 @@ class PerformanceModule(Module):
             )
         else:
             lines.append("  Tüm kullanıcılar : etkin değil")
+
+        lines += ["", "Fare imleci (ekran modu değişimi)"]
+        driver = _x_driver()
+        lines.append(f"  Ekran sürücüsü   : {driver or 'okunamadı'}")
+        if CURSOR_XORG_CONF.exists():
+            conf = _read_file(CURSOR_XORG_CONF)
+            mode = CURSOR_XORG_SWCURSOR if "SWcursor" in conf else CURSOR_XORG_MODESETTING
+            lines.append(f"  Xorg düzeltmesi  : var — {mode}")
+        else:
+            lines.append("  Xorg düzeltmesi  : yok")
+        lines.append(
+            "  Tazeleme servisi : "
+            + ("kurulu" if CURSOR_AUTOSTART.exists() else "kurulu değil")
+        )
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -362,8 +514,11 @@ class PerformanceModule(Module):
         p = dict(params or {})
         kill_processes = _as_bool(p.get("kill_user_processes"))
         light_mode = _as_bool(p.get("light_mode_enabled"))
+        cursor_xorg = (p.get("cursor_xorg_fix") or CURSOR_XORG_OFF).strip()
+        cursor_service = _as_bool(p.get("cursor_refresh_service"))
+        cursor_xorg_on = cursor_xorg != CURSOR_XORG_OFF
 
-        if not (kill_processes or light_mode):
+        if not (kill_processes or light_mode or cursor_xorg_on or cursor_service):
             return ApplyResult(False, "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı.")
 
         def say(line: str) -> None:
@@ -411,6 +566,24 @@ class PerformanceModule(Module):
                     data["light_mode_keys"] = keys
                 else:
                     failures.append(text)
+
+        if cursor_xorg_on:
+            ok, text = self._apply_cursor_xorg(original, cursor_xorg, say)
+            if ok:
+                summary.append(text)
+                details.append(f"İmleç (Xorg): {CURSOR_XORG_CONF} — {cursor_xorg}")
+                data["cursor_xorg_fix"] = cursor_xorg
+            else:
+                failures.append(text)
+
+        if cursor_service:
+            ok, text = self._apply_cursor_service(original, say)
+            if ok:
+                summary.append(text)
+                details.append(f"İmleç (servis): {CURSOR_SCRIPT}")
+                data["cursor_refresh_service"] = True
+            else:
+                failures.append(text)
 
         self._save_original(original)
         if not summary:
@@ -511,6 +684,50 @@ class PerformanceModule(Module):
     # Geri al
     # ------------------------------------------------------------------
 
+
+    def _apply_cursor_xorg(self, original: dict, choice: str, say) -> tuple[bool, str]:
+        """Xorg parçasını yazar (modesetting, istenirse + SWcursor)."""
+        swcursor = CURSOR_XORG_CHOICES.get(choice)
+        if swcursor is None:
+            return False, f"Bilinmeyen imleç seçeneği: {choice}"
+        say("\n==== Fare imleci: Xorg yapılandırması ====")
+        content = _cursor_xorg_content(swcursor)
+        try:
+            CURSOR_XORG_CONF.parent.mkdir(parents=True, exist_ok=True)
+            if _read_file(CURSOR_XORG_CONF) != content:
+                CURSOR_XORG_CONF.write_text(content, encoding="utf-8")
+                CURSOR_XORG_CONF.chmod(0o644)
+                say(f"Yazıldı: {CURSOR_XORG_CONF}")
+            else:
+                say(f"Zaten yazılı: {CURSOR_XORG_CONF}")
+        except OSError as exc:
+            return False, f"Xorg imleç yapılandırması yazılamadı: {exc}"
+        original["touched"]["cursor_xorg"] = True
+        self._save_original(original)
+        driver = _x_driver()
+        if driver:
+            say(f"Şu an yüklü sürücü: {driver} (yeni ayar oturum yeniden "
+                "başlayınca geçerli olur)")
+        return True, f"İmleç düzeltmesi yazıldı ({choice.lower()})."
+
+    def _apply_cursor_service(self, original: dict, say) -> tuple[bool, str]:
+        """Mod değişiminde imleci tazeleyen kullanıcı servisini kurar."""
+        say("\n==== Fare imleci: tazeleme servisi ====")
+        try:
+            CURSOR_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
+            CURSOR_SCRIPT.write_text(CURSOR_SCRIPT_CONTENT, encoding="utf-8")
+            CURSOR_SCRIPT.chmod(0o755)
+            CURSOR_AUTOSTART.parent.mkdir(parents=True, exist_ok=True)
+            CURSOR_AUTOSTART.write_text(CURSOR_AUTOSTART_CONTENT, encoding="utf-8")
+            CURSOR_AUTOSTART.chmod(0o644)
+        except OSError as exc:
+            return False, f"İmleç tazeleme servisi kurulamadı: {exc}"
+        original["touched"]["cursor_service"] = True
+        self._save_original(original)
+        say(f"Yazıldı: {CURSOR_SCRIPT}")
+        say(f"Autostart: {CURSOR_AUTOSTART}")
+        return True, "İmleç tazeleme servisi kuruldu (sonraki oturum açılışında)."
+
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         original = self._load_original()
         if original is None:
@@ -538,6 +755,17 @@ class PerformanceModule(Module):
                     errors.append(f"{LIGHT_PKG} kaldırılamadı: {r.stderr.strip()}")
             if light_ok:
                 done.append("ETA Hafif Mod tüm kullanıcılar için kapatıldı")
+
+        if original["touched"].get("cursor_xorg"):
+            if self._restore_or_remove("cursor_xorg", original, errors):
+                done.append("Xorg imleç yapılandırması eski hâline döndü")
+
+        if original["touched"].get("cursor_service"):
+            if all([
+                self._restore_or_remove("cursor_script", original, errors),
+                self._restore_or_remove("cursor_autostart", original, errors),
+            ]):
+                done.append("İmleç tazeleme servisi kaldırıldı")
 
         if errors:
             return ApplyResult(False, "Geri alma kısmen başarısız.", details="\n".join(done + errors))

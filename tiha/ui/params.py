@@ -546,6 +546,51 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "default": "False",
             "help": "Hareketli içerikte yükü ~%17 azaltır; kalem gecikmesi ~3 ms artar.",
         },
+        {"label": "Fare imleci (ekran modu değişimi)", "type": "heading"},
+        {
+            "key": "cursor_xorg_fix",
+            "label": "İmleç kaybolmasını önle (Xorg)",
+            "type": "select",
+            "required": False,
+            "default": "Kapalı",
+            "options": [
+                "Kapalı",
+                "modesetting sürücüsüne geç",
+                "modesetting + yazılımsal imleç (SWcursor)",
+            ],
+            "help": (
+                "Tahtada çözünürlük ya da tazeleme frekansı değiştirilip "
+                "uygulandığında fare imleci görünmez oluyor; tıklama ve odak "
+                "çalışmaya devam ediyor, fare çıkarılıp takılınca düzeliyor. "
+                "Nedeni, mod değişiminde donanımsal imleç düzleminin yeniden "
+                "kurulurken imleç görüntüsünü geri yüklememesi.\n\n"
+                "'modesetting sürücüsüne geç': /etc/X11/xorg.conf.d/"
+                "20-tiha-imlec.conf yazılır; ETAP'ta kurulu gelen eski intel "
+                "sürücüsü yerine çekirdeğin modesetting sürücüsü kullanılır. "
+                "Başarım bedeli yoktur; önce bunu deneyin.\n\n"
+                "'+ yazılımsal imleç': aynı dosyaya Option \"SWcursor\" \"on\" "
+                "eklenir; donanımsal imleç tamamen kapanır, kaybolacak düzlem "
+                "kalmaz. Kesin çözümdür ama imleci her karede sistem çizer; "
+                "zayıf tahtalarda hızlı fare hareketinde hafif gecikme "
+                "görülebilir.\n\n"
+                "Değişiklik oturum (LightDM) yeniden başlayınca geçerli olur."
+            ),
+        },
+        {
+            "key": "cursor_refresh_service",
+            "label": "Mod değişiminde imleci tazele (servis)",
+            "type": "bool",
+            "default": "False",
+            "help": (
+                "Yukarıdaki Xorg düzeltmesine alternatif, hafif yol: her "
+                "kullanıcının oturumunda küçük bir servis çalışır, Muffin'in "
+                "MonitorsChanged sinyalini dinler ve mod değişiminden ~1 sn "
+                "sonra cursor-size değerini bir artırıp geri alarak imleci "
+                "yeniden çizdirir. Donanımsal imleç korunur, başarım bedeli "
+                "yoktur; imleç yalnız bir an kaybolur. İkisini birlikte de "
+                "seçebilirsiniz."
+            ),
+        },
     ],
     "m14_bios_password": [
         {
