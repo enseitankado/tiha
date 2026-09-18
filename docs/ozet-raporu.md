@@ -33,7 +33,7 @@ Rapor panoya kopyalanabilir ya da metin dosyasına kaydedilebilir.
 | `journal.json` | Her adımın son kaydı: durum, özet, modülün `data`'sı |
 | `journal.json` → `data._rapor_params` | Uygulanan form parametreleri; parola alanlarında yalnız `***` (dolu) ya da `""` (boş) |
 | `actions.json` | Form içi düğme eylemleri (hesap silme, BIOS parolası ayarlama, PIN silme…); özet metnindeki gizli değerler temizlenir |
-| Canlı sistem | `/etc/machine-id`, `/var/lib/tiha/first-boot-sshkeys.done`, `/etc/ahenk/ahenk.conf`, `/etc/systemd/system/tiha-wake-on-lan.service` |
+| Canlı sistem | `/etc/machine-id`, `/var/lib/tiha/first-boot-sshkeys.done`, `/etc/ahenk/ahenk.conf`, `/etc/systemd/system/tiha-wake-on-lan.service`, `/var/lib/tiha/state` altındaki hassas yedekler |
 
 Parametreler `JournalEntry`'ye yeni alan olarak değil `data` içinde
 ayrılmış bir anahtarda tutulur: günce `JournalEntry(**e)` ile yüklendiği
@@ -50,7 +50,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Sistem güncellemesi | uygulandı / başarısız |
 | Kullanıcı parolaları | hangi parolalar atandı ya da atanamadı (root, etapadmin, ogretmen), öğretmen parolası hesap yokluğundan uygulanmadı, anahtarlıklar kenara alındı, yedek hesap açıldı ya da zaten vardı, ortak hesap silindi, öğrenci hesabı düğmeyle silindi |
 | Her açılışta parola temizliği | uygulandı |
-| Öğretmen PIN anahtarları | eta-otp-cli ya da dahili yol, öğretmen listesi, yedek hesaplar, etapadmin/ogretmen için üretildi ya da korundu, yeni/korunan anahtar sayısı, grup PIN'i oluşturuldu ya da korundu, gruba eklenenler, otomatik grup servisi, giriş ekranı önbelleği (≥50 kullanıcı), değişen anahtar, PIN'lerin üretimden sonra silinmesi, fazladan hesap silme |
+| Öğretmen PIN anahtarları | eta-otp-cli ya da dahili yol, öğretmen listesi, yedek hesaplar, etapadmin/ogretmen için üretildi ya da korundu, yeni/korunan anahtar sayısı, grup PIN'i oluşturuldu ya da korundu, gruba eklenenler, otomatik grup servisi, giriş ekranı önbelleği (≥50 kullanıcı), değişen anahtar, PIN'lerin üretimden sonra silinmesi, fazladan hesap silme, ortak hesabın gruptan çıkarılması |
 | EBA QR parola diyaloğu | kapatıldı / zaten kapalıydı |
 | SSH sunucusu | paket kuruldu / zaten kuruluydu |
 | Samba | paket kuruldu ya da vardı, kullanıcı root ya da başka |
@@ -62,8 +62,8 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Başarım (Deneysel) | oturum kalıntısı temizliği, hafif mod ayarları tek tek, hafif mod kaldırıldı, imleç Xorg düzeltmesi, imleç tazeleme servisi |
 | Otomatik Ahenk Kaydı | ahenk kuruldu ya da vardı, imzalanan MAC |
 | BIOS parolası | temizleme, yalnız ayarlara girişte, her açılışta, Faz 1 modeli, model adı, kaynak tahtanın BIOS'unun düğmeyle doğrudan değiştirilmesi |
-| GRUB koruması | kuruldu, kaldırıldı, zaten etkindi (parola korundu), etkinleştirilmedi |
-| İmaj için sanitize | uygulandı, boşaltılan alan |
+| GRUB koruması | kuruldu (kurtarma girdisi menüde ve parolalı), eski sürümün kapattığı kurtarma geri açıldı, kurtarma yöneticinin ayarıyla kapalı, kayıtlı açılış varsayılanı sıfırlandı, kaldırıldı, zaten etkindi (parola korundu), etkinleştirilmedi |
+| İmaj için sanitize | uygulandı, boşaltılan alan, hassas TiHA yedeklerinin silinmesi, imaj damgasının yalnız root'a açık olması |
 
 ## Adımlar arası denetimler
 
@@ -86,7 +86,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | BIOS parolası + uzaktan uyandırma | BIOS ayarları her tahtada parola gerektirir |
 | BIOS parolası + Otomatik Ahenk Kaydı | Ortak MAC imzası; BIOS parolasını klonda doğrulayın |
 | GRUB var, BIOS yok / BIOS var, GRUB yok | Açılış güvenliği tek taraflı |
-| Parola değişikliği ya da PIN kâğıtları | `/var/lib/tiha` hassas kayıtlarla imaja gidiyor |
+| Sanitize'ın sildiği hassas yedekler (shadow yedeği, anahtarlıklar, PIN kâğıtları, anahtar yedeği) diskte duruyor — canlı denetim | İmajla klonlara gidecek; sanitize'ı (yeniden) çalıştırın |
 
 ## Genel klon denetimleri
 
@@ -171,12 +171,13 @@ YAPTIKLARINIZ
   ! Klonun ilk açılışında BIOS flash belleğine yazılır; bu işlem her tahtada tekrar eder. Önce tek bir klonda, sonra filodaki her tahta modelinden bir klonda deneyin.
   ! Parola, kaynak tahtada ve imajda düz metin bir betikte duruyor (/usr/local/sbin/tiha-first-boot-bios.py); klonda yalnız işlem başarılı olunca silinir. İmaj dosyalarını buna göre koruyun.
 ■ GRUB koruması
-  • GRUB açılış menüsünü korumaya aldınız: menü düzenleme ('e') ve GRUB komut satırı ('c') artık 'etapadmin' GRUB kullanıcı adı ve bu adımda belirlediğiniz GRUB parolasıyla açılıyor. Kurtarma (recovery) girdisini menüden kaldırdınız; normal açılış parola sormuyor.
+  • GRUB açılış menüsünü korumaya aldınız: menü düzenleme ('e') ve GRUB komut satırı ('c') artık 'etapadmin' GRUB kullanıcı adı ve bu adımda belirlediğiniz GRUB parolasıyla açılıyor. Kurtarma (recovery) girdisi menüde kalıyor ama onu açmak da aynı kullanıcı adı ve parolayı istiyor; 'Gelişmiş seçenekler' alt menüsü de parolalı. Normal açılış parola sormuyor.
   ! GRUB parolası sistemdeki etapadmin parolası değildir ve hiçbir yerden geri okunamaz; bütün klonlarda aynıdır. Türkçe karakter (ç, ğ, ı, ö, ş, ü) içeren bir parola GRUB'ın ABD klavye düzeninde yazılamayabilir.
 ■ İmaj için sanitize
   • İmajı klonlamaya hazırlamak için kimlik temizliği yaptınız: makine kimliğini (machine-id) sıfırladınız, SSH anahtarlarını sildiniz (her klon ilk açılışta kendi anahtarını üretecek), kayıtlı ağ bağlantılarını ve Wi-Fi parolalarını temizlediniz.
   • Günlükleri, APT önbelleğini ve paket listelerini, kabuk geçmişlerini, kullanıcı önbelleklerini, tarayıcı gezinti verilerini (yer imleri korunarak), GNOME anahtarlıklarını ve geçici dosyaları sildiniz; yaklaşık 412.3 MB disk alanı boşalttınız.
-  • İmaja /etc/tiha-image-info.json damgasını yazdınız; sahada bu dosyadan imajın sürümü ve uygulanan adımlar görülebilir.
+  • İmaja /etc/tiha-image-info.json damgasını yazdınız; sahada bu dosyadan imajın sürümü ve uygulanan adımlar görülebilir (yalnız root okuyabilir).
+  • TiHA'nın imajla klonlara gidecek hassas yedeklerini (parola değişikliği öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, PIN kâğıtları ve anahtar yedeği) sildiniz; bu yüzden Kullanıcı parolaları ve PIN adımları artık geri alınamaz.
   ! Temizlikten sonra kaynak tahtayı işletim sistemiyle YENİDEN AÇMAYIN: kapatın ve imajı canlı USB'den (Clonezilla vb.) alın. Açarsanız makine kimliği ve SSH anahtarları kaynak tahtada yeniden üretilir ve bütün klonlara aynen gider.
 
 DİKKAT — ADIMLAR ARASI İLİŞKİLER
@@ -184,7 +185,7 @@ DİKKAT — ADIMLAR ARASI İLİŞKİLER
   ! BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan uyandırmayı açtınız: uzaktan uyandırılan tahtalar BIOS parola ekranında bekleyip işletim sistemine hiç geçmeyecek.
   ! Uzaktan uyandırma her tahtada BIOS ayarı (Wake on LAN açık, ErP ve Deep Sleep kapalı) ister ve BIOS'a yönetici parolası koyduğunuz için bu ayarları yapmak her tahtada o parolayı gerektirecek. BIOS ayarlarını mümkünse parola ayarlanmadan önce yapın.
   ! “BIOS yönetici parolası” ve “Otomatik Ahenk Kaydı” aynı MAC imzasını kullanıyor. BIOS parolası klonun ilk açılışında ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan sonra BIOS'a girerek mutlaka doğrulayın.
-  ! TiHA'nın kayıt dizini /var/lib/tiha imaj temizliğinde silinmiyor ve imajla bütün klonlara gidiyor. Bu dizinde parola değişikliğinden önceki /etc/shadow yedeği (eski parola özetleri) ve bütün PIN anahtarlarını QR kodlarıyla içeren PIN kâğıtları var. İmaj dosyalarına erişimi buna göre sınırlayın.
+  ! TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara gidecek hassas yedekler var: parola değişikliği öncesi /etc/shadow yedeği, PIN anahtarlarının yedeği ve PIN kâğıtları (bütün anahtarlar QR'lı). İmaj temizliği (sanitize) bunları siler; imajı almadan önce o adımı yeniden çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin.
 
 KLON TAHTADA DENEYİN
 ■ Sistem güncellemesi (apt)
@@ -266,7 +267,9 @@ KLON TAHTADA DENEYİN
 ■ GRUB koruması
   ☐ Klonun açılış menüsünde bir girdinin üzerindeyken 'e' tuşuna basın: kullanıcı adı olarak etapadmin, ardından GRUB parolası sorulmalı; yanlış parolayla düzenleme ekranı açılmamalı. Menü görünmüyorsa açılışta Shift ya da Esc tuşunu basılı tutun.
   ☐ 'c' tuşuyla GRUB komut satırında da aynı iki sorunun geldiğini doğrulayın.
-  ☐ Varsayılan girdiyle ve zaman aşımıyla açılışın HİÇ parola sormadan ilerlediğini, menüde kurtarma (recovery) girdisi olmadığını doğrulayın.
+  ☐ Varsayılan girdiyle ve zaman aşımıyla açılışın HİÇ parola sormadan ilerlediğini doğrulayın.
+  ☐ "Gelişmiş seçenekler" altındaki kurtarma (recovery mode) girdisini seçin: etapadmin kullanıcı adı ve GRUB parolası sorulmalı, parolayla kurtarma kipine girilebilmeli; yanlış parolayla girilememeli.
+  ☐ Kurtarma kipinden çıkıp tahtayı yeniden başlatın: sonraki açılış normal girdiyle ve parola sormadan gerçekleşmeli (alt menü girdileri açılış varsayılanı olarak kaydedilmez).
   ☐ Parolayı fiziksel bir USB klavyeyle deneyin: GRUB'da dokunmatik ve ekran klavyesi yoktur, klavye düzeni ABD'dir.
   ☐ "Gelişmiş seçenekler" alt menüsünün de parola istediğini doğrulayın; eski çekirdekle açmak gerekirse GRUB parolası gerekir.
 ■ İmaj için sanitize
@@ -274,7 +277,7 @@ KLON TAHTADA DENEYİN
   ☐ Klonda `ls /etc/ssh/ssh_host_*` ile SSH anahtarlarının üretildiğini ve (SSH kuruluysa) `systemctl is-active ssh` çıktısının active olduğunu doğrulayın.
   ☐ Kablolu ağın klonda kendiliğinden bağlandığını doğrulayın; Wi-Fi kullanılacaksa bağlantıyı yeniden tanımlamanız gerekir (Wi-Fi parolaları imajdan silindi).
   ☐ etapadmin ve bir öğretmen hesabıyla girişte "anahtarlık parolası uyuşmuyor" uyarısı çıkmadığını, Firefox ve Chrome'un açıldığını doğrulayın.
-  ☐ Klonda `sudo apt update` komutunun çalıştığını ve `cat /etc/tiha-image-info.json` çıktısının beklediğiniz sürümü gösterdiğini doğrulayın.
+  ☐ Klonda `sudo apt update` komutunun çalıştığını ve `sudo cat /etc/tiha-image-info.json` çıktısının beklediğiniz sürümü gösterdiğini doğrulayın; `ls -l /etc/tiha-image-info.json` yalnız root'a okuma izni (-rw-------) göstermeli.
 ■ Genel
   ☐ İmajı en az bir tahtaya yazın ve ilk açılışı başından sonuna izleyin: hata ekranı, beklenmedik parola sorusu ya da uzun bekleme olmamalı.
   ☐ Klonu en az iki kez yeniden başlatın ve bir kez tamamen kapatıp açın; her açılışta aynı sonucu aldığınızı doğrulayın.
