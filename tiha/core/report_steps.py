@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..modules.m10_image_sanitize import SENSITIVE_STATE
+from .paths import STATE_DIR
 from .report import StepContext, StepReport
 
 # ---------------------------------------------------------------------------
@@ -301,6 +303,11 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
         )
     if grouped:
         rep.done.append(f"{len(grouped)} hesabı ogretmenler grubuna eklediniz.")
+    if d.get("ungrouped_users"):
+        rep.done.append(
+            "Ortak öğretmen hesabını ogretmenler grubundan çıkardınız; grup PIN'i "
+            "artık ortak hesapta geçmiyor."
+        )
     if d.get("auto_group_service_installed"):
         rep.done.append(
             "EBA QR ile sonradan açılacak öğretmen hesaplarını ogretmenler "
@@ -1042,8 +1049,8 @@ def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
     if d.get("removed"):
         rep.done.append(
-            "GRUB korumasını kaldırdınız; menü düzenleme ve komut satırı artık "
-            "parolasız, kurtarma (recovery) girdisi yeniden menüde."
+            "GRUB korumasını kaldırdınız; menü düzenleme, komut satırı ve "
+            "kurtarma (recovery) girdisi artık parolasız."
         )
         rep.tests.append(
             "Klonun açılış menüsünde 'e' tuşuyla düzenleme ekranının parola "
@@ -1055,8 +1062,26 @@ def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
             "GRUB açılış menüsünü korumaya aldınız: menü düzenleme ('e') ve GRUB "
             "komut satırı ('c') artık 'etapadmin' GRUB kullanıcı adı ve bu adımda "
             "belirlediğiniz GRUB parolasıyla açılıyor. Kurtarma (recovery) "
-            "girdisini menüden kaldırdınız; normal açılış parola sormuyor."
+            "girdisi menüde kalıyor ama onu açmak da aynı kullanıcı adı ve "
+            "parolayı istiyor; 'Gelişmiş seçenekler' alt menüsü de parolalı. "
+            "Normal açılış parola sormuyor."
         )
+        if d.get("recovery_restored"):
+            rep.done.append(
+                "TiHA'nın eski sürümünün menüden kaldırdığı kurtarma girdisini "
+                "geri getirdiniz."
+            )
+        if d.get("recovery_protected") and d.get("recovery_entries") == 0:
+            rep.notes.append(
+                "Kurtarma girdisi menüde yok: /etc/default/grub'da "
+                "GRUB_DISABLE_RECOVERY ile kapatılmış (TiHA'dan önceki bir "
+                "ayar). Açılırsa o da parola ister."
+            )
+        if d.get("saved_entry_reset"):
+            rep.done.append(
+                "Kayıtlı açılış varsayılanı parolalı alt menüyü gösteriyordu; "
+                "sıfırladınız (gözetimsiz açılış parola ekranında beklemesin)."
+            )
     elif "zaten etkin" in ctx.summary:
         rep.done.append(
             "GRUB koruması zaten etkindi; mevcut GRUB parolasını değiştirmeden "
@@ -1085,7 +1110,17 @@ def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
     )
     rep.tests.append(
         "Varsayılan girdiyle ve zaman aşımıyla açılışın HİÇ parola sormadan "
-        "ilerlediğini, menüde kurtarma (recovery) girdisi olmadığını doğrulayın."
+        "ilerlediğini doğrulayın."
+    )
+    rep.tests.append(
+        "\"Gelişmiş seçenekler\" altındaki kurtarma (recovery mode) girdisini "
+        "seçin: etapadmin kullanıcı adı ve GRUB parolası sorulmalı, parolayla "
+        "kurtarma kipine girilebilmeli; yanlış parolayla girilememeli."
+    )
+    rep.tests.append(
+        "Kurtarma kipinden çıkıp tahtayı yeniden başlatın: sonraki açılış "
+        "normal girdiyle ve parola sormadan gerçekleşmeli (alt menü girdileri "
+        "açılış varsayılanı olarak kaydedilmez)."
     )
     rep.tests.append(
         "Parolayı fiziksel bir USB klavyeyle deneyin: GRUB'da dokunmatik ve "
@@ -1124,7 +1159,14 @@ def narrate_m10(ctx: StepContext, rep: StepReport) -> None:
     )
     rep.done.append(
         "İmaja /etc/tiha-image-info.json damgasını yazdınız; sahada bu dosyadan "
-        "imajın sürümü ve uygulanan adımlar görülebilir."
+        "imajın sürümü ve uygulanan adımlar görülebilir (yalnız root "
+        "okuyabilir)."
+    )
+    rep.done.append(
+        "TiHA'nın imajla klonlara gidecek hassas yedeklerini (parola "
+        "değişikliği öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, "
+        "PIN kâğıtları ve anahtar yedeği) sildiniz; bu yüzden Kullanıcı "
+        "parolaları ve PIN adımları artık geri alınamaz."
     )
     rep.tests.append(
         "İki farklı klonda `cat /etc/machine-id` ve `ssh-keygen -lf "
@@ -1147,9 +1189,10 @@ def narrate_m10(ctx: StepContext, rep: StepReport) -> None:
         "doğrulayın."
     )
     rep.tests.append(
-        "Klonda `sudo apt update` komutunun çalıştığını ve `cat "
+        "Klonda `sudo apt update` komutunun çalıştığını ve `sudo cat "
         "/etc/tiha-image-info.json` çıktısının beklediğiniz sürümü gösterdiğini "
-        "doğrulayın."
+        "doğrulayın; `ls -l /etc/tiha-image-info.json` yalnız root'a okuma izni "
+        "(-rw-------) göstermeli."
     )
     rep.notes.append(
         "Temizlikten sonra kaynak tahtayı işletim sistemiyle YENİDEN AÇMAYIN: "
@@ -1306,6 +1349,28 @@ FAILED_NARRATORS = {
 MACHINE_ID = Path("/etc/machine-id")
 SSH_SENTINEL = Path("/var/lib/tiha/first-boot-sshkeys.done")
 AHENK_CONF = Path("/etc/ahenk/ahenk.conf")
+TIHA_STATE_DIR = STATE_DIR
+
+_SENSITIVE_LABELS = {
+    ("m01_initial_passwords", "shadow"): "parola değişikliği öncesi /etc/shadow yedeği",
+    ("m01_initial_passwords", "keyrings"): "kenara alınmış anahtarlıklar",
+    ("m03_otp_secrets", "otp-secrets.json"): "PIN anahtarlarının yedeği",
+    ("m03_otp_secrets", "ogretmen-pin-kagitlari-*.html"): "PIN kâğıtları (bütün anahtarlar QR'lı)",
+}
+
+
+def _sensitive_leftovers() -> list[str]:
+    """Sanitize'ın sildiği hassas TiHA yedeklerinden diskte duranlar."""
+    found = []
+    for key in SENSITIVE_STATE:
+        module_dir, pattern = key
+        root = TIHA_STATE_DIR / module_dir
+        try:
+            if root.is_dir() and any(root.glob(pattern)):
+                found.append(_SENSITIVE_LABELS.get(key, f"{module_dir}/{pattern}"))
+        except OSError:
+            continue
+    return found
 
 
 def _read(path: Path) -> str:
@@ -1509,17 +1574,15 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
             "menüsünde 'e' tuşuyla tahta doğrudan yönetici kabuğuna düşürülebilir."
         )
 
-    # --- TiHA'nın kendi kayıtları imaja gidiyor ---------------------------------
-    sensitive = []
-    if m01 is not None and m01.applied and _m01_passwords(m01)[0]:
-        sensitive.append("parola değişikliğinden önceki /etc/shadow yedeği (eski parola özetleri)")
-    if m03 is not None and m03.applied:
-        sensitive.append("bütün PIN anahtarlarını QR kodlarıyla içeren PIN kâğıtları")
-    if sensitive:
+    # --- TiHA'nın kendi hassas yedekleri diskte mi? (canlı denetim) -------------
+    left = _sensitive_leftovers()
+    if left:
         w.append(
-            "TiHA'nın kayıt dizini /var/lib/tiha imaj temizliğinde silinmiyor ve "
-            f"imajla bütün klonlara gidiyor. Bu dizinde {_join(sensitive)} var. "
-            "İmaj dosyalarına erişimi buna göre sınırlayın."
+            "TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara "
+            f"gidecek hassas yedekler var: {_join(left)}. İmaj temizliği "
+            "(sanitize) bunları siler; imajı almadan önce o adımı "
+            + ("yeniden " if sanitize in applied else "")
+            + "çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin."
         )
     return w
 
