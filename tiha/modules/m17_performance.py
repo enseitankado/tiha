@@ -420,7 +420,8 @@ class PerformanceModule(Module):
     doc_label = "Başarım (Deneysel) — mekanizma, ölçümler ve tahtada deneme"
     apply_hint = (
         "Oturum kapanınca kalan süreçler sonlandırılır (açılıştan sonra); "
-        "seçilirse ETA Hafif Mod tüm kullanıcılara uygulanır."
+        "seçilirse ETA Hafif Mod tüm kullanıcılara uygulanır ve imleç "
+        "düzeltmesi kurulur."
     )
     rationale = (
         "Bir öğretmen tarayıcısını kapatmadan oturumunu kapattığında "
