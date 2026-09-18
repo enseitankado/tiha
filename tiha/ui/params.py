@@ -454,6 +454,29 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "step": 1,
             "help": "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika.",
         },
+        {
+            "key": "countdown_seconds",
+            "label": "Geri sayım süresi (saniye)",
+            "type": "spin",
+            "required": False,
+            "default": "120",
+            # Yüklü service.py'de zaten bir COUNTDOWN_SECONDS varsa
+            # kutu o değerle açılsın — kullanıcı farkında olmadan
+            # eski süreyi yeniden yazmaz.
+            "default_from": "suggested_countdown_seconds",
+            "min": 30,
+            "max": 600,
+            "step": 10,
+            "help": (
+                "Sabit saat veya idle tabanlı kapatma tetiklendiğinde "
+                "\"Kapanıyor…\" penceresinin ekranda kalma süresi. "
+                "Bu süre boyunca kullanıcı 10 dakika erteleyebilir ya da "
+                "pencerenin sağ üst X'ine basıp idle sayacını "
+                "sıfırlayabilir. Alt sınır 30 saniye (kullanıcı "
+                "pencereyi görüp tepki verebilsin), üst sınır 600 "
+                "saniye (10 dakika)."
+            ),
+        },
     ],
     "m17_performance": [
         {"label": "Oturum kalıntıları", "type": "heading"},

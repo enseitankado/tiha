@@ -8,7 +8,8 @@ sistemi kurar. İki mod destekler:
 2. **Idle tabanlı kapatma**: Belirtilen süre boşta kalınca kapatma
 
 **Orijinalden farkı:**
-- Her iki modda da 2 dakika önceden uyarı diyalogu gösterir
+- Her iki modda da uyarı diyalogu gösterir (varsayılan 2 dakika,
+  form kutusundan ayarlanabilir)
 - Kullanıcı kapatmayı erteleyebilir
 - 1 dakika aralıklarla kontrol yapar (daha hassas)
 - Aktif oturumu systemd-logind ile saptar; kullanıcı login değilse
@@ -172,15 +173,23 @@ sys.exit(win.exit_code)
 '''
 
 
-def _render_enhanced_service() -> str:
+DEFAULT_COUNTDOWN_SECONDS = 120
+
+
+def _render_enhanced_service(countdown_seconds: int = DEFAULT_COUNTDOWN_SECONDS) -> str:
     """TiHA tarafından geliştirilmiş eta-shutdown service script'i.
 
     Orijinal eta-shutdown ``service.py`` dosyası bu içerikle değiştirilir.
     `main.py` (orijinal) her 60 saniyede ``service()`` fonksiyonunu çağırır.
     Aynı systemd unit ve aynı /etc/pardus/eta-shutdown.conf'u kullanır;
     yalnızca davranış (GUI geri sayım + erteleme) bu modülde tanımlanır.
+
+    ``countdown_seconds`` — kapanmadan önce ekranda beklenecek uyarı
+    süresi (saniye). Adımın form kutusundan gelir. Template metnindeki
+    varsayılan ``COUNTDOWN_SECONDS = 120`` satırı bu değere göre
+    değiştirilir.
     """
-    return '''import os
+    template = '''import os
 import pwd
 import sys
 import time
@@ -196,7 +205,7 @@ from logger import log
 
 CONFIG_FILE = "/etc/pardus/eta-shutdown.conf"
 COUNTDOWN_SCRIPT = "/usr/local/sbin/tiha-shutdown-countdown.py"
-COUNTDOWN_SECONDS = 120  # 2 dakika
+COUNTDOWN_SECONDS = 120
 
 config = configparser.ConfigParser()
 config.read(CONFIG_FILE)
@@ -535,6 +544,22 @@ def service():
             log("TiHA: Sabit saat kapatma gerçekleştiriliyor")
             os.system("poweroff")
 '''
+    return template.replace(
+        f"COUNTDOWN_SECONDS = {DEFAULT_COUNTDOWN_SECONDS}",
+        f"COUNTDOWN_SECONDS = {int(countdown_seconds)}",
+        1,
+    )
+
+
+def _current_countdown_seconds() -> int:
+    """Yüklü service.py dosyasından mevcut geri sayım süresini oku."""
+    import re as _re
+    try:
+        txt = ETA_SHUTDOWN_SERVICE.read_text(encoding="utf-8")
+    except OSError:
+        return DEFAULT_COUNTDOWN_SECONDS
+    m = _re.search(r"COUNTDOWN_SECONDS\s*=\s*(\d+)", txt)
+    return int(m.group(1)) if m else DEFAULT_COUNTDOWN_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -713,10 +738,11 @@ class PowerManagementModule(Module):
     rationale = (
         "Tahtanın unutulması durumunda otomatik kapatma sistemi kurar. "
         "Belirlenen saatte veya tahta boşta kaldığında otomatik olarak "
-        "kapatma işlemi yapılır. Her iki modda da 2 dakika önceden uyarı "
-        "diyalogu gösterilir ve kapatma 10 dakika ertelenebilir. "
-        "Hali hazırda oturum açmış bir kullanıcı yoksa uyarı giriş "
-        "ekranında gösterilir."
+        "kapatma işlemi yapılır. Her iki modda da bir uyarı diyalogu "
+        "gösterilir (süresi form kutusundan ayarlanır, varsayılan "
+        "2 dakika) ve kapatma 10 dakika ertelenebilir. Hali hazırda "
+        "oturum açmış bir kullanıcı yoksa uyarı giriş ekranında "
+        "gösterilir."
     )
     extra_links = [
         {"label": "ETA Zamanlı Kapatma'yı aç", "action": "launch_eta_shutdown_gui_action"},
@@ -824,15 +850,30 @@ class PowerManagementModule(Module):
         except OSError:
             pass
 
+        current_countdown = _current_countdown_seconds()
+        if current_countdown % 60 == 0:
+            countdown_label = f"{current_countdown // 60} dakika"
+        else:
+            countdown_label = f"{current_countdown} saniye"
+        lines.append(f"Geri sayım süresi    : {countdown_label}")
         lines.append("")
         lines.append("Kapanmadan önce:")
-        lines.append("  - 2 dakikalık uyarı penceresi gösterilir")
+        lines.append(
+            f"  - {countdown_label} uyarı penceresi gösterilir "
+            "(form kutusundan değiştirilebilir)"
+        )
         lines.append("  - Kullanıcı 10 dakika erteleyebilir")
         lines.append(
             "  - Pencerenin sağ üst X'ine basılırsa idle sayacı "
             "sıfırlanır ve pencere kapanır"
         )
         return "\n".join(lines)
+
+    def suggested_countdown_seconds(self) -> int:
+        """"Geri sayım süresi" kutusunun açılışta görüneceği değer.
+
+        Yüklü service.py dosyasından okunur; yoksa varsayılan 120."""
+        return _current_countdown_seconds()
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
@@ -844,6 +885,19 @@ class PowerManagementModule(Module):
 
         idle_enabled = str(params.get("idle_enabled", "True")).lower() == "true"
         idle_minute = int(params.get("idle_minute", 15))
+
+        # Geri sayım (uyarı diyaloğunun ekranda kalma) süresi — kullanıcı
+        # yapılandırabilir. Alt sınır 30 sn (kullanıcının pencereyi
+        # görmesi + tepki verebilmesi), üst sınır 600 sn (10 dk; daha
+        # uzun anlamsız çünkü erteleme düğmesi zaten +10 dk veriyor).
+        try:
+            countdown_seconds = int(params.get("countdown_seconds", DEFAULT_COUNTDOWN_SECONDS))
+        except (TypeError, ValueError):
+            countdown_seconds = DEFAULT_COUNTDOWN_SECONDS
+        if countdown_seconds < 30:
+            countdown_seconds = 30
+        elif countdown_seconds > 600:
+            countdown_seconds = 600
 
         # Ekran-blank ile idle kapanma süresinin çakışma kontrolü (yumuşak uyarı).
         # Geri sayım diyalogu idle_threshold anında doğar; doğum anında ekran
@@ -884,7 +938,10 @@ class PowerManagementModule(Module):
 
         # Geliştirilmiş service dosyasını yaz
         try:
-            ETA_SHUTDOWN_SERVICE.write_text(_render_enhanced_service(), encoding="utf-8")
+            ETA_SHUTDOWN_SERVICE.write_text(
+                _render_enhanced_service(countdown_seconds),
+                encoding="utf-8",
+            )
             ETA_SHUTDOWN_SERVICE.chmod(0o755)
         except OSError as exc:
             return ApplyResult(False, f"Service dosyası yazılamadı: {exc}")
