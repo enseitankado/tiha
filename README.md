@@ -79,7 +79,7 @@ Sihirbaz adımları sırasıyla uygular. Her adım isteğe bağlıdır; sol list
 </tr>
 <tr>
 <td><a href="docs/images/14-imaj-icin-sanitize.png"><img src="docs/images/14-imaj-icin-sanitize.png" alt="Sanitize"></a><br><sub><b>14. İmaj için sanitize</b> — kapsamlı tekil kimlik ve iz temizliği</sub></td>
-<td><a href="docs/images/15-ozet.png"><img src="docs/images/15-ozet.png" alt="Özet"></a><br><sub><b>Özet</b> — günce genelinde geri alınabilir adımları listeler (önceki oturumlarda uygulanmış olsa bile)</sub></td>
+<td><a href="docs/images/15-ozet.png"><img src="docs/images/15-ozet.png" alt="Özet"></a><br><sub><b>Özet</b> — bu imajda yapılan her şeyi ve klon tahtada denenmesi gerekenleri raporlar (<a href="docs/ozet-raporu.md">ayrıntı</a>); günce genelinde geri alınabilir adımları listeler</sub></td>
 </tr>
 <tr>
 <td colspan="2" align="center" width="100%"><a href="docs/images/bonus-greeter-countdown.png"><img src="docs/images/bonus-greeter-countdown.png" alt="Greeter ekranında countdown" width="55%"></a><br><sub><b>Bonus — Otomatik kapanma uyarısı greeter ekranında</b><br>Kullanıcı login değilken (LightDM giriş ekranında) bile 2 dakikalık geri sayım penceresi gösterilir; "10 dakika ertele" ile şimdilik vazgeçilebilir.</sub></td>
