@@ -99,8 +99,70 @@ Kurallar:
 original.json`'a ve dosya yedeklerine kaydedilir; sonraki uygulamalar bu
 kaydı değiştirmez. Geri alma yalnızca TiHA'nın dokunduğu parçaları o
 duruma döndürür, paketi TiHA kurduysa `apt-get purge` eder. logind
-değişikliği yine yeniden başlatınca etkin olur. Hafif mod bir kez
-uygulanmış kullanıcıların kişisel masaüstü ayarları geri dönmez.
+değişikliği yine yeniden başlatınca etkin olur.
+
+### Hafif modun asimetrisi
+
+`eta-light-mode` sistem tarafında yalnız iki dosya tutar. Ayarların
+kendisi her oturum açılışında, autostart girdisi aracılığıyla,
+kullanıcının **kendi dconf'una** yazılır. Paketin kapatma yolu
+(`Action.py disable`) yalnız o iki sistem dosyasını siler; daha önce
+giriş yapmış hesapların dconf değerleri olduğu gibi kalır. Yani paketin
+kendi geri alması asimetriktir: "hafif mod kapalı ama ekran hâlâ hafif".
+
+**Paketi kaldırmak çözüm değil.** `/etc/xdg/autostart/tr.org.eta.light-mode-autostart.desktop`
+ve `/etc/eta-light-mode/settings.json` dpkg'nin dosya listesinde yok
+(Action.py çalışma anında yazıyor); paketin `postrm`/`prerm` betiği de
+yok. `apt remove` (hatta `purge`) bu iki dosyayı yerinde bırakır,
+`/usr/bin/eta-light-mode`'u siler ve geriye her oturumda boşa çalışan bir
+autostart girdisi kalır. Üstelik paket ETAP deposundan gelen standart
+kurulumun parçası; kaldırmak imajı depodan uzaklaştırır ve bir sonraki
+güncellemede geri gelebilir.
+
+**TiHA ne yapıyor.** Hafif mod uygulanmadan hemen önce her hesabın
+ilgili dconf anahtarları ve `~/.config/cinnamon-monitors.xml` dosyası
+yedeklenir (`original.json` → `user_dconf`, `kullanici/<ad>.monitors.xml`).
+Aşağıdaki üç durumda bu iz temizlenir:
+
+| Tetikleyici | Kapsam |
+|---|---|
+| "Bu adımı geri al" | Sistem dosyaları + bütün hesaplar, bütün ayarlar |
+| Hafif mod kutusu kaldırılıp "Uygula" | Sistem dosyaları + bütün hesaplar, bütün ayarlar |
+| Tek bir alt kutu kaldırılıp "Uygula" | Yalnız o ayarın dconf yolları |
+
+Kurallar:
+
+- Bir anahtara **yalnız** oradaki değer hafif modun yazdığı değerse
+  dokunulur; öğretmenin kendi seçtiği bir değer ezilmez.
+- Kayıtta değeri olan hesapta özgün değer geri yazılır; kayıtta değeri
+  olmayan hesapta anahtar **silinir**, yani sistem varsayılanına döner.
+- Hafif mod uygulandıktan **sonra** açılan hesapların TiHA öncesi bir
+  değeri yoktur; onlarda da anahtar silinir.
+- Okuma başarısız olursa hesap sessizce atlanmaz, hata olarak bildirilir.
+- Paket **kaldırılmaz**.
+
+Yazma, hesabın kendisi olarak (`runuser -u`) ve temizlenmiş bir ortamda
+(`env -i`) yapılır; hesabın açık oturumu varsa onun veri yoluna, yoksa
+`dbus-run-session` ile açılan geçici veri yoluna yazılır. Ekranda
+görülmesi için o hesabın oturumu yeniden açılmalıdır.
+
+Adımın önizlemesindeki "İzi taşıyan hesap" satırı kaç hesabın
+etkilendiğini gösterir.
+
+#### Geri alınan dconf anahtarları
+
+| Hafif mod ayarı | dconf yolu | Hafif değer |
+|---|---|---|
+| effects | `/org/cinnamon/desktop-effects-workspace` | `false` |
+| compositor | `/org/cinnamon/muffin/unredirect-fullscreen-windows` | `true` |
+| thumbnails | `/org/nemo/preferences/show-image-thumbnails` | `'never'` |
+| directory-item-counts | `/org/nemo/preferences/show-directory-item-counts` | `'never'` |
+| app-monitoring | `/org/cinnamon/enable-app-monitoring` | `false` |
+| text-scaling | `/org/cinnamon/desktop/interface/font-name` | `'Ubuntu Regular 9.5'` |
+| text-scaling | `/org/nemo/desktop/font` | `'Ubuntu Regular 9.5'` |
+| text-scaling | `/org/cinnamon/desktop/wm/preferences/titlebar-font` | `'Ubuntu Bold 9.5'` |
+| file-icon-size | `/org/nemo/icon-view/default-zoom-level` | `'small'` |
+| low-resolution / low-refresh-rate | `~/.config/cinnamon-monitors.xml` | 1600x900 ya da 50 Hz |
 
 ## Gerçek tahtada deneme
 
