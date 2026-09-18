@@ -41,13 +41,30 @@ Geri al.
 yalnızca TiHA'nın dokunduğu parçaları o duruma döndürür: logind drop-in
 silinir (ya da önceki içeriği geri yazılır), hafif mod dosyaları silinir
 ya da yedekten geri yüklenir, paketi TiHA kurduysa ``apt-get purge``
-edilir. logind değişikliği yine açılışta etkin olur. Hafif mod ayarları
-bir kez uygulanmış kullanıcıların kişisel ayarları geri dönmez.
+edilir. logind değişikliği yine açılışta etkin olur.
+
+Hafif modun asimetrisi ve TiHA'nın kapattığı boşluk.
+``eta-light-mode``'un kendi "kapat" yolu (``Action.py disable``) yalnız
+``/etc/eta-light-mode/settings.json`` ile autostart girdisini siler; ayarlar
+ise her oturum açılışında kullanıcının **kendi dconf'una** yazıldığı için
+daha önce giriş yapmış hesaplarda olduğu gibi kalır — "hafif mod kapalı ama
+ekran hâlâ hafif". Paketi ``apt remove`` etmek daha da kötü: bu iki dosya
+dpkg'nin dosya listesinde olmadığından yerinde kalır, üstelik geri almak
+için gereken araç silinir ve imaj depodaki standart kurulumdan uzaklaşır.
+Bu yüzden TiHA hafif modu uygularken her hesabın ilgili dconf değerlerini
+ve ``~/.config/cinnamon-monitors.xml`` dosyasını yedekler; geri alırken
+(ya da adımdaki kutu kaldırılıp uygulandığında) hem sistem dosyalarını hem
+de hesapların ayarlarını o hâle döndürür. Paket kaldırılmaz. Bir anahtara
+yalnız oradaki değer hafif modun yazdığı değerse dokunulur; kullanıcının
+kendi seçtiği değer ezilmez. Hafif mod uygulandıktan sonra açılmış
+hesaplarda TiHA öncesi değer bulunmadığından anahtar silinir, yani sistem
+varsayılanına döner.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -102,6 +119,40 @@ LIGHT_FIELDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
      ("low-resolution", "text-scaling", "file-icon-size")),
     ("lm_low_refresh_rate", "Yenileme hızı 50 Hz", ("low-refresh-rate",)),
 )
+
+# --- Hafif modun kullanıcı başına bıraktığı iz ------------------------------
+# eta-light-mode sistem tarafında yalnız iki dosya tutar; asıl ayarlar her
+# oturum açılışında autostart ile kullanıcının KENDİ dconf'una yazılır.
+# Paketin "kapat" yolu (Action.py disable) yalnız o iki sistem dosyasını
+# siler; daha önce giriş yapmış kullanıcıların dconf değerleri olduğu gibi
+# kalır — yani paketin geri alması asimetrik. TiHA bu izi de temizlemek
+# zorunda, yoksa tahtada "hafif mod kapalı ama ekran hâlâ hafif" kalır.
+#
+# (eta-light-mode ayar adı, dconf yolu, hafif değer). Değerler dconf
+# sözdiziminde; Cinnamon.py'deki *_LOW sabitlerinden birebir alındı.
+LIGHT_DCONF: tuple[tuple[str, str, str], ...] = (
+    ("effects", "/org/cinnamon/desktop-effects-workspace", "false"),
+    ("compositor", "/org/cinnamon/muffin/unredirect-fullscreen-windows", "true"),
+    ("thumbnails", "/org/nemo/preferences/show-image-thumbnails", "'never'"),
+    ("directory-item-counts", "/org/nemo/preferences/show-directory-item-counts", "'never'"),
+    ("app-monitoring", "/org/cinnamon/enable-app-monitoring", "false"),
+    ("text-scaling", "/org/cinnamon/desktop/interface/font-name", "'Ubuntu Regular 9.5'"),
+    ("text-scaling", "/org/nemo/desktop/font", "'Ubuntu Regular 9.5'"),
+    ("text-scaling", "/org/cinnamon/desktop/wm/preferences/titlebar-font", "'Ubuntu Bold 9.5'"),
+    ("file-icon-size", "/org/nemo/icon-view/default-zoom-level", "'small'"),
+)
+# Yol → o yolda "hafif" sayılan değerler. text-scaling gibi bir ayar birden
+# çok yola yazdığı için ters tabloyu bir kez kuruyoruz.
+LIGHT_DCONF_VALUES: dict[str, set[str]] = {}
+for _lm_key, _lm_path, _lm_value in LIGHT_DCONF:
+    LIGHT_DCONF_VALUES.setdefault(_lm_path, set()).add(_lm_value)
+
+# Çözünürlük ve yenileme hızı dconf'a değil bu dosyaya yazılır
+# (Screen._write_monitors_xml); Muffin açılışta oradan geri yükler.
+USER_MONITORS_XML = ".config/cinnamon-monitors.xml"
+USER_DCONF_DB = ".config/dconf/user"
+# Kullanıcı başına yedeklerin state dizini içindeki alt klasörü.
+USER_BACKUP_DIR = "kullanici"
 
 
 # --- Fare imleci (ekran modu değişimi) --------------------------------------
@@ -406,6 +457,127 @@ def _read_light_settings() -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+# --- Kullanıcı dconf'u (root'tan okuma/yazma) --------------------------------
+# TiHA root olarak çalışır, ayarlar ise her kullanıcının kendi
+# ``~/.config/dconf/user`` dosyasında. Okuma veri yolu istemez (dconf dosyayı
+# doğrudan mmap'ler), yazma ister. Bu yüzden:
+#   - komut ``runuser -u <kullanıcı>`` ile hesabın kendisi olarak çalışır,
+#     böylece dosya sahipliği bozulmaz;
+#   - ortam ``env -i`` ile sıfırlanır — root'un DBUS_SESSION_BUS_ADDRESS'i
+#     miras kalsaydı yazma root'un dconf'una giderdi;
+#   - kullanıcının açık oturumu varsa onun veri yolu kullanılır (çalışan
+#     dconf-service yazıyı yutmasın), yoksa ``dbus-run-session`` ile geçici
+#     bir veri yolu açılır.
+
+_UserRef = tuple[str, int, Path]
+
+
+def _human_users() -> list[_UserRef]:
+    """Grafik oturum açabilecek gerçek hesaplar: (ad, uid, ev dizini)."""
+    users: list[_UserRef] = []
+    try:
+        text = Path("/etc/passwd").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return users
+    for line in text.splitlines():
+        parts = line.split(":")
+        if len(parts) < 7:
+            continue
+        name, _pw, uid_s, _gid, _gecos, home, shell = parts[:7]
+        try:
+            uid = int(uid_s)
+        except ValueError:
+            continue
+        # Debian'da normal hesaplar 1000..59999; nobody (65534) ve sistem
+        # hesapları dışarıda kalsın.
+        if not 1000 <= uid < 60000:
+            continue
+        if Path(shell).name in ("nologin", "false", "sync"):
+            continue
+        path = Path(home)
+        if not path.is_dir():
+            continue
+        users.append((name, uid, path))
+    return sorted(users)
+
+
+def _user_cmd(user: _UserRef, argv: list[str], *, write: bool) -> list[str]:
+    name, uid, home = user
+    env = [
+        "env", "-i",
+        f"HOME={home}", f"USER={name}", f"LOGNAME={name}",
+        "PATH=/usr/bin:/bin", "LC_ALL=C",
+    ]
+    if not write:
+        return ["runuser", "-u", name, "--", *env, *argv]
+    bus = Path(f"/run/user/{uid}/bus")
+    if bus.exists():
+        env += [f"XDG_RUNTIME_DIR=/run/user/{uid}",
+                f"DBUS_SESSION_BUS_ADDRESS=unix:path={bus}"]
+        return ["runuser", "-u", name, "--", *env, *argv]
+    return ["runuser", "-u", name, "--", *env, "dbus-run-session", "--", *argv]
+
+
+def _dconf_dump(user: _UserRef) -> dict[str, str]:
+    """Kullanıcının dconf'undaki bütün anahtarlar: yol → ham değer.
+
+    Hiç oturum açmamış kullanıcıda dosya yoktur; boş sözlük döner. Tek
+    süreçte okunur — anahtar başına ``dconf read`` çağırmak, kullanıcı
+    sayısıyla çarpılınca önizlemeyi gözle görülür yavaşlatıyordu.
+    """
+    if not (user[2] / USER_DCONF_DB).exists():
+        return {}
+    r = run_cmd(_user_cmd(user, ["dconf", "dump", "/"], write=False), timeout=20)
+    if not r.ok:
+        return {}
+    values: dict[str, str] = {}
+    section = ""
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip("/")
+            continue
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key = key.strip()
+        values[f"/{section}/{key}" if section else f"/{key}"] = value.strip()
+    return values
+
+
+def _dconf_apply(user: _UserRef, path: str, value: str | None) -> tuple[bool, str]:
+    """``value`` None ise anahtar silinir (sistem varsayılanına döner)."""
+    argv = ["dconf", "write", path, value] if value is not None else ["dconf", "reset", path]
+    r = run_cmd(_user_cmd(user, argv, write=True), timeout=30)
+    return r.ok, (r.stderr or "").strip()
+
+
+def _monitors_xml_is_light(home: Path) -> bool:
+    """Kullanıcının monitors.xml'i hafif modun yazdığı modu mu taşıyor?"""
+    try:
+        text = (home / USER_MONITORS_XML).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    low_res = "<width>1600</width>" in text and "<height>900</height>" in text
+    low_hz = re.search(r"<rate>5[01](\.\d+)?</rate>", text) is not None
+    return low_res or low_hz
+
+
+def _light_user_traces(user: _UserRef, dump: dict[str, str] | None = None) -> list[str]:
+    """Bu hesapta hafif modun bıraktığı izler (insan okunur etiketler)."""
+    values = _dconf_dump(user) if dump is None else dump
+    traces = [
+        path.rsplit("/", 1)[-1]
+        for path, light in LIGHT_DCONF_VALUES.items()
+        if values.get(path) in light
+    ]
+    if _monitors_xml_is_light(user[2]):
+        traces.append("cinnamon-monitors.xml")
+    return traces
+
+
 class PerformanceModule(Module):
     id = "m17_performance"
     title = "Başarım (Deneysel)"
@@ -438,8 +610,56 @@ class PerformanceModule(Module):
         "eta-light-mode paketidir. Seçilen ayarlar tahtadaki bütün "
         "kullanıcılara her oturum açılışında uygulanır. Çözünürlük ve "
         "yenileme hızı düşürme ekranı ve kalem çizgisini bulanıklaştırır; "
-        "önce tek bir tahtada deneyin."
+        "önce tek bir tahtada deneyin.\n\n"
+        "Hafif mod kutusu sistemin o anki durumunu gösterir. Kutu işaretliyken "
+        "kaldırılıp uygulanırsa hafif mod sistemden kaldırılır ve daha önce "
+        "giriş yapmış hesapların masaüstü ayarları da geri alınır. Paket "
+        "kaldırılmaz: ETAP imajının parçası, kaldırılması ayarları geri "
+        "almaya yetmez ve geri almak için gereken aracı da yok eder."
     )
+
+    # ------------------------------------------------------------------
+    # Formun sistemden dolan alanları (params.py "default_from")
+    # ------------------------------------------------------------------
+
+    def light_mode_active(self) -> bool:
+        """Hafif mod şu an tüm kullanıcılara uygulanıyor mu?"""
+        return _read_light_settings() is not None and LIGHT_AUTOSTART.exists()
+
+    def _light_key_active(self, key: str) -> bool:
+        """Hafif mod etkinse o anahtarın gerçek durumu, değilse önerilen açık.
+
+        Hafif mod kapalıyken bütün alt kutuları boş göstermek, kullanıcıyı
+        ana kutuyu işaretledikten sonra yedi kutuyu tek tek işaretlemeye
+        zorlardı.
+        """
+        if not self.light_mode_active():
+            return True
+        return bool((_read_light_settings() or {}).get(key))
+
+    # Her alt kutu kendi anahtarının gerçek durumundan dolar. Adıma
+    # girildiğinde form sistemin hâlini gösterdiği için bir kutuyu kaldırıp
+    # uygulamak "o ayarı kaldır" anlamına gelebiliyor.
+    def lm_effects_active(self) -> bool:
+        return self._light_key_active("effects")
+
+    def lm_compositor_active(self) -> bool:
+        return self._light_key_active("compositor")
+
+    def lm_thumbnails_active(self) -> bool:
+        return self._light_key_active("thumbnails")
+
+    def lm_directory_counts_active(self) -> bool:
+        return self._light_key_active("directory-item-counts")
+
+    def lm_app_monitoring_active(self) -> bool:
+        return self._light_key_active("app-monitoring")
+
+    def lm_low_resolution_active(self) -> bool:
+        return self._light_key_active("low-resolution")
+
+    def lm_low_refresh_rate_active(self) -> bool:
+        return self._light_key_active("low-refresh-rate")
 
     # ------------------------------------------------------------------
     # Önizleme
@@ -488,6 +708,24 @@ class PerformanceModule(Module):
         else:
             lines.append("  Tüm kullanıcılar : etkin değil")
 
+        affected = [
+            (user[0], traces)
+            for user in _human_users()
+            for traces in [_light_user_traces(user)]
+            if traces
+        ]
+        if affected:
+            lines.append(
+                f"  İzi taşıyan hesap: {len(affected)} — "
+                + ", ".join(f"{name} ({len(t)} ayar)" for name, t in affected)
+            )
+            lines.append(
+                "                     (hafif mod kaldırılırsa bu hesapların "
+                "ayarları da geri alınır)"
+            )
+        else:
+            lines.append("  İzi taşıyan hesap: yok")
+
         lines += ["", "Fare imleci (ekran modu değişimi)"]
         driver = _x_driver()
         lines.append(f"  Ekran sürücüsü   : {driver or 'okunamadı'}")
@@ -518,8 +756,12 @@ class PerformanceModule(Module):
         cursor_xorg = (p.get("cursor_xorg_fix") or CURSOR_XORG_OFF).strip()
         cursor_service = _as_bool(p.get("cursor_refresh_service"))
         cursor_xorg_on = cursor_xorg != CURSOR_XORG_OFF
+        # Kutu sisteme bakarak dolduğu için (params.py "default_from"),
+        # işaretinin kaldırılıp uygulanması bilinçli bir "kaldır" isteğidir.
+        light_remove = not light_mode and self.light_mode_active()
 
-        if not (kill_processes or light_mode or cursor_xorg_on or cursor_service):
+        if not (kill_processes or light_mode or light_remove
+                or cursor_xorg_on or cursor_service):
             return ApplyResult(False, "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı.")
 
         def say(line: str) -> None:
@@ -567,6 +809,15 @@ class PerformanceModule(Module):
                     data["light_mode_keys"] = keys
                 else:
                     failures.append(text)
+
+        if light_remove:
+            ok, text = self._remove_light_mode(original, say, warnings)
+            if ok:
+                summary.append(text)
+                details.append("Hafif mod kaldırıldı (sistem + kullanıcı ayarları)")
+                data["light_mode_removed"] = True
+            else:
+                failures.append(text)
 
         if cursor_xorg_on:
             ok, text = self._apply_cursor_xorg(original, cursor_xorg, say)
@@ -646,6 +897,9 @@ class PerformanceModule(Module):
             if version is None:
                 return False, f"{LIGHT_PKG} kurulumu doğrulanamadı."
         say(f"{LIGHT_PKG} sürümü: {version}")
+        # Kullanıcı ayarlarının TiHA öncesi hâli bu noktada hâlâ el
+        # değmemiş: autostart yazılmadan kimse yeni ayarla oturum açmadı.
+        self._capture_user_state(original, say)
         original["touched"]["light"] = True
         self._save_original(original)
 
@@ -668,6 +922,11 @@ class PerformanceModule(Module):
         if not LIGHT_ACTION.is_file():
             return False, f"{LIGHT_ACTION} bulunamadı; paket yapısı değişmiş olabilir."
 
+        # Daha önce açık olup bu kez seçilmeyen ayarlar. JSON'dan düşmeleri
+        # yetmez: paket bir anahtarı yoksaydığında kullanıcıdaki değeri
+        # olduğu gibi bırakır, ayar sessizce açık kalırdı.
+        dropped = sorted(set((_read_light_settings() or {}).keys()) - set(keys))
+
         payload = {k: True for k in keys}
         r = run_cmd(
             ["python3", str(LIGHT_ACTION), "enable"],
@@ -679,7 +938,61 @@ class PerformanceModule(Module):
             return False, "eta-light-mode ayarları yazıldı görünüyor ama doğrulanamadı."
         say(f"Yazıldı: {LIGHT_SETTINGS} ({', '.join(keys)})")
         say(f"Autostart: {LIGHT_AUTOSTART}")
+
+        if dropped:
+            say(f"\nSeçimden çıkarılan ayarlar geri alınıyor: {', '.join(dropped)}")
+            reverted, errors = self._revert_user_state(original, set(dropped), say)
+            warnings.extend(errors)
+            if reverted:
+                say(f"Etkilenen hesap: {', '.join(reverted)}")
         return True, "ETA Hafif Mod tüm kullanıcılara uygulandı (sonraki oturum açılışında)."
+
+    def _remove_light_mode(
+        self, original: dict, say, warnings: list[str],
+    ) -> tuple[bool, str]:
+        """Hafif modu sistemden ve daha önce giriş yapmış hesaplardan kaldırır.
+
+        Paket bilerek kaldırılmaz. ``/etc/xdg/autostart/...`` ve
+        ``/etc/eta-light-mode/settings.json`` dpkg'nin dosya listesinde
+        değil (Action.py çalışma anında yazıyor), bu yüzden ``apt remove``
+        ikisini de yerinde bırakır; üstelik geri alma için gereken
+        ``/usr/bin/eta-light-mode`` aracını siler ve ETAP imajını depodaki
+        standart kurulumdan uzaklaştırır.
+        """
+        say("\n==== ETA Hafif Mod kaldırılıyor ====")
+        # Kullanıcıların TiHA öncesi hâli kaydedilmemişse (hafif modu TiHA
+        # açmadıysa) şimdi kaydetmenin anlamı yok: ayar zaten uygulanmış
+        # durumda. Bu durumda geri alma sistem varsayılanına döner.
+        if LIGHT_ACTION.is_file():
+            r = run_cmd(["python3", str(LIGHT_ACTION), "disable"], timeout=30)
+            if not r.ok:
+                return False, (
+                    "eta-light-mode kapatılamadı: "
+                    f"{r.stderr.strip() or r.returncode}"
+                )
+        else:
+            say(f"{LIGHT_ACTION} yok; sistem dosyaları doğrudan siliniyor.")
+            for path in (LIGHT_SETTINGS, LIGHT_AUTOSTART):
+                try:
+                    if path.exists():
+                        path.unlink()
+                except OSError as exc:
+                    return False, f"{path} silinemedi: {exc}"
+        if self.light_mode_active():
+            return False, "Hafif mod kapatıldı görünüyor ama doğrulanamadı."
+        say(f"Silindi: {LIGHT_SETTINGS}")
+        say(f"Silindi: {LIGHT_AUTOSTART}")
+        say(f"{LIGHT_PKG} paketi kaldırılmadı (ETAP imajının parçası).")
+
+        reverted, errors = self._revert_user_state(original, None, say)
+        warnings.extend(errors)
+        if reverted:
+            say(f"Kullanıcı ayarları geri alındı: {', '.join(reverted)}")
+            return True, (
+                "ETA Hafif Mod kaldırıldı; "
+                f"{len(reverted)} hesabın masaüstü ayarı geri alındı."
+            )
+        return True, "ETA Hafif Mod kaldırıldı (izi taşıyan hesap yoktu)."
 
     # ------------------------------------------------------------------
     # Geri al
@@ -756,6 +1069,18 @@ class PerformanceModule(Module):
                     errors.append(f"{LIGHT_PKG} kaldırılamadı: {r.stderr.strip()}")
             if light_ok:
                 done.append("ETA Hafif Mod tüm kullanıcılar için kapatıldı")
+                # Sistem dosyalarını geri almak yetmez: ayarlar her oturum
+                # açılışında kullanıcıların kendi dconf'una yazıldı ve orada
+                # kalır. Bunları da TiHA öncesi hâline döndür.
+                reverted, revert_errors = self._revert_user_state(
+                    original, None, lambda _line: None,
+                )
+                errors.extend(revert_errors)
+                if reverted:
+                    done.append(
+                        f"{len(reverted)} hesabın masaüstü ayarları geri alındı "
+                        f"({', '.join(reverted)})"
+                    )
 
         if original["touched"].get("cursor_xorg"):
             if self._restore_or_remove("cursor_xorg", original, errors):
@@ -775,8 +1100,9 @@ class PerformanceModule(Module):
             True,
             "; ".join(done) + "." if done else "Geri alınacak değişiklik yoktu.",
             details=(
-                "Hafif mod ayarları bir kez uygulanmış kullanıcıların kişisel "
-                "masaüstü ayarları (yazı boyutu, çözünürlük vb.) otomatik geri dönmez."
+                "Hafif modun kullanıcı hesaplarına yazdığı ayarlar (yazı boyutu, "
+                "ikon boyutu, çözünürlük vb.) de TiHA öncesi hâline döndürüldü. "
+                "Ekranda görülmesi için o hesabın oturumu yeniden açılmalı."
             ),
         )
 
@@ -789,6 +1115,109 @@ class PerformanceModule(Module):
             return LOGIND_DROPIN.read_text(encoding="utf-8") == LOGIND_DROPIN_CONTENT
         except OSError:
             return False
+
+    # --- Kullanıcı hesaplarının hafif mod öncesi hâli ----------------------
+
+    def _capture_user_state(self, original: dict, say) -> None:
+        """Her hesabın ilgili dconf değerlerini ve monitors.xml'ini yedekler.
+
+        Yalnız bir kez çalışır: ikinci uygulama kaydı bozmasın, geri alma
+        her zaman TiHA hiç dokunmadan önceki duruma dönsün.
+        """
+        if "user_dconf" in original:
+            return
+        snapshot: dict[str, dict[str, str]] = {}
+        backup_dir = self.ensure_state_dir() / USER_BACKUP_DIR
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        for user in _human_users():
+            name, _uid, home = user
+            dump = _dconf_dump(user)
+            # Yalnız ayarlanmış anahtarlar yazılır; kayıtta olmayan anahtar
+            # "kullanıcıda yoktu" demektir ve geri alırken silinir.
+            snapshot[name] = {p: dump[p] for p in LIGHT_DCONF_VALUES if p in dump}
+            xml = home / USER_MONITORS_XML
+            if xml.is_file():
+                try:
+                    shutil.copy2(xml, backup_dir / f"{name}.monitors.xml")
+                except OSError as exc:
+                    log.warning("%s monitors.xml yedeklenemedi: %s", name, exc)
+        original["user_dconf"] = snapshot
+        self._save_original(original)
+        say(f"{len(snapshot)} hesabın masaüstü ayarı geri alma için kaydedildi.")
+
+    def _revert_user_state(
+        self, original: dict, keys: set[str] | None, say,
+    ) -> tuple[list[str], list[str]]:
+        """Hafif modun hesaplara yazdığı ayarları geri alır.
+
+        ``keys`` verilmezse bütün hafif mod ayarları, verilirse yalnız o
+        eta-light-mode anahtarlarına karşılık gelen dconf yolları ele
+        alınır. Bir anahtara ancak o hesaptaki değeri hafif modun yazdığı
+        değerse dokunulur; kullanıcının kendi seçtiği bir değer ezilmez.
+
+        Döner: (geri alınan hesaplar, hatalar).
+        """
+        if keys is None:
+            paths = set(LIGHT_DCONF_VALUES)
+            monitors = True
+        else:
+            paths = {p for k, p, _v in LIGHT_DCONF if k in keys}
+            monitors = bool(keys & {"low-resolution", "low-refresh-rate"})
+        snapshot = original.get("user_dconf") or {}
+        backup_dir = self.state_dir / USER_BACKUP_DIR
+        reverted: list[str] = []
+        errors: list[str] = []
+
+        for user in _human_users():
+            name, _uid, home = user
+            dump = _dconf_dump(user)
+            # Kayıtta olmayan hesap (hafif mod uygulandıktan SONRA açılmış):
+            # TiHA öncesi değeri yok, anahtarı silmek doğru davranış —
+            # değer sistem varsayılanına döner.
+            saved = snapshot.get(name)
+            changed: list[str] = []
+            for path in sorted(paths):
+                current = dump.get(path)
+                if current is None or current not in LIGHT_DCONF_VALUES[path]:
+                    continue
+                target = saved.get(path) if saved else None
+                if target == current:
+                    continue
+                ok, err = _dconf_apply(user, path, target)
+                if ok:
+                    changed.append(path.rsplit("/", 1)[-1])
+                else:
+                    errors.append(
+                        f"{name}: {path} geri alınamadı ({err or 'bilinmeyen hata'})"
+                    )
+            if monitors and _monitors_xml_is_light(home):
+                ok, err = self._restore_user_monitors(user, backup_dir)
+                if ok:
+                    changed.append("cinnamon-monitors.xml")
+                else:
+                    errors.append(f"{name}: monitors.xml geri alınamadı ({err})")
+            if changed:
+                reverted.append(name)
+                say(f"  {name}: {', '.join(changed)}")
+        return reverted, errors
+
+    def _restore_user_monitors(self, user: _UserRef, backup_dir: Path) -> tuple[bool, str]:
+        """Hesabın ekran modu dosyasını yedekten geri yazar ya da siler."""
+        name, uid, home = user
+        target = home / USER_MONITORS_XML
+        backup = backup_dir / f"{name}.monitors.xml"
+        try:
+            if backup.is_file():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup, target)
+                # Root olarak kopyalandı; sahipliği geri vermezsek Muffin
+                # bir dahaki ekran ayarında dosyayı yazamaz.
+                os.chown(target, uid, home.stat().st_gid)
+            elif target.exists():
+                target.unlink()
+        except OSError as exc:
+            return False, str(exc)
+        return True, ""
 
     def _load_original(self) -> dict | None:
         try:

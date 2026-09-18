@@ -502,6 +502,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Hafif modu tüm kullanıcılara uygula",
             "type": "bool",
             "default": "False",
+            "default_from": "light_mode_active",
             "enables": [
                 "lm_effects", "lm_compositor", "lm_thumbnails",
                 "lm_directory_counts", "lm_app_monitoring",
@@ -513,8 +514,10 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "yazılır; her kullanıcıya (klon tahtaya sonradan eklenen "
                 "hesaplar dahil) oturum açılışında uygulanır. Kullanıcı "
                 "kendi oturumunda değiştirse de bir sonraki girişte yeniden "
-                "uygulanır. Kişisel ayarlar geri al ile otomatik eski "
-                "hâline dönmez."
+                "uygulanır. Kutu sistemin o anki durumunu gösterir: "
+                "işaretliyken kaldırıp uygularsanız hafif mod sistemden "
+                "kaldırılır ve daha önce giriş yapmış hesapların masaüstü "
+                "ayarları da geri alınır. Paket kaldırılmaz."
             ),
         },
         {
@@ -522,6 +525,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Pencere ve menü animasyonlarını kapat",
             "type": "bool",
             "default": "True",
+            "default_from": "lm_effects_active",
             "help": "Menü, pencere ve diyaloglar daha çabuk açılır hissi verir.",
         },
         {
@@ -529,6 +533,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Tam ekran pencereleri doğrudan çiz",
             "type": "bool",
             "default": "True",
+            "default_from": "lm_compositor_active",
             "help": "Tam ekran video ve sunumlarda yükü azaltır; ekran yırtılması görülebilir.",
         },
         {
@@ -536,6 +541,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Resim ve video önizlemelerini kapat",
             "type": "bool",
             "default": "True",
+            "default_from": "lm_thumbnails_active",
             "help": "Çok dosyalı USB/klasör açılışındaki yoğun işlemci ve disk yükünü kaldırır.",
         },
         {
@@ -543,18 +549,21 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Klasör öğesi sayımını kapat",
             "type": "bool",
             "default": "True",
+            "default_from": "lm_directory_counts_active",
         },
         {
             "key": "lm_app_monitoring",
             "label": "Uygulama kullanım izlemesini kapat",
             "type": "bool",
             "default": "True",
+            "default_from": "lm_app_monitoring_active",
         },
         {
             "key": "lm_low_resolution",
             "label": "Çözünürlüğü 1600x900'e düşür",
             "type": "bool",
             "default": "False",
+            "default_from": "lm_low_resolution_active",
             "help": (
                 "Grafik yükünü ~%30 azaltır ama yazı ve kalem çizgisi "
                 "bulanıklaşır. Büyüyen arayüzü dengelemek için yazı boyutu "
@@ -567,6 +576,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": "Yenileme hızını 50 Hz'e düşür",
             "type": "bool",
             "default": "False",
+            "default_from": "lm_low_refresh_rate_active",
             "help": "Hareketli içerikte yükü ~%17 azaltır; kalem gecikmesi ~3 ms artar.",
         },
         {"label": "Fare imleci (ekran modu değişimi)", "type": "heading"},
