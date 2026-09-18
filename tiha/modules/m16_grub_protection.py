@@ -347,8 +347,22 @@ class GrubProtectionModule(Module):
 
         password = (params.get("grub_password") or "").strip()
         # Koruma zaten etkinken parola kutusu boş bırakıldıysa: operatör
-        # yalnız adımdan geçiyordur, mevcut parolayı bozmayalım.
+        # yalnız adımdan geçiyordur, mevcut parolayı bozmayalım. Ama koruma
+        # TiHA'nın eski sürümüyle kurulduysa (kurtarma girdisi kapalı, yeni
+        # yama yok) parolaya dokunmadan yamayı yükseltiriz; yoksa tahtada
+        # parolayı yeniden yazmadan kurtarma koruması hiç gelmezdi.
+        keep_existing = False
         if not password and self.lockdown_active():
+            linux_now = _read_text(GRUB_LINUX_SCRIPT)
+            if GRUB_LOCKDOWN_INCLUDE.exists() and (
+                GUARD_BEGIN not in linux_now
+                or CLASS_REPLACE not in linux_now
+                or _recovery_disabled(_read_text(GRUB_DEFAULTS))
+            ):
+                keep_existing = True
+                emit("Koruma etkin, parola korunuyor; eski sürümün yaması "
+                     "yükseltiliyor (kurtarma girdisi parolalı)…")
+        if not password and self.lockdown_active() and not keep_existing:
             return ApplyResult(
                 True,
                 "GRUB koruması zaten etkin; parola alanı boş bırakıldığı için "
@@ -360,7 +374,7 @@ class GrubProtectionModule(Module):
                     "kutucuğun işaretini kaldırıp uygulayın."
                 ),
             )
-        if not password:
+        if not password and not keep_existing:
             return ApplyResult(
                 False,
                 "GRUB yönetici parolası boş bırakılamaz.",
@@ -371,7 +385,7 @@ class GrubProtectionModule(Module):
                     "GRUB shell'ini açmak isteyenden bu parola sorulur."
                 ),
             )
-        if len(password) < 8:
+        if not keep_existing and len(password) < 8:
             return ApplyResult(
                 False,
                 "GRUB yönetici parolası çok kısa (en az 8 karakter).",
@@ -418,8 +432,9 @@ class GrubProtectionModule(Module):
                 ),
             )
 
-        emit("Parola hash'i hesaplanıyor (PBKDF2-SHA512)…")
-        pw_hash = _pbkdf2_hash(password)
+        if not keep_existing:
+            emit("Parola hash'i hesaplanıyor (PBKDF2-SHA512)…")
+            pw_hash = _pbkdf2_hash(password)
 
         # Yedekler yalnız TiHA dokunmadan önceki hâli tutar: ilk uygulamada
         # alınır, sonraki uygulamalar üzerine yazmaz (eski sürüm her seferinde
@@ -435,14 +450,15 @@ class GrubProtectionModule(Module):
         except OSError as exc:
             return ApplyResult(False, f"Yedek alınamadı: {exc}")
 
-        emit(f"{GRUB_LOCKDOWN_INCLUDE} yazılıyor…")
-        try:
-            GRUB_LOCKDOWN_INCLUDE.write_text(
-                _include_content(pw_hash), encoding="utf-8",
-            )
-            GRUB_LOCKDOWN_INCLUDE.chmod(0o755)
-        except OSError as exc:
-            return ApplyResult(False, f"Include yazılamadı: {exc}")
+        if not keep_existing:
+            emit(f"{GRUB_LOCKDOWN_INCLUDE} yazılıyor…")
+            try:
+                GRUB_LOCKDOWN_INCLUDE.write_text(
+                    _include_content(pw_hash), encoding="utf-8",
+                )
+                GRUB_LOCKDOWN_INCLUDE.chmod(0o755)
+            except OSError as exc:
+                return ApplyResult(False, f"Include yazılamadı: {exc}")
 
         patched = _patch_linux(linux_txt)
         if patched != linux_txt:
@@ -495,6 +511,9 @@ class GrubProtectionModule(Module):
 
         return ApplyResult(
             True,
+            (f"GRUB koruması güncellendi — mevcut parola korundu, kurtarma "
+             f"girdisi parolalı; kullanıcı adı: {SUPERUSER}")
+            if keep_existing else
             f"GRUB koruması etkinleştirildi — kullanıcı adı: {SUPERUSER}",
             details=(
                 f"Kullanıcı adı    : {SUPERUSER}\n"
