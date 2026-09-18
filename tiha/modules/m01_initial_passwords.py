@@ -254,7 +254,16 @@ class InitialPasswordsModule(Module):
         "parola artık giriş anahtarlığınızla uyuşmuyor' diyaloğu çıkar ve "
         "doğru parola bile kabul edilmez (anahtarlık eski parolayı bekler). "
         "Bu adım bayatlayan anahtarlığı kenara alır; ilk girişte yenisi yeni "
-        "parolayla otomatik oluşturulur. Geri alma dosyaları yerine koyar."
+        "parolayla otomatik oluşturulur. Geri alma dosyaları yerine koyar.\n\n"
+        "Ortak hesap neden önemli? Öğretmenin tahtada kişisel hesabı ilk "
+        "EBA QR girişiyle oluşur; PIN kodu ve USB ile giriş ancak bundan "
+        "sonra kullanılabilir. Öğretmen kişisel hesabını henüz oluşturmamışsa "
+        "ve EBA QR çalışmıyorsa (internet yok, uygulama ya da altyapı sorunu) "
+        "tahtaya yalnızca ortak hesapla (ogretmen) girebilir. Tahtaların "
+        "kullanım politikanıza göre ya bu ortak hesabın parolasını "
+        "öğretmenlerle paylaşmanız (sınıfta yazılırken öğrenciler de "
+        "görebilir) ya da 'Öğretmen PIN anahtarları' adımında ortak hesap "
+        "için PIN anahtarı tanımlamanız gerekir."
     )
     extra_links = [
         {"label": "Kullanıcılar ve Gruplar uygulamasını aç", "action": "launch_users_admin_gui_action"},
