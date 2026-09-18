@@ -43,6 +43,7 @@ class StepReport:
     tests: list[str] = field(default_factory=list)   # klonda deneyin
     notes: list[str] = field(default_factory=list)   # bu adıma özel dikkat
     failed: bool = False
+    skipped: bool = False     # bilinçli olarak atlandı (ör. kutu işaretsiz)
     experimental: bool = False
 
 
@@ -67,7 +68,7 @@ class Report:
                 head = f"■ {s.title}"
                 if s.failed:
                     head += " (BAŞARISIZ)"
-                elif s.experimental:
+                elif s.experimental and "deneysel" not in s.title.lower():
                     head += " (deneysel)"
                 out.append(head)
                 out += [f"  • {line}" for line in s.done]
@@ -256,7 +257,7 @@ def _intro(steps: list[StepReport]) -> str:
             "uyguladıkça burada imaja neyin girdiği ve bir klon tahtada "
             "neyin denenmesi gerektiği listelenecek."
         )
-    ok = [s for s in steps if not s.failed]
+    ok = [s for s in steps if not s.failed and not s.skipped]
     failed = [s for s in steps if s.failed]
     parts = [
         f"Bu tahtada TiHA ile {len(ok)} adımı uyguladınız"

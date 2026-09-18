@@ -877,6 +877,7 @@ def narrate_m15_failed(ctx: StepContext, rep: StepReport) -> None:
         return
     # Kutu işaretsiz uygulandı: hata değil, bilinçli atlama.
     rep.failed = False
+    rep.skipped = True
     import os.path
     if os.path.exists(_WOL_SERVICE):
         rep.done.append(
@@ -1422,7 +1423,7 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
         if m01 is not None and m01.applied and "ogretmen" in _m01_passwords(m01)[0]:
             w.append(
                 "Ortak öğretmen hesabına (ogretmen) parola belirlediniz ama "
-                f"{q('m02_boot_password_wipe')} da etkin: bu parola klonun ilk "
+                f"{q('m02_boot_password_wipe')} adımı da etkin: bu parola klonun ilk "
                 "açılışında rastgele bir değerle ezilecek ve işe yaramayacak."
             )
         if "m03_otp_secrets" not in applied:
