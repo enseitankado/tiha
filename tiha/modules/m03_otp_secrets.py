@@ -128,6 +128,9 @@ MIN_USERS_FOR_CACHE = 50
 
 # Varsayılan sistem kullanıcıları (işletim sistemi kurulumunda gelir)
 DEFAULT_SYSTEM_USERS = {"etapadmin", "ogrenci", "ogretmen"}
+# ogretmenler grubuna (ve dolayısıyla grup PIN'ine) hiç girmemesi gereken
+# hesaplar: yönetici ve ortak öğretmen hesabı.
+GROUP_EXCLUDED_USERS = ("etapadmin", "ogretmen")
 
 
 # enseitankado/eta-otp-cli entegrasyonu: bootstrap.sh aracı
@@ -795,6 +798,16 @@ def get_extra_users() -> list[str]:
 
 
 
+def _excluded_group_members() -> list[str]:
+    """ogretmenler grubunda bulunmaması gerektiği hâlde üye olan hesaplar."""
+    import grp as _grp
+    try:
+        members = set(_grp.getgrnam(OGRETMENLER_GROUP).gr_mem)
+    except KeyError:
+        return []
+    return [u for u in GROUP_EXCLUDED_USERS if u in members]
+
+
 def reset_to_default_users(
     progress: ProgressCallback | None = None,
 ) -> tuple[bool, list[str], dict[str, str]]:
@@ -835,15 +848,12 @@ def reset_to_default_users(
             if progress:
                 progress(f"  ✗ {username} silinemedi: {err}")
 
-    # OTP secrets dosyasını temizle (sadece varsayılan kullanıcılar kalacak)
-    try:
-        secrets = load_secrets()
-        default_secrets = {k: v for k, v in secrets.items()
-                         if k in DEFAULT_SYSTEM_USERS}
-        save_secrets(default_secrets)
-        log.info("OTP secrets dosyası temizlendi")
-    except Exception as exc:
-        log.error("OTP secrets temizlenemedi: %s", exc)
+    # PIN kayıtlarına burada dokunulmaz. Eskiden yalnız varsayılan
+    # hesapların kayıtları bırakılıyordu; bu, onay metninin "korunur"
+    # dediği grup anahtarını (@ogretmenler) ve silinemeyen hesapların
+    # anahtarlarını da siliyordu. Karşılığı kalmayan kayıtları çağıran
+    # (remove_extra_users_action) hemen ardından orphan_secret_users
+    # kuralıyla temizler: grup anahtarları ve varsayılan hesaplar korunur.
 
     # Greeter cache'i güncelle
     if GREETER_SCRIPT_PATH.exists():
@@ -1179,6 +1189,7 @@ class OTPSecretsModule(Module):
         group_key = f"@{OGRETMENLER_GROUP}"
         group_secret_is_new = False
         grouped_users: list[str] = []
+        ungrouped_users: list[str] = []
         auto_group_service_installed = False
 
         if add_teachers_to_group:
@@ -1193,8 +1204,10 @@ class OTPSecretsModule(Module):
                              "grubuna ekleniyor...")
                 for u in targets:
                     # etapadmin bir öğretmen hesabı değil; ortak PIN'in
-                    # yönetici hesabına da geçmesi istenmez.
-                    if u == "etapadmin" or not user_exists(u):
+                    # yönetici hesabına da geçmesi istenmez. Ortak ogretmen
+                    # hesabı da gruba girmez: grup PIN'i ortak hesapta
+                    # geçmemeli (otomatik grup servisi de onu hariç tutar).
+                    if u in GROUP_EXCLUDED_USERS or not user_exists(u):
                         continue
                     run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
                     grouped_users.append(u)
@@ -1202,6 +1215,12 @@ class OTPSecretsModule(Module):
                         progress(f"  + {u}")
                 if not grouped_users and progress:
                     progress("  (gruba eklenecek mevcut hesap yok)")
+                # Eski sürüm ortak hesabı da gruba ekliyordu; üyeliği kaldır.
+                for u in _excluded_group_members():
+                    if run_cmd(["gpasswd", "-d", u, OGRETMENLER_GROUP], check=False).ok:
+                        ungrouped_users.append(u)
+                        if progress:
+                            progress(f"  - {u} (ortak/yönetici hesap gruptan çıkarıldı)")
                 # Sonradan EBA QR ile açılacak hesaplar için izleyici servis
                 if install_auto_group_service():
                     auto_group_service_installed = True
@@ -1449,6 +1468,7 @@ class OTPSecretsModule(Module):
                 "preserved_users": preserved_users,
                 "changed_users": changed_users,
                 "grouped_users": grouped_users,
+                "ungrouped_users": ungrouped_users,
                 "used_tool": bool(cli_script),
                 "greeter_cache_applied": greeter_cache_applied,
                 "total_users": total_users,
