@@ -275,13 +275,24 @@ def _read_file(path: Path) -> str:
         return ""
 
 
+# Xorg günlüğünde ekran sürücülerinin yanı sıra girdi sürücüleri de
+# (libinput, evdev, wacom) "Loading ..._drv.so" satırıyla geçer ve genelde
+# en sonda yüklenirler; bu yüzden sürücü adını süzmek gerekiyor.
+X_VIDEO_DRIVERS = (
+    "intel", "modesetting", "amdgpu", "radeon", "nouveau", "nvidia",
+    "ati", "fbdev", "vesa", "vmware", "qxl", "virtio_gpu",
+)
+
+
 def _x_driver() -> str:
-    """Xorg günlüğüne göre en son yüklenen ekran sürücüsü (ör. "intel",
+    """Xorg günlüğüne göre en son yüklenen EKRAN sürücüsü (ör. "intel",
     "modesetting"). Okunamazsa boş döner — önizlemede bilgi amaçlı."""
     names = [
-        line.rsplit("/", 1)[-1].replace("_drv.so", "").strip()
+        name
         for line in _read_file(XORG_LOG).splitlines()
         if "_drv.so" in line and "Loading" in line
+        for name in [line.rsplit("/", 1)[-1].replace("_drv.so", "").strip()]
+        if name in X_VIDEO_DRIVERS
     ]
     return names[-1] if names else ""
 
@@ -472,6 +483,26 @@ def _read_light_settings() -> dict | None:
 _UserRef = tuple[str, int, Path]
 
 
+def _runuser_bin() -> str:
+    """``runuser`` /usr/sbin altındadır; sudo'nun secure_path'i o dizini her
+    zaman içermediği için bilinen konumlara da bakılır."""
+    found = shutil.which("runuser")
+    if found:
+        return found
+    for candidate in ("/usr/sbin/runuser", "/sbin/runuser", "/usr/bin/runuser"):
+        if Path(candidate).is_file():
+            return candidate
+    return "runuser"
+
+
+def _path_exists(path: Path) -> bool:
+    """Başka kullanıcının 700 izinli ev dizini ``exists()``'i patlatır."""
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
 def _human_users() -> list[_UserRef]:
     """Grafik oturum açabilecek gerçek hesaplar: (ad, uid, ev dizini)."""
     users: list[_UserRef] = []
@@ -508,28 +539,33 @@ def _user_cmd(user: _UserRef, argv: list[str], *, write: bool) -> list[str]:
         f"HOME={home}", f"USER={name}", f"LOGNAME={name}",
         "PATH=/usr/bin:/bin", "LC_ALL=C",
     ]
+    runuser = _runuser_bin()
     if not write:
-        return ["runuser", "-u", name, "--", *env, *argv]
+        return [runuser, "-u", name, "--", *env, *argv]
     bus = Path(f"/run/user/{uid}/bus")
-    if bus.exists():
+    if _path_exists(bus):
         env += [f"XDG_RUNTIME_DIR=/run/user/{uid}",
                 f"DBUS_SESSION_BUS_ADDRESS=unix:path={bus}"]
-        return ["runuser", "-u", name, "--", *env, *argv]
-    return ["runuser", "-u", name, "--", *env, "dbus-run-session", "--", *argv]
+        return [runuser, "-u", name, "--", *env, *argv]
+    return [runuser, "-u", name, "--", *env, "dbus-run-session", "--", *argv]
 
 
-def _dconf_dump(user: _UserRef) -> dict[str, str]:
+def _dconf_dump(user: _UserRef) -> dict[str, str] | None:
     """Kullanıcının dconf'undaki bütün anahtarlar: yol → ham değer.
 
-    Hiç oturum açmamış kullanıcıda dosya yoktur; boş sözlük döner. Tek
-    süreçte okunur — anahtar başına ``dconf read`` çağırmak, kullanıcı
+    Hiç oturum açmamış kullanıcıda dosya yoktur; boş sözlük döner. Komut
+    çalıştırılamazsa **None** döner: "ayarı yok" ile "okuyamadım" birbirine
+    karışırsa geri alma hiçbir şey yapmadan başarılı görünürdü.
+
+    Tek süreçte okunur — anahtar başına ``dconf read`` çağırmak, kullanıcı
     sayısıyla çarpılınca önizlemeyi gözle görülür yavaşlatıyordu.
     """
-    if not (user[2] / USER_DCONF_DB).exists():
+    if not _path_exists(user[2] / USER_DCONF_DB):
         return {}
     r = run_cmd(_user_cmd(user, ["dconf", "dump", "/"], write=False), timeout=20)
     if not r.ok:
-        return {}
+        log.warning("%s: dconf okunamadı — %s", user[0], (r.stderr or "").strip())
+        return None
     values: dict[str, str] = {}
     section = ""
     for line in r.stdout.splitlines():
@@ -567,7 +603,7 @@ def _monitors_xml_is_light(home: Path) -> bool:
 
 def _light_user_traces(user: _UserRef, dump: dict[str, str] | None = None) -> list[str]:
     """Bu hesapta hafif modun bıraktığı izler (insan okunur etiketler)."""
-    values = _dconf_dump(user) if dump is None else dump
+    values = dump if dump is not None else (_dconf_dump(user) or {})
     traces = [
         path.rsplit("/", 1)[-1]
         for path, light in LIGHT_DCONF_VALUES.items()
@@ -1132,11 +1168,16 @@ class PerformanceModule(Module):
         for user in _human_users():
             name, _uid, home = user
             dump = _dconf_dump(user)
+            if dump is None:
+                # Okunamayan hesabı kayda hiç almıyoruz; "boş kaydedildi"
+                # sanılsa geri alma o hesabın ayarlarını silerdi.
+                log.warning("%s: hafif mod öncesi ayarlar kaydedilemedi", name)
+                continue
             # Yalnız ayarlanmış anahtarlar yazılır; kayıtta olmayan anahtar
             # "kullanıcıda yoktu" demektir ve geri alırken silinir.
             snapshot[name] = {p: dump[p] for p in LIGHT_DCONF_VALUES if p in dump}
             xml = home / USER_MONITORS_XML
-            if xml.is_file():
+            if _path_exists(xml):
                 try:
                     shutil.copy2(xml, backup_dir / f"{name}.monitors.xml")
                 except OSError as exc:
@@ -1171,6 +1212,12 @@ class PerformanceModule(Module):
         for user in _human_users():
             name, _uid, home = user
             dump = _dconf_dump(user)
+            if dump is None:
+                errors.append(
+                    f"{name}: hesabın ayarları okunamadı, geri alınamadı "
+                    "(elle denetleyin)"
+                )
+                continue
             # Kayıtta olmayan hesap (hafif mod uygulandıktan SONRA açılmış):
             # TiHA öncesi değeri yok, anahtarı silmek doğru davranış —
             # değer sistem varsayılanına döner.
@@ -1213,7 +1260,7 @@ class PerformanceModule(Module):
                 # Root olarak kopyalandı; sahipliği geri vermezsek Muffin
                 # bir dahaki ekran ayarında dosyayı yazamaz.
                 os.chown(target, uid, home.stat().st_gid)
-            elif target.exists():
+            elif _path_exists(target):
                 target.unlink()
         except OSError as exc:
             return False, str(exc)
