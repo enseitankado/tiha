@@ -651,7 +651,20 @@ class PerformanceModule(Module):
         "kaldırılıp uygulanırsa hafif mod sistemden kaldırılır ve daha önce "
         "giriş yapmış hesapların masaüstü ayarları da geri alınır. Paket "
         "kaldırılmaz: ETAP imajının parçası, kaldırılması ayarları geri "
-        "almaya yetmez ve geri almak için gereken aracı da yok eder."
+        "almaya yetmez ve geri almak için gereken aracı da yok eder.\n\n"
+        "⚠ DİKKAT: Bu adımın uyguladığı değişiklikler — özellikle hafif "
+        "mod (kompozitör kapatma, çözünürlük düşürme, yenileme hızı 50 Hz, "
+        "yazı/ikon ölçekleme) — hâlihazırda Pardus ETAP üzerinde "
+        "kullandığınız uygulama programlarının görsel arayüzlerinde renk "
+        "ve fiziksel ölçü açısından kullanımı olumsuz etkileyebilecek "
+        "sonuçlara yol açabilir: pencereler beklenenden farklı boyutta "
+        "açılabilir, buton/menü hizaları bozulabilir, kalem çizgisi "
+        "bulanıklaşabilir, video/tam ekran içeriklerde renk yırtılması "
+        "görülebilir. Klonlamaya başlamadan önce ÖRNEK MAKİNEDE gerekli "
+        "kontrolleri ve testleri yapmayı unutmayın; sınıfta kullanılan "
+        "eğitim yazılımları, EBA içerikleri, sunum araçları ve tarayıcı "
+        "üzerinde açık video/etkileşimli içeriklerle bir tur çalıştırıp "
+        "davranışlarını gözle doğrulayın."
     )
 
     # ------------------------------------------------------------------
