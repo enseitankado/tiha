@@ -70,10 +70,10 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Koşul | Uyarı |
 |---|---|
 | Başarısız kalan adım var | İmaj almadan önce düzeltin ya da geri alın |
-| Sanitize hiç uygulanmadı | Bütün klonlar aynı makine kimliği ve SSH anahtarını paylaşır |
-| Sanitize'dan sonra adım ya da düğme eylemi | İzler imaja girer; temizliği yeniden çalıştırın |
-| Sanitize uygulandı ama `/etc/machine-id` dolu | Tahta temizlikten sonra yeniden açılmış; klonlar aynı kimliği alır |
-| Sanitize uygulandı ama SSH "yapıldı" işareti var | Klonlar SSH anahtarı üretmez |
+| İmaj öncesi temizlik hiç uygulanmadı | Bütün klonlar aynı makine kimliği ve SSH anahtarını paylaşır |
+| İmaj öncesi temizlikten sonra adım ya da düğme eylemi | İzler imaja girer; temizliği yeniden çalıştırın |
+| Temizlik uygulandı ama `/etc/machine-id` dolu | Tahta temizlikten sonra yeniden açılmış; klonlar aynı kimliği alır |
+| Temizlik uygulandı ama SSH "yapıldı" işareti var | Klonlar SSH anahtarı üretmez |
 | Ahenk kurulu ama Otomatik Ahenk Kaydı yok | Klonlar Lider'e aynı kimlikle bağlanır |
 | SSH / Samba / log var ama dinamik hostname yok | Klonlar ağda ve log sunucusunda aynı adla görünür |
 | Ortak öğretmen parolası + parola temizliği | Parola ilk açılışta ezilir |
@@ -86,7 +86,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | BIOS parolası + uzaktan uyandırma | BIOS ayarları her tahtada parola gerektirir |
 | BIOS parolası + Otomatik Ahenk Kaydı | Ortak MAC imzası; BIOS parolasını klonda doğrulayın |
 | GRUB var, BIOS yok / BIOS var, GRUB yok | Açılış güvenliği tek taraflı |
-| Sanitize'ın sildiği hassas yedekler (shadow yedeği, anahtarlıklar, PIN kâğıtları, anahtar yedeği) diskte duruyor — canlı denetim | İmajla klonlara gidecek; sanitize'ı (yeniden) çalıştırın |
+| İmaj öncesi temizliğin sildiği hassas yedekler (shadow yedeği, anahtarlıklar, PIN kâğıtları, anahtar yedeği) diskte duruyor — canlı denetim | İmajla klonlara gidecek; temizliği (yeniden) çalıştırın |
 
 ## Genel klon denetimleri
 
