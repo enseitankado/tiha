@@ -42,8 +42,11 @@ def _redirect_stderr_to_log() -> None:
         fd = os.open(
             str(stderr_log),
             os.O_WRONLY | os.O_CREAT | os.O_APPEND,
-            0o644,
+            0o640,
         )
+        # Günlük yalnız etapadmin'e açık (root:etapadmin 0640).
+        from .core.private_files import protect_system_path
+        protect_system_path(stderr_log)
         # Dosya başına TiHA oturum ayracı yaz (log okumayı kolaylaştırır)
         from datetime import datetime
         os.write(
@@ -130,7 +133,7 @@ def main() -> int:
 
     console.banner_open("TiHA — Tahta İmaj Hazırlık Aracı", f"v{__version__}")
     console.info("Sihirbaz penceresi açılıyor…")
-    console.info("Detaylı loglar: /tmp/tiha.logs")
+    console.info("Detaylı loglar: /var/log/tiha/tiha-debug.log (yalnız etapadmin okuyabilir)")
 
     # Terminali kirletecek GTK/GLib/dconf uyarılarını dosyaya yönlendir.
     # (Bundan önce tüm kullanıcıya-görür mesajlar çıktı.)

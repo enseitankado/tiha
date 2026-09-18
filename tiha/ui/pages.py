@@ -27,6 +27,7 @@ from ..core.report_log import REPORT_PARAMS_KEY, ActionLog, redact_params
 # Rapor sayfa yüklenirken içe aktarılır: imaj temizliği /tmp'yi (bootstrap
 # ile gelen TiHA'nın dizini) boşalttıktan sonra geç içe aktarma bulamaz.
 from ..core.report import Report, StepReport, build_report
+from ..core.private_files import write_user_file
 
 log = get_logger(__name__)
 
@@ -1760,14 +1761,11 @@ class ModulePage(Gtk.Box):
             if forced_suffix and not path.lower().endswith(forced_suffix.lower()):
                 path += forced_suffix
             try:
-                Path(path).write_text(text, encoding="utf-8")
                 # Kaydedilen içerik gizli olabilir (PIN anahtarları,
-                # parolalar). Root umask'ı 0644 verir; başka hesapların
-                # okumasını engellemek için sahibine kısıtlıyoruz.
-                try:
-                    os.chmod(path, 0o600)
-                except OSError:
-                    pass
+                # parolalar): dosya etapadmin'e ait, 0600 yazılır. Eskiden
+                # 0600 ama sahibi root kalıyordu; etapadmin kendi
+                # kaydettiği dosyayı açamıyordu.
+                write_user_file(Path(path), text)
                 # Dosya root tarafından yazıldı; etapadmin ev dizinindeyse
                 # sahipliği etapadmin'e çevir ki kullanıcı kolayca açabilsin.
                 try:
@@ -2166,8 +2164,8 @@ class SummaryPage(Gtk.Box):
         try:
             if dlg.run() == Gtk.ResponseType.ACCEPT:
                 try:
-                    Path(dlg.get_filename()).write_text(
-                        self._report.to_text() + "\n", encoding="utf-8",
+                    write_user_file(
+                        Path(dlg.get_filename()), self._report.to_text() + "\n",
                     )
                 except OSError as exc:
                     log.warning("Rapor kaydedilemedi: %s", exc)

@@ -101,6 +101,7 @@ import pyotp
 
 from ..core.async_state import AsyncValue
 from ..core.logger import get_logger
+from ..core.private_files import owner_ids
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import OTP_SECRETS_FILE, VAR_ROOT
 from ..core.qr import qr_svg, qrcode_available
@@ -466,49 +467,6 @@ def save_secrets(secrets: dict[str, str]) -> None:
     os.chown(OTP_SECRETS_FILE, 0, 0)
 
 
-def _admin_ids() -> tuple[int, int] | None:
-    """Tahtanın yöneticisi olan kullanıcının (uid, gid) çifti.
-
-    Anahtar taşıyan dosyaları bu kullanıcının grubuna açıyoruz: kâğıdı
-    tarayıcıda açan yönetici okuyabilsin, tahtadaki öğretmen/öğrenci
-    hesapları okuyamasın. Önce aktif grafik oturumun kullanıcısı, o
-    yoksa TiHA'yı sudo/pkexec ile başlatan kullanıcı denenir. İkisi de
-    bulunamazsa ``None`` döner ve dosyalar root'a kapalı kalır —
-    sızdırmamak, açılabilir olmaktan önemli.
-    """
-    import pwd as _pwd
-
-    from ..core.privilege import invoking_username
-    from ..core.utils import _find_active_graphical_session
-
-    candidates: list[str] = []
-    try:
-        env = _find_active_graphical_session()
-        if env and env.get("USER"):
-            candidates.append(env["USER"])
-    except OSError as exc:
-        log.debug("Grafik oturum bulunamadı: %s", exc)
-    candidates.append(invoking_username())
-
-    for name in candidates:
-        if not name or name == "root":
-            continue
-        try:
-            entry = _pwd.getpwnam(name)
-        except KeyError:
-            continue
-        return entry.pw_uid, entry.pw_gid
-    return None
-
-
-# eta-otp-lock'un grup mekanizması: '@' ile başlayan kayıtlar bir
-# kullanıcıya değil bir gruba aittir (ör. '@ogretmenler') ve gruba üye
-# tüm hesaplarda geçerlidir. Tasarımı gereği karşılığında bir sistem
-# hesabı YOKTUR; bu yüzden "hesabı kalmayan kayıt" taramalarında
-# yetim sayılmamaları gerekir.
-GROUP_SECRET_PREFIX = "@"
-
-
 def is_group_secret(key: str) -> bool:
     """Kayıt bir grup anahtarı mı (kullanıcı anahtarı değil)?"""
     return key.startswith(GROUP_SECRET_PREFIX)
@@ -551,8 +509,8 @@ def order_secret_users(users) -> list[str]:
 
 # Anahtar taşıyan dosyaların izinleri. Kâğıtlar ve otp-secrets.json
 # yedeği düz metin PIN anahtarı taşır; dosya root'a, okuma hakkı da
-# yalnız yönetici grubuna aittir. Dizin de listelenemez olmalı, aksi
-# hâlde dosya adları (öğretmen adları) sızar.
+# yalnız etapadmin'e aittir (root:etapadmin). Dizin de listelenemez
+# olmalı, aksi hâlde dosya adları (öğretmen adları) sızar.
 SECRET_FILE_MODE = 0o640
 SECRET_DIR_MODE = 0o750
 
@@ -560,14 +518,16 @@ SECRET_DIR_MODE = 0o750
 def harden_secret_store(state_dir: Path) -> int:
     """Anahtar taşıyan durum dizinini ve içindeki dosyaları kilitler.
 
-    Dizin 0750, dosyalar 0640 yapılır; sahip root, grup ise yönetici
-    kullanıcının grubu olur. Böylece yönetici kâğıdı tarayıcıda açıp
+    Dizin 0750, dosyalar 0640 yapılır; sahip root, grup ise etapadmin
+    olur. Böylece yönetici kâğıdı tarayıcıda açıp
     okuyabilir ama değiştiremez, diğer hesaplar hiç göremez.
 
     Geçmişte gevşek izinle (0644) yazılmış dosyalar da bu çağrıyla
     düzeltilir; düzeltilen dosya sayısı döner.
     """
-    admin = _admin_ids()
+    # Yalnız etapadmin: eskiden aktif grafik oturumun kullanıcısının grubu
+    # seçiliyordu; o an bir öğretmen oturumu açıksa kâğıtlar ona açılırdı.
+    admin = owner_ids()
     gid = admin[1] if admin is not None else 0
 
     try:

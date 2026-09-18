@@ -37,6 +37,7 @@ from pathlib import Path
 
 from .. import __version__
 from .logger import get_logger
+from .private_files import write_user_file
 from .undo import Journal
 
 log = get_logger(__name__)
@@ -90,10 +91,8 @@ def export_preset(
     }
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        json.dumps(blob, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    # Yalnız etapadmin okuyabilsin (öğretmen adları, ağ ayarları taşır).
+    write_user_file(target, json.dumps(blob, indent=2, ensure_ascii=False) + "\n")
     log.info("Preset dışa aktarıldı: %s (%d modül)", target, len(clean))
     return target
 

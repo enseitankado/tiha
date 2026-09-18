@@ -529,7 +529,7 @@ class InitialPasswordsModule(Module):
             details_lines.append("  • Kullanıcı shadow dosyasında bulunamadı")
             details_lines.append("  • Shadow dosyası yazma izni problemi")
             details_lines.append("  • Bozuk shadow dosyası formatı")
-            details_lines.append("Detaylı hatalar /tmp/tiha.logs dosyasında.")
+            details_lines.append("Detaylı hatalar /var/log/tiha/tiha-debug.log dosyasında.")
 
         # Yedek hesap özeti — detay satırlarına
         if created_reserve or skipped_reserve:
