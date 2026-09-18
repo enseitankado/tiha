@@ -58,6 +58,7 @@ class SSHServerModule(Module):
     id = "m04_ssh_server"
     title = "SSH sunucusu (root girişi)"
     sidebar_title = "SSH Sunucusu"
+    rationale_inline = True
     apply_hint = (
         "openssh-server kurulur, uzak root girişi açılır."
     )

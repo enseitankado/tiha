@@ -64,7 +64,8 @@ _samba_installed = AsyncValue(
 
 class SambaShareModule(Module):
     id = "m05_samba_share"
-    title = "Samba dosya paylaşımı"
+    title = "Dosya sunucusu"
+    rationale_inline = True
     apply_hint = (
         "Samba kurulur, kök '/' paylaşımı açılır."
     )

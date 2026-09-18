@@ -434,6 +434,7 @@ class AhenkResetModule(Module):
     id = "m12_ahenk_reset"
     title = "Otomatik Ahenk Kaydı"
     sidebar_title = "Otomatik Ahenk Kaydı"
+    rationale_inline = True
     streams_output = True
     popup_on_success = True
     apply_hint = (

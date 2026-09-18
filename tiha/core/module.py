@@ -97,6 +97,10 @@ class Module:
     # ``True`` ise adım gerçek tahta donanımında henüz doğrulanmamıştır;
     # UI başlığın altında "Deneysel" uyarı şeridi gösterir.
     experimental: bool = False
+    # Açıklama (rationale) "?" düğmesinin arkasına katlanmadan doğrudan
+    # adım ekranında gösterilsin. Kısa adımlarda katlamak içeriği
+    # gereksizce gizliyordu.
+    rationale_inline: bool = False
 
     # --- Yardımcılar ------------------------------------------------------
 

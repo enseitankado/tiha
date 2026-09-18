@@ -1579,8 +1579,8 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
     if left:
         w.append(
             "TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara "
-            f"gidecek hassas yedekler var: {_join(left)}. İmaj temizliği "
-            "(sanitize) bunları siler; imajı almadan önce o adımı "
+            f"gidecek hassas yedekler var: {_join(left)}. {q(sanitize)} "
+            "adımı bunları siler; imajı almadan önce o adımı "
             + ("yeniden " if sanitize in applied else "")
             + "çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin."
         )

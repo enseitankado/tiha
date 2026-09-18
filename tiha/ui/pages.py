@@ -168,7 +168,7 @@ _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
      "ilk girişte çıkan parola sorusu kapatılır."),
     ("SSH sunucusu",
      "uzaktan komut/dosya erişimi."),
-    ("Samba dosya paylaşımı",
+    ("Dosya sunucusu",
      "pencere açmadan dosya alıp verme."),
     ("Dayanıklı merkezi log iletimi",
      "profil seçimi (Bakım/Kapsamlı/Yalnız güvenlik), disk sağlığı ve "
@@ -193,7 +193,7 @@ _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
     ("GRUB koruması",
      "'e' düzenleme ve GRUB shell parola arkasına alınır; "
      "init=/bin/bash saldırı vektörü kapatılır."),
-    ("İmaj için sanitize",
+    ("İmaj öncesi temizlik",
      "tekil kimlikler sıfırlanır, tarayıcı kilitleri ve izler silinir; "
      "tahta imaj alınmaya hazır."),
 )
@@ -319,7 +319,9 @@ class ModulePage(Gtk.Box):
         # rationale hemen görünür — düğme yok.
         rationale_text = (self.module.rationale or "").strip()
         sentence_count = _count_sentences(rationale_text)
-        is_long_rationale = sentence_count > 3
+        is_long_rationale = sentence_count > 3 and not getattr(
+            self.module, "rationale_inline", False,
+        )
 
         heading_lbl = _wrapping_label(self.module.title, klass="tiha-heading")
         if is_long_rationale:
@@ -2113,7 +2115,7 @@ class SummaryPage(Gtk.Box):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.get_style_context().add_class("tiha-report-warnings")
         box.pack_start(
-            _wrapping_label("Dikkat: adımlar arası ilişkiler", klass="tiha-report-subtitle"),
+            _wrapping_label("Dikkat", klass="tiha-report-subtitle"),
             False, False, 0,
         )
         box.pack_start(self._bullets(warnings, "⚠"), False, False, 0)

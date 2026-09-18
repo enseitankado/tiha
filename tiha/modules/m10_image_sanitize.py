@@ -333,7 +333,8 @@ def _clean_browser_data(home: Path) -> int:
 
 class ImageSanitizeModule(Module):
     id = "m10_image_sanitize"
-    title = "İmaj için sanitize"
+    title = "İmaj öncesi temizlik"
+    rationale_inline = True
     apply_hint = (
         "Son adım: tekil kimlikler ve izler temizlenir — imaj alınabilir."
     )
@@ -700,7 +701,7 @@ class ImageSanitizeModule(Module):
 
         return ApplyResult(
             True,
-            f"İmaj sanitize tamamlandı; ~{freed_str} alan boşaltıldı.",
+            f"İmaj öncesi temizlik tamamlandı; ~{freed_str} alan boşaltıldı.",
             details="\n".join(f"• {o}" for o in ops),
         )
 

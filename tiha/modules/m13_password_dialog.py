@@ -97,6 +97,7 @@ class PasswordDialogModule(Module):
     id = "m13_password_dialog"
     title = "EBA QR parola diyalogu"
     sidebar_title = "QR Parola Diyaloğu"
+    rationale_inline = True
     apply_hint = (
         "EBA QR ile ilk girişte otomatik açılan parola tanımlama "
         "diyalogu devre dışı bırakılır."

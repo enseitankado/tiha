@@ -75,7 +75,7 @@ class Report:
                 out += [f"  ! {line}" for line in s.notes]
             out.append("")
         if self.warnings:
-            out.append("DİKKAT — ADIMLAR ARASI İLİŞKİLER")
+            out.append("DİKKAT")
             out += [f"  ! {w}" for w in self.warnings]
             out.append("")
         tests = [(s.title, s.tests) for s in self.steps if s.tests]

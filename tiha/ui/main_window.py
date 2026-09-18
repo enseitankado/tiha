@@ -214,7 +214,7 @@ _CREDITS_SECTIONS: tuple[dict, ...] = (
                 "MEB EBA programı",
                 "https://www.eba.gov.tr/",
                 "Devlet programı",
-                "İhtiyacın kaynağı; PIN, sanitize ve klonlama akışları bu programın günlük gerçeklerine göre biçimlendi.",
+                "İhtiyacın kaynağı; PIN, imaj temizliği ve klonlama akışları bu programın günlük gerçeklerine göre biçimlendi.",
             ),
             (
                 "Öğretmenler ve okul yöneticileri",

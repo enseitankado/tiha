@@ -150,11 +150,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "False",
-            # Ortak grup-PIN ile ortak 'ogretmen' hesabının PIN'i aynı
-            # ihtiyaca iki ayrı yerden cevap veriyor; ikisini birlikte
-            # üretmek gereksiz bir ikinci ortak sır demek. Grup-PIN
-            # seçilince hesap PIN'inin işareti kalkar.
-            "deselects": ["include_ogretmen"],
+            # Ortak 'ogretmen' hesabının kendi PIN'i grup PIN'inden
+            # bağımsızdır (ortak hesap ogretmenler grubuna girmez), bu
+            # yüzden grup PIN'i seçilince o kutuya dokunulmaz.
             # PAM grup-PIN'i yalnız gruba üye kullanıcılara kabul ediyor;
             # bu bayrak işaretlenince "Öğretmen hesaplarını ogretmenler
             # grubuna ekle" kutusu da otomatik işaretlenir, kullanıcı bağı
