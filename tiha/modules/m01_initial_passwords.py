@@ -586,6 +586,15 @@ class InitialPasswordsModule(Module):
                 "removed_users": removed_users,
                 "keyrings_moved": keyrings_moved,
                 "created_reserve": created_reserve,
+                # Özet raporu için (gizli değer içermez): hangi hesabın
+                # parolası gerçekten atandı / atanamadı, hangi yedek hesap
+                # zaten vardı, öğretmen parolası hesap yokluğundan mı
+                # uygulanmadı.
+                "passwords_set": [u for u, ok in results.items() if ok],
+                "passwords_failed": [u for u, ok in results.items() if not ok],
+                "skipped_reserve": skipped_reserve,
+                "reserve_requested": reserve,
+                "teacher_skipped_no_account": bool(teacher_pw) and "ogretmen" not in results,
             },
         )
 

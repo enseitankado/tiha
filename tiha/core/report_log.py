@@ -34,6 +34,10 @@ from pathlib import Path
 
 from .logger import get_logger
 from .paths import ACTIONS_FILE, ensure_runtime_dirs
+# Başta içe aktarılır: imaj temizliği /tmp'yi (TiHA'nın çalıştığı dizin)
+# boşalttıktan sonra geç içe aktarma dosyayı bulamaz. ui paketinin
+# __init__'i boş, params saf veri; GTK yüklenmez.
+from ..ui import params as params_schema
 
 log = get_logger(__name__)
 
@@ -56,10 +60,6 @@ def looks_secret(key: str) -> bool:
 
 
 def _schema_fields(module_id: str) -> dict[str, dict]:
-    try:
-        from ..ui import params as params_schema  # saf veri; GTK yüklemez
-    except Exception:  # pragma: no cover - paket bozuksa rapor yine çalışsın
-        return {}
     return {f["key"]: f for f in params_schema.get(module_id) if "key" in f}
 
 
@@ -91,6 +91,23 @@ def redact_params(module_id: str, params: dict | None) -> dict:
             continue
         out[key] = _json_safe(value)
     return out
+
+
+def _secret_values(*sources: dict | None) -> list[str]:
+    """Gizli anahtarlardaki dolu metin değerleri (özet metninden silinmek için)."""
+    found: list[str] = []
+    for src in sources:
+        for key, value in (src or {}).items():
+            if isinstance(value, str) and value.strip() and looks_secret(str(key)):
+                found.append(value.strip())
+    # Uzun olan önce: biri ötekinin parçasıysa kısmen kalmasın.
+    return sorted(set(found), key=len, reverse=True)
+
+
+def scrub_text(text: str, secrets: list[str]) -> str:
+    for value in secrets:
+        text = text.replace(value, SECRET_MARK)
+    return text
 
 
 def redact_data(data: dict | None) -> dict:
@@ -178,7 +195,9 @@ class ActionLog:
             label=label,
             timestamp=datetime.now(timezone.utc).isoformat(),
             success=bool(success),
-            summary=summary or "",
+            # Bazı eylemler parolayı özet metnine yazıyor (ör. BIOS "mevcut
+            # parolayı oku"); kayda girmeden temizlenir.
+            summary=scrub_text(summary or "", _secret_values(params, data)),
             params=redact_params(module_id, params),
             data=redact_data(data),
         )
