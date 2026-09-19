@@ -141,80 +141,82 @@ def _scrolled_textview(text: str, *, monospace: bool = False,
 
 
 _WELCOME_INTRO = (
-    "TiHA, Pardus ETAP etkileşimli tahtanızı imaj alınmaya hazırlayan bir "
-    "sihirbazdır. Tek tahtada yaptığınız hazırlığı, ortak bir imajdan "
-    "geçirip onlarca tahtaya tutarlı biçimde dağıtırsınız — bu yolun "
-    "başındaki sıkıcı işleri TiHA sizin yerinize, doğru sırada yapar."
+    "TiHA, Pardus ETAP etkileşimli tahtayı imaj alınmaya hazırlayan bir "
+    "sihirbazdır. Örnek bir tahtayı bu adımlarla hazırlar, imajını alır "
+    "ve onlarca tahtaya dağıtırsınız. Her klon aynı ayarlarla, ama kendi "
+    "kimliğiyle açılır."
 )
 
-_WELCOME_FEATURES_TITLE = "Bu sihirbazda neler bulacaksınız?"
+_WELCOME_FEATURES_TITLE = "Adımlar"
 
 # (başlık, açıklama) çiftleri — hoşgeldiniz sayfasında iki sütunlu bir
 # Grid ile render edilir; böylece açıklamaların ilk harfi aynı hizada
-# başlar.
+# başlar. Başlıklar sol menüdeki adlarla birebir aynı ve aynı sırada.
 _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
     ("Sistem güncellemesi",
-     "paketleri imaj öncesi günceller."),
-    ("Kullanıcı parolaları",
-     "root, etapadmin ve öğretmen parolalarını canlı güç göstergesi ve "
-     "yaygın parola engeliyle siz belirler."),
-    ("Her açılışta parola temizliği",
-     "tahta yeniden başladığında yerel parolalar otomatik sıfırlanır "
-     "(opsiyonel sertleştirme)."),
-    ("Öğretmen PIN anahtarları",
-     "merkezi olarak üretilip imaja gömülür; ortak grup PIN'i seçeneği "
-     "de vardır — her tahtaya tek tek kurmaktan kurtarır."),
-    ("EBA QR parola diyalogu",
-     "ilk girişte çıkan parola sorusu kapatılır."),
-    ("SSH sunucusu",
-     "uzaktan komut/dosya erişimi."),
+     "Paketleri imaj alınmadan önce günceller."),
+    ("Yerel hesaplar",
+     "root, etapadmin ve ortak öğretmen parolalarını belirler; yedek "
+     "öğretmen hesapları açar."),
+    ("Otomatik parola temizliği",
+     "Her açılışta etapadmin dışındaki hesapların yerel parolalarını "
+     "geçersiz kılar (isteğe bağlı)."),
+    ("Toplu pin anahtarı",
+     "Öğretmen PIN anahtarlarını merkezde üretip imaja gömer; ortak grup "
+     "PIN'i de tanımlanabilir."),
+    ("QR Parola Diyaloğu",
+     "EBA QR ile ilk girişte çıkan parola sorusunu kapatır."),
+    ("SSH Sunucusu",
+     "Tahtaya uzaktan komut ve dosya erişimi sağlar."),
     ("Dosya sunucusu",
-     "pencere açmadan dosya alıp verme."),
-    ("Dayanıklı merkezi log iletimi",
-     "profil seçimi (Bakım/Kapsamlı/Yalnız güvenlik), disk sağlığı ve "
-     "sıcaklık izleme, opsiyonel Prometheus metrik dışa aktarımı."),
-    ("Zaman senkronu (NTP)",
-     "saat sapması olmaz."),
+     "Ağ üzerinden dosya alıp vermeyi sağlar."),
+    ("Merkezi log sunucusu",
+     "Tahta kayıtlarını merkeze kayıpsız iletir; disk sağlığı ve metrik "
+     "izleme eklenebilir."),
+    ("Zaman senkronizasyonu (NTP)",
+     "Tahta saatinin kaymasını önler."),
     ("Dinamik hostname",
-     "her tahta benzersiz ad alır."),
+     "Her klon kendine özgü bir ad alır."),
     ("Otomatik kapanma",
-     "unutulan tahta belli süre sonra kapanır."),
-    ("Uzaktan uyandırma (Wake-on-LAN)",
-     "kapalı tahtayı merkezden magic packet ile açar; BIOS'ta "
-     "yapılacak somut ayarlar önizlemede listelenir."),
+     "Unutulan tahtayı belirli saatte ya da boşta kalınca, önce uyararak "
+     "kapatır."),
+    ("Uzaktan uyandırma",
+     "Kapalı tahtanın ağ üzerinden açılabilmesini sağlar."),
     ("Başarım (Deneysel)",
-     "oturum kalıntılarını temizler, ETA Hafif Mod'u tüm kullanıcılara "
+     "Oturum kalıntılarını temizler, ETA Hafif Mod'u tüm kullanıcılara "
      "uygular."),
     ("Otomatik Ahenk Kaydı",
-     "klonlanan tahta Lider'e kendi kimliğiyle yeniden kayıt olur."),
-    ("BIOS yönetici parolası",
-     "desteklenen donanımda klonun ilk açılışında tek seferlik "
-     "ayarlanır."),
+     "Klonlanan tahta Lider'e kendi kimliğiyle abone olur."),
+    ("BIOS parolası",
+     "Desteklenen donanımda klonun ilk açılışında BIOS yönetici parolası "
+     "atar."),
     ("GRUB koruması",
-     "'e' düzenleme ve GRUB shell parola arkasına alınır; "
-     "init=/bin/bash saldırı vektörü kapatılır."),
+     "Açılış menüsünün düzenlenmesini parolaya bağlar."),
     ("İmaj öncesi temizlik",
-     "tekil kimlikler sıfırlanır, tarayıcı kilitleri ve izler silinir; "
-     "tahta imaj alınmaya hazır."),
+     "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya "
+     "hazırlar."),
 )
 
 _WELCOME_FLOW = (
-    "Sihirbaz adım adım ilerler. Her adımda ne yapılacağı ve nedeni "
-    "açıklanır, onayınız alınır, sonuç gösterilir, gerektiğinde geri "
-    "alınır. Hazırsanız soldaki listeden ya da aşağıdaki “İleri” "
-    "düğmesiyle başlayın."
+    "Adımlar sırayla ilerler. Her adım ne yapacağını ve neden gerektiğini "
+    "açıklar, uygulamadan önce onayınızı alır, sonucu gösterir; "
+    "gerekirse geri alınabilir. İstemediğiniz adımları atlayabilirsiniz. "
+    "İmaj öncesi temizliği en sona, imajı almadan hemen öncesine bırakın. "
+    "Başlamak için soldaki listeden bir adım seçin ya da “İleri” düğmesine "
+    "basın."
 )
 
 # Proje deposu (Hoşgeldiniz sayfasında tıklanabilir satır olarak gösterilir).
 _WELCOME_REPO_URL = "https://github.com/enseitankado/tiha"
 _WELCOME_REPO_LABEL = (
-    "Proje deposu, kaynak kodu, sürüm geçmişi ve hata bildirimi"
+    "Proje deposu: kaynak kod, sürüm geçmişi ve hata bildirimi"
 )
 
 
 class WelcomePage(Gtk.Box):
     def __init__(self) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
+        self.get_style_context().add_class("tiha-welcome")
         self.set_margin_top(_PAGE_MARGIN)
         self.set_margin_bottom(_PAGE_MARGIN)
         self.set_margin_start(_PAGE_MARGIN + 4)
@@ -230,7 +232,7 @@ class WelcomePage(Gtk.Box):
 
         add_paragraph(_WELCOME_INTRO)
 
-        title_lbl = _wrapping_label(_WELCOME_FEATURES_TITLE)
+        title_lbl = _wrapping_label(_WELCOME_FEATURES_TITLE, klass="tiha-form-section")
         title_lbl.set_max_width_chars(110)
         title_lbl.set_margin_top(4)
         self.pack_start(title_lbl, False, False, 0)
@@ -262,7 +264,7 @@ class WelcomePage(Gtk.Box):
         # GitHub depo bağlantısı — tıklanabilir.
         repo_lbl = Gtk.Label(xalign=0)
         repo_lbl.set_markup(
-            f'🐙 <a href="{GLib.markup_escape_text(_WELCOME_REPO_URL)}">'
+            f'<a href="{GLib.markup_escape_text(_WELCOME_REPO_URL)}">'
             f'{GLib.markup_escape_text(_WELCOME_REPO_LABEL)}</a>'
         )
         repo_lbl.set_use_markup(True)

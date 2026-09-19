@@ -270,6 +270,12 @@ textview.tiha-placeholder text selection {
     font-size: 10pt;
 }
 
+/* Karşılama sayfası: adım formlarıyla aynı 10pt gövde metni; başlık
+   (.tiha-heading) kendi boyutunu korur. */
+.tiha-welcome label:not(.tiha-heading) {
+    font-size: 10pt;
+}
+
 /* Salt okunur alanlar ("readonly"): değer modülden gelir, kullanıcı
    yalnızca görür/kopyalar. Düzenlenebilir kutulardan ayrışsın diye
    soluk zemin. */
