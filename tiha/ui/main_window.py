@@ -867,6 +867,11 @@ class TiHAWindow(Gtk.Window):
                 status_lbl.set_text("⚠")
                 ctx.add_class("tiha-step-status-fail")
                 status_lbl.set_tooltip_text(t("ui.main.status_failed", summary=entry.summary))
+            elif entry.status == "skipped":
+                # Bu tahtada uygulanamaz (ör. donanım desteklenmiyor):
+                # hata değil, simge yok; nedeni ipucunda.
+                status_lbl.set_text("")
+                status_lbl.set_tooltip_text(t("ui.main.status_skipped", summary=entry.summary))
             elif entry.status == "undone":
                 status_lbl.set_text("")
                 status_lbl.set_tooltip_text("")

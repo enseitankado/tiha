@@ -36,6 +36,19 @@ log = get_logger(__name__)
 # Yardımcı: içerik sayfasının ortak çerçeve marjları (kompakt ama nefes alan)
 _PAGE_MARGIN = 18
 _ROW_SPACING = 14
+
+# Kısa değer alan form kutularının varsayılan genişliği (karakter). Bu
+# türler satır boyunca uzamaz, sola yaslanır; alan başına şemadaki
+# "width" ile değiştirilir. 0: doğal genişlik (spin, select).
+_COMPACT_FIELD_WIDTHS = {
+    "text": 28,
+    "password": 28,
+    "number": 8,
+    "readonly": 20,
+    "spin": 0,
+    "select": 0,
+    "button": 0,
+}
 _LONG_TEXT_HEIGHT = 180  # uzun metin kutularının sabit yüksekliği
 
 
@@ -85,6 +98,20 @@ def _as_checked(value: object) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+
+def _report_meta() -> list[tuple[str, str]]:
+    """Yazdırılabilir raporun başlık altı bilgileri."""
+    import socket
+    from datetime import datetime
+
+    from .. import __version__
+
+    return [
+        (t("core.report.html.meta_date"), datetime.now().strftime("%d.%m.%Y %H:%M")),
+        (t("core.report.html.meta_host"), socket.gethostname()),
+        (t("core.report.html.meta_version"), __version__),
+    ]
 
 
 def _no_focus_labels(widget: Gtk.Widget) -> None:
@@ -307,6 +334,12 @@ class ModulePage(Gtk.Box):
             )
             self.pack_start(banner, False, False, 0)
 
+        # Modülün o anki duruma göre verdiği vurgulu not (ör. SSH adımında
+        # "root parolası tanımlı değil"). Sayfa her açıldığında tazelenir.
+        self._notice_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.pack_start(self._notice_holder, False, False, 0)
+        self._refresh_notice()
+
         rationale_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         rationale_lbl = _wrapping_label(rationale_text, klass="tiha-rationale")
         rationale_container.pack_start(rationale_lbl, False, False, 0)
@@ -460,13 +493,26 @@ class ModulePage(Gtk.Box):
             label = _wrapping_label(field["label"])
             grid.attach(label, 0, row_idx, 1, 1)
             widget = self._make_field(field)
-            widget.set_hexpand(True)
+            kind = field.get("type", "text")
+            if kind in _COMPACT_FIELD_WIDTHS:
+                # Kısa değer alan kutular satır boyu uzamasın: sola yaslı,
+                # içeriğe göre makul genişlik (şemada "width" ile ayarlanır).
+                widget.set_hexpand(False)
+                widget.set_halign(Gtk.Align.START)
+                entry = getattr(widget, "_entry", widget)
+                chars = field.get("width", _COMPACT_FIELD_WIDTHS[kind])
+                if chars and isinstance(entry, Gtk.Entry) and not isinstance(entry, Gtk.SpinButton):
+                    entry.set_width_chars(chars)
+            else:
+                widget.set_hexpand(True)
             grid.attach(widget, 1, row_idx, 1, 1)
             self._fields[field["key"]] = widget
             row_idx += 1
             row_widgets: list[Gtk.Widget] = [label, widget]
             if field.get("help"):
                 help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
+                # Kutular daraldı; sütunu sayfa genişliğine yardım metni yayar.
+                help_lbl.set_hexpand(True)
                 grid.attach(help_lbl, 1, row_idx, 1, 1)
                 row_idx += 1
                 row_widgets.append(help_lbl)
@@ -627,9 +673,25 @@ class ModulePage(Gtk.Box):
     def _refresh_after_action(self) -> None:
         """Apply / buton işlemi sonrası önizleme + şartlı alan + dinamik
         button etiketi tazeleme."""
+        self._refresh_notice()
         self._refresh_preview()
         self._refresh_conditional_fields()
         self._refresh_button_labels()
+
+    def _refresh_notice(self) -> None:
+        for child in self._notice_holder.get_children():
+            self._notice_holder.remove(child)
+        try:
+            notice = self.module.notice()
+        except Exception as exc:
+            log.warning("notice başarısız %s: %s", self.module.id, exc)
+            notice = None
+        if not notice:
+            return
+        kind, text = notice
+        klass = "tiha-experimental-banner" if kind == "warning" else "tiha-prev-banner"
+        self._notice_holder.pack_start(_wrapping_label(text, klass=klass), False, False, 0)
+        self._notice_holder.show_all()
 
     def _refresh_button_labels(self) -> None:
         """Her button widget'ının `label_from` provider'ı varsa etiketini
@@ -1425,14 +1487,17 @@ class ModulePage(Gtk.Box):
         self._applying = False
         self._finish_stream_dialog(
             result.summary,
-            result.success,
+            result.success or result.not_applicable,
             details=result.details or "",
             copyable=result.copyable or "",
         )
         # "Çalışıyor" göstergesini kaldır (result_holder temizlenecek)
         entry = JournalEntry.new(self.module.id, self.module.title)
         entry.summary = result.summary
-        entry.status = "applied" if result.success else "failed"
+        entry.status = (
+            "skipped" if result.not_applicable
+            else "applied" if result.success else "failed"
+        )
         # Modülün bıraktığı undo verisini günceye taşı
         entry.data = dict(result.data) if isinstance(result.data, dict) else {}
         # Özet raporu hangi seçeneklerle uygulandığını bilsin (parolalar
@@ -1444,6 +1509,8 @@ class ModulePage(Gtk.Box):
         # Terminale profesyonel sonuç satırı
         if result.success:
             console.ok(result.summary)
+        elif result.not_applicable:
+            console.note(result.summary)
         else:
             console.fail(result.summary)
         self._show_result(result)
@@ -1477,7 +1544,9 @@ class ModulePage(Gtk.Box):
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.get_style_context().add_class(
-            "tiha-result-ok" if result.success else "tiha-result-fail"
+            "tiha-result-ok" if result.success
+            else "tiha-prev-banner" if result.not_applicable
+            else "tiha-result-fail"
         )
         box.pack_start(_wrapping_label(result.summary, selectable=True), False, False, 0)
 
@@ -1558,7 +1627,7 @@ class ModulePage(Gtk.Box):
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
             box.pack_start(undo_btn, False, False, 0)
 
-        if not result.success:
+        if not result.success and not result.not_applicable:
             report_btn = Gtk.Button(label=t("ui.pages.report_bug"))
             report_btn.set_tooltip_text(t("ui.pages.report_bug_tip"))
             report_btn.connect("clicked", lambda *_: self._report_failure(result))
@@ -1964,6 +2033,7 @@ class SummaryPage(Gtk.Box):
         status_map = {
             "applied": ("✓", "tiha-summary-ok"),
             "failed":  ("✗", "tiha-summary-fail"),
+            "skipped": ("–", "tiha-summary-undone"),
         }
 
         for entry in entries:
@@ -2165,14 +2235,19 @@ class SummaryPage(Gtk.Box):
             action=Gtk.FileChooserAction.SAVE,
         )
         dlg.add_buttons(t("ui.main.cancel"), Gtk.ResponseType.CANCEL, t("ui.main.save"), Gtk.ResponseType.ACCEPT)
-        dlg.set_current_name("tiha-imaj-raporu.txt")
+        dlg.set_current_name("tiha-imaj-raporu.html")
         dlg.set_do_overwrite_confirmation(True)
+        html_filter = Gtk.FileFilter()
+        html_filter.set_name("HTML")
+        html_filter.add_pattern("*.html")
+        dlg.add_filter(html_filter)
         try:
             if dlg.run() == Gtk.ResponseType.ACCEPT:
+                path = Path(dlg.get_filename())
+                if path.suffix.lower() not in (".html", ".htm"):
+                    path = path.with_suffix(".html")
                 try:
-                    write_user_file(
-                        Path(dlg.get_filename()), self._report.to_text() + "\n",
-                    )
+                    write_user_file(path, self._report.to_html(_report_meta()))
                 except OSError as exc:
                     log.warning("Rapor kaydedilemedi: %s", exc)
         finally:

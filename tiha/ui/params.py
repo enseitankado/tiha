@@ -5,7 +5,9 @@ Alan tipleri: ``text``, ``password``, ``number``, ``textarea``, ``select``,
 kullanıcının değiştiremediği ``readonly`` (değerini ``default_from``
 sağlar) ve değer taşımayan bölüm başlığı ``heading``. ``bool`` alanı
 ``enables`` listesi taşıyabilir: kutu işaretsizken listedeki alanlar
-pasifleşir. Ek olarak ``deselects`` (bu kutu işaretlenince
+pasifleşir. Kısa değerli alanlar (text, password, number, readonly)
+satır boyu uzamaz; genişlik karakter cinsinden ``width`` ile verilir.
+Ek olarak ``deselects`` (bu kutu işaretlenince
 listedeki kutuların işareti kaldırılır) ve simetriği ``selects``
 (bu kutu işaretlenince listedeki ön-koşul kutuları da otomatik
 işaretlenir) bayrakları da desteklenir.
@@ -149,6 +151,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m05_samba_share": [
         {
             "key": "samba_user",
+            "width": 20,
             "label": t("m05.params.samba_user.label"),
             "type": "text",
             "required": True,
@@ -232,6 +235,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m07_time_sync": [
         {
             "key": "ntp_servers",
+            "width": 44,
             "label": t("m07.params.ntp_servers.label"),
             "type": "text",
             "required": False,
@@ -247,6 +251,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "ntp_fallback",
+            "width": 44,
             "label": t("m07.params.ntp_fallback.label"),
             "type": "text",
             "required": False,
@@ -254,6 +259,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "timezone",
+            "width": 20,
             "label": t("m07.params.timezone.label"),
             "type": "text",
             "required": False,
@@ -263,6 +269,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m08_hostname": [
         {
             "key": "template",
+            "width": 20,
             "label": t("m08.params.template.label"),
             "type": "text",
             "required": False,
@@ -271,6 +278,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "prefix",
+            "width": 16,
             "label": t("m08.params.prefix.label"),
             "type": "text",
             "required": False,
@@ -448,6 +456,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m14_bios_password": [
         {
             "key": "supervisor_password",
+            "width": 16,
             "label": t("m14.params.supervisor_password.label"),
             # Düz metin — kullanıcının ne yazdığını görmesi gerekir
             # (BIOS yalnız BÜYÜK A-Z 0-9 kabul eder; 'I' yasak — '1' ile

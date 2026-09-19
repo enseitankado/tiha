@@ -40,6 +40,20 @@ PasswordAuthentication yes
 """
 
 
+def _root_password_set() -> bool | None:
+    """root'un parolayla girilebilir bir parolası var mı? ``/etc/shadow``
+    okunamazsa ``None``. Boş, ``*`` ya da ``!`` ile başlayan (kilitli)
+    alan parolasız sayılır."""
+    try:
+        for line in Path("/etc/shadow").read_text(encoding="utf-8").splitlines():
+            if line.startswith("root:"):
+                pw = line.split(":")[1]
+                return bool(pw) and not pw.startswith(("*", "!"))
+    except OSError:
+        return None
+    return False
+
+
 def _is_package_installed(name: str) -> bool:
     """``dpkg-query`` ile paket kurulu mu denetler."""
     result = run_cmd(["dpkg-query", "-W", "-f=${Status}", name])
@@ -80,6 +94,14 @@ class SSHServerModule(Module):
 
     def prefetch_preview_state(self, on_ready=None) -> None:
         _ssh_installed.get_async(on_ready)
+
+    def notice(self) -> tuple[str, str] | None:
+        state = _root_password_set()
+        if state is True:
+            return ("info", t("m04.notice.root_set"))
+        if state is False:
+            return ("warning", t("m04.notice.root_missing"))
+        return ("warning", t("m04.notice.root_unknown"))
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
         # Başlangıç durumu (undo için saklanacak)
@@ -139,6 +161,9 @@ class SSHServerModule(Module):
             True,
             t("m04.apply.summary"),
             details=t("m04.apply.details", path=SSH_CONF),
+            warning=(
+                t("m04.notice.root_missing") if _root_password_set() is False else None
+            ),
             data={
                 "was_installed_before": was_installed_before,
                 "conf_existed_before": conf_existed_before,

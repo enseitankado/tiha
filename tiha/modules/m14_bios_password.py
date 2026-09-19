@@ -694,6 +694,7 @@ class BiosPasswordModule(Module):
                     board=info.get("board"), bios=info.get("bios"),
                     error=info.get("error") or "-",
                 ),
+                not_applicable=True,
             )
         self._supported_cache = True
         pw_min = int(info.get("pw_min") or 4)

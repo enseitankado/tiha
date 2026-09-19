@@ -278,6 +278,7 @@ sidebar_welcome = "Hoş geldiniz"
 sidebar_summary = "Özet"
 status_applied = "Uygulandı: {summary}"
 status_failed = "Hata: {summary}"
+status_skipped = "Bu tahtada uygulanamaz: {summary}"
 apply_hint = "Uygulandığında: {hint}"
 
 [ui.welcome]
@@ -583,6 +584,17 @@ experimental_suffix = " (deneysel)"
 section_warnings = "DİKKAT"
 section_tests = "KLON TAHTADA DENEYİN"
 general = "Genel"
+
+[core.report.html]
+lang = "tr"
+title = "TiHA imaj raporu"
+meta_date = "Tarih"
+meta_host = "Tahta"
+meta_version = "TiHA sürümü"
+section_warnings = "Dikkat"
+section_done = "Yapılanlar"
+section_tests = "Kontrol et: klon tahtada deneyin"
+tests_hint = "İmajı en az bir tahtaya yazın ve her maddeyi o klon tahtada deneyip işaretleyin."
 
 [core.report.sensitive]
 shadow = "parola değişikliği öncesi /etc/shadow yedeği"
@@ -1741,6 +1753,20 @@ Farklı bir ağdan (örn. öğrenci/misafir ağları) ulaşılamaz; bu bilinçli
 güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile erişimi yalnızca \
 yönetim istasyonlarıyla sınırlamanız tavsiye edilir.\
 """
+
+[m04.notice]
+root_missing = """\
+Root parolası tanımlı değil. SSH ile root olarak bağlanabilmek için önce \
+\"Yerel hesaplar\" adımında root parolasını belirleyin. Parola \
+belirlenmezse sunucu kurulur ama uzaktan kimse giriş yapamaz."""
+root_unknown = """\
+SSH ile root olarak bağlanabilmek için root parolasının tanımlı olması \
+gerekir. \"Yerel hesaplar\" adımında root parolasını belirlediğinizden \
+emin olun."""
+root_set = """\
+Uzaktan root girişinde \"Yerel hesaplar\" adımında belirlediğiniz root \
+parolası kullanılır. Bu parola imajdan çoğaltılan bütün tahtalarda aynı \
+olacak; güçlü bir parola seçtiğinizden emin olun."""
 
 [m04.preview]
 checking = "openssh-server kurulum durumu kontrol ediliyor..."

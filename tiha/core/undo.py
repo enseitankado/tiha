@@ -21,6 +21,14 @@ from .paths import JOURNAL_FILE, ensure_runtime_dirs
 log = get_logger(__name__)
 
 
+# "Bu tahtada uygulanamaz" durumu eskiden "failed" olarak kaydediliyordu.
+# O kayıtlar okunurken "skipped" sayılır ki adımın yeniden uygulanması
+# gerekmesin. Özet metni o sürümün yazdığı sabit Türkçe metindir.
+_LEGACY_NOT_APPLICABLE = {
+    ("m14_bios_password", "Bu donanım eta-112 tarafından desteklenmiyor; adım uygulanmaz."),
+}
+
+
 @dataclass
 class JournalEntry:
     """Uygulanmış bir işlemin özeti."""
@@ -28,7 +36,7 @@ class JournalEntry:
     module_id: str
     title: str
     timestamp: str
-    status: str                  # "applied" | "undone" | "failed"
+    status: str                  # "applied" | "undone" | "failed" | "skipped"
     summary: str = ""
     data: dict = field(default_factory=dict)  # Modül-özel durum bilgisi
 
@@ -62,6 +70,9 @@ class Journal:
         except (OSError, json.JSONDecodeError, TypeError) as exc:
             log.warning("Günce okunamadı (%s): %s", self.path, exc)
             self._entries = []
+        for entry in self._entries:
+            if entry.status == "failed" and (entry.module_id, entry.summary) in _LEGACY_NOT_APPLICABLE:
+                entry.status = "skipped"
 
     def _save(self) -> None:
         try:

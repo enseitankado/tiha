@@ -31,6 +31,38 @@ from .undo import Journal, JournalEntry
 
 CLOSING = t("core.report.closing")
 
+# Yazdırılabilir rapor stili: siyah-beyaz baskıda da okunur, mürekkep ve
+# kâğıt harcamaz (renkli zemin yok, sıkı satır aralığı, dar kenar).
+_REPORT_CSS = """
+@page { size: A4; margin: 12mm 13mm; }
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+       font-size: 9.5pt; line-height: 1.32; color: #111; margin: 0 auto;
+       max-width: 190mm; padding: 8px; }
+h1 { font-size: 14pt; margin: 0 0 2px; }
+h2 { font-size: 11pt; margin: 12px 0 4px; padding-bottom: 2px;
+     border-bottom: 1px solid #999; }
+h3 { font-size: 9.5pt; margin: 6px 0 1px; }
+p { margin: 3px 0; }
+.meta { font-size: 8.5pt; color: #444; margin-bottom: 6px; }
+.intro { margin-bottom: 4px; }
+ul { margin: 0 0 2px; padding-left: 16px; }
+li { margin: 0; }
+li.note { list-style: none; margin-left: -12px; padding-left: 12px;
+          text-indent: -12px; font-style: italic; }
+li.note::before { content: "! "; font-weight: bold; font-style: normal; }
+.warn { border: 1px solid #555; border-left: 4px solid #111;
+        padding: 2px 8px 4px; margin: 8px 0; }
+.warn h2 { border: none; margin-top: 4px; }
+.step { break-inside: avoid; page-break-inside: avoid; }
+ul.check { list-style: none; padding-left: 4px; }
+ul.check li { padding-left: 17px; text-indent: -17px; }
+ul.check li::before { content: "\\2610\\00a0\\00a0"; font-size: 10.5pt; }
+.hint { font-size: 8.5pt; color: #444; }
+.closing { margin-top: 10px; font-weight: bold; }
+@media print { body { padding: 0; max-width: none; } }
+"""
+
 
 # --- Veri modeli -------------------------------------------------------------
 
@@ -91,6 +123,67 @@ class Report:
             out.append("")
         out.append(self.closing)
         return "\n".join(out)
+
+    def to_html(self, meta: list[tuple[str, str]]) -> str:
+        """Yazdırmaya uygun tek sayfa HTML. ``meta``: başlık altındaki
+        (etiket, değer) satırları (tarih, tahta adı, TiHA sürümü…).
+
+        Kâğıt dostu: A4, dar kenar boşluğu, 9.5pt, renkli zemin yok;
+        adımlar sayfa arasında bölünmez, denenecekler kutucuklu liste."""
+        from html import escape as e
+
+        def step_title(s: StepReport) -> str:
+            title = e(s.title)
+            if s.failed:
+                title += e(t("core.report.text.failed_suffix"))
+            elif s.experimental and "deneysel" not in s.title.lower():
+                title += e(t("core.report.text.experimental_suffix"))
+            return title
+
+        body: list[str] = []
+        body.append(f"<h1>{e(t('core.report.html.title'))}</h1>")
+        body.append('<p class="meta">' + " &nbsp;·&nbsp; ".join(
+            f"<b>{e(k)}:</b> {e(v)}" for k, v in meta
+        ) + "</p>")
+        body.append(f'<p class="intro">{e(self.intro)}</p>')
+
+        if self.warnings:
+            body.append('<section class="warn">')
+            body.append(f"<h2>{e(t('core.report.html.section_warnings'))}</h2><ul>")
+            body += [f"<li>{e(w)}</li>" for w in self.warnings]
+            body.append("</ul></section>")
+
+        if self.steps:
+            body.append(f"<h2>{e(t('core.report.html.section_done'))}</h2>")
+            for s in self.steps:
+                body.append('<div class="step">')
+                body.append(f"<h3>{step_title(s)}</h3><ul>")
+                body += [f"<li>{e(line)}</li>" for line in s.done]
+                body += [f'<li class="note">{e(line)}</li>' for line in s.notes]
+                body.append("</ul></div>")
+
+        tests = [(s.title, s.tests) for s in self.steps if s.tests]
+        if self.general_tests:
+            tests.append((t("core.report.text.general"), self.general_tests))
+        if tests:
+            body.append(f"<h2>{e(t('core.report.html.section_tests'))}</h2>")
+            body.append(f'<p class="hint">{e(t("core.report.html.tests_hint"))}</p>')
+            for title, items in tests:
+                body.append('<div class="step">')
+                body.append(f'<h3>{e(title)}</h3><ul class="check">')
+                body += [f"<li>{e(item)}</li>" for item in items]
+                body.append("</ul></div>")
+
+        body.append(f'<p class="closing">{e(self.closing)}</p>')
+
+        return (
+            "<!DOCTYPE html>\n"
+            f'<html lang="{e(t("core.report.html.lang"))}"><head><meta charset="utf-8">'
+            f"<title>{e(t('core.report.html.title'))}</title>"
+            f"<style>{_REPORT_CSS}</style></head><body>\n"
+            + "\n".join(body)
+            + "\n</body></html>\n"
+        )
 
 
 # --- Anlatıcıya verilen bağlam ----------------------------------------------
@@ -195,7 +288,9 @@ def build_report(
     contexts: dict[str, StepContext] = {}
     for order, module in enumerate(modules):
         entry = latest.get(module.id)
-        if entry is not None and entry.status == "undone":
+        # Geri alınmış ya da bu tahtada uygulanamayan (ör. donanım
+        # desteklenmiyor) adım imaja bir şey katmadı; raporda yer almaz.
+        if entry is not None and entry.status in ("undone", "skipped"):
             entry = None
         mod_actions = [a for a in actions.for_module(module.id) if a.success]
         if entry is None and not mod_actions:

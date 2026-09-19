@@ -172,13 +172,18 @@ def cmd_apply(
         # Journal'a kayıt
         entry = JournalEntry.new(mod.id, mod.title)
         entry.summary = result.summary
-        entry.status = "applied" if result.success else "failed"
+        entry.status = (
+            "skipped" if result.not_applicable
+            else "applied" if result.success else "failed"
+        )
         entry.data = dict(result.data) if isinstance(result.data, dict) else {}
         entry.data[REPORT_PARAMS_KEY] = redact_params(mod.id, params)
         journal.record(entry)
 
         if result.success:
             console.ok(result.summary)
+        elif result.not_applicable:
+            console.note(result.summary)
         else:
             console.fail(result.summary)
             if result.details:

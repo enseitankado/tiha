@@ -61,6 +61,11 @@ class ApplyResult:
     # biçimini de belirler: UI bu uzantıyı filtreler ve zorlar.
     save_filename: str | None = None
 
+    # Adım bu tahtada uygulanamıyor (ör. donanım desteklenmiyor). Hata
+    # değildir: günceye "skipped" olarak düşer; kenar çubuğu, Özet ve
+    # imaj raporu onu başarısız saymaz. ``success`` bu durumda False'tur.
+    not_applicable: bool = False
+
 
 class Module:
     """Tüm modüllerin türediği taban sınıf."""
@@ -119,6 +124,15 @@ class Module:
     def preview(self) -> str:
         """Uygulamadan önce durumu özetleyen kısa metin."""
         return ""
+
+    def notice(self) -> tuple[str, str] | None:
+        """Başlığın hemen altında vurgulu şeritte gösterilecek not.
+
+        ``("warning", metin)`` sarı uyarı, ``("info", metin)`` mavi bilgi
+        şeridi olarak çizilir; ``None`` şerit yok demektir. Sayfa her
+        açıldığında yeniden sorulur.
+        """
+        return None
 
     def prefetch_preview_state(
         self, on_ready: Callable[[object], object] | None = None
