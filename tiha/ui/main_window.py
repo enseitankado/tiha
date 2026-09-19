@@ -649,8 +649,22 @@ class TiHAWindow(Gtk.Window):
         title.get_style_context().add_class("tiha-sidebar-title")
         subtitle = Gtk.Label(label=t("ui.main.sidebar_subtitle"), xalign=0)
         subtitle.get_style_context().add_class("tiha-sidebar-subtitle")
+        # Güncelleme rozeti "TiHA" yazısının sağında, aynı taban çizgisinde;
+        # yeni sürüm yoksa gizli. Async kontrol sonucu geldiğinde dolar.
+        self.update_badge = Gtk.Label(xalign=0)
+        self.update_badge.set_track_visited_links(False)
+        self.update_badge.set_no_show_all(True)
+        self.update_badge.get_style_context().add_class("tiha-update-badge")
+        self.update_badge.set_valign(Gtk.Align.BASELINE)
+        # Tarayıcıya gitmek yerine inline "Yenilikler" diyaloğunu aç.
+        self.update_badge.connect("activate-link", self._on_update_badge_link)
+        title.set_valign(Gtk.Align.BASELINE)
+        title_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title_row.pack_start(title, False, False, 0)
+        title_row.pack_start(self.update_badge, False, False, 0)
+
         title_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        title_col.pack_start(title, False, False, 0)
+        title_col.pack_start(title_row, False, False, 0)
         title_col.pack_start(subtitle, False, False, 0)
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -680,20 +694,6 @@ class TiHAWindow(Gtk.Window):
             icon.set_margin_start(12)
             header.pack_start(icon, False, False, 0)
             header.reorder_child(icon, 0)
-
-        # Güncelleme rozeti — async kontrol sonucu geldiğinde belirir.
-        self.update_badge = Gtk.Label(xalign=0)
-        self.update_badge.set_max_width_chars(28)
-        self.update_badge.set_ellipsize(3)
-        self.update_badge.set_track_visited_links(False)
-        self.update_badge.set_no_show_all(True)
-        self.update_badge.get_style_context().add_class("tiha-update-badge")
-        self.update_badge.set_margin_start(12)
-        self.update_badge.set_margin_end(12)
-        self.update_badge.set_margin_top(4)
-        # Tarayıcıya gitmek yerine inline "Yenilikler" diyaloğunu aç.
-        self.update_badge.connect("activate-link", self._on_update_badge_link)
-        sidebar_outer.pack_start(self.update_badge, False, False, 0)
 
         sidebar_scroll = Gtk.ScrolledWindow()
         sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
