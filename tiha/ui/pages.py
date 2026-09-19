@@ -1899,19 +1899,33 @@ class SummaryPage(Gtk.Box):
         self.set_margin_start(_PAGE_MARGIN + 4)
         self.set_margin_end(_PAGE_MARGIN + 4)
 
+        self.get_style_context().add_class("tiha-summary")
+
         heading = _wrapping_label("Özet", klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
-        # "Bu imajda neler yaptınız" raporu: yapılanlar, adımlar arası
-        # uyarılar ve klon tahtada denenecekler. refresh() her açılışta
-        # yeniden kurar.
+        # "Bu imajda neler yaptınız" raporu: giriş, adımlar arası uyarılar,
+        # kapanış ve dışa aktarma düğmeleri. Ayrıntılar aşağıdaki üç
+        # katlanır grupta. refresh() her açılışta yeniden kurar.
         self.report_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.pack_start(self.report_box, False, False, 0)
         self._report: Report | None = None
 
-        undo_title = _wrapping_label("Geri alınabilir adımlar", klass="tiha-section-title")
-        undo_title.set_margin_top(12)
-        self.pack_start(undo_title, False, False, 0)
+        # Üç katlanır grup: Yapılanlar, Özet (adım kartları + geri alma),
+        # Kontrol et (klon tahtada denenecekler). Varsayılan kapalı;
+        # expander'lar bir kez kurulur, refresh() yalnız içlerini
+        # yenilediği için açık/kapalı durumları korunur.
+        self.done_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.done_exp = self._group_expander(self.done_box)
+        self.pack_start(self.done_exp, False, False, 0)
+
+        summary_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.summary_exp = self._group_expander(summary_box)
+        self.pack_start(self.summary_exp, False, False, 0)
+
+        self.tests_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.tests_exp = self._group_expander(self.tests_box)
+        self.pack_start(self.tests_exp, False, False, 0)
 
         info = _wrapping_label(
             "Bu tahtada geri alınabilir durumdaki adımlar aşağıda "
@@ -1921,10 +1935,10 @@ class SummaryPage(Gtk.Box):
             "kapatır.",
             klass="tiha-rationale",
         )
-        self.pack_start(info, False, False, 0)
+        summary_box.pack_start(info, False, False, 0)
 
         self.entries_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.pack_start(self.entries_box, False, False, 0)
+        summary_box.pack_start(self.entries_box, False, False, 0)
 
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         refresh = Gtk.Button(label="Listeyi yenile")
@@ -1941,9 +1955,27 @@ class SummaryPage(Gtk.Box):
             export_btn.connect("clicked", lambda *_: self.on_export_preset())
             btn_row.pack_start(export_btn, False, False, 0)
 
-        self.pack_start(btn_row, False, False, 0)
+        summary_box.pack_start(btn_row, False, False, 0)
 
         self.refresh()
+
+    @staticmethod
+    def _group_expander(child: Gtk.Widget) -> Gtk.Expander:
+        """Özet sayfasındaki katlanır grup: kalın başlık, kapalı başlar."""
+        exp = Gtk.Expander()
+        exp.set_expanded(False)
+        exp.set_margin_top(6)
+        title = Gtk.Label(xalign=0)
+        title.get_style_context().add_class("tiha-summary-group")
+        exp.set_label_widget(title)
+        child.set_margin_top(6)
+        child.set_margin_start(18)
+        exp.add(child)
+        return exp
+
+    @staticmethod
+    def _set_group_title(exp: Gtk.Expander, title: str, detail: str) -> None:
+        exp.get_label_widget().set_text(f"{title} ({detail})" if detail else title)
 
     def refresh(self) -> None:
         """Tüm geçmiş kayıtlar arasından her modül için en son durumu
@@ -1961,6 +1993,17 @@ class SummaryPage(Gtk.Box):
         entries = sorted(
             (e for e in latest.values() if e.status != "undone"),
             key=lambda e: order.get(e.module_id, 99),
+        )
+
+        undoable = sum(
+            1 for e in entries
+            if e.status == "applied"
+            and (m := self.modules.get(e.module_id)) is not None
+            and m.undo_supported
+        )
+        self._set_group_title(
+            self.summary_exp, "Özet ve geri alma",
+            f"{len(entries)} adım, {undoable} geri alınabilir" if entries else "",
         )
 
         if not entries:
@@ -2021,8 +2064,9 @@ class SummaryPage(Gtk.Box):
     # --- "Bu imajda neler yaptınız" raporu ---------------------------------
 
     def _render_report(self) -> None:
-        for child in self.report_box.get_children():
-            self.report_box.remove(child)
+        for box in (self.report_box, self.done_box, self.tests_box):
+            for child in box.get_children():
+                box.remove(child)
         try:
             report = build_report(list(self.modules.values()), journal=self.journal)
         except Exception as exc:  # rapor hatası Özet sayfasını düşürmesin
@@ -2032,6 +2076,8 @@ class SummaryPage(Gtk.Box):
                 False, False, 0,
             )
             self.report_box.show_all()
+            self.done_exp.hide()
+            self.tests_exp.hide()
             return
         self._report = report
 
@@ -2043,11 +2089,26 @@ class SummaryPage(Gtk.Box):
         )
         card.pack_start(_wrapping_label(report.intro, selectable=True), False, False, 0)
 
+        # Gruplar içerik varsa görünür; set_no_show_all ile üst sayfanın
+        # show_all çağrısı gizli grubu yeniden açmasın.
+        for exp in (self.done_exp, self.tests_exp):
+            exp.set_no_show_all(report.is_empty)
+            exp.set_visible(not report.is_empty)
+
         if not report.is_empty:
-            card.pack_start(self._report_steps(report.steps), False, False, 0)
+            self.done_box.pack_start(self._report_steps(report.steps), False, False, 0)
+            self._set_group_title(self.done_exp, "Yapılanlar", f"{len(report.steps)} adım")
+            tests_box = self._report_tests(report)
+            self.tests_box.pack_start(tests_box, False, False, 0)
+            n_tests = sum(len(s.tests) for s in report.steps) + len(report.general_tests)
+            self._set_group_title(self.tests_exp, "Kontrol et", f"{n_tests} deneme")
+            _no_focus_labels(self.done_box)
+            _no_focus_labels(self.tests_box)
+            self.done_box.show_all()
+            self.tests_box.show_all()
+
             if report.warnings:
                 card.pack_start(self._report_warnings(report.warnings), False, False, 0)
-            card.pack_start(self._report_tests(report), False, False, 0)
 
             closing = _wrapping_label(report.closing, selectable=True)
             closing.get_style_context().add_class("tiha-report-closing")
@@ -2088,9 +2149,6 @@ class SummaryPage(Gtk.Box):
 
     def _report_steps(self, steps: list[StepReport]) -> Gtk.Box:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.pack_start(
-            _wrapping_label("Yaptıklarınız", klass="tiha-report-subtitle"), False, False, 0,
-        )
         for step in steps:
             title = step.title
             if step.failed:
@@ -2125,10 +2183,6 @@ class SummaryPage(Gtk.Box):
 
     def _report_tests(self, report: Report) -> Gtk.Box:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        box.pack_start(
-            _wrapping_label("Klon tahtada deneyin", klass="tiha-report-subtitle"),
-            False, False, 0,
-        )
         box.pack_start(
             _wrapping_label(
                 "İmajı en az bir tahtaya yazın ve aşağıdakilerin her birini o "

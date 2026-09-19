@@ -276,6 +276,27 @@ textview.tiha-placeholder text selection {
     font-size: 10pt;
 }
 
+/* Özet sayfası: gövde metni 10pt; ikincil metinler 9pt; katlanır grup
+   başlıkları biraz daha belirgin. Kurallar aynı özgüllükte, sıraları
+   önemli (sonra gelen kazanır). */
+.tiha-summary label {
+    font-size: 10pt;
+}
+.tiha-summary label.tiha-summary-desc,
+.tiha-summary label.tiha-rationale {
+    font-size: 9pt;
+}
+.tiha-summary label.tiha-heading {
+    font-size: 12pt;
+}
+.tiha-summary label.tiha-summary-sym {
+    font-size: 11pt;
+}
+.tiha-summary label.tiha-summary-group {
+    font-size: 11pt;
+    font-weight: 700;
+}
+
 /* Salt okunur alanlar ("readonly"): değer modülden gelir, kullanıcı
    yalnızca görür/kopyalar. Düzenlenebilir kutulardan ayrışsın diye
    soluk zemin. */
