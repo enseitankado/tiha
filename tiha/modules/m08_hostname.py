@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.utils import backup_file, restore_file, run_cmd
@@ -150,27 +151,10 @@ WantedBy=multi-user.target
 
 class HostnameModule(Module):
     id = "m08_hostname"
-    title = "Dinamik hostname stratejisi"
-    sidebar_title = "Dinamik hostname"
-    apply_hint = (
-        "İmaj hostname'i uygulanır; her açılışta dinamik hostname servisi kurulur."
-    )
-    rationale = (
-        "Aynı imajdan çoğaltılan onlarca tahta ağa bağlandığında, ağı "
-        "yöneten kişinin karşısına hepsi aynı isimle çıkar. Bu durumda "
-        "hangi tahtanın sınıfta hangisi olduğu ayırt edilemez; uzaktan "
-        "bir tahtaya bağlanmak ya da bir sorunu izlemek istendiğinde "
-        "yanlış cihaza ulaşma riski doğar, merkezi loglar birbirine "
-        "karışır.\n\n"
-        "Bu adım her tahtanın ağda kendine özgü, sabit bir isimle "
-        "görünmesini sağlar (örneğin 'etap-ab12cd' gibi). Böylece ağı "
-        "yöneten kişi sınıftaki her tahtayı listede tekil olarak görür, "
-        "doğru cihaza erişebilir ve sorunu olanı kesin biçimde tespit "
-        "edebilir.\n\n"
-        "İmaj alınırken tahtaya geçici, ortak bir isim verilir; her tahta "
-        "ilk açıldığında ise kendi donanımına özgü kalıcı ismine otomatik "
-        "olarak geçer — sahada elle isim atamaya gerek kalmaz."
-    )
+    title = t("m08.title")
+    sidebar_title = t("m08.sidebar_title")
+    apply_hint = t("m08.apply_hint")
+    rationale = t("m08.rationale")
 
     def preview(self) -> str:
         current = _current_hostname()
@@ -180,28 +164,14 @@ class HostnameModule(Module):
             result = run_cmd(["systemctl", "is-enabled", FIRST_BOOT_SERVICE.name])
             service_enabled = result.ok and "enabled" in result.stdout
 
-        lines = [
-            f"Mevcut hostname          : {current}",
-            f"Dinamik hostname servisi : {'kurulu' if service_exists else 'yok'}",
-            f"Servis durumu            : {'aktif' if service_enabled else 'devre dışı'}",
-            "",
-            "Bu adım uygulandığında:",
-            "  1) Hostname 'etap-image' (ya da sizin girdiğiniz şablon) olur.",
-            "  2) /etc/hosts içindeki 127.0.1.1 satırı yeni isme eşitlenir.",
-            "  3) tiha-hostname.service kurulur ve etkinleştirilir.",
-            "",
-            "Her açılışta tahta:",
-            "  - MAC adresini okur (kablolu NIC'ten)",
-            "  - 'etap-XXXXXX' hostname'i üretir (MAC'in son 6 hanesi)",
-            "  - hostname ve /etc/hosts güncellenir",
-            "  - Zaten doğruysa değişiklik yapmaz",
-            "",
-            "Avantajlar:",
-            "  - Ağ kartı değişse bile hostname dinamik güncellenir",
-            "  - Her açılışta MAC'e göre benzersizlik garantilenir",
-            "  - Hostname çakışması riski minimize edilir",
-        ]
-        return "\n".join(lines)
+        return t(
+            "m08.preview.body",
+            current=current,
+            service=t("m08.preview.service_installed") if service_exists
+            else t("m08.preview.service_missing"),
+            status=t("m08.preview.status_active") if service_enabled
+            else t("m08.preview.status_inactive"),
+        )
 
     def apply(self, params=None, progress=None) -> ApplyResult:
         params = params or {}
@@ -216,7 +186,7 @@ class HostnameModule(Module):
         # 1) Hostname
         hn = run_cmd(["hostnamectl", "set-hostname", template])
         if not hn.ok:
-            return ApplyResult(False, "hostnamectl set-hostname başarısız.",
+            return ApplyResult(False, t("m08.apply.hostname_failed"),
                                details=hn.stderr,
                                data={"previous_hostname": previous_hostname})
 
@@ -224,7 +194,7 @@ class HostnameModule(Module):
         try:
             _sync_hosts_file(HOSTS_FILE, template)
         except OSError as exc:
-            return ApplyResult(False, f"/etc/hosts güncellenemedi: {exc}",
+            return ApplyResult(False, t("m08.apply.hosts_failed", error=exc),
                                data={"previous_hostname": previous_hostname})
 
         # 3) First-boot servisi
@@ -234,18 +204,17 @@ class HostnameModule(Module):
         run_cmd(["systemctl", "daemon-reload"])
         enable = run_cmd(["systemctl", "enable", FIRST_BOOT_SERVICE.name])
         if not enable.ok:
-            return ApplyResult(False, "First-boot servisi etkinleştirilemedi.",
+            return ApplyResult(False, t("m08.apply.enable_failed"),
                                details=enable.stderr,
                                data={"previous_hostname": previous_hostname})
 
         return ApplyResult(
             True,
-            f"Hostname '{template}' olarak ayarlandı; her açılışta '{prefix}-XXXXXX' olacak.",
-            details=(
-                f"/etc/hosts içindeki 127.0.1.1 satırı güncellendi.\n"
-                f"Script: {FIRST_BOOT_SCRIPT}\n"
-                f"Servis: {FIRST_BOOT_SERVICE}\n"
-                f"Her açılışta MAC adresinden dinamik hostname üretilecek."
+            t("m08.apply.done", template=template, prefix=prefix),
+            details=t(
+                "m08.apply.done_details",
+                script=FIRST_BOOT_SCRIPT,
+                service=FIRST_BOOT_SERVICE,
             ),
             data={"previous_hostname": previous_hostname},
         )
@@ -282,9 +251,8 @@ class HostnameModule(Module):
             _sync_hosts_file(HOSTS_FILE, previous)
 
         msg = (
-            f"Dinamik hostname servisi kaldırıldı, hostname '{previous}' olarak geri alındı "
-            "ve /etc/hosts yedekten yüklendi."
+            t("m08.undo.done_restored", previous=previous)
             if previous
-            else "Dinamik hostname servisi kaldırıldı (önceki hostname kaydı bulunamadı)."
+            else t("m08.undo.done_no_previous")
         )
         return ApplyResult(True, msg)

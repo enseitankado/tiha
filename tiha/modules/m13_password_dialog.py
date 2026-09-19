@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import backup_file, restore_file
@@ -95,57 +96,40 @@ def _set_hidden(text: str) -> str:
 
 class PasswordDialogModule(Module):
     id = "m13_password_dialog"
-    title = "EBA QR parola diyalogu"
-    sidebar_title = "QR Parola Diyaloğu"
+    title = t("m13.title")
+    sidebar_title = t("m13.sidebar_title")
     rationale_inline = True
-    apply_hint = (
-        "EBA QR ile ilk girişte otomatik açılan parola tanımlama "
-        "diyalogu devre dışı bırakılır."
-    )
-    rationale = (
-        "Bir kullanıcı tahtaya EBA QR kodu ile ilk kez giriş yaptığında, "
-        "sistem otomatik olarak parola tanımlama penceresini açar. Sınıf "
-        "ortamında öğretmen, parolasını öğrencilerin önünde klavyeden "
-        "yazmak durumunda kalabilir ve bu da parolanın istemeden ifşa "
-        "olmasına yol açabilir.\n\n"
-        "Bu adım, ilk girişte otomatik açılan diyalogu kapatır. "
-        "Kullanıcının parolası olmamış olur; tahtaya yine yalnızca EBA QR "
-        "ile giriş yapılır. Bir öğretmen kendi parolasını koymak isterse "
-        "her zaman Sistem Ayarları > Kullanıcı Hesapları üzerinden uygun "
-        "bir ortamda (örneğin teneffüste, sınıf boşken) tanımlayabilir."
-    )
+    apply_hint = t("m13.apply_hint")
+    rationale = t("m13.rationale")
     undo_supported = True
 
     def preview(self) -> str:
         if not AUTOSTART_FILE.is_file():
-            return (
-                f" Hedef bulunamadı: {AUTOSTART_FILE}\n\n"
-                "eta-password-changer paketi kurulu değil görünüyor. "
-                "Bu adım uygulanamaz."
-            )
+            return t("m13.preview.target_missing", path=AUTOSTART_FILE)
 
         try:
             text = AUTOSTART_FILE.read_text(encoding="utf-8")
         except OSError as exc:
-            return f" Autostart dosyası okunamadı: {exc}"
+            return t("m13.preview.read_error", error=exc)
 
         already_hidden = _is_hidden(text)
         backup_path = self.state_dir / AUTOSTART_FILE.name
         backup_exists = backup_path.exists()
 
+        status = (
+            t("m13.preview.status_disabled") if already_hidden
+            else t("m13.preview.status_enabled")
+        )
+        backup = (
+            t("m13.preview.backup_present", path=backup_path)
+            if backup_exists else t("m13.preview.backup_absent")
+        )
         lines = [
-            f"Hedef     : {AUTOSTART_FILE}",
-            f"Durum     : {' devre dışı (Hidden=true)' if already_hidden else ' etkin - diyalog açılıyor'}",
-            f"Yedek     : {'var (' + str(backup_path) + ')' if backup_exists else 'yok'}",
+            t("m13.preview.target", path=AUTOSTART_FILE),
+            t("m13.preview.status", status=status),
+            t("m13.preview.backup", backup=backup),
             "",
-            "Bu adım uygulandığında:",
-            "  - Orijinal autostart dosyası modül dizinine yedeklenir (yoksa)",
-            "  - Dosyaya 'Hidden=true' eklenerek otomatik tetikleme kapatılır",
-            "  - eta-password-changer / eta-qr-login paketleri kaldırılmaz",
-            "  - Kullanıcı dilerse parolasını Sistem Ayarları'ndan",
-            "    (veya doğrudan 'eta-password-changer' ile) tanımlayabilir",
-            "",
-            "Geri al: yedek dosya orijinal yerine yazılır.",
+            t("m13.preview.body"),
         ]
         return "\n".join(lines)
 
@@ -155,21 +139,17 @@ class PasswordDialogModule(Module):
         progress: ProgressCallback | None = None,
     ) -> ApplyResult:
         if not AUTOSTART_FILE.is_file():
-            return ApplyResult(
-                False,
-                f"{AUTOSTART_FILE} bulunamadı; "
-                "eta-password-changer paketi yüklü değil.",
-            )
+            return ApplyResult(False, t("m13.apply.not_found", path=AUTOSTART_FILE))
 
         try:
             text = AUTOSTART_FILE.read_text(encoding="utf-8")
         except OSError as exc:
-            return ApplyResult(False, f"Autostart dosyası okunamadı: {exc}")
+            return ApplyResult(False, t("m13.apply.read_error", error=exc))
 
         if _is_hidden(text):
             return ApplyResult(
                 True,
-                "Diyalog zaten devre dışıydı; değişiklik yapılmadı.",
+                t("m13.apply.already_hidden"),
                 data={"was_already_hidden": True},
             )
 
@@ -177,29 +157,27 @@ class PasswordDialogModule(Module):
         backup_path = backup_dir / AUTOSTART_FILE.name
         if not backup_path.exists():
             if progress:
-                progress(f"Orijinal yedekleniyor → {backup_path}")
+                progress(t("m13.apply.backing_up", path=backup_path))
             try:
                 backup_file(AUTOSTART_FILE, backup_dir)
             except OSError as exc:
-                return ApplyResult(False, f"Yedek alınamadı: {exc}")
+                return ApplyResult(False, t("m13.apply.backup_failed", error=exc))
 
         new_text = _set_hidden(text)
         try:
             AUTOSTART_FILE.write_text(new_text, encoding="utf-8")
         except OSError as exc:
-            return ApplyResult(False, f"Autostart dosyası yazılamadı: {exc}")
+            return ApplyResult(False, t("m13.apply.write_failed", error=exc))
 
         if progress:
-            progress("✓ Hidden=true eklendi — otomatik diyalog devre dışı.")
+            progress(t("m13.apply.hidden_added"))
 
         return ApplyResult(
             True,
-            "EBA QR ilk-giriş parola diyalogu devre dışı bırakıldı.",
-            details=(
-                f"Yedek: {backup_path}\n"
-                f"Hedef: {AUTOSTART_FILE} (Hidden=true)\n"
-                "Kullanıcı parolasını Sistem Ayarları → Kullanıcı "
-                "Hesapları üzerinden istediği zaman tanımlayabilir."
+            t("m13.apply.done"),
+            details=t(
+                "m13.apply.done_details",
+                backup=backup_path, target=AUTOSTART_FILE,
             ),
             data={"was_already_hidden": False},
         )
@@ -211,25 +189,15 @@ class PasswordDialogModule(Module):
     ) -> ApplyResult:
         data = data or {}
         if data.get("was_already_hidden"):
-            return ApplyResult(
-                True,
-                "Apply zamanı diyalog zaten devre dışıydı; "
-                "geri alacak değişiklik yok.",
-            )
+            return ApplyResult(True, t("m13.undo.nothing"))
 
         backup_path = self.state_dir / AUTOSTART_FILE.name
         if not backup_path.exists():
-            return ApplyResult(
-                False,
-                f"Yedek dosya bulunamadı: {backup_path}",
-            )
+            return ApplyResult(False, t("m13.undo.backup_missing", path=backup_path))
 
         try:
             restore_file(backup_path, AUTOSTART_FILE)
         except OSError as exc:
-            return ApplyResult(False, f"Geri yükleme başarısız: {exc}")
+            return ApplyResult(False, t("m13.undo.restore_failed", error=exc))
 
-        return ApplyResult(
-            True,
-            "Orijinal autostart geri yüklendi; otomatik diyalog yeniden aktif.",
-        )
+        return ApplyResult(True, t("m13.undo.done"))

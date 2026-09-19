@@ -54,6 +54,7 @@ from ..core.keyring import (
     quarantine_stale_keyrings,
     restore_quarantined_keyrings,
 )
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.privilege import invoking_username
@@ -238,35 +239,12 @@ def get_removable_user_status() -> dict[str, bool]:
 
 class InitialPasswordsModule(Module):
     id = "m01_initial_passwords"
-    title = "Kullanıcı parolaları"
-    sidebar_title = "Yerel hesaplar"
-    apply_hint = (
-        "Parolalar SHA-512 hash olarak doğrudan /etc/shadow'a yazılır. "
-        "Doldurduğunuz alanlara göre ilgili hesapların parolaları ayarlanır; "
-        "eski parolayla şifreli kalan GNOME anahtarlıkları kenara alınır."
-    )
-    rationale = (
-        "root, etapadmin veya ogretmen hesaplarından istediğinizin parolasını "
-        "belirleyin. Hangi alanları doldurursanız sadece o hesapların parolası "
-        "değişir; diğerlerine dokunulmaz.\n\n"
-        "Parola değişen hesabın GNOME anahtarlığı eski parolayla şifreli "
-        "kaldığı için girişte 'Bilgisayara giriş yapmak için kullandığınız "
-        "parola artık giriş anahtarlığınızla uyuşmuyor' diyaloğu çıkar ve "
-        "doğru parola bile kabul edilmez (anahtarlık eski parolayı bekler). "
-        "Bu adım bayatlayan anahtarlığı kenara alır; ilk girişte yenisi yeni "
-        "parolayla otomatik oluşturulur. Geri alma dosyaları yerine koyar.\n\n"
-        "Ortak hesap neden önemli? Öğretmenin tahtada kişisel hesabı ilk "
-        "EBA QR girişiyle oluşur; PIN kodu ve USB ile giriş ancak bundan "
-        "sonra kullanılabilir. Öğretmen kişisel hesabını henüz oluşturmamışsa "
-        "ve EBA QR çalışmıyorsa (internet yok, uygulama ya da altyapı sorunu) "
-        "tahtaya yalnızca ortak hesapla (ogretmen) girebilir. Tahtaların "
-        "kullanım politikanıza göre ya bu ortak hesabın parolasını "
-        "öğretmenlerle paylaşmanız (sınıfta yazılırken öğrenciler de "
-        "görebilir) ya da 'Öğretmen PIN anahtarları' adımında ortak hesap "
-        "için PIN anahtarı tanımlamanız gerekir."
-    )
+    title = t("m01.title")
+    sidebar_title = t("m01.sidebar_title")
+    apply_hint = t("m01.apply_hint")
+    rationale = t("m01.rationale")
     extra_links = [
-        {"label": "Kullanıcılar ve Gruplar uygulamasını aç", "action": "launch_users_admin_gui_action"},
+        {"label": t("m01.extra_links.users_admin"), "action": "launch_users_admin_gui_action"},
     ]
 
     def suggested_reserve_count(self) -> int:
@@ -292,33 +270,21 @@ class InitialPasswordsModule(Module):
         existing_reserve = count_reserve_accounts()
 
         lines: list[str] = []
-        lines.append("Sistemdeki ortak hesaplar:")
+        lines.append(t("m01.preview.common_accounts"))
         for user, exists in user_status.items():
-            status = " mevcut" if exists else "⨯ yok"
-            lines.append(f"    - {user}: {status}")
+            status = t("m01.preview.account_present") if exists else t("m01.preview.account_absent")
+            lines.append(t("m01.preview.account_line", user=user, status=status))
         if not any(user_status.values()):
-            lines.append("    (ogrenci ve ogretmen zaten yok)")
+            lines.append(t("m01.preview.common_none"))
 
         lines.append("")
-        lines.append("Yedek hesaplar:")
+        lines.append(t("m01.preview.reserve_title"))
         if existing_reserve > 0:
-            lines.append(
-                f"    - Sistemde ogretmen1 … ogretmen{existing_reserve} "
-                f"hazır ({existing_reserve} yedek hesap)."
-            )
-            lines.append(
-                "      Kutuya daha büyük bir sayı yazarsanız eksikler "
-                "tamamlanır. Küçük yazarsanız fazla hesap SİLİNMEZ; "
-                "silmek için 'Öğretmen PIN anahtarları' adımındaki "
-                "'Fazladan Hesapları Sil' düğmesi kullanılır."
-            )
+            lines.append(t("m01.preview.reserve_existing", count=existing_reserve))
+            lines.append(t("m01.preview.reserve_existing_hint"))
         else:
-            lines.append("    - Sistemde henüz yedek hesap yok.")
-            lines.append(
-                "      Kutuya yazacağınız sayı kadar ogretmen1, "
-                "ogretmen2 … biçiminde hesap açılır; PIN anahtarları "
-                "'Öğretmen PIN anahtarları' adımında üretilir."
-            )
+            lines.append(t("m01.preview.reserve_none"))
+            lines.append(t("m01.preview.reserve_none_hint"))
 
         # Parola değişince bayatlayacak anahtarlıklar — kullanıcının
         # "ne olacak?" sorusunu uygulamadan önce cevaplamak için.
@@ -332,14 +298,10 @@ class InitialPasswordsModule(Module):
 
         if keyring_lines:
             lines.append("")
-            lines.append("Mevcut GNOME anahtarlıkları:")
+            lines.append(t("m01.preview.keyrings_title"))
             lines.extend(keyring_lines)
             lines.append("")
-            lines.append("    Parola korumalı olanlar yeni parolayla açılamaz.")
-            lines.append("    Parolası değişen hesapta bu adım onları kenara alır;")
-            lines.append("    ilk girişte yenisi otomatik oluşur, geri alma")
-            lines.append("    dosyaları yerine koyar. Parolasız anahtarlıklar")
-            lines.append("    parola değişiminden etkilenmez, dokunulmaz.")
+            lines.append(t("m01.preview.keyrings_note"))
 
         return "\n".join(lines)
 
@@ -359,20 +321,16 @@ class InitialPasswordsModule(Module):
         if not root_pw and not admin_pw and not teacher_pw and _reserve_hint <= 0:
             return ApplyResult(
                 success=False,
-                summary=(
-                    "En az bir aksiyon gerekli: parola belirtin (root, "
-                    "etapadmin, ogretmen) veya yedek hesap sayısını "
-                    "sıfırdan büyük yapın."
-                ),
+                summary=t("m01.apply.need_action"),
             )
 
         # Parola uzunluk kontrolü (sadece dolu olanlar için)
         if root_pw and len(root_pw) < 8:
-            return ApplyResult(False, "root parolası en az 8 karakter olmalıdır.")
+            return ApplyResult(False, t("m01.apply.too_short", user="root"))
         if admin_pw and len(admin_pw) < 8:
-            return ApplyResult(False, "etapadmin parolası en az 8 karakter olmalıdır.")
+            return ApplyResult(False, t("m01.apply.too_short", user="etapadmin"))
         if teacher_pw and len(teacher_pw) < 8:
-            return ApplyResult(False, "ogretmen parolası en az 8 karakter olmalıdır.")
+            return ApplyResult(False, t("m01.apply.too_short", user="ogretmen"))
 
         # Yaygın parola listesi kontrolü — SecLists top10k. UI'da canlı
         # uyarı gösterilmiş olsa da apply zamanında sunucu tarafı
@@ -384,8 +342,7 @@ class InitialPasswordsModule(Module):
             if pw and is_common(pw):
                 return ApplyResult(
                     False,
-                    f"{lbl} parolası en yaygın 10.000 parola arasında; "
-                    "farklı bir parola seçin.",
+                    t("m01.apply.too_common", user=lbl),
                 )
 
         state = self.ensure_state_dir()
@@ -457,8 +414,7 @@ class InitialPasswordsModule(Module):
             # yerine cross-modül import (döngüsel değil).
             from .m03_otp_secrets import create_user
             if progress:
-                progress(f"\n{reserve} yedek hesap hazırlanıyor "
-                         "(useradd + EBA cihaz grupları + parola kilitli)…")
+                progress(t("m01.apply.reserve_preparing", count=reserve))
             for i in range(1, reserve + 1):
                 # Yeni konvansiyon: sıfır önekli değil, sade 'ogretmenN'
                 # ("Ogretmen N" display'i eta-otp-cli tarafından da aynı
@@ -491,64 +447,46 @@ class InitialPasswordsModule(Module):
                         progress(f"  + {username}")
                 else:
                     if progress:
-                        progress(f"  ✗ {username} oluşturulamadı")
+                        progress(t("m01.apply.reserve_create_failed", user=username))
 
         details_lines = []
         if removed_users:
-            details_lines.append("Silinen ortak hesaplar: " + ", ".join(removed_users))
+            details_lines.append(t("m01.apply.removed_common", users=", ".join(removed_users)))
 
         failed_users = []
         for user, success in results.items():
-            details_lines.append(f"{user} parolası: {'atandı' if success else 'ATANAMADI'}")
+            details_lines.append(t("m01.apply.password_line", user=user,
+                                    state=t("m01.apply.password_set") if success else t("m01.apply.password_not_set")))
             if not success:
                 failed_users.append(user)
 
         if keyrings_moved:
             details_lines.append("")
-            details_lines.append("Bayatlayan GNOME anahtarlıkları kenara alındı:")
+            details_lines.append(t("m01.apply.keyrings_moved_title"))
             for username, names in keyrings_moved.items():
                 details_lines.append(f"  - {username}: {', '.join(names)}")
-            details_lines.append(
-                "Kenara alınmasaydı ilgili kullanıcı girişte 'parola artık giriş "
-                "anahtarlığınızla uyuşmuyor' diyaloğuyla karşılaşır ve doğru "
-                "parolayı yazsa bile geçemezdi."
-            )
-            details_lines.append(
-                "Yeni anahtarlık, kullanıcının ilk girişinde yeni parolayla "
-                "otomatik oluşturulur. Değişikliğin etkili olması için oturumu "
-                "kapatıp açmak (ya da tahtayı yeniden başlatmak) gerekir."
-            )
-            details_lines.append(f"Yedek: {keyring_backup_root}")
+            details_lines.append(t("m01.apply.keyrings_moved_why"))
+            details_lines.append(t("m01.apply.keyrings_moved_next"))
+            details_lines.append(t("m01.apply.keyrings_backup", path=keyring_backup_root))
 
         # Başarısız olan kullanıcılar için bilgi
         if failed_users:
             details_lines.append("")
-            details_lines.append("== BAŞARISIZLIK BİLGİLERİ ==")
-            details_lines.append("Parola değişikliği doğrudan /etc/shadow dosyasına yapıldı.")
-            details_lines.append("Olası nedenler:")
-            details_lines.append("  • Kullanıcı shadow dosyasında bulunamadı")
-            details_lines.append("  • Shadow dosyası yazma izni problemi")
-            details_lines.append("  • Bozuk shadow dosyası formatı")
-            details_lines.append("Detaylı hatalar /var/log/tiha/tiha-debug.log dosyasında.")
+            details_lines.append(t("m01.apply.failure_info"))
 
         # Yedek hesap özeti — detay satırlarına
         if created_reserve or skipped_reserve:
             details_lines.append("")
-            details_lines.append("Yedek hesaplar:")
+            details_lines.append(t("m01.apply.reserve_title"))
             if created_reserve:
-                details_lines.append(
-                    f"  Yeni açılan ({len(created_reserve)}): "
-                    + ", ".join(created_reserve)
-                )
+                details_lines.append(t("m01.apply.reserve_created",
+                                       count=len(created_reserve),
+                                       users=", ".join(created_reserve)))
             if skipped_reserve:
-                details_lines.append(
-                    f"  Zaten var, dokunulmadı ({len(skipped_reserve)}): "
-                    + ", ".join(skipped_reserve)
-                )
-            details_lines.append(
-                "  PIN anahtarları 'Öğretmen PIN anahtarları' adımında "
-                "üretilir; o adım bu hesapları da otomatik yakalar."
-            )
+                details_lines.append(t("m01.apply.reserve_skipped",
+                                       count=len(skipped_reserve),
+                                       users=", ".join(skipped_reserve)))
+            details_lines.append(t("m01.apply.reserve_pin_note"))
 
         overall = (
             (all(results.values()) if results else False)
@@ -559,28 +497,26 @@ class InitialPasswordsModule(Module):
 
         summary_parts = []
         if removed_users:
-            summary_parts.append(f"{len(removed_users)} ortak hesap silindi")
+            summary_parts.append(t("m01.apply.summary_removed", count=len(removed_users)))
 
         password_parts = []
         for user, success in results.items():
             if success:
                 password_parts.append(user)
         if password_parts:
-            summary_parts.append(f"{'/'.join(password_parts)} parolaları atandı")
+            summary_parts.append(t("m01.apply.summary_passwords", users="/".join(password_parts)))
 
         if created_reserve:
-            summary_parts.append(f"{len(created_reserve)} yedek hesap açıldı")
+            summary_parts.append(t("m01.apply.summary_reserve", count=len(created_reserve)))
 
         keyring_count = sum(len(names) for names in keyrings_moved.values())
         if keyring_count:
-            summary_parts.append(
-                f"{keyring_count} bayat anahtarlık dosyası kenara alındı"
-            )
+            summary_parts.append(t("m01.apply.summary_keyrings", count=keyring_count))
 
         return ApplyResult(
             success=overall,
             summary="; ".join(summary_parts) + "." if overall and summary_parts
-                    else "Bazı işlemler başarısız oldu, ayrıntılara bakın.",
+                    else t("m01.apply.partial_failure"),
             details="\n".join(details_lines),
             data={
                 "removed_users": removed_users,
@@ -602,7 +538,7 @@ class InitialPasswordsModule(Module):
         state = self.state_dir
         backup = state / "shadow"
         if not backup.exists():
-            return ApplyResult(False, "Yedek /etc/shadow bulunamadı; geri alınamıyor.")
+            return ApplyResult(False, t("m01.undo.no_backup"))
 
         restored_users = []
         removed_users = data.get("removed_users", [])
@@ -632,7 +568,7 @@ class InitialPasswordsModule(Module):
             restore_file(backup, SHADOW)
         except OSError as exc:
             log.error("Shadow geri yükleme hatası: %s", exc)
-            return ApplyResult(False, f"Geri yükleme başarısız: {exc}")
+            return ApplyResult(False, t("m01.undo.restore_failed", error=exc))
 
         # Parolalar eski hâline döndüğü için kenara alınan anahtarlıklar
         # yeniden açılabilir durumda; yerlerine koyuyoruz. Shadow geri
@@ -645,20 +581,18 @@ class InitialPasswordsModule(Module):
             if names:
                 restored_keyrings[username] = names
 
-        summary_parts = ["Önceki /etc/shadow durumu geri yüklendi"]
+        summary_parts = [t("m01.undo.shadow_restored")]
         if deleted_reserve:
-            summary_parts.append(
-                f"{len(deleted_reserve)} yedek hesap silindi: "
-                + ", ".join(deleted_reserve)
-            )
+            summary_parts.append(t("m01.undo.reserve_deleted",
+                                   count=len(deleted_reserve),
+                                   users=", ".join(deleted_reserve)))
         if restored_users:
-            summary_parts.append(
-                f"{len(restored_users)} kullanıcı geri yüklendi: "
-                + ", ".join(restored_users)
-            )
+            summary_parts.append(t("m01.undo.users_restored",
+                                   count=len(restored_users),
+                                   users=", ".join(restored_users)))
         keyring_count = sum(len(names) for names in restored_keyrings.values())
         if keyring_count:
-            summary_parts.append(f"{keyring_count} anahtarlık dosyası yerine konuldu")
+            summary_parts.append(t("m01.undo.keyrings_restored", count=keyring_count))
         return ApplyResult(True, "; ".join(summary_parts) + ".")
 
     # -----------------------------------------------------------------
@@ -678,8 +612,8 @@ class InitialPasswordsModule(Module):
         if not existing_users:
             return ApplyResult(
                 False,
-                "Silinecek sistem kullanıcısı bulunamadı.",
-                details="ogrenci ve ogretmen kullanıcıları zaten yok."
+                t("m01.action.no_system_users"),
+                details=t("m01.action.no_system_users_details")
             )
 
         state = self.ensure_state_dir()
@@ -692,16 +626,16 @@ class InitialPasswordsModule(Module):
         if removed_users:
             return ApplyResult(
                 True,
-                f"{len(removed_users)} sistem kullanıcısı silindi: {', '.join(removed_users)}",
-                details="Kullanıcılar güvenli şekilde yedeklendi ve kaldırıldı.\n"
-                       "Geri alma işlevi ile geri yüklenebilir.",
+                t("m01.action.system_users_removed", count=len(removed_users),
+                  users=", ".join(removed_users)),
+                details=t("m01.action.backed_up_removed"),
                 data={"removed_users": removed_users}
             )
         else:
             return ApplyResult(
                 False,
-                "Hiçbir kullanıcı silinemedi.",
-                details="Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
+                t("m01.action.none_removed"),
+                details=t("m01.action.see_log")
             )
 
     def remove_student_user_action(self, params: dict | None = None) -> ApplyResult:
@@ -709,8 +643,8 @@ class InitialPasswordsModule(Module):
         if not user_exists("ogrenci"):
             return ApplyResult(
                 False,
-                "Öğrenci kullanıcısı (ogrenci) bulunamadı.",
-                details="Kullanıcı zaten silinmiş olabilir."
+                t("m01.action.student_not_found"),
+                details=t("m01.action.student_maybe_deleted")
             )
 
         state = self.ensure_state_dir()
@@ -718,16 +652,15 @@ class InitialPasswordsModule(Module):
         if remove_user_with_backup("ogrenci", state):
             return ApplyResult(
                 True,
-                "Öğrenci kullanıcısı (ogrenci) başarıyla silindi.",
-                details="Kullanıcı güvenli şekilde yedeklendi ve kaldırıldı.\n"
-                       "Geri alma işlevi ile geri yüklenebilir.",
+                t("m01.action.student_removed"),
+                details=t("m01.action.student_backed_up"),
                 data={"removed_users": ["ogrenci"]}
             )
         else:
             return ApplyResult(
                 False,
-                "Öğrenci kullanıcısı silinemedi.",
-                details="Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
+                t("m01.action.student_remove_failed"),
+                details=t("m01.action.see_log")
             )
 
     def launch_users_admin_gui_action(self, params: dict | None = None) -> ApplyResult:
@@ -736,8 +669,8 @@ class InitialPasswordsModule(Module):
         if not binary.exists():
             return ApplyResult(
                 False,
-                "Kullanıcılar ve Gruplar uygulaması bulunamadı.",
-                details=f"{binary} mevcut değil; cinnamon-control-center paketi kurulu mu?",
+                t("m01.action.users_admin_missing"),
+                details=t("m01.action.users_admin_missing_details", binary=binary),
             )
 
         user = invoking_username()
@@ -754,12 +687,12 @@ class InitialPasswordsModule(Module):
         except OSError as exc:
             return ApplyResult(
                 False,
-                "Kullanıcılar ve Gruplar başlatılamadı.",
+                t("m01.action.users_admin_failed"),
                 details=str(exc),
             )
 
         return ApplyResult(
             True,
-            f"Kullanıcılar ve Gruplar '{user}' oturumunda açıldı.",
-            details="Pencereyi kapattığınızda bu adımdaki hesap durumu önizlemesi yenilenir.",
+            t("m01.action.users_admin_opened", user=user),
+            details=t("m01.action.users_admin_opened_details"),
         )

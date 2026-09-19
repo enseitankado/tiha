@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .i18n import t
 from .logger import get_logger
 from .utils import run_cmd
 
@@ -27,9 +28,11 @@ OS_RELEASE = Path("/etc/os-release")
 class BoardInfo:
     """Kullanıcıya gösterilecek özet bilgi."""
 
-    brand: str = "Bilinmiyor"       # Üretici (ör. "Vestel", "Arçelik", "LG")
-    model: str = "Bilinmiyor"       # Model adı
-    phase: str = "Tespit edilemedi" # Faz 1 / 2 / 3 tanımı
+    # Üretici (ör. "Vestel", "Arçelik", "LG")
+    brand: str = field(default_factory=lambda: t("core.board.unknown"))
+    model: str = field(default_factory=lambda: t("core.board.unknown"))
+    # Faz 1 / 2 / 3 tanımı
+    phase: str = field(default_factory=lambda: t("core.board.phase_unknown"))
     bios_version: str = ""
     distro_pretty: str = ""
     kernel: str = ""
@@ -40,16 +43,19 @@ class BoardInfo:
     def as_rows(self) -> list[tuple[str, str]]:
         """UI için hazır etiket+değer çiftleri döndürür."""
         rows = [
-            ("Marka", self.brand),
-            ("Model", self.model),
-            ("Donanım Fazı", self.phase),
-            ("BIOS Sürümü", self.bios_version or "—"),
-            ("İşletim Sistemi", self.distro_pretty or "—"),
-            ("Çekirdek", self.kernel or "—"),
-            ("Mimari", self.arch or "—"),
+            (t("core.board.row_brand"), self.brand),
+            (t("core.board.row_model"), self.model),
+            (t("core.board.row_phase"), self.phase),
+            (t("core.board.row_bios"), self.bios_version or "—"),
+            (t("core.board.row_os"), self.distro_pretty or "—"),
+            (t("core.board.row_kernel"), self.kernel or "—"),
+            (t("core.board.row_arch"), self.arch or "—"),
         ]
         if self.is_vm:
-            rows.append(("Çalışma Ortamı", f"Sanal Makine ({self.vm_type})"))
+            rows.append((
+                t("core.board.row_runtime"),
+                t("core.board.virtual_machine", vm_type=self.vm_type),
+            ))
         return rows
 
 
@@ -84,17 +90,17 @@ def _detect_phase(brand: str, model: str, bios: str) -> str:
     # Faz 3 örüntüleri (daha yeni tahtalar, tipik olarak 4K ve Android tabanlı,
     # ancak Pardus uyarlamaları da var)
     if re.search(r"\bfaz\s*3\b|\bphase\s*3\b|\bf3\b", blob):
-        return "Faz 3"
+        return t("core.board.phase_3")
     if re.search(r"\bfaz\s*2\b|\bphase\s*2\b|\bf2\b", blob):
-        return "Faz 2"
+        return t("core.board.phase_2")
     if re.search(r"\bfaz\s*1\b|\bphase\s*1\b|\bf1\b", blob):
-        return "Faz 1"
+        return t("core.board.phase_1")
     # Marka bazlı kaba kestirim: Vestel Faz 2/3 tipiktir.
     if "vestel" in blob:
-        return "Faz 2 (tahmini)"
+        return t("core.board.phase_2_guess")
     if "arçelik" in blob or "arcelik" in blob or "grundig" in blob:
-        return "Faz 3 (tahmini)"
-    return "Tespit edilemedi"
+        return t("core.board.phase_3_guess")
+    return t("core.board.phase_unknown")
 
 
 def _detect_vm() -> tuple[bool, str]:
@@ -112,8 +118,8 @@ def detect() -> BoardInfo:
 
     Tüm okumalar salt-okuma niteliktedir; yan etki yaratmaz.
     """
-    brand = _read(DMI / "sys_vendor") or _read(DMI / "board_vendor") or "Bilinmiyor"
-    model = _read(DMI / "product_name") or _read(DMI / "board_name") or "Bilinmiyor"
+    brand = _read(DMI / "sys_vendor") or _read(DMI / "board_vendor") or t("core.board.unknown")
+    model = _read(DMI / "product_name") or _read(DMI / "board_name") or t("core.board.unknown")
     bios = _read(DMI / "bios_version")
     phase = _detect_phase(brand, model, bios)
 

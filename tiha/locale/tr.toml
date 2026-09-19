@@ -1,0 +1,4181 @@
+# TiHA arayüz metinleri (Türkçe).
+#
+# Ekranda görünen bütün metinler bu dosyadadır; kod yalnızca anahtarları
+# kullanır (ör. t("m01.title")). Metni değiştirmek için değeri düzenleyin,
+# anahtarı (= işaretinin solu) değiştirmeyin.
+#
+# - {ad} biçimindeki yer tutucuları silmeyin; program onları doldurur.
+#   Yer tutucu içeren metinlerde düz süslü parantez {{ ve }} yazılır.
+# - Uzun metinler """ ile açılıp kapanır. Satır sonundaki \ işareti
+#   yalnızca dosyada satırı sarar; ekranda metin kesintisiz akar.
+#   \n yeni satır demektir.
+# - Başka bir dil için bu dosyanın kopyasını en.toml gibi adlandırıp
+#   değerleri çevirin; TIHA_LANG=en ile çalıştırın. Eksik kalan
+#   anahtarlar Türkçe gösterilir.
+
+# ==========================================================================
+# Uygulama başlatma
+# ==========================================================================
+
+[app]
+error_line = "HATA: {reason}"
+error_runtime_dir_cli = "HATA: çalışma dizini oluşturulamadı: {error}"
+error_banner = """\
+\n\
+\u0020\u0020HATA: {reason}\n\
+\
+"""
+error_runtime_dir = "Çalışma dizini oluşturulamadı: {error}"
+banner_title = "TiHA — Tahta İmaj Hazırlık Aracı"
+opening_window = "Sihirbaz penceresi açılıyor…"
+debug_log_hint = "Detaylı loglar: /var/log/tiha/tiha-debug.log (yalnız etapadmin okuyabilir)"
+window_closed = "Sihirbaz kapatıldı."
+start_failed = "TiHA başlatılamadı"
+start_failed_line = "TiHA başlatılamadı: {message}"
+
+# ==========================================================================
+# Komut satırı
+# ==========================================================================
+
+[cli]
+description = "TiHA — Tahta İmaj Hazırlık Aracı (CLI mod). Hiçbir bayrak verilmezse GUI açılır."
+epilog = "Örnek: sudo tiha --apply --preset okul-a.json"
+help_list = "Modülleri sıralı olarak listele ve çık."
+help_apply = "Preset'teki modülleri sırasıyla uygula."
+help_info = "Preset içeriğini göster; uygulama."
+help_preset = "Preset JSON dosyasının yolu."
+help_only = "Yalnızca verilen modül id'lerini uygula (virgülle ayır)."
+help_skip = "Verilen modül id'lerini atla (virgülle ayır)."
+list_title = "TiHA Modülleri"
+preset_read_error = "HATA: preset okunamadı: {error}"
+info_title = "Preset İçeriği"
+info_total = """\
+Toplam modül: {count}\n\
+\
+"""
+unknown_module = "(tanımsız modül!)"
+unknown_ids = "⚠ Tanımsız modül id'leri: {ids}"
+unknown_ids_skipped = "⚠ Preset'te tanımsız modül id'leri (atlanacak): {ids}"
+nothing_to_apply = "Uygulanacak modül yok (filtre/yokluk)."
+apply_title = "TiHA — CLI Apply"
+apply_preset = "Preset : {path}"
+apply_targets = """\
+Hedef  : {count} modül\n\
+\
+"""
+exception_line = "  ✗ İSTİSNA: {error}"
+exception_summary = "İstisna: {error}"
+apply_done = "CLI Apply tamamlandı — başarı: {ok}, hata: {failed}"
+info_needs_preset = "--info için --preset gereklidir"
+apply_needs_preset = "--apply için --preset gereklidir"
+
+# ==========================================================================
+# Arayüz: pencere, karşılama, özet, diyaloglar
+# ==========================================================================
+
+[ui.credits]
+title = "Emeği Geçenler"
+subtitle = """\
+TiHA, kendisi küçük bir Python sihirbazı olsa da büyük ve olgun bir açık \
+kaynak ekosistemin omuzlarında duruyor. Aşağıdaki proje, veri kümesi ve \
+topluluklara — her adımın altında görünmeyen emek verenlere — teşekkür eder.\
+"""
+link = "Emeği Geçenler"
+
+[ui.credits.sections]
+developer = "Geliştirici"
+pardus = "Pardus ve ETAP ekosistemi"
+system_tools = "Sistem araçları"
+ui_lang = "Arayüz ve dil"
+datasets = "Veri kümeleri ve algoritmalar"
+platform = "Hedef platform ve saha"
+contact = "TiHA'ya ulaşmak"
+
+[ui.credits.items.ozgur_koca]
+name = "Özgür Koca"
+license = "—"
+desc = "TiHA'nın tasarımı, kodu ve sürdürülmesi."
+
+[ui.credits.items.tankado_com]
+name = "tankado.com"
+license = "—"
+desc = "Geliştiricinin kişisel sitesi; yazılar, notlar ve iletişim."
+
+[ui.credits.items.pardus]
+name = "Pardus"
+license = "Karışık (özgür yazılım)"
+desc = "Ulusal GNU/Linux dağıtımı; TiHA doğrudan Pardus ETAP 23 üzerine yazıldı."
+
+[ui.credits.items.pardus_etap_kaynaklari]
+name = "Pardus / ETAP kaynakları"
+license = "GPL-3.0+"
+desc = "eta-* paketlerinin ortak deposu."
+
+[ui.credits.items.eta_otp_lock]
+name = "eta-otp-lock"
+license = "GPL-3.0+"
+desc = "Öğretmen PIN mekanizması, @grup PIN'i, pam_otp; Öğretmen PIN adımının temeli."
+
+[ui.credits.items.eta_otp_cli]
+name = "eta-otp-cli"
+license = "GPL-3.0+"
+desc = "eta-otp-lock'un komut satırı arayüzü."
+
+[ui.credits.items.eta_112]
+name = "eta-112"
+license = "GPL-3.0+"
+desc = "Vestel Faz 2 BIOS'una supervisor parola yazan araç; BIOS parolası adımı bunu kullanır."
+
+[ui.credits.items.eta_light_mode]
+name = "eta-light-mode"
+license = "GPL-3.0+"
+desc = "Düşük donanımlı tahtalar için hafif arayüz modu."
+
+[ui.credits.items.ahenk_lider]
+name = "Ahenk / Lider"
+license = "GPL-3.0+"
+desc = "Merkezi tahta yönetim istemcisi ve sunucusu; klon sonrası kayıt yenileme buna teslim eder."
+
+[ui.credits.items.debian]
+name = "Debian"
+license = "Karışık (DFSG)"
+desc = "Pardus'un tabanı."
+
+[ui.credits.items.systemd]
+name = "systemd"
+license = "LGPL-2.1+"
+desc = "logind, servisler, path unit'ları; birçok adım bu altyapıyı kullanır."
+
+[ui.credits.items.gnu_grub]
+name = "GNU GRUB"
+license = "GPL-3.0+"
+desc = "PBKDF2 parola hash mekanizması (GRUB koruması adımı)."
+
+[ui.credits.items.rsyslog]
+name = "rsyslog"
+license = "GPL-3.0 / LGPL-3.0"
+desc = "Dayanıklı merkezi log iletiminin belkemiği."
+
+[ui.credits.items.prometheus_node_exporter]
+name = "Prometheus node_exporter"
+license = "Apache-2.0"
+desc = "Opsiyonel metrik dışa aktarımı (CPU, RAM, disk, sıcaklık, ağ, boot)."
+
+[ui.credits.items.smartmontools]
+name = "smartmontools"
+license = "GPL-2.0+"
+desc = "SMART disk sağlığı izleme."
+
+[ui.credits.items.lm_sensors]
+name = "lm-sensors"
+license = "LGPL-2.1+"
+desc = "Sıcaklık okuma."
+
+[ui.credits.items.ethtool]
+name = "ethtool"
+license = "GPL-2.0"
+desc = "Wake-on-LAN dinleme modunun anahtarı."
+
+[ui.credits.items.python_3]
+name = "Python 3"
+license = "PSF-2.0"
+desc = "TiHA'nın dili."
+
+[ui.credits.items.gtk_3]
+name = "GTK 3"
+license = "LGPL-2.1+"
+desc = "Sihirbaz penceresi, form alanları, canlı çıktı modali."
+
+[ui.credits.items.pygobject]
+name = "PyGObject"
+license = "LGPL-2.1+"
+desc = "GTK'nın Python bağlaması."
+
+[ui.credits.items.seclists]
+name = "SecLists"
+license = "MIT"
+desc = """\
+En yaygın 10.000 parolanın listesi (Daniel Miessler ve katkıcılar); \
+Kullanıcı parolaları adımı bunu kullanır.\
+"""
+
+[ui.credits.items.zxcvbn]
+name = "zxcvbn"
+license = "MIT"
+desc = "Parola gücü skorlama fikri (Dropbox); TiHA basit bir uyarlamasını çalıştırır."
+
+[ui.credits.items.vestel_faz_2_e_tahta]
+name = "Vestel Faz 2 E-Tahta"
+license = "Donanım"
+desc = "TiHA'nın öncelikli hedef donanımı; her modül bu donanımda doğrulanır."
+
+[ui.credits.items.meb_eba_programi]
+name = "MEB EBA programı"
+license = "Devlet programı"
+desc = """\
+İhtiyacın kaynağı; PIN, imaj temizliği ve klonlama akışları bu programın \
+günlük gerçeklerine göre biçimlendi.\
+"""
+
+[ui.credits.items.ogretmenler_ve_okul_yoneticileri]
+name = "Öğretmenler ve okul yöneticileri"
+license = "Saha"
+desc = "Geri bildirim ve saha testi için."
+
+[ui.credits.items.kaynak_kodu]
+name = "Kaynak kodu"
+license = "GPL-3.0+"
+desc = "Kaynak kodu, sürüm geçmişi ve dokümantasyon."
+
+[ui.credits.items.hata_bildirimi_ve_oneri]
+name = "Hata bildirimi ve öneri"
+license = "GitHub Issues"
+desc = "Doğrudan GitHub üzerinden."
+
+[ui.credits.items.e_posta]
+name = "E-posta"
+license = "İletişim"
+desc = "Sorun, öneri ya da geri bildirim için doğrudan yazabilirsiniz."
+
+[ui.main]
+window_title = "TiHA — Tahta İmaj Hazırlık Aracı"
+export_empty_title = "Dışa aktarılacak parametre yok"
+export_empty_body = """\
+Henüz bu oturumda parametre alan bir modül uygulanmamış. En az bir adımı \
+uygulayıp tekrar deneyin.\
+"""
+export_dialog_title = "Preset'i kaydet"
+cancel = "İptal"
+save = "Kaydet"
+json_filter = "JSON dosyaları (*.json)"
+export_done_title = "Preset kaydedildi"
+export_done_body = """\
+{count} modülün parametreleri şu dosyaya yazıldı:\n\
+\n\
+{path}\n\
+\n\
+Diğer tahtalarda uygulamak için:\n\
+\u0020\u0020sudo tiha --preset {name} --apply\
+"""
+export_failed_title = "Kayıt başarısız"
+export_failed_body = "Preset yazılamadı: {error}"
+update_badge = "🔔 Yeni sürüm: <a href=\"tiha-update\">v{version}</a>"
+update_tip_many = "Şu an v{current}. {count} sürüm gerideisin — tıklayınca yenilikleri özet halinde görürsün."
+update_tip_one = "Şu an v{current}. Tıklayınca bu sürümde neler değiştiğini gösterir."
+notes_title_one = "Yenilikler — v{version}"
+notes_title_many = "Yenilikler — son {count} sürüm"
+open_github = "GitHub'da aç"
+close = "Kapat"
+notes_header = "<b>Şu an:</b> v{current}  ·  <b>Son sürüm:</b> v{latest}"
+notes_empty = "Yeni sürüm var ama not yazılmamış. Ayrıntılar için GitHub'ı açabilirsin."
+sidebar_title = "TiHA"
+sidebar_subtitle = "Tahta İmaj Hazırlık Aracı"
+btn_back = "◀  Geri"
+btn_apply = "Uygula"
+btn_next = "İleri  ▶"
+btn_finish = "Bitir"
+sidebar_welcome = "Hoş geldiniz"
+sidebar_summary = "Özet"
+status_applied = "Uygulandı: {summary}"
+status_failed = "Hata: {summary}"
+apply_hint = "Uygulandığında: {hint}"
+
+[ui.welcome]
+heading = "Hoş geldiniz"
+intro = """\
+TiHA, Pardus ETAP etkileşimli tahtayı imaj alınmaya hazırlayan bir \
+sihirbazdır. Örnek bir tahtayı bu adımlarla hazırlar, imajını alır ve \
+onlarca tahtaya dağıtırsınız. Her klon aynı ayarlarla, ama kendi kimliğiyle \
+açılır.\
+"""
+features_title = "Adımlar"
+flow = """\
+Adımlar sırayla ilerler. Her adım ne yapacağını ve neden gerektiğini \
+açıklar, uygulamadan önce onayınızı alır, sonucu gösterir; gerekirse geri \
+alınabilir. İstemediğiniz adımları atlayabilirsiniz. İmaj öncesi temizliği \
+en sona, imajı almadan hemen öncesine bırakın. Başlamak için soldaki \
+listeden bir adım seçin ya da “İleri” düğmesine basın.\
+"""
+repo_label = "Proje deposu: kaynak kod, sürüm geçmişi ve hata bildirimi"
+
+[ui.welcome.features]
+m09 = "Paketleri imaj alınmadan önce günceller."
+m01 = "root, etapadmin ve ortak öğretmen parolalarını belirler; yedek öğretmen hesapları açar."
+m02 = """\
+Her açılışta etapadmin dışındaki hesapların yerel parolalarını geçersiz \
+kılar (isteğe bağlı).\
+"""
+m03 = """\
+Öğretmen PIN anahtarlarını merkezde üretip imaja gömer; ortak grup PIN'i de \
+tanımlanabilir.\
+"""
+m13 = "EBA QR ile ilk girişte çıkan parola sorusunu kapatır."
+m04 = "Tahtaya uzaktan komut ve dosya erişimi sağlar."
+m05 = "Ağ üzerinden dosya alıp vermeyi sağlar."
+m06 = "Tahta kayıtlarını merkeze kayıpsız iletir; disk sağlığı ve metrik izleme eklenebilir."
+m07 = "Tahta saatinin kaymasını önler."
+m08 = "Her klon kendine özgü bir ad alır."
+m11 = "Unutulan tahtayı belirli saatte ya da boşta kalınca, önce uyararak kapatır."
+m15 = "Kapalı tahtanın ağ üzerinden açılabilmesini sağlar."
+m17 = "Oturum kalıntılarını temizler, ETA Hafif Mod'u tüm kullanıcılara uygular."
+m12 = "Klonlanan tahta Lider'e kendi kimliğiyle abone olur."
+m14 = "Desteklenen donanımda klonun ilk açılışında BIOS yönetici parolası atar."
+m16 = "Açılış menüsünün düzenlenmesini parolaya bağlar."
+m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya hazırlar."
+
+[ui.pages]
+rationale_toggle_tip = "Bu adımın açıklamasını göster / gizle"
+experimental_banner = """\
+Deneysel: Bu adım gerçek tahta donanımında henüz doğrulanmadı. Önce tek bir \
+tahtada deneyin; sorun görürseniz \"Bu adımı geri al\" ile eski duruma \
+dönün.\
+"""
+doc_link_default = "Algoritma akış şeması ve gerekçeler"
+previous_apply = """\
+ℹ Bu adım daha önce ({when}) bir TiHA oturumunda uygulanmış.\n\
+Son durum: {summary}\
+"""
+undo_step = "Bu adımı geri al"
+browse = "📁 Göz at…"
+choose_file_title = "Dosya seç — {label}"
+choose = "Seç"
+filter_all_files = "Tüm dosyalar"
+filter_images = "Görsel dosyaları"
+password_toggle_tip = "Parolayı göster / gizle"
+strength = "Güç: {label} ({score}/4)"
+working_row = "Çalışıyor… Lütfen bekleyin."
+console_action = "{title} — {label}"
+stream_title_running = "{title} — çalışıyor"
+action_error = "Button action hatası: {error}"
+missing_fields = "Eksik alanlar: {fields}"
+applying_row = "Uygulanıyor… Bu adım tamamlanana kadar lütfen bekleyin."
+stream_title_applying = "{title} — uygulanıyor"
+unexpected_error = "Beklenmeyen hata: {error}"
+stream_working = "Çalışıyor… lütfen bekleyin."
+stream_done = "Tamamlandı — {summary}"
+stream_failed = "BAŞARISIZ — {summary}"
+stream_result_trailing = """\
+\n\
+───\n\
+Sonuç: {summary}\n\
+\
+"""
+stream_result = """\
+Sonuç: {summary}\n\
+\
+"""
+warning_line = "⚠ {warning}"
+copy_clipboard = "Panoya kopyala"
+save_to_file = "Dosyaya kaydet…"
+report_bug = "🐛 GitHub'a hata bildir…"
+report_bug_tip = """\
+Adım id'si, TiHA sürümü, hata özeti ve son log satırlarını içeren bir GitHub \
+Issue formunu tarayıcıda açar. Göndermeden önce içeriği gözden \
+geçirebilirsiniz.\
+"""
+browser_failed = "Tarayıcı otomatik açılamadı"
+browser_failed_body = """\
+Aşağıdaki URL'i tarayıcınıza kopyalayın:\n\
+\n\
+{url}\
+"""
+save_dialog_title = "Dosyaya kaydet"
+file_filter = "{kind} dosyası (*{suffix})"
+saved_to = "Dosyaya kaydedildi: {path}"
+save_failed = "Dosya yazılamadı: {error}"
+confirm_default_title = "Emin misiniz?"
+warning_dialog_title = "Dikkat edilmesi gereken bir durum var"
+undo_nothing = "Geri alınacak kayıt bulunamadı."
+undo_prompt_default_title = "Onay"
+undo_error = "Geri alma sırasında hata: {error}"
+
+[ui.pages.issue]
+masked_line = "[satır parola/secret içerebileceği için maskelendi]"
+log_unreadable = "(log okunamadı)"
+head = """\
+**Modül:** `{module_id}` — {title}\n\
+**TiHA sürümü:** {version}\n\
+**Tarih:** {date}\n\
+\n\
+### Hata özeti\n\
+\n\
+```\n\
+{summary}\n\
+```\n\
+\n\
+\
+"""
+details = """\
+### Detay\n\
+\n\
+```\n\
+{details}\n\
+```\n\
+\n\
+\
+"""
+log = """\
+### Log son 50 satır (parola benzeri satırlar maskelendi)\n\
+\n\
+```\n\
+{log_tail}\n\
+```\n\
+\n\
+---\n\
+_Bu rapor TiHA içinden otomatik oluşturuldu. Göndermeden önce içeriği gözden \
+geçirip kişisel bilgileri (IP, hostname, kullanıcı adları) \
+kaldırabilirsiniz._\n\
+\
+"""
+
+[ui.summary]
+heading = "Özet"
+undo_info = """\
+Bu tahtada geri alınabilir durumdaki adımlar aşağıda listelenmiştir. Daha \
+önceki bir oturumda uygulanmış olsa bile, modül geri almayı destekliyorsa ve \
+günce kaydı hâlâ etkinse buradan geri alabilirsiniz. Alttaki 'Bitir' \
+düğmesi uygulamayı kapatır.\
+"""
+refresh = "Listeyi yenile"
+export_preset = "📦 Preset olarak dışa aktar…"
+export_preset_tip = """\
+Bu oturumda uygulanmış adımların parametrelerini JSON dosyasına kaydeder. \
+Diğer tahtalarda CLI ile aynı ayarları uygulayabilirsiniz: tiha --preset \
+<dosya> --apply\
+"""
+group_title = "{title} ({detail})"
+group_undo = "Özet ve geri alma"
+group_undo_detail = "{count} adım, {undoable} geri alınabilir"
+undo_empty = """\
+Geri alınabilecek bir adım yok — henüz hiçbir modül uygulanmamış ya da \
+uygulanan tüm adımlar zaten geri alınmış.\
+"""
+undo = "Geri al"
+report_failed = "Rapor oluşturulamadı: {error}"
+report_title = "Bu imajda neler yaptınız?"
+group_done = "Yapılanlar"
+group_done_detail = "{count} adım"
+group_tests = "Kontrol et"
+group_tests_detail = "{count} deneme"
+copy_report = "Raporu kopyala"
+copy_report_tip = """\
+Raporu düz metin olarak panoya kopyalar; e-postaya ya da belgeye yapıştırıp \
+klon testinde yanınızda bulundurabilirsiniz.\
+"""
+save_report = "Raporu dosyaya kaydet…"
+step_failed = "{title} — BAŞARISIZ"
+step_skipped = "{title} — atlandı"
+experimental_marker = "deneysel"
+step_experimental = "{title} (deneysel)"
+warnings_title = "Dikkat"
+tests_intro = "İmajı en az bir tahtaya yazın ve aşağıdakilerin her birini o klon tahtada deneyin."
+tests_general = "Genel"
+save_report_title = "Raporu kaydet"
+undo_error = "Hata: {error}"
+
+# ==========================================================================
+# Çekirdek yardımcılar ve rapor
+# ==========================================================================
+
+[core.module]
+unexpected_error = "Beklenmeyen hata: {error}"
+
+[core.keyring]
+protected = "{name} (parola korumalı)"
+unprotected = "{name} (parolasız)"
+
+[core.password_strength]
+label_very_weak = "Çok zayıf"
+label_weak = "Zayıf"
+label_medium = "Orta"
+label_good = "İyi"
+label_strong = "Güçlü"
+label_common = "Yaygın parola listesinde"
+warn_common = "Bu parola en yaygın 10.000 parola arasında; ilk denemede kırılır."
+warn_too_short = "Çok kısa — en az 8 karakter önerilir."
+warn_single_class = "Yalnız tek tür karakter — büyük harf, rakam ve sembol karışımı ekleyin."
+warn_repeated = "Çok tekrarlanan karakter var (örn. 'aaaabbbb')."
+warn_sequence = "Ardışık dizi içeriyor (örn. 'abcd', '1234')."
+warn_pattern = "'{pattern}' gibi kolay tahmin edilen bir dizi içeriyor."
+
+[core.update_check]
+release_fallback_title = "Sürüm"
+no_release_notes = "(Bu sürüm için ayrıntı notu girilmemiş.)"
+
+[core.board]
+row_brand = "Marka"
+row_model = "Model"
+row_phase = "Donanım Fazı"
+row_bios = "BIOS Sürümü"
+row_os = "İşletim Sistemi"
+row_kernel = "Çekirdek"
+row_arch = "Mimari"
+row_runtime = "Çalışma Ortamı"
+virtual_machine = "Sanal Makine ({vm_type})"
+phase_1 = "Faz 1"
+phase_2 = "Faz 2"
+phase_3 = "Faz 3"
+phase_2_guess = "Faz 2 (tahmini)"
+phase_3_guess = "Faz 3 (tahmini)"
+phase_unknown = "Tespit edilemedi"
+unknown = "Bilinmiyor"
+
+[core.console]
+wizard_closed = "Sihirbaz kapatıldı."
+undone = "Geri alındı: {title}"
+
+[core.preset]
+unsupported_schema = "Desteklenmeyen schema_version: {version} (beklenen {expected})"
+modules_missing = "'modules' anahtarı eksik veya tip uyumsuz."
+
+[core.privilege]
+root_required = """\
+TiHA yönetici (kök) yetkisi gerektirir. Uygulamayı terminalden `sudo tiha` \
+ile ya da menüdeki kısayoldan (parola ister) başlatın.\
+"""
+admin_only = """\
+TiHA yalnızca '{admin}' kullanıcısı tarafından kullanılabilir. Şu anda \
+'{user}' hesabıyla çalışıyorsunuz.\
+"""
+
+[core.utils]
+stream_timeout = "[ZAMAN AŞIMI]"
+
+[core.report]
+closing = "Bu imajı yaymadan önce kapsamlı bir testten geçirmeyi unutmayın."
+join_and = " ve "
+quoted = "“{title}”"
+fallback_action = "“{label}” işlemini çalıştırdınız: {summary}."
+fallback_test = "Bu adımın yaptığı değişikliği klon tahtada yeniden başlattıktan sonra gözle doğrulayın."
+narrator_error = "Bu adım rapora dökülemedi ({error})."
+experimental_note = """\
+Bu adım deneysel olarak işaretli: gerçek tahta donanımında henüz yeterince \
+doğrulanmadı. Klonda özellikle dikkatle deneyin.\
+"""
+intro_empty = """\
+Bu tahtada TiHA ile henüz bir adım uygulanmadı. Adımları uyguladıkça burada \
+imaja neyin girdiği ve bir klon tahtada neyin denenmesi gerektiği \
+listelenecek.\
+"""
+intro_applied = """\
+Bu tahtada TiHA ile {ok} adımı uyguladınız{failed_part}. Aşağıda imaja neyin \
+girdiğini ve her değişikliğin bir klon tahtada nasıl sınanacağını \
+bulacaksınız.\
+"""
+intro_failed_part = "; {failed} adım başarısız oldu"
+intro_why = """\
+Bu imaj çok sayıda tahtaya kopyalanacak. Burada gözden kaçan her ayrıntıyı, \
+imajın yazıldığı tahta sayısı kadar ayrı ayrı düzeltmek zorunda kalırsınız. \
+Bu yüzden imajı yaymadan önce en az bir klon tahtaya yazıp aşağıdaki \
+denetimleri eksiksiz yapın.\
+"""
+failed_done = "Bu adım başarısız oldu."
+failed_done_reason = "Bu adım başarısız oldu: {reason}."
+failed_note = """\
+Başarısız adım imaja yarım bir değişiklik bırakmış olabilir. İmajı almadan \
+önce adımı düzeltip yeniden uygulayın ya da geri alın.\
+"""
+
+[core.report.text]
+section_done = "YAPTIKLARINIZ"
+failed_suffix = " (BAŞARISIZ)"
+experimental_suffix = " (deneysel)"
+section_warnings = "DİKKAT"
+section_tests = "KLON TAHTADA DENEYİN"
+general = "Genel"
+
+[core.report.sensitive]
+shadow = "parola değişikliği öncesi /etc/shadow yedeği"
+keyrings = "kenara alınmış anahtarlıklar"
+otp_backup = "PIN anahtarlarının yedeği"
+pin_papers = "PIN kâğıtları (bütün anahtarlar QR'lı)"
+
+[core.report.warn]
+failed = """\
+Başarısız kalan adımlar var: {steps}. Başarısız bir adım imaja yarım \
+değişiklik bırakabilir; imajı almadan önce bu adımları düzeltip yeniden \
+uygulayın ya da geri alın.\
+"""
+sanitize_missing = """\
+{step} adımını henüz çalıştırmadınız. Çalıştırmadan imaj alırsanız bütün \
+klonlar aynı makine kimliğini ve SSH anahtarını paylaşır; Wi-Fi parolaları, \
+kabuk geçmişleri ve tarayıcı verileri de imaja girer. Bu adımı en sona, \
+imajı almadan hemen önce uygulayın.\
+"""
+after_sanitize = """\
+İmaj temizliğinden SONRA şu adımlarda değişiklik yaptınız: {steps}. Bu \
+değişikliklerin günlük ve önbellek izleri imaja girecek; imajı almadan önce \
+temizlik adımını yeniden çalıştırın.\
+"""
+machine_id = """\
+İmaj temizliğinden sonra bu tahta işletim sistemiyle yeniden açılmış \
+görünüyor: makine kimliği (machine-id) yeniden üretilmiş. Bu hâliyle alınan \
+imajda bütün klonlar aynı makine kimliğini paylaşır. Temizlik adımını \
+yeniden çalıştırın ve tahtayı açmadan, canlı USB'den imaj alın.\
+"""
+ssh_sentinel = """\
+İmaj temizliğinden sonra SSH anahtarları bu tahtada yeniden üretilmiş ve \
+'yapıldı' işareti ({path}) bırakılmış. Bu dosya imajda kalırsa klonlar kendi \
+SSH anahtarlarını ÜRETMEZ: ya kaynak tahtanın anahtarını paylaşırlar ya da \
+hiç anahtarları olmaz ve SSH çalışmaz. İmajı almadan önce bu dosyayı silip \
+(`sudo rm {path}`) temizlik adımını yeniden çalıştırın.\
+"""
+ahenk = """\
+Tahtada Ahenk kurulu ama {step} adımını uygulamadınız. Klonların hepsi \
+Lider'e bu tahtanın kimliğiyle bağlanır; tek bir tahtaymış gibi görünür ve \
+komutlar yanlış tahtaya gidebilir.\
+"""
+hostname = """\
+{hostname} adımını uygulamadınız ama {steps} tahtaları ağdaki adlarıyla \
+ayırt etmenizi gerektirir. Bütün klonlar ağda ve log sunucusunda aynı adla \
+görünecek.\
+"""
+wipe_ogretmen = """\
+Ortak öğretmen hesabına (ogretmen) parola belirlediniz ama {wipe} adımı da \
+etkin: bu parola klonun ilk açılışında rastgele bir değerle ezilecek ve işe \
+yaramayacak.\
+"""
+wipe_no_pin = """\
+{wipe} etkin ama {pin} adımını uygulamadınız: öğretmenler tahtaya yalnız EBA \
+QR ya da USB bellekle girebilir. QR çalışmadığında hiçbir öğretmen giriş \
+yapamaz; yalnız etapadmin kalır.\
+"""
+qr_no_pin = """\
+{qr} adımıyla parola penceresini kapattınız ama PIN anahtarı üretmediniz: \
+öğretmen hesaplarında parola olmayacak, QR çalışmadığında tahtaya giriş yolu \
+kalmaz.\
+"""
+reserve_after_pin = """\
+Yedek öğretmen hesaplarını {pin} adımından SONRA açtınız; bu yeni hesapların \
+PIN anahtarı yok. PIN adımını yeniden uygulayın (mevcut anahtarlara \
+dokunulmaz).\
+"""
+time_pin = "PIN kodları"
+time_shutdown = "sabit saatte kapanma"
+time_logs = "log kayıtlarının zaman damgaları"
+time = """\
+{items} doğru saate bağlı ama {step} adımını uygulamadınız. Klonların \
+saatinin okul ağında doğru eşitlendiğinden emin olun{suffix}\
+"""
+time_suffix_pin = "; PIN kodları saat 30 saniyeden fazla kayınca reddedilir."
+time_suffix = "."
+wol_idle = """\
+Uzaktan uyandırılan bir tahta, kimse kullanmazsa yaklaşık {idle} dakika + \
+{duration} sonra giriş ekranında kendiliğinden kapanacak (boşta kapanma \
+giriş ekranında da çalışır). Tahtaları dersten çok önce uyandıracaksanız \
+boşta kalma süresini buna göre seçin.\
+"""
+bios_always_wol = """\
+BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan uyandırmayı \
+açtınız: uzaktan uyandırılan tahtalar BIOS parola ekranında bekleyip işletim \
+sistemine hiç geçmeyecek.\
+"""
+bios_wol = """\
+Uzaktan uyandırma her tahtada BIOS ayarı (Wake on LAN açık, ErP ve Deep \
+Sleep kapalı) ister ve BIOS'a yönetici parolası koyduğunuz için bu ayarları \
+yapmak her tahtada o parolayı gerektirecek. BIOS ayarlarını mümkünse parola \
+ayarlanmadan önce yapın.\
+"""
+bios_ahenk = """\
+{bios} ve {ahenk} aynı MAC imzasını kullanıyor. BIOS parolası klonun ilk \
+açılışında ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki \
+açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan sonra \
+BIOS'a girerek mutlaka doğrulayın.\
+"""
+grub_no_bios = """\
+GRUB menüsünü korudunuz ama BIOS parolası ayarlamadınız: tahtaya erişen biri \
+BIOS'tan USB bellekle açıp GRUB korumasını aşabilir.\
+"""
+bios_no_grub = """\
+BIOS parolası ayarladınız ama GRUB menüsünü korumadınız: açılış menüsünde \
+'e' tuşuyla tahta doğrudan yönetici kabuğuna düşürülebilir.\
+"""
+sensitive = """\
+TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara gidecek \
+hassas yedekler var: {items}. {step} adımı bunları siler; imajı almadan önce \
+o adımı {again}çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin.\
+"""
+again = "yeniden "
+
+[core.report.general]
+first_boot = """\
+İmajı en az bir tahtaya yazın ve ilk açılışı başından sonuna izleyin: hata \
+ekranı, beklenmedik parola sorusu ya da uzun bekleme olmamalı.\
+"""
+reboot = """\
+Klonu en az iki kez yeniden başlatın ve bir kez tamamen kapatıp açın; her \
+açılışta aynı sonucu aldığınızı doğrulayın.\
+"""
+accounts = "Öğretmen ve öğrenci hesaplarının her biriyle oturum açıp kapatın."
+hardware = "Tahtanın dokunmatiği, kalemi, sesi ve ağ bağlantısının klonda çalıştığını doğrulayın."
+identity = """\
+En az iki klonu aynı anda aynı ağa bağlayın; bilgisayar adlarının, IP \
+adreslerinin ve (kullanıyorsanız) Lider kayıtlarının birbirinden farklı \
+olduğunu doğrulayın.\
+"""
+models = """\
+İmaj farklı tahta modellerine (ör. Intel ve AMD işlemcili) yazılacaksa her \
+modelde en az bir klon deneyin.\
+"""
+school = """\
+Klonu kurulacağı okulun ağında, gerçek bir öğretmen hesabıyla en az bir ders \
+süresince kullanın.\
+"""
+fix_source = """\
+Testte bulduğunuz her sorunu kaynak tahtada düzeltip imajı yeniden alın; \
+sorunu klonlarda tek tek düzeltmeye çalışmayın.\
+"""
+
+# ==========================================================================
+# Adım 1: Sistem güncellemesi (m09_system_update)
+# ==========================================================================
+
+[m09]
+title = "Sistem güncellemesi (apt)"
+sidebar_title = "Sistem güncellemesi"
+apply_hint = "Repository sağlığı düzeltilir, apt update + full-upgrade + temizlik çalışır (uzun sürer)."
+rationale = """\
+Tahtadaki paketleri en güncel sürüme çıkarır. Güvenlik yamaları ve \
+kararlılık düzeltmeleri için imaj öncesi tavsiye edilir. Çıktı ekranda canlı \
+olarak akar; güncelleme uzun sürebilir.\n\
+\n\
+Bekleyen yükseltme yoksa bu adım atlanabilir; alttaki “İleri” düğmesi ya da \
+soldaki listeden bir sonraki adıma geçebilirsiniz.\
+"""
+
+[m09.links]
+pardus_update = "Pardus Güncelleyici'yi aç"
+
+[m09.fix]
+deleting_broken = "{count} bozuk repository dosyası siliniyor..."
+adding_main = "Ana Pardus ETAP depoları ekleniyor..."
+fixed = "✅ {count} repository sorunu düzeltildi"
+healthy = "✅ Repository yapılandırması sağlıklı"
+error = "❌ Repository düzeltme hatası: {error}"
+
+[m09.preview]
+main_repos = "Ana Pardus depoları  : {status}"
+main_repos_ok = "mevcut"
+main_repos_bad = "eksik"
+broken_files = "Bozuk depo dosyaları : {status}"
+broken_files_count = "{count} adet"
+broken_files_none = "yok"
+sources_list = "sources.list         : {status}"
+sources_list_ok = "geçerli"
+sources_list_bad = "boş veya eksik"
+pending_checking = "Bekleyen yükseltme   : arka planda kontrol ediliyor..."
+pending_unknown = "Bekleyen yükseltme   : tespit edilemedi (apt erişilemedi)"
+pending_none = "Bekleyen yükseltme   : yok, sistem güncel görünüyor"
+pending_count = "Bekleyen yükseltme   : {count} paket"
+will_do = """\
+Bu adım uygulandığında:\n\
+\u0020\u0020- Depo yapılandırma sorunları düzeltilir\n\
+\u0020\u0020- apt update > full-upgrade > autoremove > clean çalışır\
+"""
+long_running = "  - İşlem uzun sürebilir"
+
+[m09.apply]
+checking_repos = """\
+\n\
+==== Repository sağlığı kontrol ediliyor ====\
+"""
+repo_fix_failed = "Repository düzeltme başarısız oldu."
+repo_fix_failed_details = "Repository yapılandırması düzeltilemedi. Manuel müdahale gerekebilir."
+step_header = """\
+\n\
+==== {label} ====\
+"""
+step_failed = "[HATA] {label} başarısız (çıkış kodu {code})"
+some_failed = "Bazı güncelleme adımları başarısız oldu."
+some_failed_details = "Başarısız olanlar: {steps}"
+done = "Sistem güncel."
+
+[m09.gui]
+not_found = "Pardus Güncelleyici uygulaması bulunamadı."
+not_found_details = "{binary} mevcut değil; pardus-update paketi kurulu mu?"
+start_failed = "Pardus Güncelleyici başlatılamadı."
+opened = "Pardus Güncelleyici '{user}' oturumunda açıldı."
+opened_details = "Pencereyi kapattığınızda bu adımdaki bekleyen güncelleme sayısı yenilenir."
+
+[m09.report]
+done = """\
+Sistem güncellemesini çalıştırdınız: depo yapılandırması denetlendi, \
+paketler en güncel sürüme yükseltildi ve gereksiz paketler temizlendi.\
+"""
+test_hardware = """\
+Güncelleme yeni çekirdek ve sürücüler getirmiş olabilir. Klonda ekranın, \
+dokunmatiğin, kalemin, sesin ve ağın (kablolu ve kablosuz) çalıştığını \
+doğrulayın.\
+"""
+test_eba = "EBA QR girişini ve sık kullanılan ETAP uygulamalarını klonda açıp deneyin."
+test_apt = """\
+Terminalde `sudo apt-get update` komutunun hatasız bittiğini ve \
+/etc/apt/sources.list dosyasındaki depo satırlarının beklediğiniz gibi \
+olduğunu doğrulayın. Bu adım bozuk depo dosyasını yeniden yazabilir; kurum \
+içi özel depo satırlarınız varsa silinmiş olabilir.\
+"""
+note_irreversible = """\
+Paket yükseltmeleri geri alınamaz: bir güncellemeden kaynaklanan sorun \
+imajla birlikte bütün klonlara gider.\
+"""
+
+# ==========================================================================
+# Adım 2: Yerel hesaplar (m01_initial_passwords)
+# ==========================================================================
+
+[m01]
+title = "Kullanıcı parolaları"
+sidebar_title = "Yerel hesaplar"
+apply_hint = """\
+Parolalar SHA-512 hash olarak doğrudan /etc/shadow'a yazılır. Doldurduğunuz \
+alanlara göre ilgili hesapların parolaları ayarlanır; eski parolayla şifreli \
+kalan GNOME anahtarlıkları kenara alınır.\
+"""
+rationale = """\
+root, etapadmin veya ogretmen hesaplarından istediğinizin parolasını \
+belirleyin. Hangi alanları doldurursanız sadece o hesapların parolası \
+değişir; diğerlerine dokunulmaz.\n\
+\n\
+Parola değişen hesabın GNOME anahtarlığı eski parolayla şifreli kaldığı için \
+girişte 'Bilgisayara giriş yapmak için kullandığınız parola artık giriş \
+anahtarlığınızla uyuşmuyor' diyaloğu çıkar ve doğru parola bile kabul \
+edilmez (anahtarlık eski parolayı bekler). Bu adım bayatlayan anahtarlığı \
+kenara alır; ilk girişte yenisi yeni parolayla otomatik oluşturulur. Geri \
+alma dosyaları yerine koyar.\n\
+\n\
+Ortak hesap neden önemli? Öğretmenin tahtada kişisel hesabı ilk EBA QR \
+girişiyle oluşur; PIN kodu ve USB ile giriş ancak bundan sonra \
+kullanılabilir. Öğretmen kişisel hesabını henüz oluşturmamışsa ve EBA QR \
+çalışmıyorsa (internet yok, uygulama ya da altyapı sorunu) tahtaya yalnızca \
+ortak hesapla (ogretmen) girebilir. Tahtaların kullanım politikanıza göre ya \
+bu ortak hesabın parolasını öğretmenlerle paylaşmanız (sınıfta yazılırken \
+öğrenciler de görebilir) ya da 'Öğretmen PIN anahtarları' adımında ortak \
+hesap için PIN anahtarı tanımlamanız gerekir.\
+"""
+
+[m01.params.root_password]
+label = "Yeni root parolası (isteğe bağlı)"
+help = "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Boş bırakılabilir."
+
+[m01.params.admin_password]
+label = "Yeni etapadmin parolası (isteğe bağlı)"
+help = "Tahtada yerel yönetim işleri için kullanılacak parola. Boş bırakılabilir."
+
+[m01.params.teacher_password]
+label = "Öğretmen parolası (isteğe bağlı)"
+help = "Öğretmen hesabı varsa, bu hesap için parola belirleyebilirsiniz. Boş bırakılabilir."
+
+[m01.params.reserve_count]
+label = "Yedek hesap sayısı"
+help = """\
+Sonradan okula atanacak öğretmenler için ogretmen1, ogretmen2 … biçiminde \
+boş hesaplar hazırlar. Her yedek hesap için ev dizini açılır (useradd), \
+hesap EBA QR / eta-usb-login ile aynı standart cihaz gruplarına (ses, USB, \
+kamera, yazıcı vb.) eklenir ve parola kilitli tutulur. Eski kurulumlardan \
+kalma ogretmen01 / ogretmen.1 biçimindeki hesaplar da mevcut sayılır — \
+üzerine yazılmaz. İmaj alındığında bu hesaplar tüm klon tahtalara birlikte \
+gider. PIN anahtarları için \"Öğretmen PIN anahtarları\" adımı gerekir; o \
+adım bu hesapları da otomatik olarak PIN üretim listesine ekler.\
+"""
+
+[m01.params.remove_student]
+label = "Öğrenci Hesabını Sil"
+help = "Öğrenci hesabı güvenlik riski oluşturur. Bu buton ile güvenli şekilde silebilirsiniz."
+
+[m01.extra_links]
+users_admin = "Kullanıcılar ve Gruplar uygulamasını aç"
+
+[m01.preview]
+common_accounts = "Sistemdeki ortak hesaplar:"
+account_present = " mevcut"
+account_absent = "⨯ yok"
+account_line = "    - {user}: {status}"
+common_none = "    (ogrenci ve ogretmen zaten yok)"
+reserve_title = "Yedek hesaplar:"
+reserve_existing = "    - Sistemde ogretmen1 … ogretmen{count} hazır ({count} yedek hesap)."
+reserve_existing_hint = """\
+\u0020\u0020\u0020\u0020\u0020\u0020Kutuya daha büyük bir sayı yazarsanız \
+eksikler tamamlanır. Küçük yazarsanız fazla hesap SİLİNMEZ; silmek için \
+'Öğretmen PIN anahtarları' adımındaki 'Fazladan Hesapları Sil' düğmesi \
+kullanılır.\
+"""
+reserve_none = "    - Sistemde henüz yedek hesap yok."
+reserve_none_hint = """\
+\u0020\u0020\u0020\u0020\u0020\u0020Kutuya yazacağınız sayı kadar ogretmen1, \
+ogretmen2 … biçiminde hesap açılır; PIN anahtarları 'Öğretmen PIN \
+anahtarları' adımında üretilir.\
+"""
+keyrings_title = "Mevcut GNOME anahtarlıkları:"
+keyrings_note = """\
+\u0020\u0020\u0020\u0020Parola korumalı olanlar yeni parolayla açılamaz.\n\
+\u0020\u0020\u0020\u0020Parolası değişen hesapta bu adım onları kenara alır;\n\
+\u0020\u0020\u0020\u0020ilk girişte yenisi otomatik oluşur, geri alma\n\
+\u0020\u0020\u0020\u0020dosyaları yerine koyar. Parolasız anahtarlıklar\n\
+\u0020\u0020\u0020\u0020parola değişiminden etkilenmez, dokunulmaz.\
+"""
+
+[m01.apply]
+need_action = """\
+En az bir aksiyon gerekli: parola belirtin (root, etapadmin, ogretmen) veya \
+yedek hesap sayısını sıfırdan büyük yapın.\
+"""
+too_short = "{user} parolası en az 8 karakter olmalıdır."
+too_common = "{user} parolası en yaygın 10.000 parola arasında; farklı bir parola seçin."
+reserve_preparing = """\
+\n\
+{count} yedek hesap hazırlanıyor (useradd + EBA cihaz grupları + parola \
+kilitli)…\
+"""
+reserve_create_failed = "  ✗ {user} oluşturulamadı"
+removed_common = "Silinen ortak hesaplar: {users}"
+password_line = "{user} parolası: {state}"
+password_set = "atandı"
+password_not_set = "ATANAMADI"
+keyrings_moved_title = "Bayatlayan GNOME anahtarlıkları kenara alındı:"
+keyrings_moved_why = """\
+Kenara alınmasaydı ilgili kullanıcı girişte 'parola artık giriş \
+anahtarlığınızla uyuşmuyor' diyaloğuyla karşılaşır ve doğru parolayı yazsa \
+bile geçemezdi.\
+"""
+keyrings_moved_next = """\
+Yeni anahtarlık, kullanıcının ilk girişinde yeni parolayla otomatik \
+oluşturulur. Değişikliğin etkili olması için oturumu kapatıp açmak (ya da \
+tahtayı yeniden başlatmak) gerekir.\
+"""
+keyrings_backup = "Yedek: {path}"
+failure_info = """\
+== BAŞARISIZLIK BİLGİLERİ ==\n\
+Parola değişikliği doğrudan /etc/shadow dosyasına yapıldı.\n\
+Olası nedenler:\n\
+\u0020\u0020• Kullanıcı shadow dosyasında bulunamadı\n\
+\u0020\u0020• Shadow dosyası yazma izni problemi\n\
+\u0020\u0020• Bozuk shadow dosyası formatı\n\
+Detaylı hatalar /var/log/tiha/tiha-debug.log dosyasında.\
+"""
+reserve_title = "Yedek hesaplar:"
+reserve_created = "  Yeni açılan ({count}): {users}"
+reserve_skipped = "  Zaten var, dokunulmadı ({count}): {users}"
+reserve_pin_note = """\
+\u0020\u0020PIN anahtarları 'Öğretmen PIN anahtarları' adımında üretilir; o \
+adım bu hesapları da otomatik yakalar.\
+"""
+summary_removed = "{count} ortak hesap silindi"
+summary_passwords = "{users} parolaları atandı"
+summary_reserve = "{count} yedek hesap açıldı"
+summary_keyrings = "{count} bayat anahtarlık dosyası kenara alındı"
+partial_failure = "Bazı işlemler başarısız oldu, ayrıntılara bakın."
+
+[m01.undo]
+no_backup = "Yedek /etc/shadow bulunamadı; geri alınamıyor."
+restore_failed = "Geri yükleme başarısız: {error}"
+shadow_restored = "Önceki /etc/shadow durumu geri yüklendi"
+reserve_deleted = "{count} yedek hesap silindi: {users}"
+users_restored = "{count} kullanıcı geri yüklendi: {users}"
+keyrings_restored = "{count} anahtarlık dosyası yerine konuldu"
+
+[m01.action]
+no_system_users = "Silinecek sistem kullanıcısı bulunamadı."
+no_system_users_details = "ogrenci ve ogretmen kullanıcıları zaten yok."
+system_users_removed = "{count} sistem kullanıcısı silindi: {users}"
+backed_up_removed = """\
+Kullanıcılar güvenli şekilde yedeklendi ve kaldırıldı.\n\
+Geri alma işlevi ile geri yüklenebilir.\
+"""
+none_removed = "Hiçbir kullanıcı silinemedi."
+see_log = "Detaylar için /var/log/tiha/tiha.log dosyasına bakın."
+student_not_found = "Öğrenci kullanıcısı (ogrenci) bulunamadı."
+student_maybe_deleted = "Kullanıcı zaten silinmiş olabilir."
+student_removed = "Öğrenci kullanıcısı (ogrenci) başarıyla silindi."
+student_backed_up = """\
+Kullanıcı güvenli şekilde yedeklendi ve kaldırıldı.\n\
+Geri alma işlevi ile geri yüklenebilir.\
+"""
+student_remove_failed = "Öğrenci kullanıcısı silinemedi."
+users_admin_missing = "Kullanıcılar ve Gruplar uygulaması bulunamadı."
+users_admin_missing_details = "{binary} mevcut değil; cinnamon-control-center paketi kurulu mu?"
+users_admin_failed = "Kullanıcılar ve Gruplar başlatılamadı."
+users_admin_opened = "Kullanıcılar ve Gruplar '{user}' oturumunda açıldı."
+users_admin_opened_details = "Pencereyi kapattığınızda bu adımdaki hesap durumu önizlemesi yenilenir."
+
+[m01.report]
+admins_set_one = "{users} parolasını ayarladınız."
+admins_set_many = "{users} parolalarını ayarladınız."
+ogretmen_set = "Ortak öğretmen hesabının (ogretmen) parolasını ayarlayıp hesabın kilidini açtınız."
+failed_user = """\
+{user} parolasını ayarlamaya çalıştınız ama işlem başarısız oldu; bu hesabın \
+parolası değişmedi.\
+"""
+teacher_no_account = """\
+Öğretmen parolası girdiniz ama tahtada ortak ogretmen hesabı olmadığı için \
+parola hiçbir hesaba uygulanmadı.\
+"""
+keyrings_moved = """\
+{user} hesabının eski parolayla şifreli kalan anahtarlık dosyalarını kenara \
+aldınız; ilk girişte yeni parolayla yenisi oluşacak.\
+"""
+reserve_created = """\
+{count} yedek öğretmen hesabı oluşturdunuz ({span}). Hesaplar parolasız \
+(kilitli) açıldı; bu hesaplara PIN anahtarı adımında üretilen kodlarla \
+girilir.\
+"""
+reserve_kept = """\
+Yedek hesap sayısını {count} olarak bıraktınız; bu hesaplar zaten vardı, \
+yeni hesap açılmadı.\
+"""
+removed_one = "{users} ortak hesabını ev dizinleriyle birlikte sildiniz."
+removed_many = "{users} ortak hesaplarını ev dizinleriyle birlikte sildiniz."
+student_removed = "Öğrenci (ogrenci) hesabını ev diziniyle birlikte sildiniz."
+test_etapadmin = """\
+Klonu yeniden başlatıp giriş ekranında etapadmin ile yeni parolayla oturum \
+açın; \"giriş anahtarlığınızın parolası uyuşmuyor\" uyarısı çıkmamalı.\
+"""
+test_root = "Klonda bir terminalde `su -` ile yeni root parolasını deneyin."
+test_ogretmen = "Ortak öğretmen hesabına (ogretmen) yeni parolayla girin."
+test_reserve = """\
+Giriş ekranında yedek öğretmen hesaplarının göründüğünü doğrulayın. \
+Terminalde `id ogretmen1` çıktısında audio, video, plugdev gibi cihaz \
+gruplarının bulunduğunu kontrol edin.\
+"""
+test_student = "Giriş ekranında öğrenci hesabının artık görünmediğini doğrulayın."
+note_admins_one = """\
+{users} parolası bütün klonlarda aynı olacak ve geri okunamaz. Parolayı \
+güvenli bir yerde saklayın; unutulursa her tahtada ayrı ayrı erişim sorunu \
+yaşanır.\
+"""
+note_admins_many = """\
+{users} parolaları bütün klonlarda aynı olacak ve geri okunamaz. Parolayı \
+güvenli bir yerde saklayın; unutulursa her tahtada ayrı ayrı erişim sorunu \
+yaşanır.\
+"""
+
+# ==========================================================================
+# Adım 3: Otomatik parola temizliği (m02_boot_password_wipe)
+# ==========================================================================
+
+[m02]
+title = "Her açılışta parola temizliği"
+sidebar_title = "Otomatik parola temizliği"
+apply_hint = "Açılışta parola temizleme servisi kurulur ve etkinleştirilir."
+rationale = """\
+Tahta her yeniden başladığında etapadmin dışındaki hesapların (ortak \
+`ogretmen`, `ogrenci` ve kişisel öğretmen hesapları) parolasını otomatik \
+olarak rastgele bir değere çeviren sistem servisi kurar. Böylece tahtaya \
+dokunarak yazılan ve sızdırılan herhangi bir parola bir sonraki açılışta işe \
+yaramaz; tahta yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\
+\n\
+Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. Teknik bakım erişimi \
+(yerel yönetim, SSH) her zaman korunur.\
+"""
+
+[m02.preview]
+service_status = "Servis durumu : {status}"
+service_existing = "zaten kurulu, yeniden yazılacak"
+service_new = "kurulacak ve etkinleştirilecek"
+intro = """\
+Bu servis her açılışta, root ve etapadmin dışındaki hesapların parolasını \
+kriptografik olarak rastgele bir değere çevirir. Bu hesaplarda parola \
+YAZARAK giriş yapılamaz - yalnız EBA-QR, PIN veya USB bellek ile giriş \
+yapılabilir.\
+"""
+protected_header = "DOKUNULMAZ (bakım erişimi korunur):"
+shared_header = "Ortak hesaplar - parola yazarak giriş yapılamayacak:"
+personal_header = "Kişisel hesaplar - parola yazarak giriş yapılamayacak:"
+personal_with_pin = "  - {user}  (PIN anahtarı var - EBA-QR / PIN / USB ile girer)"
+personal_without_pin = "  - {user}  (PIN anahtarı yok - bu hesap parola yazarak giremez)"
+missing_warning = """\
+DİKKAT: {count} kişisel hesabın PIN anahtarı yok ({users}). Bu servis \
+etkinken bu hesaplara parola yazarak da PIN ile de giriş yapılamaz. Önce \
+\"Öğretmen PIN anahtarları\" adımına dönüp onlar için de PIN anahtarı \
+üretin.\
+"""
+
+[m02.apply]
+write_failed = "Dosya yazılamadı: {error}"
+enable_failed = "Servis etkinleştirilemedi."
+done = "Açılışta parola temizleme servisi kuruldu ve etkinleştirildi."
+done_details = """\
+Script: {script}\n\
+Servis: {service}\n\
+Servis bir sonraki açılıştan itibaren her boot'ta bir kez çalışır.\
+"""
+
+[m02.undo_prompt]
+title = "Ek kullanıcı hesapları da silinsin mi?"
+message = """\
+Sistemde etapadmin/ogretmen/ogrenci dışında şu kullanıcı hesapları var:\n\
+\n\
+{users}\n\
+\n\
+Açılış parola temizleme servisi kaldırılacak. Ek hesaplar sistemde kalırsa \
+yerel parolayla girilemediği için atıl kalır. Bu ek hesapları ev dizinleri \
+ve kayıtlarıyla birlikte tamamen silmemi ister misiniz?\n\
+\n\
+• EVET → hesaplar 'userdel -r' ile silinir (geri alınamaz).\n\
+• HAYIR → yalnızca açılış servisi kaldırılır, hesaplar kalır.\
+"""
+
+[m02.undo]
+done = "Açılış parola temizleme servisi kaldırıldı."
+removed_extras = " Ayrıca şu ek hesaplar ve ev dizinleri silindi: {users}."
+
+[m02.report]
+done = """\
+Her açılışta etapadmin dışındaki tüm yerel hesapların (ortak \
+öğretmen/öğrenci, yedek ve kişisel öğretmen hesapları) parolasını rastgele \
+bir değere çeviren açılış servisini kurdunuz. Bu hesaplara artık yalnız EBA \
+QR, PIN ya da USB bellek ile girilebilir.\
+"""
+test_etapadmin = """\
+Klonu yeniden başlatın; etapadmin ile parolayla girebildiğinizi doğrulayın \
+(bu hesaba dokunulmaz).\
+"""
+test_ogretmen = "Ortak öğretmen hesabına bilinen parolasıyla girmeyi deneyin; giriş reddedilmeli."
+test_pin = """\
+Bir öğretmen ve bir yedek hesaba PIN ile (ya da USB ile) girin; tahtayı \
+yeniden başlattıktan sonra da girilebildiğini doğrulayın.\
+"""
+test_journal = "Terminalde `journalctl -t tiha-boot-wipe -b` çıktısında HATA satırı olmadığını doğrulayın."
+note = """\
+Servis bütün klonlarda her açılışta çalışır. PIN ya da USB ile giriş kurulu \
+ve çalışır değilse öğretmenler hiçbir tahtaya giremez; yalnız etapadmin \
+kalır.\
+"""
+
+# ==========================================================================
+# Adım 4: Toplu pin anahtarı (m03_otp_secrets)
+# ==========================================================================
+
+[m03]
+title = "Öğretmen PIN anahtarları"
+sidebar_title = "Toplu pin anahtarı"
+apply_hint = """\
+Listedeki ve yedek hesaplar için PIN anahtarları üretilir. Anahtarı zaten \
+olan hesaplara dokunulmaz; yalnızca eksikler tamamlanır. Çıktı, sistemdeki \
+tüm anahtarları QR kodlarıyla birlikte içeren yazdırılabilir bir HTML \
+kâğıdıdır.\
+"""
+rationale = """\
+Her öğretmen için 6 haneli pin kodu üreten anahtarları toplu olarak üretir.\n\
+\n\
+Anahtar nedir, kod nedir?\n\
+\u0020\u0020• Anahtar: Telefona kurulan uygulamada (Google Authenticator \
+vb.) saklanan, uzun ve gizli bir tanıtıcıdır — bir tür dijital kimlik kartı. \
+Bir kez kurulur, sonra hep telefonda durur.\n\
+\u0020\u0020• Kod: Bu anahtar kullanılarak zamana bağlı olarak üretilen, 30 \
+saniyede bir değişen 6 haneli bir sayıdır. Tahtaya giriş yaparken bu sayıyı \
+yazarsınız. Geçici bir parola gibi düşünün — her seferinde tahtanın kabul \
+ettiği yeni bir kapı şifresi.\n\
+\n\
+Olağan kullanımda her öğretmen kendi anahtarını uygulamasından üretip her \
+tahtaya tek tek (dışa aktar / içe aktar) yüklemek zorundadır; onlarca \
+tahtada bu işlem pratik değil. Bu adım anahtarları imaj alınmadan ÖNCE her \
+öğretmen için merkezî olarak üretir ve imaja gömer. İmajdan dağıtılan tüm \
+tahtalarda anahtarlar hazır gelir; öğretmen yalnızca kendi anahtarını size \
+verdiğimiz biçimde (yazılı veya QR kodu olarak) uygulamasına bir kez ekler \
+ve sonra ister sınıf 1'deki tahta olsun ister sınıf 50'deki, hepsinde kendi \
+PIN kodunu görüp girerek oturum açabilir.\n\
+\n\
+Dikkat: Otomatik parola temizliği adımı uygulandıysa öğretmen tahtada kendi \
+PIN'ini üretemez (yerel parola bilinmediği için); bu durumda anahtarları \
+merkezî olarak üretmek mecburidir. Uygulanmadıysa da tek tek kurulumdan çok \
+daha hızlıdır.\n\
+\n\
+Önemli: Öğretmenin tahtada kişisel hesabı ilk EBA QR girişiyle oluşur; PIN \
+kodu ve USB ile giriş ancak bundan sonra kullanılabilir. Kişisel hesabı \
+henüz oluşmamış bir öğretmen, EBA QR çalışmadığında (internet yok, uygulama \
+ya da altyapı sorunu) tahtaya yalnızca ortak hesapla girebilir. Bu durum \
+için kullanım politikanıza göre ya ortak hesabın parolasını paylaşın \
+(sınıfta yazılırken öğrenciler de görebilir) ya da 'Ortak öğretmen hesabı \
+(ogretmen) için de PIN üret' seçeneğiyle ortak hesaba PIN anahtarı \
+tanımlayın. Not: ogretmenler grubu ortak PIN'i ortak ogretmen hesabında \
+geçmez; yalnız gruba üye kişisel ve yedek (ogretmen1, ogretmen2 …) \
+hesaplarda geçer.\n\
+\n\
+Geri alma ile varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) \
+dışındakiler silinir.\
+"""
+
+[m03.preview]
+tool_checking = "kontrol ediliyor"
+tool_cli = "enseitankado/eta-otp-cli (yalnız OTP anahtarları)"
+tool_internal = "TiHA dahili pyotp yolu (yalnız OTP anahtarları)"
+status_time = "Durum kontrolü       : {time}"
+tool = "Araç                 : {tool}"
+system_users = "Sistem kullanıcıları : {count} (UID >= 1000)"
+personal_count = "Kişisel hesaplar     : {count}"
+pin_accounts = "PIN anahtarlı hesap  : {done}/{total}"
+total_pins = "Toplam PIN kaydı     : {count}"
+qr = "QR kodları           : {state}"
+qr_embedded = "kâğıda gömülecek"
+qr_skipped = "ATLANACAK (python3-qrcode kurulu değil)"
+greeter = "Greeter cache        : {state}"
+greeter_installed = "kurulu"
+greeter_pending = "kurulacak"
+note_no_accounts = """\
+Not: Bu adım yalnız OTP anahtarları oluşturur; sistem kullanıcı hesaplarını \
+oluşturmaz. Yedek hesaplar (ogretmen1, ogretmen2 …) 'Kullanıcı parolaları' \
+adımında oluşturulur; bu adım sistemde bulduğu yedek hesapları otomatik \
+olarak PIN listesine ekler.\
+"""
+note_keep_existing = """\
+Not: Anahtarı zaten olan hesaplara dokunulmaz — yalnızca eksikler \
+tamamlanır. Öğretmenlerin telefonundaki anahtarlar geçerli kalır, adımı \
+güvenle yeniden uygulayabilirsiniz.\
+"""
+has_otp_header = "PIN anahtarı kurulu kişisel hesaplar:"
+missing_otp_header = "PIN anahtarı OLMAYAN kişisel hesaplar:"
+missing_otp_hint = """\
+\u0020\u0020\"Açılışta parola temizliği\" adımı etkinken bu hesaplar tahtaya \
+hiç giremez. Anahtar üretmek için aşağıdaki listeye adlarını yazın.\
+"""
+group_secrets = """\
+Grup PIN anahtarları (kullanıcı hesabı gerektirmez; gruba üye tüm hesaplarda \
+geçerli): {keys}\
+"""
+orphans = "Sistemde hesabı kalmayan PIN kayıtları ({count} adet — hesap silinmiş olabilir): {users}"
+orphans_hint = """\
+\u0020\u0020Bu kayıtlar kullanılamaz; imaja gitmemeleri için \"Fazladan \
+Hesapları Sil\" düğmesi onları da temizler.\
+"""
+user_mgmt_header = "Kullanıcı yönetimi"
+extra_count = "  Fazladan kullanıcı hesabı : {count} adet"
+extra_more = "    - ... ve {count} tane daha"
+extra_hint = """\
+\u0020\u0020\"Fazladan Hesapları Sil\" düğmesi ile bunları \
+kaldırabilirsiniz; sistemde yalnız etapadmin, ogrenci ve ogretmen kalır.\
+"""
+only_defaults = "  Sistemde yalnız varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)."
+
+[m03.apply]
+group_forced = """\
+Not: Grup PIN'i seçili — öğretmen hesaplarını '{group}' grubuna ekleme \
+otomatik etkinleştirildi (PAM grup PIN'ini yalnız gruba üye kullanıcıya \
+kabul ediyor).\
+"""
+empty_list = "Liste boş — öğretmen eklemediniz ve sistemde yedek hesap yok."
+empty_list_details = """\
+Lütfen en az bir isim girin ya da 'Kullanıcı parolaları' adımında 'Yedek \
+hesap sayısı' kutusuna sıfırdan büyük bir değer yazıp o adımı uygulayın.\
+"""
+keys_failed = "PIN anahtarları üretilemedi."
+keys_failed_details = "Ayrıntı için /var/log/tiha/tiha.log dosyasına bakın."
+group_create_failed_membership = "'{group}' grubu olusturulamadi; grup uyeligi atlandi."
+adding_to_group = "Ogretmen hesaplari '{group}' grubuna ekleniyor..."
+no_group_targets = "  (gruba eklenecek mevcut hesap yok)"
+removed_from_group = "  - {user} (ortak/yönetici hesap gruptan çıkarıldı)"
+auto_group_installed = """\
+Otomatik grup ekleme servisi kuruldu — EBA QR ile sonradan acilan ogretmen \
+hesaplari da gruba dahil edilecek.\
+"""
+group_create_failed_pin = "'{group}' grubu olusturulamadi; grup-PIN akisi iptal edildi."
+group_pin_kept = "Mevcut ortak grup-PIN korundu: {key} — telefonlardaki anahtar geçerli kalir."
+group_pin_created = "Ortak grup-PIN uretildi: {key}"
+changed_warning = "UYARI: {count} hesabin PIN anahtari DEGISTI."
+changed_hint = "Bu hesaplarin telefonundaki eski kayit artik calismaz; yeni kagidi teslim edin."
+none_generated = "Hiç PIN anahtarı üretilemedi."
+none_generated_details = "Mevcut kayıt sayısı: {count}"
+greeter_start = "{count} kullanıcı tespit edildi — greeter cache kurulumu başlatılıyor..."
+greeter_downloading = "Greeter cache script GitHub'dan indiriliyor..."
+greeter_downloaded = "✓ Greeter cache script indirildi"
+greeter_service_creating = "Otomatik greeter cache service oluşturuluyor..."
+greeter_service_created = "✓ Greeter cache service oluşturuldu"
+greeter_updating = "Greeter cache güncellemesi yapılıyor..."
+greeter_updated = "✓ Greeter cache güncellendi"
+greeter_not_needed = "{count} kullanıcı var — greeter cache gerekli değil (limit: {limit})"
+display_admin = "Sistem Yöneticisi (etapadmin)"
+display_group = "Ogretmenler grubu — ORTAK PIN"
+paper_written = "🖨️ Yazdırılabilir kâğıt ({count} anahtar): {path}"
+paper_header = "🖨️ Yazdırılabilir öğretmen kâğıdı — sistemdeki {count} anahtarın tamamı:"
+paper_print_hint = "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin."
+paper_autoopen = "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
+paper_save_hint = "  'Dosyaya kaydet…' bu kâğıdı HTML olarak kaydeder."
+summary_new = "{count} PIN anahtarı üretildi ve {path} dosyasına yazıldı."
+summary_none_new = "Yeni anahtar gerekmedi; listedeki hesapların anahtarı zaten vardı ve korundu."
+summary_preserved = "{count} hesabın mevcut anahtarına dokunulmadı."
+summary_greeter_ok = "Greeter cache güncellendi ve otomatik çalıştırma ayarlandı."
+summary_greeter_failed = "Greeter cache kurulumu tamamlanamadı."
+summary_grouped = "{count} hesap {group} grubuna eklendi."
+summary_auto_group = "Yeni öğretmen hesabı → ogretmenler grubu servis kuruldu."
+changed_dialog = """\
+Bu adımda {count} hesabın PIN anahtarı DEĞİŞTİ:\n\
+\n\
+{users}\n\
+\n\
+Bu hesapların telefonlarındaki eski kayıt artık çalışmaz. Yeni PIN kâğıdını \
+bu öğretmenlere mutlaka yeniden teslim edin.\
+"""
+tool_running = "enseitankado/eta-otp-cli aracı çalıştırılıyor (sadece OTP anahtarları)…"
+tool_kept = "  {idx}/{total}: {name} → {user} — mevcut anahtar korundu, dokunulmadı"
+tool_ok = "    ✓ OTP anahtarı oluşturuldu: {user}"
+tool_error = "    ✗ Hata: {user}"
+tool_done = "Tamamlandı: {ok}/{attempted} yeni OTP anahtarı üretildi, {kept} mevcut anahtar korundu"
+internal_start = "Dahili pyotp yolu kullanılıyor."
+internal_kept = "  • {user} ({name}): mevcut PIN anahtarı korundu"
+internal_created = "  • {user} ({name}): PIN anahtarı üretildi"
+gecos_updated = "  • {count} kullanıcının ad/soyad alanı güncellendi"
+
+[m03.pin_report]
+generated = "  {count} hesap için PIN anahtarı üretildi."
+preserved = "  {count} hesabın mevcut anahtarı korundu (yeniden üretilmedi)."
+changed = "  DİKKAT: {count} hesabın anahtarı DEĞİŞTİ — eski kayıtları çalışmaz."
+total = "  Toplam PIN kaydı: {count}"
+file = "  Dosya: {path}"
+issuer = "  Üretici: Issuer = \"{issuer}\", 6 hane, 30 sn periyot."
+tool = "  Araç:   enseitankado/eta-otp-cli  →  toplu-kullanici-olustur.py"
+reserve_display = "(yedek hesap)"
+username = "     Kullanıcı adı : {user}"
+secret = "     PIN anahtarı  : {secret}"
+preserved_header = "  Mevcut anahtarı korunan hesaplar (dokunulmadı — telefondaki anahtar geçerli):"
+usage = """\
+Kullanım: öğretmenler bu anahtarı Google Authenticator vb.\n\
+uygulamaya elle girebilir; daha kolayı, yazdırılabilir\n\
+kâğıttaki QR kodunu uygulamayla taratmaktır. Anahtarları\n\
+yalnızca özelden (şifreli mesaj, gizli dağıtım listesi)\n\
+teslim edin.\
+"""
+
+[m03.paper]
+html_lang = "tr"
+title = "Öğretmen PIN kâğıtları — {ts}"
+heading = "Öğretmen PIN Kâğıtları"
+meta = """\
+Oluşturulma: {created} ·\n\
+\u0020\u0020Toplam: {total} kâğıt ({new} tanesi bu turda üretildi,\n\
+\u0020\u0020{badge} etiketli) ·\n\
+\u0020\u0020TiHA tarafından üretildi · Issuer: <em>{issuer}</em>\
+"""
+badge_new = "YENİ"
+qr_label = "Uygulamayla taratın"
+secret_label = "PIN anahtarı (QR okunmazsa elle girin):"
+user_line = "Kullanıcı adı: <code>{user}</code>"
+group_line = """\
+Grup: <code>{group}</code> — bu PIN, gruba üye tüm öğretmen hesaplarına \
+giriş için geçerlidir.\
+"""
+group_display = "{group} grubu — ORTAK PIN"
+no_account = "{user} (sistemde hesap yok)"
+step_install = "Telefonunuza <strong>Google Authenticator</strong> veya benzeri bir uygulama kurun."
+step_type = "Tür: <em>Zaman tabanlı</em> (varsayılan)."
+group_step_scan = """\
+Uygulamada <em>\"+ Anahtar ekle\"</em> &gt; <em>\"QR kodu tara\"</em>'yı \
+seçip yandaki kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
+ile yukarıdaki anahtarı yazın.\
+"""
+group_step_label = "Hesap adı olarak <em>istediğiniz</em> bir etiket yazın (örn. <code>Sınıf-PIN</code>)."
+group_step_save = """\
+Kaydedin. Bu PIN, tahtada <strong>{group}</strong> grubuna üye herhangi bir \
+hesabın giriş ekranında kullanılabilir.\
+"""
+user_step_scan = """\
+Uygulamada <em>\"+ Anahtar ekle\"</em> &gt; <em>\"QR kodu tara\"</em>'yı \
+seçip yandaki kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
+ile yukarıdaki anahtarı ve hesap adı olarak <code>{user}</code> yazın.\
+"""
+user_step_save = """\
+Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir; tahta giriş \
+ekranında bu PIN'i girersiniz.\
+"""
+
+[m03.reset]
+killing = "→ {user}: prosesler sonlandırılıyor..."
+deleted = "  ✓ {user} silindi"
+failed = "  ✗ {user} silinemedi: {error}"
+exit_code = "deluser çıkış kodu {code}"
+
+[m03.undo]
+removed = "{count} kullanıcı silindi"
+restored = "önceki PIN anahtar dosyası geri yüklendi"
+greeter_removed = "greeter cache kurulumu kaldırıldı"
+
+[m03.buttons]
+purge_all = "Tüm PIN Anahtarlarını Sil ({count} anahtar)"
+remove_extra = "Fazladan Hesapları Sil ({accounts} hesap, {keys} anahtar)"
+
+[m03.purge]
+none = "Silinecek PIN anahtarı yok."
+none_details = "{path} boş ya da mevcut değil."
+deleting = "{count} PIN anahtari siliniyor..."
+deleted_list = "{count} anahtar silindi: {users}"
+file_empty = "{path} artık boş."
+papers_removed = "{count} yazdırılabilir kâğıt da silindi (silinen anahtarları içeriyordu)."
+backup = "Silme öncesi yedek: {path}"
+redistribute = """\
+Dağıtılmış anahtarlar artık geçersiz. Öğretmenlerin PIN ile giriş \
+yapabilmesi için adımı yeniden uygulayıp yeni kâğıtları teslim etmeniz \
+gerekir.\
+"""
+summary = "{count} PIN anahtarı silindi; dosya boşaltıldı."
+warning = """\
+{count} PIN anahtarı silindi. Bu anahtarların telefonlardaki kayıtları artık \
+çalışmaz. Öğretmenlerin PIN ile giriş yapabilmesi için adımı yeniden \
+uygulayıp yeni kâğıtları teslim etmelisiniz.\
+"""
+orphans_cleaning = "Karsiligi kalmayan {count} PIN kaydi temizleniyor..."
+
+[m03.remove_extra]
+nothing = "Silinecek fazladan kullanıcı ya da yetim PIN kaydı bulunamadı."
+nothing_details = """\
+Sistemde sadece varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) \
+mevcut ve tüm PIN kayıtlarının karşılığı var.\
+"""
+only_orphans = "Fazladan hesap yoktu; karşılığı kalmayan {count} PIN kaydı temizlendi."
+only_orphans_details = "Silinen kayıtlar (imaja ölü sır gitmesin):"
+will_delete = "{count} fazladan hesap silinecek: {users}"
+removed_header = "Silinen hesaplar:"
+failed_header = "Silinemeyen hesaplar:"
+empty_output = "(boş çıktı)"
+orphans_removed = "Karşılığı kalmayan {count} PIN kaydı da silindi (imaja ölü sır gitmesin):"
+defaults_only = "Sistem artık sadece varsayılan hesapları içeriyor:"
+default_admin = "  • etapadmin (yönetici)"
+default_student = "  • ogrenci (ortak hesap)"
+default_teacher = "  • ogretmen (ortak hesap)"
+summary = "{count} fazladan kullanıcı silindi, sistem varsayılan durumuna getirildi."
+summary_orphans = " {count} yetim PIN kaydı temizlendi."
+summary_partial = "{removed} kullanıcı silindi, {failed} kullanıcı silinemedi."
+
+[m03.params.teacher_names]
+label = "Öğretmen ad soyad listesi (her satıra bir kişi)"
+help = """\
+İsimleri BÜYÜK HARFLERLE girin, her satıra bir kişi. Ad ve soyadların \
+öğretmenin MEBBIS'te kayıtlı olduğu biçimle birebir aynı yazılması \
+önemlidir; harf atlanması veya küçük bir yazım farkı sonrasında öğretmenin \
+PIN koduyla oturum açamamasına neden olur. Alan boş bırakılabilir; yalnızca \
+yedek hesap üretmek de mümkündür. Örnek satırlar tıklayıp yazmaya \
+başladığınızda silinir.\
+"""
+placeholder = """\
+AYŞE YILMAZ\n\
+MEHMET DEMİR\n\
+FATMA ÖZTÜRK\n\
+AHMET KARA\
+"""
+
+[m03.params.include_etapadmin]
+label = "Sistem yöneticisi (etapadmin) için de PIN üret"
+help = """\
+İşaretlenirse etapadmin için de bir OTP anahtarı üretilir. Yönetici \
+parolasını paylaşmak yerine birine sadece o anlık 6 haneli PIN'i vererek \
+geçici yetki devredilebilir; parola güvende kalır. etapadmin hesabı yine her \
+giriş yolu (parola, USB, QR, PIN) için kullanılabilir.\
+"""
+
+[m03.params.include_ogretmen]
+label = "Ortak öğretmen hesabı (ogretmen) için de PIN üret"
+help = """\
+İşaretlenirse ortak ogretmen hesabı için de bir OTP anahtarı üretilir. \
+Sınıfta parola paylaşmadan geçici giriş için kullanışlıdır; hesabın kendi \
+parolası varsa onunla giriş yine mümkündür.\
+"""
+
+[m03.params.add_teachers_to_group]
+label = "Öğretmen hesaplarını ogretmenler grubuna ekle"
+help = """\
+Bu adımın yönettiği öğretmen hesaplarını (listedekiler ve yedek hesaplar) \
+'ogretmenler' grubuna üye yapar. Ayrıca imaja /etc/passwd'i izleyen küçük \
+bir sistem servisi gömülür: EBA QR ile bir öğretmen tahtaya ilk kez oturum \
+açtığında oluşan yeni yerel hesap da otomatik olarak gruba dahil edilir. \
+Grup üyeliği, aşağıdaki '@ogretmenler' ortak PIN'inin çalışması için ön \
+koşuldur.\
+"""
+
+[m03.params.make_group_pin]
+label = "Ogretmenler grubu için ortak PIN oluştur"
+help = """\
+İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' PIN anahtarı \
+üretilir (eta-otp-lock @grup mekanizması). Bu ortak PIN, gruba üye tüm \
+hesaplara giriş için kullanılabilir; PIN kâğıdında ayrı bir 'ORTAK PIN' \
+kartı olarak çıkar. Zaten bir ortak PIN varsa korunur, yenilenmez. Tek tek \
+öğretmen PIN'lerinden daha zayıf bir izdir (herkes aynı kodu kullanır), bu \
+yüzden varsayılan olarak kapalıdır.\n\
+\n\
+ÖN KOŞUL: PAM grup PIN'ini yalnız 'ogretmenler' grubunun ÜYESİ olan \
+hesaplara kabul eder. Bu kutu işaretlenince 'Öğretmen hesaplarını \
+ogretmenler grubuna ekle' kutusu da otomatik olarak işaretlenir — aksi halde \
+üretilen ortak PIN hiçbir hesapta çalışmayacağı için. Manuel olarak geri \
+kaldırmayın; iki bayrak birlikte çalışır.\
+"""
+
+[m03.params.purge_all_secrets]
+label = "Tüm PIN Anahtarlarını Sil"
+help = """\
+Kaynak imajı temiz bir sayfadan hazırlamak için (ör. test amaçlı üretilmiş \
+anahtarları imaja taşımamak) tüm PIN anahtarlarını siler. Onay ister; silme \
+öncesi dosyanın yedeği modülün durum dizinine alınır.\
+"""
+confirm_title = "Tüm PIN anahtarları silinsin mi?"
+confirm_message = """\
+/etc/otp-secrets.json içindeki BÜTÜN PIN anahtarları silinecek ve bu \
+anahtarları taşıyan yazdırılabilir kâğıtlar da kaldırılacak.\n\
+\n\
+Dağıtılmış anahtarlar geçersiz olur: telefonlardaki kayıtlarla artık tahtaya \
+giriş yapılamaz.\n\
+\n\
+Silme öncesi bir yedek alınır. Devam edilsin mi?\
+"""
+
+[m03.params.remove_extra_users]
+label = "Fazladan Hesapları Sil"
+help = """\
+Etap Pardus'daki varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) \
+dışındaki tüm fazladan kullanıcıları siler ve karşılığı kalmayan PIN \
+kayıtlarını temizler. Fazladan hesap olmasa bile, geride kalmış yetim PIN \
+kayıtları varsa bu düğme onları temizlemek için görünür. Bu işlem onay \
+gerektirir.\
+"""
+confirm_title = "Fazladan hesaplar silinsin mi?"
+confirm_message = """\
+Varsayılan hesaplar (etapadmin, ogrenci, ogretmen) dışındaki tüm \
+kullanıcılar, ev dizinleriyle birlikte silinecek.\n\
+\n\
+Ayrıca karşılığı kalmayan PIN kayıtları /etc/otp-secrets.json'dan \
+temizlenecek — hesabı olmayan bir anahtar kullanılamaz ama imaja okunabilir \
+bir sır olarak giderdi. Grup anahtarları (@...) ve varsayılan hesapların \
+kayıtları korunur.\n\
+\n\
+Silme öncesi PIN dosyasının yedeği alınır. Devam edilsin mi?\
+"""
+
+[m03.report]
+teachers_tool = """\
+Listeye girdiğiniz {count} öğretmen için PIN anahtarı hazırladınız. Bu \
+öğretmenlerin tahtadaki kişisel hesabı ilk EBA QR girişlerinde oluşacak; PIN \
+ile giriş ancak bundan sonra çalışır.\
+"""
+teachers_internal = """\
+Listeye girdiğiniz {count} öğretmen için hem yerel hesap açtınız hem PIN \
+anahtarı ürettiniz (TiHA'nın dahili yolu; kullanıcı adları 'ad.soyad' \
+biçiminde).\
+"""
+note_internal = """\
+PIN aracı (eta-otp-cli) kullanılamadı, dahili yol devreye girdi. Bu yolun \
+açtığı kullanıcı adları EBA QR'ın açacağı adlardan farklı olabilir; klonda \
+mutlaka deneyin.\
+"""
+reserves = "Tahtadaki {count} yedek öğretmen hesabını ({span}) PIN listesine eklediniz."
+label_etapadmin = "Sistem yöneticisi (etapadmin)"
+label_ogretmen = "Ortak öğretmen hesabı (ogretmen)"
+key_created = "{label} için de PIN anahtarı ürettiniz."
+key_preserved = "{label} için mevcut PIN anahtarını korudunuz."
+new_keys = "Toplam {count} yeni PIN anahtarı üretildi ve imaja girecek."
+preserved = """\
+{count} hesabın mevcut PIN anahtarına dokunulmadı; öğretmenlerin \
+telefonlarındaki kayıtlar geçerli kalıyor.\
+"""
+group_new = """\
+ogretmenler grubu için ortak PIN anahtarı oluşturdunuz; bu kod gruba üye \
+kişisel ve yedek öğretmen hesaplarında geçerli.\
+"""
+group_kept = "ogretmenler grubu için ortak PIN'in açık kalmasını seçtiniz; mevcut ortak anahtar korundu."
+grouped = "{count} hesabı ogretmenler grubuna eklediniz."
+ungrouped = """\
+Ortak öğretmen hesabını ogretmenler grubundan çıkardınız; grup PIN'i artık \
+ortak hesapta geçmiyor.\
+"""
+auto_group = """\
+EBA QR ile sonradan açılacak öğretmen hesaplarını ogretmenler grubuna \
+kendiliğinden ekleyen servisi etkinleştirdiniz.\
+"""
+greeter_applied = "Tahtada {total} kullanıcı olduğu için giriş ekranı önbelleği servisini kurdunuz."
+note_greeter_missing = """\
+Kullanıcı sayısı {total} ama giriş ekranı önbelleği kurulamadı; bazı \
+hesaplar giriş ekranında görünmeyebilir.\
+"""
+note_changed = """\
+{count} hesabın PIN anahtarı DEĞİŞTİ ({users}). Bu öğretmenlerin \
+telefonundaki eski kayıt artık çalışmaz; yeni PIN kâğıdını onlara yeniden \
+teslim edin.\
+"""
+paper = """\
+Tüm anahtarları QR kodlarıyla içeren yazdırılabilir PIN kâğıdı üretildi; \
+öğretmenlere yalnızca özelden teslim edin.\
+"""
+purged = "Tüm PIN anahtarlarını sildiniz."
+purged_count = "Tüm PIN anahtarlarını sildiniz ({count} anahtar)."
+note_purged_after = """\
+PIN anahtarlarını, anahtar üretiminden SONRA sildiniz. Yukarıda üretildiği \
+yazan anahtarlar artık tahtada yok; imajı almadan önce PIN adımını yeniden \
+uygulayın.\
+"""
+extra_removed = """\
+Fazladan hesapları (yedek ve kişisel öğretmen hesapları) ev dizinleriyle \
+birlikte sildiniz.\
+"""
+test_time = """\
+Klonun tarih, saat ve saat diliminin doğru olduğunu doğrulayın. PIN kodları \
+saate bağlıdır; saat birkaç dakika bile kaymışsa bütün PIN girişleri \
+reddedilir.\
+"""
+test_qr = """\
+PIN kâğıdındaki bir QR kodu telefondaki doğrulayıcı uygulamaya okutun; klonu \
+yeniden başlatıp o hesaba telefonun gösterdiği 6 haneli kodla girin.\
+"""
+test_teacher = """\
+Listedeki bir öğretmenle klonda önce EBA QR ile giriş yapın, sonra oturumu \
+kapatıp aynı hesaba PIN ile girin. Ad soyad MEBBİS'teki yazımdan farklı \
+girildiyse o öğretmenin PIN'i hiçbir tahtada çalışmaz.\
+"""
+test_reserve = "Bir yedek hesaba (ör. {user}) PIN ile girin."
+test_etapadmin = "etapadmin'e hem PIN ile hem de parolayla girilebildiğini doğrulayın."
+test_ogretmen = "Ortak öğretmen hesabına (ogretmen) PIN ile girin."
+test_group = """\
+Kâğıttaki ORTAK PIN kartını okutup bir yedek ya da kişisel öğretmen hesabına \
+ortak kodla girin.\
+"""
+test_auto_group = """\
+Klonda EBA QR ile yeni bir öğretmen girişi yaptıktan sonra bu hesabın \
+ogretmenler grubuna eklendiğini doğrulayın (terminalde `id <kullanıcı>`).\
+"""
+test_greeter = """\
+Yeniden başlatmadan sonra giriş ekranında bütün hesapların (yedekler dahil) \
+listelendiğini doğrulayın.\
+"""
+note_copied = """\
+PIN anahtarları imajla birlikte bütün klonlara aynen kopyalanır; bu bilinçli \
+bir tasarım. Tek bir tahtadan ya da kâğıttan sızan anahtar bütün tahtaları \
+etkiler.\
+"""
+note_group_weak = "Ortak PIN, kişisel PIN'lerden daha zayıf bir önlemdir: gruptaki herkes aynı kodu kullanır."
+
+# ==========================================================================
+# Adım 5: QR Parola Diyaloğu (m13_password_dialog)
+# ==========================================================================
+
+[m13]
+title = "EBA QR parola diyalogu"
+sidebar_title = "QR Parola Diyaloğu"
+apply_hint = "EBA QR ile ilk girişte otomatik açılan parola tanımlama diyalogu devre dışı bırakılır."
+rationale = """\
+Bir kullanıcı tahtaya EBA QR kodu ile ilk kez giriş yaptığında, sistem \
+otomatik olarak parola tanımlama penceresini açar. Sınıf ortamında öğretmen, \
+parolasını öğrencilerin önünde klavyeden yazmak durumunda kalabilir ve bu \
+da parolanın istemeden ifşa olmasına yol açabilir.\n\
+\n\
+Bu adım, ilk girişte otomatik açılan diyalogu kapatır. Kullanıcının parolası \
+olmamış olur; tahtaya yine yalnızca EBA QR ile giriş yapılır. Bir öğretmen \
+kendi parolasını koymak isterse her zaman Sistem Ayarları > Kullanıcı \
+Hesapları üzerinden uygun bir ortamda (örneğin teneffüste, sınıf boşken) \
+tanımlayabilir.\
+"""
+
+[m13.preview]
+target_missing = """\
+\u0020Hedef bulunamadı: {path}\n\
+\n\
+eta-password-changer paketi kurulu değil görünüyor. Bu adım uygulanamaz.\
+"""
+read_error = " Autostart dosyası okunamadı: {error}"
+target = "Hedef     : {path}"
+status = "Durum     : {status}"
+status_disabled = " devre dışı (Hidden=true)"
+status_enabled = " etkin - diyalog açılıyor"
+backup = "Yedek     : {backup}"
+backup_present = "var ({path})"
+backup_absent = "yok"
+body = """\
+Bu adım uygulandığında:\n\
+\u0020\u0020- Orijinal autostart dosyası modül dizinine yedeklenir (yoksa)\n\
+\u0020\u0020- Dosyaya 'Hidden=true' eklenerek otomatik tetikleme kapatılır\n\
+\u0020\u0020- eta-password-changer / eta-qr-login paketleri kaldırılmaz\n\
+\u0020\u0020- Kullanıcı dilerse parolasını Sistem Ayarları'ndan\n\
+\u0020\u0020\u0020\u0020(veya doğrudan 'eta-password-changer' ile) \
+tanımlayabilir\n\
+\n\
+Geri al: yedek dosya orijinal yerine yazılır.\
+"""
+
+[m13.apply]
+not_found = "{path} bulunamadı; eta-password-changer paketi yüklü değil."
+read_error = "Autostart dosyası okunamadı: {error}"
+already_hidden = "Diyalog zaten devre dışıydı; değişiklik yapılmadı."
+backing_up = "Orijinal yedekleniyor → {path}"
+backup_failed = "Yedek alınamadı: {error}"
+write_failed = "Autostart dosyası yazılamadı: {error}"
+hidden_added = "✓ Hidden=true eklendi — otomatik diyalog devre dışı."
+done = "EBA QR ilk-giriş parola diyalogu devre dışı bırakıldı."
+done_details = """\
+Yedek: {backup}\n\
+Hedef: {target} (Hidden=true)\n\
+Kullanıcı parolasını Sistem Ayarları → Kullanıcı Hesapları üzerinden \
+istediği zaman tanımlayabilir.\
+"""
+
+[m13.undo]
+nothing = "Apply zamanı diyalog zaten devre dışıydı; geri alacak değişiklik yok."
+backup_missing = "Yedek dosya bulunamadı: {path}"
+restore_failed = "Geri yükleme başarısız: {error}"
+done = "Orijinal autostart geri yüklendi; otomatik diyalog yeniden aktif."
+
+[m13.report]
+already_hidden = "EBA QR ilk giriş parola penceresi zaten kapalıydı; bu adımda değişiklik yapılmadı."
+hidden = """\
+EBA QR ile ilk girişte açılan parola tanımlama penceresini kapattınız; \
+öğretmenler sınıfta öğrencilerin önünde parola yazmak zorunda kalmayacak.\
+"""
+test_first_login = """\
+Klonda o tahtaya daha önce hiç girmemiş bir öğretmenle EBA QR ile ilk girişi \
+yapın; masaüstü açıldığında parola tanımlama penceresi çıkmamalı.\
+"""
+test_second_login = """\
+Aynı öğretmenin oturumu kapatıp ikinci kez QR ile (PIN anahtarı varsa PIN \
+ile de) girebildiğini doğrulayın.\
+"""
+note = "Bu hesaplarda parola olmayacak; QR çalışmadığında giriş için PIN ya da USB bellek gerekir."
+
+# ==========================================================================
+# Adım 6: SSH Sunucusu (m04_ssh_server)
+# ==========================================================================
+
+[m04]
+title = "SSH sunucusu (root girişi)"
+sidebar_title = "SSH Sunucusu"
+apply_hint = "openssh-server kurulur, uzak root girişi açılır."
+rationale = """\
+Tahtaları sınıflara dağıttıktan sonra uzaktan bakım yapabilmek için SSH \
+sunucusunu kurar ve root kullanıcısının uzak oturum açmasına izin verir; \
+sorun giderme, ayar değişikliği ve günlük inceleme için kullanılır.\n\
+\n\
+Uzaktan bağlanmak için tahtayla aynı ağda olmalısınız. Okulda tahtalar ve \
+kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır — bu \
+ağdaki bir bilgisayardan `ssh root@<tahta-ip>` komutunu kullanırsınız. \
+Farklı bir ağdan (örn. öğrenci/misafir ağları) ulaşılamaz; bu bilinçli bir \
+güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile erişimi yalnızca \
+yönetim istasyonlarıyla sınırlamanız tavsiye edilir.\
+"""
+
+[m04.preview]
+checking = "openssh-server kurulum durumu kontrol ediliyor..."
+installed = "openssh-server zaten kurulu - yalnızca yapılandırma eklenecek."
+not_installed = "openssh-server kurulacak ve yapılandırma ek bir yapılandırma dosyası yazılacak."
+
+[m04.apply]
+start_pkg = "Başlangıç: openssh-server {state}"
+start_conf = "Başlangıç: ek yapılandırma dosyası {state}"
+state_installed = "kurulu"
+state_not_installed = "kurulu değil"
+state_exists = "var"
+state_missing = "yok"
+apt_update_failed = "apt-get update başarısız."
+install_failed = "openssh-server kurulamadı."
+conf_write_failed = "SSH ek yapılandırma dosyası yazılamadı: {error}"
+conf_written = "Ek yapılandırma dosyası yazıldı: {path}"
+service_status = "ssh enable/reload: {enable} / {reload}"
+ok_word = "tamam"
+err_word = "hata"
+summary = "SSH sunucusu kuruldu, root girişine izin verildi."
+details = """\
+Yapılandırma: {path}\n\
+Servis: ssh (etkin)\
+"""
+
+[m04.undo]
+purge_failed = "openssh-server kaldırılamadı."
+removed = "SSH yapılandırması ve openssh-server paketi kaldırıldı."
+kept_pkg = "SSH root izni kaldırıldı (paket zaten başlangıçta kuruluydu, korundu)."
+
+[m04.report]
+done_installed = """\
+Tahtaya SSH sunucusunu kurdunuz ve root kullanıcısının ağ üzerinden \
+parolayla oturum açmasına izin verdiniz.\
+"""
+done_existing = """\
+Tahtada zaten kurulu olan SSH sunucusunda root kullanıcısının ağ üzerinden \
+parolayla oturum açmasına izin verdiniz.\
+"""
+done_generic = "SSH sunucusunu etkinleştirip root girişine izin verdiniz."
+test_ssh = """\
+Yönetim bilgisayarınızdan `ssh root@<klon-ip>` ile klona bağlanın; \
+beklediğiniz root parolasının geçtiğini doğrulayın.\
+"""
+test_active = """\
+Klonda `systemctl is-active ssh` çıktısının active olduğunu ve `sudo sshd -T \
+| grep -Ei 'permitrootlogin|passwordauthentication'` çıktısında ikisinin de \
+yes olduğunu doğrulayın (adım, servisin gerçekten ayağa kalktığını \
+denetlemiyor).\
+"""
+test_fingerprint = """\
+İki farklı klonda `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` parmak \
+izlerinin FARKLI olduğunu doğrulayın.\
+"""
+test_network = "Öğrenci ya da misafir ağından klonun SSH portuna erişilemediğini doğrulayın."
+note = """\
+Root parolası ve parolayla SSH girişi bütün klonlarda aynı olacak; parola \
+sızarsa bütün tahtalar uzaktan yönetici erişimine açılır. Erişimi güvenlik \
+duvarı ya da VLAN ile yönetim bilgisayarlarına sınırlayın.\
+"""
+
+# ==========================================================================
+# Adım 7: Dosya sunucusu (m05_samba_share)
+# ==========================================================================
+
+[m05]
+title = "Dosya sunucusu"
+sidebar_title = "Dosya sunucusu"
+apply_hint = "Samba kurulur, kök '/' paylaşımı açılır."
+rationale = """\
+Bu adım, tahtanın tüm diskine ağ üzerinden dosya gezgininden ulaşmanızı \
+sağlar. Windows bilgisayarda \"Bilgisayarım\" penceresinin adres çubuğuna \
+yazmanız yeterlidir — sürükle-bırak ile dosya taşırsınız.\n\
+\n\
+Kısacası: bu tahtaya, başına gitmeden ya da USB belleğe dosya yüklemek \
+zorunda kalmadan; uzaktaki bilgisayarınızdan erişirsiniz. Güncelleme dosyası \
+bırakmak, öğrenci çalışmalarını almak, hata günlüklerini kopyalamak için \
+kullanışlıdır.\n\
+\n\
+Tahtayla aynı ağda olmanız gerekir. Okulda tahtalar ve kablosuz erişim \
+noktaları (AP) genellikle `10.x.x.x` aralığındadır; bu ağdaki bir \
+bilgisayardan paylaşıma ulaşabilirsiniz. Farklı bir ağdan (örn. \
+öğrenci/misafir ağları) ulaşılamaz; bu bilinçli bir güvenlik kısıtıdır.\n\
+\n\
+Nasıl ulaşılır?\n\
+\u0020\u0020• Windows Dosya Gezgini adres çubuğuna:  `\\\\<tahta-ip>\\root`\n\
+\u0020\u0020• Linux Dosya Gezgini adres çubuğuna:  \
+`smb://<tahta-ip>/{share}`\n\
+\u0020\u0020• Ardından belirlediğiniz kullanıcı adı ve parolayı girin.\
+"""
+
+[m05.params.samba_user]
+label = "Samba kullanıcı adı"
+
+[m05.params.samba_password]
+label = "Samba parolası"
+
+[m05.preview]
+checking = "samba kurulum durumu kontrol ediliyor..."
+update = "samba kurulu ve paylaşım tanımı mevcut - yapılandırma güncellenecek."
+partial = "samba kurulu, kısmi yapılandırma mevcut - tamamlanacak."
+add_share = "samba zaten kurulu - paylaşım tanımı eklenecek."
+install_keep_share = "samba kurulacak - mevcut paylaşım tanımı korunacak."
+install_add_share = "samba kurulacak ve paylaşım tanımı eklenecek."
+
+[m05.apply]
+password_required = "Samba parolası verilmeli."
+start_pkg = "Başlangıç: samba {state}"
+state_installed = "kurulu"
+state_not_installed = "kurulu değil"
+apt_update_failed = "apt-get update başarısız."
+install_failed = "samba kurulamadı."
+conf_write_failed = "Samba ek yapılandırma dosyası yazılamadı: {error}"
+smbconf_failed = "smb.conf güncellenemedi: {error}"
+smbpasswd_failed = "smbpasswd başarısız."
+share_active = "Paylaşım aktif: //<tahta-ip>/{share} (kullanıcı: {user})"
+summary = "Samba paylaşımı '//<tahta-ip>/{share}' olarak hazır ({user} kullanıcısıyla)."
+details = """\
+Ek yapılandırma dosyası: {path}\n\
+Kullanıcı: {user}\n\
+İstemciden örnek: smbclient //<tahta-ip>/{share} -U {user}\
+"""
+
+[m05.undo]
+purge_failed = "Samba paketleri kaldırılamadı."
+removed = "Samba paylaşımı ve paketleri tamamen kaldırıldı."
+kept_pkg = "[{share}] paylaşımı kaldırıldı (Samba paketleri başlangıçta kuruluydu, korundu)."
+
+[m05.report]
+who_user = "'{user}' kullanıcısı"
+who_generic = "belirlediğiniz kullanıcı"
+lead_installed = "Tahtaya Samba'yı kurdunuz ve"
+lead_existing = "Samba ile"
+done = """\
+{lead} tahtanın tüm diskini (kök '/') ağda \\\\<tahta-ip>\\root adıyla, \
+{who} ve parolasıyla tam yazma yetkisiyle paylaştınız.\
+"""
+user_note = "Paylaşıma '{user}' ile bağlanılsa da dosyalar root yetkisiyle yazılır."
+user_part = "'{user}' "
+test_windows = """\
+Bir Windows bilgisayarda Dosya Gezgini'ne \\\\<klon-ip>\\root yazıp \
+{user_part}kullanıcı adı ve parolayla bağlanın; bir dosya oluşturup silerek \
+yazma yetkisini doğrulayın.\
+"""
+test_active = """\
+Klonda `systemctl is-active smbd` çıktısının active olduğunu doğrulayın \
+(adım servisin ayağa kalktığını denetlemiyor).\
+"""
+test_names = """\
+Birkaç klon aynı anda ağdayken Windows'un Ağ görünümünde her tahtanın kendi \
+adıyla göründüğünü, ad çakışması olmadığını doğrulayın.\
+"""
+note = """\
+Samba parolası bütün klonlarda aynı ve paylaşım diskin tamamına root \
+yetkisiyle yazabiliyor; parola sızarsa bütün tahtalar etkilenir. Paylaşıma \
+erişimi yönetim ağıyla sınırlayın.\
+"""
+
+# ==========================================================================
+# Adım 8: Merkezi log sunucusu (m06_remote_syslog)
+# ==========================================================================
+
+[m06]
+title = "Dayanıklı merkezi log iletimi"
+sidebar_title = "Merkezi log sunucusu"
+apply_hint = "Hiç log kaybı olmayan dayanıklı merkezi log iletimi kurulur."
+rationale = """\
+Tahtanın tüm sistem günlüklerini (oturum açma denemeleri, servis hataları, \
+cron, ağ olayları) ağdaki merkezi bir rsyslog sunucusuna DAYANIKLI BİÇİMDE \
+gönderir. 50 tahtalı bir okulun loglarını tek bir arayüzden izleyebilir, \
+olay/arıza taramasını saniyeler içinde yapabilirsiniz.\n\
+\n\
+Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka uygulayın. \
+Aksi hâlde imajdan klonlanan tüm tahtalar aynı hostname ile log gönderir; \
+merkezi sunucudaki kayıtları tahta tahta ayırt edemezsiniz. Hostname adımı \
+her klona kendi MAC adresinden türeyen benzersiz bir ad verir.\n\
+\n\
+KRİTİK AVANTAJ: Bu modül HİÇ LOG KAYBI OLMAYAN gelişmiş yapılandırma \
+kullanır. Uzak log sunucusu haftalarca hatta aylarca erişilemez durumda olsa \
+bile (elektrik kesintisi, ağ bakımı, sunucu arızası), tahta loglarını yerel \
+diskte biriktirir — yerel tavan 2 GB olduğundan en kötü profilde bile 3 \
+aydan uzun yerel kayıt tutulur. Sunucu geri geldiğinde birikmiş tüm loglar \
+otomatik olarak gönderilir.\n\
+\n\
+Bunun için /etc/rsyslog.d/ altına disk-assisted queue (disk destekli kuyruk) \
+kullanan gelişmiş bir yapılandırma dosyası yazılır. Paket güncellemesi \
+gelirse yapılandırmanız korunur, geri almak da o tek dosyayı silmek kadar \
+kolaydır.\n\
+\n\
+Log sunucusu tahtalarla aynı ağda olmalı. Okulda tahtalar ve kablosuz erişim \
+noktaları (AP) genellikle `10.x.x.x` aralığındadır; log sunucusunu bu ağa \
+konumlandırmalısınız. İdari ağdan log sunucusuna erişim olmaz — bu bilinçli \
+bir güvenlik kısıtıdır.\
+"""
+
+[m06.params.log_profile]
+opt_bakim = "Bakım (önerilen)"
+opt_kapsamli = "Kapsamlı"
+opt_guvenlik = "Yalnız güvenlik"
+label = "Log profili"
+help = """\
+Merkezi sunucuya iletilecek olayların kapsamını seçin. Bakım: donanım \
+uyarıları (kern.warning), servis hataları/notice (daemon.notice), kimlik \
+doğrulama (auth/authpriv), TiHA + Ahenk servisleri (local0-7). Öğretmen \
+davranışı ve tarayıcı içeriği iletilmez. Kapsamlı: her mesaj gönderilir; \
+ayıklama için, kalıcı olarak açık tutmayın. Yalnız güvenlik: minimum trafik, \
+sadece kimlik ve kritik hatalar.\
+"""
+
+[m06.params.syslog_host]
+label = "Merkezi log sunucusu (IP veya isim)"
+
+[m06.params.syslog_port]
+label = "Port"
+
+[m06.params.syslog_proto]
+label = "Protokol"
+
+[m06.params.install_smart_monitoring]
+label = "Disk sağlığı + sıcaklık izleme paketlerini kur"
+help = """\
+İşaretlenirse smartmontools (SMART disk izleme) ve lm-sensors (sıcaklık \
+okuma) paketleri kurulur; smartd servisi etkinleştirilir ve sensors-detect \
+otomatik çalıştırılır. Bu araçlar 'daemon' facility'sine log yazar; Bakım \
+veya Kapsamlı profil seçilmişse otomatik olarak merkezi sunucuya iletilir. \
+Böylece disk arızası ve aşırı ısınma erkenden görünür.\
+"""
+
+[m06.params.install_node_exporter]
+label = "Metrik izleme"
+help = """\
+İşaretlenirse prometheus-node-exporter paketi kurulup 9100 numaralı porta \
+bağlanır. Merkezi Prometheus sunucusu buradan CPU, RAM, disk, sıcaklık, ağ \
+ve boot metriklerini toplar; Grafana panosunda onlarca tahtanın sağlığı tek \
+ekrandan izlenir.\
+"""
+
+[m06.params.node_exporter_listen]
+label = "Metrik dinleme adresi"
+help = """\
+Varsayılan ':9100' — tüm ağ arayüzlerinde dinler; Prometheus scrape'i yapar. \
+Güvenlik sıkı istenirse '127.0.0.1:9100' yazın (sadece localhost dinler; \
+Prometheus ile arada SSH tünel gerekir).\
+"""
+
+[m06.params.test_log_server]
+label = "Log Sunucusunu Test Et"
+help = """\
+Yukarıda yazılan host/port/protokole erişilebilir mi diye kontrol eder; TCP \
+ise gerçek bağlantı kurar, UDP ise örnek bir RFC3164 mesajı gönderir.\
+"""
+
+[m06.preview]
+config_present = "Yapılandırma dosyası : var ({path})"
+config_missing = "Yapılandırma dosyası : yok"
+server = "Log sunucusu         : {host}:{port} ({proto})"
+profile = "Log profili          : {profile}"
+queue_dir = "Kuyruk dizini        : {path}"
+queue_pending = "Bekleyen log kuyruğu : {count} dosya, {size:,} bayt"
+queue_pending_hint = "                       (uzak sunucu erişilemez durumda olabilir)"
+queue_none = "Bekleyen log kuyruğu : yok (log iletimi doğrudan çalışıyor)"
+hostname_reminder = """\
+Hatırlatma: \"Benzersiz hostname\" adımı henüz uygulanmamış. Bu adımı \
+uygulayacaksanız mutlaka onu da uygulayın; aksi hâlde merkezi sunucudaki \
+loglarda tahtalar aynı isimle görünür ve birbirinden ayırt edilemez.\
+"""
+will_do = """\
+Bu adım uygulandığında:\n\
+\u0020\u0020- {path} yazılır (disk destekli kuyruk yapılandırması)\n\
+\u0020\u0020- Uzak sunucu erişilemezse loglar yerel diskte biriktirilir\n\
+\u0020\u0020- Sunucu geri geldiğinde birikmiş loglar otomatik gönderilir\n\
+\u0020\u0020- rsyslog servisi yeniden başlatılır\
+"""
+
+[m06.apply]
+no_host = "Merkezi log sunucusu adresi (IP/isim) boş."
+state_skipped = "atlandı"
+smart_installing = "Disk sağlığı ve sıcaklık izleme paketleri kuruluyor (smartmontools, lm-sensors)..."
+smart_installed_state = "kuruldu (smartd çalışıyor; sensors-detect otomatik modülleri yükledi)"
+smart_installed = "smartd etkinleştirildi, sıcaklık modülleri yüklendi."
+smart_failed_state = "kurulum başarısız (paket yöneticisi hatası)"
+smart_failed = "smartmontools/lm-sensors kurulamadı — adım devam ediyor."
+node_downloading = "Metrik izleme paketi (prometheus-node-exporter) indiriliyor..."
+node_installed_writing = "Paket kuruldu; dinleme adresi yazılıyor..."
+node_listen_set = "Dinleme adresi ayarlandı: {listen}"
+node_listen_write_failed = "Uyarı: dinleme adresi dosyası yazılamadı; servis varsayılan port ile açılacak."
+node_starting = "Servis etkinleştiriliyor ve başlatılıyor..."
+node_installed_state = "kuruldu (dinleme adresi {listen}; Prometheus sunucusu buradan scrape yapabilir)"
+node_active = "Metrik izleme aktif — {listen} adresinde dinliyor."
+node_failed_state = "kurulum başarısız (prometheus-node-exporter paketi yüklenemedi)"
+node_failed = "Metrik izleme kurulumu başarısız (paket yöneticisi hatası); log iletim akışı devam ediyor."
+write_failed = "rsyslog ek yapılandırma dosyası yazılamadı: {error}"
+restart_failed = "rsyslog yeniden başlatılamadı."
+not_running = "rsyslog servisi çalıştırılamadı."
+not_running_details = "systemctl status rsyslog komutuyla kontrol edin."
+done = "Dayanıklı log iletimi {host}:{port}/{proto} için kuruldu ({profile})."
+done_details = """\
+Yapılandırma dosyası : {conf}\n\
+Kuyruk dizini        : {queue_dir}\n\
+Hedef                : {host}:{port} ({proto})\n\
+Log profili          : {profile}\n\
+Disk/sıcaklık izleme : {smart}\n\
+Metrik izleme (node) : {node}\n\
+\n\
+Kuyruk özellikleri:\n\
+\u0020\u0020- Uzak sunucu offline: loglar yerel diskte birikir\n\
+\u0020\u0020- Sunucu geri gelince: birikmiş loglar otomatik gönderilir\n\
+\u0020\u0020- Yerel disk tavanı: {disk_max} (en kötü profilde bile 3+ ay \
+yerel kayıt)\n\
+\u0020\u0020- Yeniden deneme aralığı: 30-600 saniye\n\
+\n\
+Test: sunucu tarafında 'tcpdump -n -i any port {port}' ile gelen kayıtları \
+görebilirsiniz.\
+"""
+
+[m06.test]
+reading = "Mevcut rsyslog yapılandırması okunuyor..."
+no_config = """\
+Yapılandırma dosyası yok ya da geçersiz: {path}.\n\
+Önce bu adımı bir kez uygulayın (Uygula düğmesi).\
+"""
+target = "Hedef: {host}:{port} ({proto})"
+resolving = "DNS çözülmesi deneniyor: {host}…"
+dns_failed = "DNS çözümleme başarısız ({host}): {error}"
+resolved = "   → çözümlendi: {address}"
+tcp_trying = "TCP el sıkışması deneniyor: {address}:{port}…"
+tcp_failed = """\
+TCP bağlantısı kurulamadı ({host}:{port}): {error}. Sunucu kapalı veya ağ \
+engelliyor olabilir.\
+"""
+tcp_ok = "✓ TCP bağlantı kuruldu ({host}:{port})."
+tcp_ok_hint = "Sunucu bu portu dinliyor; rsyslog logları kayıpsız iletebilecek durumda."
+udp_sending = "UDP örnek mesaj gönderiliyor: {address}:{port}…"
+udp_sample = "tiha-test: TiHA log sunucusu erişim testi"
+udp_failed = "UDP mesajı gönderilemedi ({host}:{port}): {error}"
+udp_ok = "✓ UDP mesajı gönderildi ({host}:{port})."
+udp_ok_hint = """\
+UDP'de ack yoktur — sunucu tarafında `journalctl -u rsyslog` veya `tcpdump \
+-n -i any port {port}` ile gerçekten alındığını teyit edin.\
+"""
+
+[m06.undo]
+part_config_removed = "Yapılandırma dosyası kaldırıldı"
+part_queue_cleaned = "bekleyen log kuyruğu temizlendi"
+part_restarted = "rsyslog yeniden başlatıldı"
+summary = "Dayanıklı log iletimi kaldırıldı: {parts}."
+removed_count = "Kaldırılan dosya sayısı: {count}"
+restart_error = """\
+\n\
+⚠ rsyslog yeniden başlatma hatası: {error}\
+"""
+
+[m06.report]
+profile_bakim = "kimlik doğrulama, donanım uyarıları, servis bildirimleri ve TiHA/Ahenk kayıtları iletilir"
+profile_kapsamli = "bütün kayıtlar iletilir"
+profile_guvenlik = "kimlik doğrulama ve kritik hatalar iletilir"
+proto_fallback = "ağ"
+profile_fallback = "Bakım"
+done = """\
+Tahtanın sistem günlüklerini {host}:{port} adresindeki merkezi log \
+sunucusuna {proto} ile iletecek şekilde ayarladınız (profil: {profile}; \
+{profile_text}).\
+"""
+done_generic = "Tahtanın sistem günlüklerini merkezi log sunucusuna yönlendirdiniz."
+tcp_buffer = """\
+Sunucuya ulaşılamazsa kayıtlar tahtada en fazla 2 GB'a kadar biriktirilip \
+bağlantı gelince gönderilecek.\
+"""
+note_udp = """\
+UDP seçtiniz: teslim onayı olmadığı için sunucu kapalıyken gönderilen \
+kayıtlar kaybolabilir. Kayıpsız iletim için TCP önerilir.\
+"""
+smart = "Disk sağlığı (SMART) ve sıcaklık izleme paketlerinin kurulmasını istediniz."
+exporter = "Metrik izleme ajanının (node_exporter) dinlemesini istediniz."
+exporter_listen = "Metrik izleme ajanının (node_exporter) {listen} adresinde dinlemesini istediniz."
+note_exporter = "node_exporter metrikleri kimlik doğrulamasız sunar; erişimi yönetim ağıyla sınırlayın."
+note_kapsamli = """\
+Kapsamlı profil bütün kayıtları gönderir; ayıklama içindir. Bütün klonlarda \
+kalıcı açık kalırsa ağ ve disk yükü oluşturur.\
+"""
+test_logger = """\
+Klonda `logger -p auth.notice \"tiha-klon-test\"` çalıştırın; kaydın log \
+sunucusuna ulaştığını ve orada klonun KENDİ bilgisayar adıyla (kaynak \
+tahtanın ya da ortak imaj adının değil) göründüğünü doğrulayın.\
+"""
+test_two_clones = """\
+İki klonu aynı anda açıp log sunucusunda iki ayrı bilgisayar adı ve IP \
+gördüğünüzü doğrulayın; bunu ilk açılışta ve bir yeniden başlatmadan sonra \
+ayrı ayrı yapın.\
+"""
+test_queue = """\
+Klonun ilk açılışında `sudo ls -la /var/lib/rsyslog/` ile bekleyen bir \
+kuyruk dosyası olmadığını doğrulayın; varsa kaynak tahtanın eski kayıtları \
+her klondan yeniden gönderiliyor demektir.\
+"""
+test_tcp = """\
+Log sunucusunu ya da ağı kısa süre kesin; bağlantı gelince aradaki \
+kayıtların sunucuya ulaştığını doğrulayın.\
+"""
+test_smart = """\
+Klonda `systemctl is-active smartd` ve `sensors` çalıştırın; farklı tahta \
+modellerinde sıcaklığın okunabildiğini doğrulayın.\
+"""
+test_exporter = """\
+İzleme sunucusundan klonun metrik adresine (ör. \
+http://<klon-ip>:9100/metrics) erişebildiğinizi doğrulayın.\
+"""
+
+# ==========================================================================
+# Adım 9: Zaman senkronizasyonu (NTP) (m07_time_sync)
+# ==========================================================================
+
+[m07]
+title = "Zaman senkronizasyonu (NTP)"
+sidebar_title = "Zaman senkronizasyonu (NTP)"
+apply_hint = "NTP sunucuları ve saat dilimi ayarlanır."
+rationale = """\
+Tahtanın saatini doğru tutmak için birincil ve yedek zaman (NTP) \
+sunucularını tanımlar. Bu adım atlanırsa sahada tahtaların saati kayabilir.\n\
+\n\
+Neden bu kadar kritik? PIN kodları **zaman tabanlıdır** — her 30 saniyede \
+bir değişir. Tahtanın saati, PIN doğrulayan sunucudan 30 saniyeden fazla \
+saparsa üretilen HER PIN kodu geçersiz sayılır ve öğretmen tahtaya giremez. \
+Bu yüzden NTP'yi bilinen bir sunucuya sabitliyoruz; dış NTP'ye (udp/123) \
+kapalı bir okul ağı varsa MEB iç NTP sunucusu kullanılır.\
+"""
+
+[m07.preview]
+current = """\
+Mevcut TiHA NTP ayarı ({path}):\n\
+\n\
+{content}\
+"""
+none = """\
+TiHA özel NTP yapılandırması henüz yok. Bu adım şunları yapar:\n\
+\u0020\u0020- {path} içerisine NTP=... ve FallbackNTP=... yazar\n\
+\u0020\u0020- saat dilimini Europe/Istanbul (varsayılan) olarak ayarlar\n\
+\u0020\u0020- timedatectl set-ntp true + systemd-timesyncd restart\
+"""
+
+[m07.apply]
+no_server = "En az bir NTP sunucusu girmelisiniz."
+write_failed = "Ek yapılandırma dosyası yazılamadı: {error}"
+restart_failed = "systemd-timesyncd yeniden başlatılamadı."
+done = "Zaman senkronu ayarlandı (saat dilimi: {tz})."
+done_details = """\
+Dosya: {path}\n\
+\n\
+{status}\
+"""
+
+[m07.test]
+start = "NTP sunucu testi başlatılıyor..."
+reading = "Mevcut yapılandırma dosyası okunuyor..."
+no_server_progress = "❌ Yapılandırmada NTP sunucusu bulunamadı."
+no_server = "Mevcut yapılandırmada NTP sunucusu bulunamadı."
+found = "📋 {count} NTP sunucusu bulundu: {servers}"
+read_failed_progress = "❌ Yapılandırma dosyası okunamadı: {error}"
+read_failed = "Yapılandırma dosyası okunamadı: {error}"
+no_config = "Mevcut yapılandırma yok, varsayılan sunucular test ediliyor..."
+default_list = "📋 Test edilecek sunucular: {servers}"
+testing_count = """\
+\n\
+🔍 {count} sunucu test ediliyor...\
+"""
+testing_server = "[{index}/{total}] {server} test ediliyor..."
+connecting = "  → UDP 123 portuna bağlanıyor..."
+sent = "  → NTP paketi gönderildi, yanıt bekleniyor..."
+ok_result = "✓ {server} — Erişilebilir ve yanıt veriyor"
+ok_progress = "  ✅ Başarılı! NTP yanıtı alındı ({size} byte)"
+bad_format_result = "⚠ {server} — Yanıt aldı ama NTP formatı doğru değil"
+bad_format_progress = "  ⚠️ Yanıt alındı ama NTP formatı hatalı"
+timeout_result = "✗ {server} — Zaman aşımı (5 saniye)"
+timeout_progress = "  ❌ Zaman aşımı! 5 saniye içinde yanıt alınamadı"
+dns_result = "✗ {server} — DNS çözümlenemedi"
+dns_progress = "  ❌ DNS hatası! Sunucu adı çözümlenemedi"
+error_result = "✗ {server} — Bağlantı hatası: {error}"
+error_progress = "  ❌ Bağlantı hatası: {error}"
+finished = "🏁 Test tamamlandı!"
+result_line = "📊 Sonuç: {ok}/{total} sunucu başarılı"
+summary = "{ok}/{total} NTP sunucusu başarılı"
+none_reached = "Hiçbir NTP sunucusuna ulaşılamadı!"
+partial = "Kısmi başarı: {summary}"
+partial_details = """\
+\n\
+\n\
+⚠ {count} sunucu erişilemez durumda.\
+"""
+all_ok = "Mükemmel: {summary}"
+all_ok_details = """\
+\n\
+\n\
+✓ Tüm NTP sunucuları çalışıyor.\
+"""
+
+[m07.undo]
+done = "TiHA özel NTP yapılandırması kaldırıldı."
+
+[m07.params.ntp_servers]
+label = "NTP sunucuları (boşlukla ayırın)"
+help = """\
+MEB iç NTP adresini biliyorsanız buraya yazın (ör. time.meb.gov.tr veya okul \
+sunucu IP'si). Varsayılan: Türkiye NTP havuzu.\
+"""
+
+[m07.params.test_ntp_servers]
+label = "NTP Sunucularını Test Et"
+help = "Yukarıda yazılan NTP sunucularının çevrimiçi ve işlevsel olup olmadığını kontrol eder."
+
+[m07.params.ntp_fallback]
+label = "Yedek NTP sunucuları"
+
+[m07.params.timezone]
+label = "Saat dilimi"
+
+[m07.report]
+tz_part = " Saat dilimi: {tz}."
+ntp_both = """\
+Tahtanın saatini {ntp} NTP sunucularıyla eşitleyecek şekilde ayarladınız; \
+bunlara ulaşılamazsa {fallback} kullanılacak.{tz_part}\
+"""
+ntp_only = """\
+Tahtanın saatini {ntp} NTP sunucularıyla eşitleyecek şekilde ayarladınız; \
+yedek sunucu tanımlamadınız.{tz_part}\
+"""
+fallback_only = """\
+Birincil NTP sunucusu tanımlamadınız; tahta saatini yalnız yedek sunucularla \
+({fallback}) eşitleyecek.{tz_part}\
+"""
+enabled = "Zaman eşitlemesini (NTP) etkinleştirdiniz."
+enabled_tz = "Zaman eşitlemesini (NTP) etkinleştirdiniz ve saat dilimini {tz} olarak ayarladınız."
+note_pool = """\
+İnternet NTP havuzunu kullandınız; okul ağı UDP 123 çıkışını engelliyorsa \
+saat eşitlenmez. MEB iç NTP adresini biliyorsanız onu tercih edin.\
+"""
+tz_check = " ve \"Time zone: {tz}\""
+test_timedatectl = """\
+Klonu kurulacağı OKUL AĞINDA açıp `timedatectl` çalıştırın; \"System clock \
+synchronized: yes\"{tz_check} görülmeli. Hazırlık ağıyla okul ağı farklı \
+olabilir.\
+"""
+test_off_hours = """\
+Tahtayı birkaç saat kapalı tutup açın; saatin açılıştan kısa süre sonra \
+doğru değere geldiğini doğrulayın.\
+"""
+note_tz = """\
+Geçersiz bir saat dilimi sessizce yok sayılır; yukarıdaki testte saat \
+dilimini mutlaka kontrol edin.\
+"""
+
+# ==========================================================================
+# Adım 10: Dinamik hostname (m08_hostname)
+# ==========================================================================
+
+[m08]
+title = "Dinamik hostname stratejisi"
+sidebar_title = "Dinamik hostname"
+apply_hint = "İmaj hostname'i uygulanır; her açılışta dinamik hostname servisi kurulur."
+rationale = """\
+Aynı imajdan çoğaltılan onlarca tahta ağa bağlandığında, ağı yöneten kişinin \
+karşısına hepsi aynı isimle çıkar. Bu durumda hangi tahtanın sınıfta \
+hangisi olduğu ayırt edilemez; uzaktan bir tahtaya bağlanmak ya da bir \
+sorunu izlemek istendiğinde yanlış cihaza ulaşma riski doğar, merkezi loglar \
+birbirine karışır.\n\
+\n\
+Bu adım her tahtanın ağda kendine özgü, sabit bir isimle görünmesini sağlar \
+(örneğin 'etap-ab12cd' gibi). Böylece ağı yöneten kişi sınıftaki her tahtayı \
+listede tekil olarak görür, doğru cihaza erişebilir ve sorunu olanı kesin \
+biçimde tespit edebilir.\n\
+\n\
+İmaj alınırken tahtaya geçici, ortak bir isim verilir; her tahta ilk \
+açıldığında ise kendi donanımına özgü kalıcı ismine otomatik olarak geçer — \
+sahada elle isim atamaya gerek kalmaz.\
+"""
+
+[m08.preview]
+service_installed = "kurulu"
+service_missing = "yok"
+status_active = "aktif"
+status_inactive = "devre dışı"
+body = """\
+Mevcut hostname          : {current}\n\
+Dinamik hostname servisi : {service}\n\
+Servis durumu            : {status}\n\
+\n\
+Bu adım uygulandığında:\n\
+\u0020\u00201) Hostname 'etap-image' (ya da sizin girdiğiniz şablon) olur.\n\
+\u0020\u00202) /etc/hosts içindeki 127.0.1.1 satırı yeni isme eşitlenir.\n\
+\u0020\u00203) tiha-hostname.service kurulur ve etkinleştirilir.\n\
+\n\
+Her açılışta tahta:\n\
+\u0020\u0020- MAC adresini okur (kablolu NIC'ten)\n\
+\u0020\u0020- 'etap-XXXXXX' hostname'i üretir (MAC'in son 6 hanesi)\n\
+\u0020\u0020- hostname ve /etc/hosts güncellenir\n\
+\u0020\u0020- Zaten doğruysa değişiklik yapmaz\n\
+\n\
+Avantajlar:\n\
+\u0020\u0020- Ağ kartı değişse bile hostname dinamik güncellenir\n\
+\u0020\u0020- Her açılışta MAC'e göre benzersizlik garantilenir\n\
+\u0020\u0020- Hostname çakışması riski minimize edilir\
+"""
+
+[m08.apply]
+hostname_failed = "hostnamectl set-hostname başarısız."
+hosts_failed = "/etc/hosts güncellenemedi: {error}"
+enable_failed = "First-boot servisi etkinleştirilemedi."
+done = "Hostname '{template}' olarak ayarlandı; her açılışta '{prefix}-XXXXXX' olacak."
+done_details = """\
+/etc/hosts içindeki 127.0.1.1 satırı güncellendi.\n\
+Script: {script}\n\
+Servis: {service}\n\
+Her açılışta MAC adresinden dinamik hostname üretilecek.\
+"""
+
+[m08.undo]
+done_restored = """\
+Dinamik hostname servisi kaldırıldı, hostname '{previous}' olarak geri \
+alındı ve /etc/hosts yedekten yüklendi.\
+"""
+done_no_previous = "Dinamik hostname servisi kaldırıldı (önceki hostname kaydı bulunamadı)."
+
+[m08.params.template]
+label = "İmaj şablon hostname"
+help = "İmaj alınırken tahta bu isimle kalır; klon ilk açılışta kendi ismini üretir."
+
+[m08.params.prefix]
+label = "Yeni hostname öneki"
+help = "Klonda hostname şu biçimde olur: <önek>-<MAC'in son 6 hanesi>"
+
+[m08.report]
+done_template = """\
+İmaj için tahtanın bilgisayar adını geçici olarak '{template}' yaptınız. \
+İmajdan çıkan her tahta açılışta kablolu ağ kartının MAC adresinden kendi \
+adını üretecek: '{prefix}-XXXXXX' (XXXXXX = MAC'in son 6 hanesi).\
+"""
+done_generic = """\
+Her tahtanın açılışta MAC adresinden kendine özgü bir bilgisayar adı \
+üretmesini sağlayan servisi kurdunuz.\
+"""
+prev = "Tahtanın önceki adı '{name}' idi."
+shown_prefix = "'{prefix}-'"
+shown_generic = "önekle"
+test_hostnamectl = """\
+Klonu açıp `hostnamectl` çalıştırın: ad {shown} ile başlamalı ve son 6 \
+hanesi kablolu ağ kartının MAC adresinin (`ip link`) son 6 hanesi olmalı. Ad \
+hâlâ imaj adındaysa servis çalışmamıştır.\
+"""
+test_reboot = """\
+Klonu ikinci kez yeniden başlatın; adın DEĞİŞMEDİĞİNİ doğrulayın. Her \
+açılışta değişiyorsa tahtada kablolu kart bulunamamıştır.\
+"""
+test_sudo = """\
+`time sudo true` komutunun anında döndüğünü doğrulayın (10 saniye sürüyorsa \
+/etc/hosts güncellenmemiştir).\
+"""
+test_session = """\
+Klonun ilk açılışında oturum açıp birkaç uygulama başlatın; ad oturum \
+açıldıktan sonra değişirse yeni pencereler açılamayabilir.\
+"""
+test_two = """\
+İki klonun farklı ad aldığını ve bu adın DHCP/DNS'te, Lider'de ve \
+(kuruluysa) log sunucusunda göründüğünü doğrulayın.\
+"""
+note_prefix = """\
+Önek '{prefix}' önerilen biçimde değil (küçük harf, rakam ve '-', en fazla 8 \
+karakter). Uzun önekler Windows ağ adında (15 karakter sınırı) kırpılır ve \
+tahtalar aynı adla görünebilir.\
+"""
+
+# ==========================================================================
+# Adım 11: Otomatik kapanma (m11_power_management)
+# ==========================================================================
+
+[m11]
+title = "Otomatik kapanma"
+sidebar_title = "Otomatik kapanma"
+apply_hint = "ETA-Shutdown tabanlı otomatik kapanma sistemi kurulur."
+rationale = """\
+Tahtanın unutulması durumunda otomatik kapatma sistemi kurar. Belirlenen \
+saatte veya tahta boşta kaldığında otomatik olarak kapatma işlemi yapılır. \
+Her iki modda da bir uyarı diyalogu gösterilir (süresi form kutusundan \
+ayarlanır, varsayılan 2 dakika) ve kapatma 10 dakika ertelenebilir. Hali \
+hazırda oturum açmış bir kullanıcı yoksa uyarı giriş ekranında gösterilir.\
+"""
+link_eta_shutdown = "ETA Zamanlı Kapatma'yı aç"
+
+[m11.countdown]
+default_mode = "Otomatik kapatma"
+window_title = "Otomatik Kapatma Uyarısı"
+headline = "Tahta kapatılacak"
+postpone = "10 dakika ertele"
+shutdown_now = "Şimdi kapat"
+reason_idle = "Boşta kalma süresi aşıldı ({minutes} dakika)."
+reason_fixed = "Sabit saat kapatma ({time})."
+
+[m11.fmt]
+unreadable = "okunamadı"
+off = "kapalı"
+minutes = "{minutes} dk"
+minutes_seconds = "{minutes} dk {seconds} sn"
+seconds = "{seconds} sn"
+
+[m11.power]
+x11_saver = "X11 ekran koruyucu (Screen Saver)"
+x11_dpms = "X11 DPMS (Standby / Suspend / Off)"
+dpms_disabled = "  [DPMS kapalı]"
+display_sleep = "{desktop}: ekran karartma (AC / batarya)"
+inactive_sleep = "{desktop}: askıya alma (AC / batarya)"
+logind_idle = "logind: boşta iken eylem"
+logind_lid = "logind: kapak kapatma"
+logind_power_key = "logind: güç tuşu"
+source_label = "Kaynak"
+unavailable = "Aktif grafik oturum yok ve logind bilgisi alınamadı — güç ayarları okunamıyor."
+
+[m11.preview]
+power_header = "Şu anki güç ayarları (bilgi amaçlı, TiHA dışı):"
+status_unconfigured = "Durum                : yapılandırılmamış (kontrol {time})"
+unconfigured_plan = """\
+Bu adım uygulandığında:\n\
+\u0020\u0020- eta-shutdown yapılandırma dosyası oluşturulur\n\
+\u0020\u0020- Sabit saat ve idle tabanlı kapatma modları sunulur\n\
+\u0020\u0020- Kapanmadan 2 dakika önce uyarı penceresi gösterilir\n\
+\u0020\u0020- 10 dakikalık erteleme seçeneği eklenir\n\
+\u0020\u0020- eta-shutdown.service etkinleştirilir\
+"""
+config_error = """\
+Durum                : yapılandırma okunamadı ({error})\n\
+Sayfa yeniden yüklendiğinde tekrar denenecek.\
+"""
+status = "Durum                : {state} (kontrol {time})"
+state_enhanced = "TiHA gelişmiş sürüm aktif"
+state_original = "orijinal eta-shutdown kullanımda"
+service = "Servis               : {state}"
+service_running = "çalışıyor"
+service_stopped = "durdurulmuş"
+time_left = " ({hours}s {minutes}dk kaldı)"
+fixed_on = "Sabit saat kapatma   : aktif, {time}{countdown}"
+fixed_off = "Sabit saat kapatma   : kapalı"
+idle_on = "Idle tabanlı kapatma : aktif, {minutes} dakika"
+idle_off = "Idle tabanlı kapatma : kapalı"
+config_updated = "Config güncelleme    : {time}"
+duration_minutes = "{minutes} dakika"
+duration_seconds = "{seconds} saniye"
+countdown = "Geri sayım süresi    : {duration}"
+before_shutdown = """\
+Kapanmadan önce:\n\
+\u0020\u0020- {duration} uyarı penceresi gösterilir (form kutusundan \
+değiştirilebilir)\n\
+\u0020\u0020- Kullanıcı 10 dakika erteleyebilir\n\
+\u0020\u0020- Pencerenin sağ üst X'ine basılırsa idle sayacı sıfırlanır ve \
+pencere kapanır\
+"""
+
+[m11.apply]
+blank_warning = """\
+⚠️ UYARI: Sistemde ekran enerjisi yaklaşık {blank_minutes} dk idle sonra \
+kesiliyor; seçtiğiniz idle kapatma süresi ({idle_minutes} dk) bundan uzun \
+olduğu için 2 dk'lık geri sayım/erteleme diyalogu kararmış ekranda \
+görünmeyebilir. Önerilen üst sınır: {max_idle_minutes} dk. Daha uzun bir \
+süre istiyorsanız ekran-blank süresini Sistem Ayarları → Güç'ten yükseltin.\
+"""
+progress_backup = "Mevcut eta-shutdown konfigürasyonu yedekleniyor..."
+progress_service = "Geliştirilmiş eta-shutdown service yazılıyor..."
+progress_countdown = "Geri sayım penceresi (GUI) kuruluyor..."
+progress_config = "Otomatik kapanma konfigürasyonu yazılıyor..."
+progress_restart = "eta-shutdown servisi yeniden başlatılıyor..."
+progress_done = "✅ Otomatik kapanma sistemi kuruldu!"
+error_backup = "Service yedekleme başarısız: {error}"
+error_service = "Service dosyası yazılamadı: {error}"
+error_countdown = "Geri sayım scripti yazılamadı: {error}"
+error_config = "Konfigürasyon dosyası yazılamadı: {error}"
+error_restart = "eta-shutdown servisi başlatılamadı"
+details_installed = """\
+✓ TiHA geliştirilmiş eta-shutdown sistemi kuruldu\n\
+✓ Orijinal service yedeklendi: {backup}\n\
+✓ Konfigürasyon: {config}\n\
+✓ eta-shutdown.service aktif\
+"""
+details_fixed = "🕐 Sabit saat kapatma: {hour:02d}:{minute:02d}"
+details_idle = "💤 Idle tabanlı kapatma: {minutes} dakika boşta kalınca"
+details_countdown_bullets = """\
+\u0020\u0020\u0020- 2 dakika önceden uyarı diyalogu\n\
+\u0020\u0020\u0020- 10 dakika erteleme seçeneği\
+"""
+details_both_off = "ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu"
+details_management = """\
+📋 Test ve yönetim:\n\
+• Durum kontrolü: systemctl status eta-shutdown\n\
+• Log takibi: journalctl -f -u eta-shutdown\n\
+• Manuel yapılandırma: /usr/bin/eta-shutdown --menu\
+"""
+summary_installed = "Otomatik kapanma sistemi kuruldu"
+summary_active = "Otomatik kapanma sistemi kuruldu ve aktifleştirildi"
+
+[m11.undo]
+service_restored = "Orijinal eta-shutdown service geri yüklendi"
+countdown_removed = "Geri sayım penceresi scripti kaldırıldı"
+config_reset = "eta-shutdown konfigürasyonu sıfırlandı"
+summary = "Otomatik kapanma sistemi kaldırıldı, orijinal eta-shutdown geri yüklendi"
+nothing_removed = "Kaldırılacak öğe bulunamadı"
+
+[m11.launch]
+not_found = "ETA Zamanlı Kapatma uygulaması bulunamadı."
+not_found_details = "{path} mevcut değil; eta-shutdown paketi kurulu mu?"
+failed = "ETA Zamanlı Kapatma başlatılamadı."
+opened = "ETA Zamanlı Kapatma '{user}' oturumunda açıldı."
+opened_details = "Yapılandırmayı kaydedip kapattığınızda 10. adımdaki bilgi yenilenecek."
+
+[m11.params.auto_enabled]
+label = "Sabit saat kapatma"
+help = "Belirlenen saatte otomatik kapatma yapar."
+
+[m11.params.auto_hour]
+label = "Kapatma saati"
+help = "Otomatik kapatma yapılacak saat (24 saat formatında)."
+
+[m11.params.auto_minute]
+label = "Kapatma dakikası"
+help = "Otomatik kapatma yapılacak dakika."
+
+[m11.params.idle_enabled]
+label = "Idle tabanlı kapatma"
+help = "Tahta boşta kalırsa otomatik kapatma yapar."
+
+[m11.params.idle_minute]
+label = "Idle süresi (dakika)"
+help = "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika."
+
+[m11.params.countdown_seconds]
+label = "Geri sayım süresi (saniye)"
+help = """\
+Sabit saat veya idle tabanlı kapatma tetiklendiğinde \"Kapanıyor…\" \
+penceresinin ekranda kalma süresi. Bu süre boyunca kullanıcı 10 dakika \
+erteleyebilir ya da pencerenin sağ üst X'ine basıp idle sayacını \
+sıfırlayabilir. Alt sınır 30 saniye (kullanıcı pencereyi görüp tepki \
+verebilsin), üst sınır 600 saniye (10 dakika).\
+"""
+
+[m11.report]
+duration_min = "{count} dakika"
+duration_sec = "{count} saniye"
+no_params_default = "Otomatik kapanma sistemini kurdunuz"
+test_no_params = """\
+Klonda kapanma ayarlarının (saat ve boşta süresi) beklediğiniz gibi \
+çalıştığını doğrulayın; bu adımın seçenekleri kayıtlı değil.\
+"""
+warn = """\
+Kapanmadan önce ekranda {duration} süren bir uyarı penceresi çıkacak; \
+kullanıcı kapanmayı 10 dakika erteleyebilecek.\
+"""
+both = "Tahtanın her gün {at}'de ve {idle} dakika boşta kaldığında kapanmasını ayarladınız. {warn}"
+auto_only = "Tahtanın her gün {at}'de kapanmasını ayarladınız (boşta kalınca kapanma kapalı). {warn}"
+idle_only = """\
+Tahtanın {idle} dakika kullanılmadığında kapanmasını ayarladınız (sabit \
+saatte kapanma kapalı). {warn}\
+"""
+none = """\
+Otomatik kapanma altyapısını kurdunuz ama iki kapanma modunu da kapalı \
+bıraktınız; bu imajdan çıkan tahtalar kendiliğinden kapanmayacak.\
+"""
+test_idle = """\
+Klonda oturum açıp dokunmadan bırakın; yaklaşık {minutes} dakika sonra uyarı \
+penceresinin çıktığını ve geri sayımın {duration} ile başladığını \
+doğrulayın.\
+"""
+test_postpone = """\
+\"10 dakika ertele\" düğmesiyle pencerenin kapandığını ve 10 dakika boyunca \
+yeniden açılmadığını, sonra sayacın bitince tahtanın kapandığını doğrulayın.\
+"""
+test_greeter = """\
+Aynı denemeyi OTURUM AÇMADAN, giriş ekranında yapın; pencere orada da \
+çıkmalı. Ekran kararmışsa pencerenin ekranı uyandırdığını görün.\
+"""
+test_auto = """\
+Klonun saatinin doğru olduğundan emin olun; {at}'den {duration} önce \
+pencerenin açıldığını ve {at}'de tahtanın kapandığını doğrulayın. Tahtayı \
+{at}'den ÖNCE açmış olmanız gerekir; bu saatten sonra açılan tahta o gün \
+sabit saatte kapanmaz.\
+"""
+note_postpone = """\
+Sabit saatteki kapanma ertelenirse o günün sabit saat kapanması iptal olur; \
+tahta yalnız boşta kalma ile kapanabilir.\
+"""
+note_short = """\
+Geri sayımı 60 saniyenin altında seçtiniz; sabit saatteki kapanma bazı \
+günler kaçırılabilir.\
+"""
+test_service = "Klonda `systemctl is-active eta-shutdown` çıktısının active olduğunu doğrulayın."
+
+# ==========================================================================
+# Adım 12: Uzaktan uyandırma (m15_wake_on_lan)
+# ==========================================================================
+
+[m15]
+title = "Uzaktan uyandırma (Wake-on-LAN)"
+sidebar_title = "Uzaktan uyandırma"
+apply_hint = "Ağ kartının magic packet dinleme ayarı her boot'ta yeniden yazılır."
+rationale = """\
+Bu adım, klonlanmış tahtaların ağ kartını her açılışta Wake-on-LAN modunda \
+tutar. Böylece bakımcı merkez bilgisayarından tahtaya 'magic packet' \
+göndererek kapalı tahtayı uzaktan açabilir; sabah 07:50'de tüm sınıflar \
+açılmış hâlde 09:00 dersine hazır bekler.\n\
+\n\
+Bu adımın çalışması için üç katman gerekir: (1) BIOS/UEFI setup'ta 'Wake on \
+LAN' (veya 'WOL') AÇIK; 'Power On by PCI-E' AÇIK; ve — en kritik nokta — \
+'ErP' ile 'Deep Sleep' KAPALI olmalı. ErP veya Deep Sleep açık bırakılırsa \
+BIOS, tahta kapatıldığında ağ kartına standby gücü kesecek şekilde davranır \
+ve magic packet duyulmaz (Linux WoL doğru olsa bile tahta uyanmaz). (2) \
+Linux tarafında ethtool ile magic packet dinleme modu yazılmalı — bu ayar \
+kalıcı olmadığı için TiHA'nın bu adımda kurduğu servis her boot'ta yeniden \
+yazar. (3) Ethernet kablosu takılı olmalı ve switch, kapalı bilgisayarın \
+portuna güç kesmemelidir.\n\
+\n\
+BIOS ayarları imaj klonlamayla taşınmaz (CMOS'ta tutulur, disk imajından \
+bağımsızdır) — her tahta için bir kez elle yapılır. Faz 2 Vestel \
+modellerinde fabrika ayarı olarak WoL genelde AÇIK gelir; ancak ErP/Deep \
+Sleep açık gelebilir, bu yüzden sahada her tahta için BIOS'a girip bu iki \
+seçeneğin KAPALI olduğunu doğrulamak gerekir. Linux katmanı ise bu adımın \
+kurduğu systemd servisi ile her klonda otomatik hazır olur.\n\
+\n\
+Merkezden uyandırma için bakımcı kendi bilgisayarında 'wakeonlan <mac>' veya \
+'etherwake <mac>' komutunu kullanır. TiHA merkez betiği yazmaz; bakımcının \
+kendi tarafında bir cron işiyle sabah tüm tahtaları toplu uyandırabilir.\
+"""
+
+[m15.wol]
+no_iface = "arayüz yok"
+ethtool_missing = "ethtool paketi henüz kurulu değil"
+query_failed = "sorgulanamadı"
+no_support_reported = "kart WoL desteği bildirmedi"
+no_magic = "kart magic packet desteklemiyor (destek: {supported})"
+state_unknown = "kart destekliyor (Supports: {supported}), durum okunamadı"
+off = "kart destekliyor ama şu an KAPALI (Wake-on: {current})"
+on = "kart destekliyor ve AKTİF (Wake-on: {current})"
+
+[m15.preview]
+iface = "Birincil ağ arayüzü  : {iface}"
+not_detected = "(tespit edilemedi)"
+mac = "MAC adresi           : {mac}"
+unreadable = "(okunamadı)"
+ethtool = "ethtool paketi       : {state}"
+service = "TiHA WoL servisi     : {state}"
+installed = "kurulu"
+to_install = "kurulacak"
+wol_state = "Ağ kartı WoL durumu  : {status}"
+on_apply = "Bu adım uygulandığında:"
+script_written = """\
+\u0020\u0020- {script} yazılır (birincil arayüzü tespit eder,\n\
+\u0020\u0020\u0020\u0020ethtool ile magic packet dinlemeyi açar)\
+"""
+service_written = "  - {service} yazılır (systemd oneshot)"
+clone_note = """\
+Klon makinede her açılışta servis çalışır; ağ kartına magic packet dinleme \
+yazılır. Bilgisayar kapatıldığında kart dinlemede kalır; merkezden \
+'wakeonlan <MAC>' komutu ile uyandırılabilir.\
+"""
+bios = """\
+BIOS setup'ta yapılması gereken ayarlar\n\
+(disk imajıyla taşınmaz, her tahtada bir kez elle):\n\
+\u0020\u0020- 'Wake on LAN' / 'WOL'          → Enabled\n\
+\u0020\u0020- 'Power On by PCI-E' / 'PCIe Wake' → Enabled\n\
+\u0020\u0020- 'ErP' / 'ErP Ready'            → Disabled\n\
+\u0020\u0020- 'Deep Sleep'                   → Disabled\n\
+\n\
+Kritik: ErP veya Deep Sleep AÇIK bırakılırsa BIOS\n\
+kapatma sonrası ağ kartına standby gücü kesilir ve\n\
+magic packet duyulmaz — Linux tarafındaki WoL doğru\n\
+olsa bile tahta uyanmaz. Faz 2 Vestel'de WoL fabrika\n\
+ayarı genelde açık; ErP/Deep Sleep ise açık gelebilir.\
+"""
+
+[m15.apply]
+not_selected = "Ağ kartını magic packet dinleme moduna alma seçeneği işaretlenmedi. Adım atlandı."
+ethtool_installing = "ethtool paketi kuruluyor..."
+ethtool_failed = "ethtool paketi kurulamadı."
+ethtool_installed = "ethtool kuruldu."
+ethtool_present = "ethtool zaten kurulu."
+writing_script = "Boot scripti yazılıyor: {path}"
+write_failed = "WoL servis dosyaları yazılamadı: {error}"
+unit_written = "Systemd unit yazıldı: {name}"
+enable_failed = "{name} enable edilemedi."
+enabled = "{name} enable edildi."
+ran_once = "Servis bir kez çalıştırıldı; ağ kartı WoL modunda."
+details = """\
+Arayüz : {iface}\n\
+MAC    : {mac}\n\
+Durum  : {status}\n\
+\n\
+Servis : {service}\n\
+Script : {script}\n\
+\n\
+Klon her boot'ta bu servisi çalıştırıp ağ kartını magic packet dinleme \
+moduna alacak. Bakımcı merkez bilgisayarından 'wakeonlan {wake_mac}' ile \
+tahtayı uzaktan uyandırabilir.\
+"""
+success = "Uzaktan uyandırma (Wake-on-LAN) servisi kuruldu ve etkinleştirildi."
+
+[m15.undo]
+deleted = "{path} silindi"
+ethtool_removed = "ethtool paketi kaldırıldı (TiHA kurmuştu)"
+ethtool_remove_failed = "ethtool paketi kaldırılamadı (apt hatası) - manuel kaldırma önerilir"
+ethtool_kept = "ethtool paketi korundu (başlangıçta zaten kuruluydu)"
+done = "Uzaktan uyandırma servisi kaldırıldı."
+
+[m15.params.enable_wol_listen]
+label = "Ağ kartını magic packet dinleme moduna al"
+help = """\
+İşaretlenirse imaja bir systemd servisi gömülür. Her boot'ta bu servis \
+birincil ağ kartını Wake-on-LAN dinleme moduna alır (ethtool wol g). \
+Bilgisayar kapatıldığında kart magic packet dinlemede kalır; merkez \
+bilgisayardan 'wakeonlan <MAC>' komutuyla tahta uzaktan açılabilir. Ayar \
+kalıcı olmadığı için her boot'ta yeniden yazılır. İşaretli değilse hiçbir \
+servis kurulmaz ve tahta uzaktan uyandırılamaz.\
+"""
+
+[m15.report]
+done = """\
+İmajdan çıkan tahtaların ağ kartını her açılışta uzaktan uyandırma \
+(Wake-on-LAN) paketini dinleyecek moda alan servisi kurdunuz; kapalı \
+tahtalar merkezden `wakeonlan <MAC>` komutuyla açılabilecek.\
+"""
+ethtool = "Bunun için gereken ethtool paketini de kurdunuz."
+test_bios = """\
+Klonun BIOS ayarlarında 'Wake on LAN' ve 'Power On by PCI-E' açık, 'ErP' ve \
+'Deep Sleep' KAPALI olmalı. BIOS ayarları imajla taşınmaz; her tahtada \
+ayrıca yapılmalı.\
+"""
+test_ethtool = """\
+Klonda `sudo ethtool <arayüz>` çıktısında \"Wake-on: g\" görün ve klonun MAC \
+adresini not edin (her klonun MAC'i farklıdır).\
+"""
+test_wake = """\
+Klonu normal yoldan kapatın; AYNI ağ bölümündeki (VLAN) başka bir \
+bilgisayardan `wakeonlan <klon-MAC>` gönderip tahtanın açıldığını \
+doğrulayın.\
+"""
+note_macs = """\
+Merkezden uyandırma için bütün klonların MAC adreslerini toplamanız gerekir; \
+TiHA bu listeyi tutmaz.\
+"""
+skipped_active = """\
+Bu oturumda uzaktan uyandırma adımını atladınız; ama tahtada daha önce \
+kurulmuş uzaktan uyandırma servisi hâlâ etkin ve imaja girecek.\
+"""
+test_skipped_active = "Klonda uzaktan uyandırmanın (Wake-on-LAN) çalıştığını doğrulayın; servis imajda kurulu."
+skipped = "Uzaktan uyandırmayı açmadınız; tahtalar merkezden uyandırılamayacak."
+
+# ==========================================================================
+# Adım 13: Başarım (Deneysel) (m17_performance)
+# ==========================================================================
+
+[m17]
+title = "Başarım (Deneysel)"
+sidebar_title = "Başarım (Deneysel)"
+doc_label = "Başarım (Deneysel) — mekanizma, ölçümler ve tahtada deneme"
+apply_hint = """\
+Oturum kapanınca kalan süreçler sonlandırılır (açılıştan sonra); seçilirse \
+ETA Hafif Mod tüm kullanıcılara uygulanır ve imleç düzeltmesi kurulur.\
+"""
+rationale = """\
+Bir öğretmen tarayıcısını kapatmadan oturumunu kapattığında Firefox, Chrome \
+ve bütün alt süreçleri arka planda çalışmaya devam eder. Dört sekmeli bir \
+tarayıcı 600 MB – 1 GB bellek tutar ve işlemci harcamayı sürdürür. Tahta gün \
+içinde yeniden başlatılmadığında her yeni öğretmen oturumu bu yükün üstüne \
+eklenir.\n\
+\n\
+\"Eski oturum kalıntılarını temizle\" seçeneği, oturum kapanınca o oturumdan \
+kalan her süreci sistemin kendi oturum yöneticisine (systemd-logind) \
+sonlandırtır. Ayar bir sonraki açılışta etkin olur.\n\
+\n\
+ETA Hafif Mod, Pardus'un düşük donanımlı tahtalar için hazırladığı \
+eta-light-mode paketidir. Seçilen ayarlar tahtadaki bütün kullanıcılara her \
+oturum açılışında uygulanır. Çözünürlük ve yenileme hızı düşürme ekranı ve \
+kalem çizgisini bulanıklaştırır; önce tek bir tahtada deneyin.\n\
+\n\
+Hafif mod kutusu sistemin o anki durumunu gösterir. Kutu işaretliyken \
+kaldırılıp uygulanırsa hafif mod sistemden kaldırılır ve daha önce giriş \
+yapmış hesapların masaüstü ayarları da geri alınır. Paket kaldırılmaz: ETAP \
+imajının parçası, kaldırılması ayarları geri almaya yetmez ve geri almak \
+için gereken aracı da yok eder.\n\
+\n\
+⚠ DİKKAT: Bu adımın uyguladığı değişiklikler — özellikle hafif mod \
+(kompozitör kapatma, çözünürlük düşürme, yenileme hızı 50 Hz, yazı/ikon \
+ölçekleme) — hâlihazırda Pardus ETAP üzerinde kullandığınız uygulama \
+programlarının görsel arayüzlerinde renk ve fiziksel ölçü açısından \
+kullanımı olumsuz etkileyebilecek sonuçlara yol açabilir: pencereler \
+beklenenden farklı boyutta açılabilir, buton/menü hizaları bozulabilir, \
+kalem çizgisi bulanıklaşabilir, video/tam ekran içeriklerde renk yırtılması \
+görülebilir. Klonlamaya başlamadan önce ÖRNEK MAKİNEDE gerekli kontrolleri \
+ve testleri yapmayı unutmayın; sınıfta kullanılan eğitim yazılımları, EBA \
+içerikleri, sunum araçları ve tarayıcı üzerinde açık video/etkileşimli \
+içeriklerle bir tur çalıştırıp davranışlarını gözle doğrulayın.\
+"""
+
+[m17.params]
+heading_session = "Oturum kalıntıları"
+heading_light_mode = "ETA Hafif Mod (eta-light-mode)"
+heading_cursor = "Fare imleci (ekran modu değişimi)"
+
+[m17.params.cursor_xorg_fix]
+opt_off = "Kapalı"
+opt_modesetting = "modesetting sürücüsüne geç"
+opt_swcursor = "modesetting + yazılımsal imleç (SWcursor)"
+label = "İmleç kaybolmasını önle (Xorg)"
+help = """\
+Tahtada çözünürlük ya da tazeleme frekansı değiştirilip uygulandığında fare \
+imleci görünmez oluyor; tıklama ve odak çalışmaya devam ediyor, fare \
+çıkarılıp takılınca düzeliyor. Nedeni, mod değişiminde donanımsal imleç \
+düzleminin yeniden kurulurken imleç görüntüsünü geri yüklememesi.\n\
+\n\
+'modesetting sürücüsüne geç': /etc/X11/xorg.conf.d/20-tiha-imlec.conf \
+yazılır; ETAP'ta kurulu gelen eski intel sürücüsü yerine çekirdeğin \
+modesetting sürücüsü kullanılır. Başarım bedeli yoktur; önce bunu deneyin.\n\
+\n\
+'+ yazılımsal imleç': aynı dosyaya Option \"SWcursor\" \"on\" eklenir; \
+donanımsal imleç tamamen kapanır, kaybolacak düzlem kalmaz. Kesin çözümdür \
+ama imleci her karede sistem çizer; zayıf tahtalarda hızlı fare hareketinde \
+hafif gecikme görülebilir.\n\
+\n\
+Değişiklik oturum (LightDM) yeniden başlayınca geçerli olur.\
+"""
+
+[m17.params.kill_user_processes]
+label = "Eski oturum kalıntılarını temizle"
+help = """\
+Öğretmen oturumunu kapattığında o oturumdan kalan bütün süreçler \
+(kapatılmadan bırakılan Firefox/Chrome ve alt süreçleri dahil) \
+sonlandırılır. Tahta yeniden başlatılınca etkin olur. Aynı kullanıcının SSH \
+gibi başka açık oturumlarına dokunulmaz; root hariç tutulur. Bu ayar \
+system-wide logind yapılandırmasıdır; klon tahtaya sonradan eklenen hesaplar \
+dahil, root dışındaki tüm kullanıcılara otomatik uygulanır.\
+"""
+
+[m17.params.light_mode_enabled]
+label = "Hafif modu tüm kullanıcılara uygula"
+help = """\
+Paket yoksa kurulur. Seçilen ayarlar system-wide olarak \
+/etc/eta-light-mode/settings.json'a ve /etc/xdg/autostart'a yazılır; her \
+kullanıcıya (klon tahtaya sonradan eklenen hesaplar dahil) oturum açılışında \
+uygulanır. Kullanıcı kendi oturumunda değiştirse de bir sonraki girişte \
+yeniden uygulanır. Kutu sistemin o anki durumunu gösterir: işaretliyken \
+kaldırıp uygularsanız hafif mod sistemden kaldırılır ve daha önce giriş \
+yapmış hesapların masaüstü ayarları da geri alınır. Paket kaldırılmaz.\
+"""
+
+[m17.params.lm_effects]
+label = "Pencere ve menü animasyonlarını kapat"
+help = "Menü, pencere ve diyaloglar daha çabuk açılır hissi verir."
+
+[m17.params.lm_compositor]
+label = "Tam ekran pencereleri doğrudan çiz"
+help = "Tam ekran video ve sunumlarda yükü azaltır; ekran yırtılması görülebilir."
+
+[m17.params.lm_thumbnails]
+label = "Resim ve video önizlemelerini kapat"
+help = "Çok dosyalı USB/klasör açılışındaki yoğun işlemci ve disk yükünü kaldırır."
+
+[m17.params.lm_directory_counts]
+label = "Klasör öğesi sayımını kapat"
+
+[m17.params.lm_app_monitoring]
+label = "Uygulama kullanım izlemesini kapat"
+
+[m17.params.lm_low_resolution]
+label = "Çözünürlüğü 1600x900'e düşür"
+help = """\
+Grafik yükünü ~%30 azaltır ama yazı ve kalem çizgisi bulanıklaşır. Büyüyen \
+arayüzü dengelemek için yazı boyutu ve dosya ikonları da küçültülür. Her \
+kullanıcının ilk girişinde ekran kısa süre kararabilir.\
+"""
+
+[m17.params.lm_low_refresh_rate]
+label = "Yenileme hızını 50 Hz'e düşür"
+help = "Hareketli içerikte yükü ~%17 azaltır; kalem gecikmesi ~3 ms artar."
+
+[m17.params.cursor_refresh_service]
+label = "Mod değişiminde imleci tazele (servis)"
+help = """\
+Yukarıdaki Xorg düzeltmesine alternatif, hafif yol: her kullanıcının \
+oturumunda küçük bir servis çalışır, Muffin'in MonitorsChanged sinyalini \
+dinler ve mod değişiminden ~1 sn sonra cursor-size değerini bir artırıp geri \
+alarak imleci yeniden çizdirir. Donanımsal imleç korunur, başarım bedeli \
+yoktur; imleç yalnız bir an kaybolur. İkisini birlikte de seçebilirsiniz.\
+"""
+
+[m17.preview]
+sessions_header = "Oturum kalıntıları"
+state_active = "etkin (oturum kapanınca süreçler sonlandırılıyor)"
+state_configured = "yapılandırıldı, açılışta etkin olacak"
+state_off = "kapalı (Pardus varsayılanı; süreçler asılı kalıyor)"
+unreadable = "okunamadı"
+state = "  Durum            : {state}"
+lingering = "  Asılı oturum     : {count} (toplam ~{memory} bellek)"
+lingering_item = "    - {name} (oturum {id}, {service}, {since}) ~{memory}"
+lingering_none = "  Asılı oturum     : yok"
+light_header = "ETA Hafif Mod"
+package_installed = "  Paket            : {version} kurulu"
+package_missing = "  Paket            : kurulu değil (uygulanırsa kurulur)"
+all_users_on = "  Tüm kullanıcılar : etkin — {keys}"
+no_keys_selected = "(seçili ayar yok)"
+all_users_off = "  Tüm kullanıcılar : etkin değil"
+traced_accounts = "  İzi taşıyan hesap: {count} — {accounts}"
+traced_account_item = "{name} ({count} ayar)"
+traced_note = "                     (hafif mod kaldırılırsa bu hesapların ayarları da geri alınır)"
+traced_none = "  İzi taşıyan hesap: yok"
+cursor_header = "Fare imleci (ekran modu değişimi)"
+driver = "  Ekran sürücüsü   : {driver}"
+xorg_fix_on = "  Xorg düzeltmesi  : var — {mode}"
+xorg_fix_off = "  Xorg düzeltmesi  : yok"
+cursor_service = "  Tazeleme servisi : {state}"
+installed = "kurulu"
+not_installed = "kurulu değil"
+
+[m17.apply]
+nothing_selected = "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı."
+light_no_subkeys = "ETA Hafif Mod işaretli ama hiçbir alt ayar seçilmedi; hafif mod uygulanmadı."
+details_light = "Hafif mod: {path} → {keys}"
+details_light_removed = "Hafif mod kaldırıldı (sistem + kullanıcı ayarları)"
+details_cursor_xorg = "İmleç (Xorg): {path} — {choice}"
+details_cursor_service = "İmleç (servis): {path}"
+
+[m17.say]
+written = "Yazıldı: {path}"
+already_written = "Zaten yazılı: {path}"
+written_keys = "Yazıldı: {path} ({keys})"
+autostart = "Autostart: {path}"
+deleted = "Silindi: {path}"
+
+[m17.logind]
+header = "==== Oturum kalıntıları: systemd-logind ===="
+write_failed = "logind ayar dosyası yazılamadı: {error}"
+conflict = """\
+{path} dosyası KillUserProcesses ayarını TiHA'dan sonra okunarak ezebilir; \
+içeriğini denetleyin.\
+"""
+active = "Oturum kalıntı temizliği etkin."
+reload_impossible = """\
+systemd-logind yapılandırmayı yeniden okuyamıyor (systemd 252); ayar bir \
+sonraki açılışta etkin olacak.\
+"""
+configured = "Oturum kalıntı temizliği yapılandırıldı (yeniden başlatınca etkin)."
+
+[m17.light]
+header = """\
+\n\
+==== ETA Hafif Mod ====\
+"""
+apt_update_failed = "apt-get update başarısız; eta-light-mode kurulamadı."
+install_failed = "{package} kurulamadı."
+install_unverified = "{package} kurulumu doğrulanamadı."
+version = "{package} sürümü: {version}"
+untested_version = """\
+{package} {version} sürümü TiHA ile denenmedi (denenen: {tested}). Ayarların \
+tahtada uygulandığını ilk oturumda gözle doğrulayın.\
+"""
+unknown_keys = "Kurulu eta-light-mode şu ayarları tanımıyor, atlandı: {keys}"
+no_known_keys = "Seçilen hafif mod ayarlarının hiçbiri kurulu pakette yok."
+action_missing = "{path} bulunamadı; paket yapısı değişmiş olabilir."
+write_failed = "eta-light-mode ayarları yazılamadı: {error}"
+write_unverified = "eta-light-mode ayarları yazıldı görünüyor ama doğrulanamadı."
+reverting_dropped = """\
+\n\
+Seçimden çıkarılan ayarlar geri alınıyor: {keys}\
+"""
+affected_accounts = "Etkilenen hesap: {accounts}"
+applied = "ETA Hafif Mod tüm kullanıcılara uygulandı (sonraki oturum açılışında)."
+users_captured = "{count} hesabın masaüstü ayarı geri alma için kaydedildi."
+
+[m17.remove]
+header = """\
+\n\
+==== ETA Hafif Mod kaldırılıyor ====\
+"""
+disable_failed = "eta-light-mode kapatılamadı: {error}"
+action_missing = "{path} yok; sistem dosyaları doğrudan siliniyor."
+delete_failed = "{path} silinemedi: {error}"
+unverified = "Hafif mod kapatıldı görünüyor ama doğrulanamadı."
+package_kept = "{package} paketi kaldırılmadı (ETAP imajının parçası)."
+users_reverted = "Kullanıcı ayarları geri alındı: {accounts}"
+done_with_users = "ETA Hafif Mod kaldırıldı; {count} hesabın masaüstü ayarı geri alındı."
+done_no_users = "ETA Hafif Mod kaldırıldı (izi taşıyan hesap yoktu)."
+
+[m17.cursor]
+unknown_choice = "Bilinmeyen imleç seçeneği: {choice}"
+xorg_header = """\
+\n\
+==== Fare imleci: Xorg yapılandırması ====\
+"""
+xorg_write_failed = "Xorg imleç yapılandırması yazılamadı: {error}"
+current_driver = "Şu an yüklü sürücü: {driver} (yeni ayar oturum yeniden başlayınca geçerli olur)"
+xorg_written = "İmleç düzeltmesi yazıldı ({choice})."
+service_header = """\
+\n\
+==== Fare imleci: tazeleme servisi ====\
+"""
+service_failed = "İmleç tazeleme servisi kurulamadı: {error}"
+service_installed = "İmleç tazeleme servisi kuruldu (sonraki oturum açılışında)."
+
+[m17.undo]
+no_original = "Özgün durum kaydı bulunamadı; geri alınacak değişiklik yok."
+logind_restored = "logind ayarı eski hâline döndü (yeniden başlatınca etkin)"
+package_removed = "{package} kaldırıldı"
+package_remove_failed = "{package} kaldırılamadı: {error}"
+light_disabled = "ETA Hafif Mod tüm kullanıcılar için kapatıldı"
+users_reverted = "{count} hesabın masaüstü ayarları geri alındı ({accounts})"
+cursor_xorg_restored = "Xorg imleç yapılandırması eski hâline döndü"
+cursor_service_removed = "İmleç tazeleme servisi kaldırıldı"
+partial = "Geri alma kısmen başarısız."
+nothing = "Geri alınacak değişiklik yoktu."
+details = """\
+Hafif modun kullanıcı hesaplarına yazdığı ayarlar (yazı boyutu, ikon boyutu, \
+çözünürlük vb.) de TiHA öncesi hâline döndürüldü. Ekranda görülmesi için o \
+hesabın oturumu yeniden açılmalı.\
+"""
+
+[m17.revert]
+unreadable = "{name}: hesabın ayarları okunamadı, geri alınamadı (elle denetleyin)"
+key_failed = "{name}: {path} geri alınamadı ({error})"
+unknown_error = "bilinmeyen hata"
+monitors_failed = "{name}: monitors.xml geri alınamadı ({error})"
+
+[m17.report]
+session_done = """\
+Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin (kapatılmadan \
+bırakılan Firefox/Chrome ve alt süreçleri dahil) sonlandırılmasını \
+etkinleştirdiniz. Ayar tahta yeniden başlatılınca devreye girer.\
+"""
+test_session = """\
+Klonu yeniden başlatın. Bir öğretmen hesabıyla tarayıcıda birkaç sekme açıp \
+tarayıcıyı kapatmadan oturumu kapatın; başka bir hesapla girip Sistem \
+İzleyicisi'nde önceki kullanıcıya ait süreç kalmadığını doğrulayın.\
+"""
+test_ssh = """\
+Oturum kapatma sonrasında aynı kullanıcının SSH gibi diğer açık \
+oturumlarının kapanmadığını doğrulayın.\
+"""
+light_done = """\
+Başarımı artırmak için ETA Hafif Mod'u tüm kullanıcılara uyguladınız: \
+{labels}. Ayarlar her kullanıcıya oturum açılışında uygulanır; sonradan \
+eklenecek hesaplar dahil.\
+"""
+test_light_login = """\
+Klonda öğretmen ve öğrenci hesaplarıyla ayrı ayrı oturum açın; hafif mod \
+ayarlarının ilk girişte uygulandığını doğrulayın.\
+"""
+test_low_res = """\
+Çözünürlük 1600x900'e düştüğü için tahtaya parmakla ve kalemle dokunup \
+dokunma noktasının imleçle aynı yere düştüğünü (kalibrasyonun kaymadığını), \
+yazıların ve kalem çizgisinin okunaklı olduğunu doğrulayın.\
+"""
+test_50hz = """\
+50 Hz'de video oynatıp kalemle hızlı çizim yapın; titreme ya da belirgin \
+gecikme olmadığını doğrulayın.\
+"""
+test_cursor_mode = """\
+USB fare takılıyken oturumu kapatıp başka bir hesaba geçin; fare imlecinin \
+görünür kaldığını doğrulayın (ekran modu değişiminde imleç kaybolabiliyor).\
+"""
+light_removed = """\
+ETA Hafif Mod'u kaldırdınız; daha önce giriş yapmış hesapların masaüstü \
+ayarları da geri alındı (paket yerinde bırakıldı).\
+"""
+test_light_removed = """\
+Klonda daha önce giriş yapmış bir hesapla oturum açıp yazı boyutunun, \
+simgelerin ve çözünürlüğün normale döndüğünü doğrulayın.\
+"""
+xorg_done = "Ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü değiştirdiniz: {choice}."
+test_xorg = """\
+Klonu yeniden başlatın; ekranın açıldığını, dokunmatik ve kalemin \
+çalıştığını doğrulayın. Ardından USB fare takılıyken ekran ayarlarından \
+çözünürlüğü ya da yenileme hızını değiştirip imlecin kaybolmadığını \
+doğrulayın.\
+"""
+note_xorg = """\
+Ekran sürücüsü değişikliği tahta modeline (Intel/AMD grafik) göre farklı \
+davranabilir. İmajı yayacağınız her tahta modelinde ayrı bir klon deneyin.\
+"""
+cursor_refresh_done = "Ekran modu değiştiğinde fare imlecini kendiliğinden tazeleyen servisi kurdunuz."
+test_cursor_refresh = """\
+Klonda çözünürlüğü değiştirip uygulayın; fare imlecinin bir an sonra yeniden \
+göründüğünü doğrulayın.\
+"""
+
+[m17.report.light]
+effects = "pencere ve menü animasyonları kapatıldı"
+compositor = "tam ekran pencereler doğrudan çiziliyor"
+thumbnails = "resim ve video önizlemeleri kapatıldı"
+directory_item_counts = "klasör öğesi sayımı kapatıldı"
+app_monitoring = "uygulama kullanım izlemesi kapatıldı"
+low_resolution = "çözünürlük 1600x900'e düşürüldü"
+text_scaling = "yazı boyutu küçültüldü"
+file_icon_size = "dosya ve masaüstü simgeleri küçültüldü"
+low_refresh_rate = "yenileme hızı 50 Hz'e düşürüldü"
+
+# ==========================================================================
+# Adım 14: Otomatik Ahenk Kaydı (m12_ahenk_reset)
+# ==========================================================================
+
+[m12]
+title = "Otomatik Ahenk Kaydı"
+sidebar_title = "Otomatik Ahenk Kaydı"
+apply_hint = "Kaynak MAC kaydedilir, ahenk yoksa kurulur, klon-reclaim boot servisi devreye alınır."
+doc_label = "Otomatik Ahenk Kaydı — algoritma akış şeması ve gerekçeler"
+rationale = """\
+Sınıftaki tahtaları merkezi yönetim iki katmanlı bir sistemle takip eder. \
+Birinci katman, merkezi tahta envanter veritabanıdır: her tahta önce buraya \
+MAC adresi ve fiziksel konumu (okul, sınıf) esas alınarak, donanım \
+özellikleriyle birlikte kaydedilir. Bu kayıt işini tahta üzerindeki \
+eta-register uygulaması yapar. İkinci katman Lider yönetim sunucusudur: \
+tahta ancak envanterde kayıtlı olduğu doğrulandıktan sonra Lider'e abone \
+olabilir — Lider backend, abonelik talebinde envanter servisiyle konuşup \
+tahtayı teyit eder; onay verildiğinde tahtaya rastgele bir tekil kimlik atar \
+ve aboneliği tamamlar. Bu aşamadan sonra tahta Lider üzerinden yönetici \
+yetkisiyle uzaktan yönetilebilir hâle gelir.\n\
+\n\
+Normal işleyişte tahta klonlandıktan sonra en az bir kez etapadmin oturumu \
+açılmalıdır: tahta zaten merkez envantere kayıtlıysa Lider aboneliği \
+otomatik gerçekleşir ve her şey hazır hâle gelir; kayıtlı değilse \
+eta-register uygulaması açılıp tahtayı önce envantere eklemenizi ister. Ama \
+bir sorun vardır: imajı alınan asıl tahta zaten hem envanterde hem de \
+Lider'de kayıtlı olduğu için imaj kopyaları hep aynı Lider kimliğiyle boot \
+eder; hepsi tek bir tahtaymış gibi görünür, gönderilen komutlar yanlış \
+cihaza düşer, izleme güvenilmez olur.\n\
+\n\
+Bu adım tam da bu sorunu çözer. Ahenk paketini gerekliyse kurar (apt install \
+ahenk), sonra imaja her açılışta tahtanın kendisinin \"asıl tahta mı yoksa \
+kopya mı?\" olduğunu kontrol eden küçük bir mekanizma yerleştirir. Kopyalık \
+tespit edilirse eski Lider kimliği temizlenir ve tahta Lider'e kendi yeni \
+kimliğiyle taze abone olur — böylece operatörün, envantere önceden \
+kaydedilmiş bir klon tahtada Lider tarafını elle yeniden yapılandırması \
+gerekmez, ilk etapadmin girişinde abonelik kendiliğinden gerçekleşir.\n\
+\n\
+Sınır: bu adım yalnızca Lider kimliği bazlı kilidi çözer. Klonlanmış tahta \
+merkez envantere daha önce kaydedilmemişse (ör. yeni gelmiş bir donanım) \
+yine klon tahtada etapadmin oturumu açıp eta-register üzerinden envanter \
+kaydını yapmanız gerekir; envanter kaydı fiziksel lokasyon bilgisi istediği \
+için elle yapılan bir adımdır.\
+"""
+
+[m12.preview]
+mac_unknown = "(tespit edilemedi)"
+header = "Bu adımda yapılacaklar:"
+mac_line = "  - Kaynak MAC ({mac}) > {path}"
+ahenk_installed = "  - ahenk paketi zaten kurulu - yeniden kurulmayacak."
+ahenk_missing = """\
+\u0020\u0020- ahenk paketi kurulu DEĞİL - apt update + apt install -y ahenk \
+çalıştırılacak, ahenk.service enable edilecek.\
+"""
+body = """\
+\u0020\u0020- {script}\n\
+\u0020\u0020- {service} (Type=oneshot, Before=ahenk.service)\n\
+\u0020\u0020- systemctl enable {service_name}\n\
+\n\
+Bu wizard'da ahenk credential'larına DOKUNULMAZ - kaynak tahta normal \
+çalışmaya devam eder. Tüm credential temizliği klonun ilk açılışında, boot \
+servisi tarafından yapılır.\n\
+\n\
+Klon makinedeki davranış (her boot, ahenk'ten önce):\n\
+\u0020\u0020- İmza dosyası yok             -> çık (klon değil / \
+uygulanmamış)\n\
+\u0020\u0020- MAC eşit                     -> çık (kaynak tahta)\n\
+\u0020\u0020- MAC farklı (klon):\n\
+\u0020\u0020\u0020\u0020\u0020\u0020- API hatası               -> bu boot \
+atla, sonraki dene\n\
+\u0020\u0020\u0020\u0020\u0020\u0020- Kayıtlı                  -> ahenk \
+credential temizle,\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020ahenk \
+restart, servis disable\n\
+\u0020\u0020\u0020\u0020\u0020\u0020- Kayıtsız                 -> ahenk \
+credential temizle,\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020ahenk \
+disable, servis disable\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020(kullanıcı \
+eta-register'la kayıt yapar)\n\
+\n\
+Geri al: boot servisi + imza dosyası kaldırılır; ahenk paketi\n\
+TiHA kurduysa apt-get purge ile sökülür, daha önce kuruluysa korunur.\
+"""
+
+[m12.apply]
+no_mac = """\
+Birincil ağ arayüzünün MAC adresi tespit edilemedi; klon-reclaim servisi \
+kurulamaz, adım iptal edildi.\
+"""
+source_mac = "Kaynak MAC: {mac}"
+mac_write_failed = "İmza dosyası yazılamadı: {error}"
+mac_written = "İmza yazıldı: {path}"
+apt_update_header = """\
+\n\
+==== apt-get update ====\
+"""
+apt_update_failed = "apt-get update başarısız."
+apt_install_header = """\
+\n\
+==== apt-get install -y ahenk ====\
+"""
+install_failed = "ahenk kurulumu başarısız."
+enabling_ahenk = "ahenk.service enable ediliyor (start edilmiyor — ahenk kendi kayıt akışı boot'ta çalışır)."
+already_installed = "ahenk paketi zaten kurulu — kurulum atlanıyor."
+writing_service = """\
+\n\
+Boot servisi yazılıyor: {service}\
+"""
+service_write_failed = "Boot servisi dosyaları yazılamadı: {error}"
+enable_failed = "{service} enable edilemedi."
+enabled = "{service} enable edildi."
+ahenk_was_installed = "zaten kuruluydu"
+ahenk_installed_by_tiha = "TiHA tarafından kuruldu"
+details = """\
+İmza: {mac_file} = {mac}\n\
+Betik: {script}\n\
+Unit:  {service}\n\
+ahenk paketi: {ahenk}\n\
+Boot davranışı: her açılışta ahenk'ten önce çalışır; MAC değiştiyse API \
+sorgu sonucuna göre credential temizleyip ahenk'i yeniden başlatır veya \
+disable eder.\
+"""
+done = "Klon-yeniden-talep mekanizması imaja gömüldü."
+
+[m12.undo]
+removed_file = "{path} silindi"
+ahenk_removed = "ahenk paketi kaldırıldı (TiHA tarafından kurulmuştu)"
+ahenk_remove_failed = "ahenk paketi kaldırılamadı."
+ahenk_kept = "ahenk paketi korundu (başlangıçta zaten kuruluydu)"
+done = "Klon-yeniden-talep mekanizması kaldırıldı."
+detail_item = "• {item}"
+
+[m12.report]
+done = """\
+İmajdan çıkan her tahtanın ilk açılışta kendini kopya olarak tanıyıp kaynak \
+tahtanın Lider kimliğini silmesini ve Lider'e kendi kimliğiyle yeniden abone \
+olmasını sağlayan mekanizmayı kurdunuz.\
+"""
+done_mac = """\
+İmajdan çıkan her tahtanın ilk açılışta kendini kopya olarak tanıyıp kaynak \
+tahtanın Lider kimliğini silmesini ve Lider'e kendi kimliğiyle yeniden abone \
+olmasını sağlayan mekanizmayı kurdunuz; kaynak tahtanın MAC adresi ({mac}) \
+imza olarak kaydedildi.\
+"""
+ahenk_installed = "Tahtada bulunmayan ahenk paketini de kurdunuz."
+source_untouched = """\
+Kaynak tahtanın kendi Ahenk kimliğine dokunulmadı; imaj alınana kadar \
+Lider'e bağlı çalışmaya devam eder.\
+"""
+test_network = """\
+Klonu ilk kez açmadan önce kablolu ağa bağlayın; klonun api-etap.eba.gov.tr \
+adresine erişebildiğinden emin olun.\
+"""
+test_journal = """\
+Açılıştan sonra `sudo journalctl -t tiha-clone-reclaim` çıktısında \"klon\" \
+ve ardından \"KAYITLI\" ya da \"KAYITSIZ\" satırını görün. \"API'ye \
+ulaşılamadı\" yazıyorsa ağı düzeltip yeniden başlatın.\
+"""
+test_lider = """\
+Lider konsolunda klonun kaynak tahtadan AYRI bir kayıt olarak, kendi MAC \
+adresiyle göründüğünü; klona gönderilen bir test komutunun kaynak tahtaya \
+düşmediğini doğrulayın.\
+"""
+test_register = """\
+Envanterde kayıtlı olmayan bir klonda etapadmin ile oturum açınca \
+eta-register kayıt ekranının açıldığını, kayıttan sonra tahtanın Lider'de \
+göründüğünü doğrulayın.\
+"""
+test_two = "İki klonu aynı anda açıp Lider'de iki ayrı kayıt oluştuğunu doğrulayın."
+note_first_boot = """\
+Klonun ilk açılışında ağ ya da EBA servisi yoksa ahenk o açılış boyunca \
+kaynak tahtanın kimliğiyle Lider'e bağlanır ve komutlar yanlış tahtaya \
+gidebilir. Klonları ilk kez ağ hazırken açın.\
+"""
+
+# ==========================================================================
+# Adım 15: BIOS parolası (m14_bios_password)
+# ==========================================================================
+
+[m14]
+title = "BIOS yönetici parolası"
+sidebar_title = "BIOS parolası"
+doc_label = "https://github.com/enseitankado/eta-112"
+apply_hint = """\
+Klonun ilk açılışında BIOS yönetici parolasını ayarlayacak tek-seferlik boot \
+servisi imaja gömülür.\
+"""
+rationale = """\
+Bu adım, klon makinelerin ilk açılışında BIOS yönetici parolasını sizin \
+belirlediğiniz değere ayarlayan tek-seferlik bir boot servisi imaja \
+yerleştirir. Kaynak tahtada (yani şu an üzerinde çalıştığınız tahta) BIOS \
+parolasına standart Uygula AKIŞINDA DOKUNULMAZ — değişiklik sadece klonda \
+ilk açılışta yapılır, başarıyla tamamlandığında servis kendini disable eder \
+ve parolayı içeren script silinir.\n\
+\n\
+Yalnız bu makinenin BIOS parolasını şimdi değiştirmek/temizlemek isterseniz \
+“Bu makinenin BIOS parolasını ayarla” düğmesini kullanın — bu düğme klon \
+servisi kurmaz; yalnızca buradaki donanıma yazar.\n\
+\n\
+Parola kutusu BOŞ uygulanırsa parola temizlenir (BIOS koruması fiilen \
+kalkar) — bu hem klon servisinin hem de “şimdi uygula” düğmesinin \
+davranışıdır.\n\
+\n\
+Koruma modu: yönetici parolası her açılışta mı yoksa yalnız BIOS setup'a \
+girilirken mi sorulsun? Aşağıdan seçin. Faz 2 modellerinde eta-112 bu ayarı \
+BIOS'a doğrudan yazar; Faz 1 modellerinde ayrı bir 'ne zaman sorulsun' \
+byte'ı olmadığı için arka planda parolaları farklı atayarak aynı sonuç elde \
+edilir (yalnız yönetici = setup, yönetici+kullanıcı = her açılışta).\n\
+\n\
+Bu adım YALNIZCA eta-112 tarafından kalibre edilmiş donanım modellerinde \
+uygulanabilir (Faz 2 Vestel Gri vb.). Donanım desteklenmiyorsa form \
+gizlenir.\n\
+\n\
+Mevcut parolaları manuel olarak okumak/değiştirmek veya yeni donanım \
+sürümlerini kalibre etmek için aracın GitHub sayfasını kullanabilirsiniz.\
+"""
+
+[m14.params.protection_mode]
+opt_setup = "Yalnız BIOS ayarlarına girilirken (setup)"
+opt_always = "Her açılışta (always)"
+label = "Yönetici parolası ne zaman sorulsun"
+help = """\
+Bu seçim hem klona gömülen servise hem de “Bu makinenin BIOS parolasını \
+ayarla” düğmesine uygulanır. Parola kutusu boşsa (clear yolu) bu seçim yok \
+sayılır — parola olmadan BIOS koruması zaten etkili değildir.\
+"""
+
+[m14.params.supervisor_password]
+label = "BIOS yönetici parolası"
+help = """\
+Yalnızca BÜYÜK harf (A-Z, I hariç) ve rakam (0-9). Uzunluk modele göre 4-12 \
+karakter. Kutu boş gelir — donanımdaki mevcut parolayı görmek için aşağıdaki \
+düğmeye basın. BOŞ bırakırsanız hem klon servisi hem “şimdi uygula” düğmesi \
+parolayı TEMİZLER (BIOS koruması fiilen kalkar).\
+"""
+placeholder = "ABC23X"
+
+[m14.params.read_current]
+label = "Mevcut yönetici parolasını oku"
+help = """\
+Tıklayınca eta-112 indirilir (gerekirse), donanım sorgulanır; mevcut parola \
+ve koruma modu yukarıdaki alanlara yazılır. İlerleme alt kısımda görünür.\
+"""
+
+[m14.params.set_local]
+label = "Bu makinenin BIOS parolasını ayarla"
+help = """\
+DİKKAT: Klon servisi KURMAZ; doğrudan bu makinenin BIOS flash'ına yazar. \
+Parola kutusu boşsa parolayı TEMİZLER, doluysa girilen parolayı ve koruma \
+modunu yazar. Geri alma yoktur; eta-112 “brick riski” uyarısı burada da \
+geçerli. Değişikliğin tam etkili olması için işlem sonrası makineyi yeniden \
+başlatın.\
+"""
+
+[m14.eta112]
+not_found = "eta-112.py bulunamadı (env, cache ve indirme başarısız)"
+run_failed = "çalıştırılamadı: {error}"
+stdout_empty = """\
+stdout boş geldi (exit={code}).\n\
+stderr: {stderr}\
+"""
+both_empty = "stdout ve stderr boş (exit={code})"
+json_error = """\
+JSON parse hatası (exit={code}).\n\
+stdout: {stdout}\n\
+stderr: {stderr}\
+"""
+
+[m14.validate]
+charset = "Parola yalnızca BÜYÜK harf (I hariç) ve rakamdan oluşmalı."
+too_short = "Parola en az {min} karakter olmalı (verilen: {given})."
+too_long = "Parola en fazla {max} karakter olabilir (verilen: {given})."
+
+[m14.protection]
+always = "her açılışta sorulur"
+setup = "yalnızca BIOS ayarlarına girilirken sorulur"
+unknown = "(okunamadı)"
+
+[m14.preview]
+no_info = """\
+Bu adımın hazırlık bilgisi henüz alınmadı.\n\
+\n\
+Aşağıdaki “Mevcut yönetici parolasını oku” düğmesine basarak eta-112'yi \
+indirip donanımı sorgulayabilirsiniz; böylece form da donanım desteğine göre \
+güncellenir.\
+"""
+not_detected = "(tespit edilemedi)"
+unsupported = """\
+\u0020Bu donanım eta-112 tarafından DESTEKLENMİYOR.\n\
+\n\
+\u0020\u0020Anakart: {board}\n\
+\u0020\u0020BIOS:    {bios}\n\
+\n\
+Bu adım uygulanmaz; uygula tıklansa bile servis kurulmaz. Diğer adımlara \
+devam edebilirsiniz.\
+"""
+unnamed = "(adsız)"
+no_chip = "(yok)"
+not_set = "(ayarlanmamış)"
+supported = """\
+\u0020Donanım destekleniyor.\n\
+\u0020\u0020Model:           {model}\n\
+\u0020\u0020Flash çipi:      {chip}\n\
+\u0020\u0020Parola uzunluğu: {pw_min}-{pw_max} karakter, BÜYÜK A-Z 0-9\n\
+\n\
+\u0020\u0020Mevcut yönetici parolası: {current}\n\
+\u0020\u0020Mevcut koruma modu:       {protection}\n\
+\
+"""
+faz1 = """\
+\u0020Faz 1 farkı: BIOS'ta ayrı bir 'parola ne zaman sorulsun' byte'ı yok.\n\
+\u0020\u0020Koruma seçiminize göre eta-112 parolaları şöyle ayarlar:\n\
+\u0020\u0020\u0020\u0020- Yalnız BIOS ayarlarına girilirken (setup)  >  \
+sadece yönetici parolası\n\
+\u0020\u0020\u0020\u0020- Her açılışta (always)                      >  \
+yönetici + kullanıcı parolasına aynı değer\n\
+\
+"""
+plan = """\
+Bu adımda yapılacaklar:\n\
+\u0020\u0020- Kaynak MAC ({mac}) > {mac_file}\n\
+\u0020\u0020- eta-112 > {eta}\n\
+\u0020\u0020- Boot scripti > {script} (chmod 700, parola gömülü)\n\
+\u0020\u0020- Systemd unit > {unit}\n\
+\u0020\u0020- systemctl enable {unit_name}\n\
+\n\
+Klon makinedeki davranış (yalnızca ilk açılışta):\n\
+\u0020\u0020┌── Sentinel mevcut ────────- çık (zaten yapıldı)\n\
+\u0020\u0020├── İmza yok ──────────────- çık (klon değil/uygulanmamış)\n\
+\u0020\u0020├── MAC eşit ──────────────- çık (kaynak tahta)\n\
+\u0020\u0020└── MAC farklı (klon)\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020└── eta-112 set --yonetici PASS\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020> \
+sentinel yaz, servisi disable et, parola scriptini sil\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020> \
+sentinel yazma; sonraki boot tekrar dene\n\
+\n\
+Geri al: boot scripti + servis + sentinel + paketlenmiş eta-112 silinir.\
+"""
+
+[m14.common]
+preparing = "eta-112 aracı hazırlanıyor..."
+querying_model = "Donanım modeli sorgulanıyor (bios info --json)..."
+empty_output = "(boş çıktı)"
+unknown_error = "bilinmeyen hata"
+download_failed = "eta-112 aracı indirilemedi."
+download_failed_details = "İnternet bağlantısı ya da {url} erişimi yok olabilir."
+info_bad_json = "eta-112 'info' beklenen JSON çıktısını vermedi."
+board_bios = """\
+Anakart: {board}\n\
+BIOS:    {bios}\
+"""
+
+[m14.apply]
+not_found = "eta-112.py bulunamadı; indirilemedi de."
+not_found_details = """\
+Beklenen yerler: $TIHA_ETA_112_DIR, {cache}\n\
+İnternet bağlantısı veya {url} erişimi yok olabilir.\
+"""
+info_bad_json = "eta-112 'info' komutu beklenen JSON çıktısını vermedi."
+unsupported = "Bu donanım eta-112 tarafından desteklenmiyor; adım uygulanmaz."
+unsupported_details = """\
+Anakart: {board}\n\
+BIOS:    {bios}\n\
+Hata:    {error}\
+"""
+clear_note = "Parola kutusu boş — klonda 'bios clear yonetici' çalıştırılacak (BIOS koruması kalkar)."
+cmd_koruma = "Klona gömülecek komut: bios set --yonetici <{length} kr> --koruma {protection}"
+cmd_faz1_always = """\
+Klona gömülecek komut: bios set --yonetici <{length} kr> --kullanici \
+<{length} kr> (Faz 1: her açılışta sorulması için kullanıcı parolası da set \
+ediliyor)\
+"""
+cmd_faz1_setup = """\
+Klona gömülecek komut: bios set --yonetici <{length} kr> (Faz 1: yalnız \
+yönetici → BIOS setup'a girilirken sorulur)\
+"""
+no_mac = "Birincil ağ arayüzünün MAC adresi tespit edilemedi; klon tespiti için imza yazılamaz."
+mac_dir_failed = "İmza dizini oluşturulamadı: {error}"
+mac_written = "MAC imzası yazıldı: {path} = {mac}"
+mac_write_failed = "İmza dosyası yazılamadı: {error}"
+mac_exists = "MAC imzası zaten mevcut: {path} (paylaşımlı)"
+copy_failed = "eta-112 sisteme kopyalanamadı: {error}"
+copied = "eta-112 kopyalandı: {path}"
+files_failed = "Boot servis dosyaları yazılamadı: {error}"
+script_written = "Boot scripti yazıldı: {path} (chmod 700)"
+unit_written = "Systemd unit yazıldı: {path}"
+enable_failed = "{name} enable edilemedi."
+enabled = "{name} enable edildi."
+plan_clear = "klonda parola TEMİZLENECEK (bios clear yonetici)"
+plan_set = "klonda parola AYARLANACAK ({length} kr, koruma={protection})"
+plan_faz1 = "klonda parola AYARLANACAK ({length} kr) — Faz 1: {mode}"
+faz1_always = "her açılışta (yön+kul aynı parola)"
+faz1_setup = "yalnız BIOS setup'a girilirken (yalnız yön.)"
+details = """\
+Model:    {model}\n\
+Anakart:  {board}  ·  BIOS: {bios}\n\
+Plan:     {plan}\n\
+MAC:      {mac}\n\
+Script:   {script} (chmod 700)\n\
+Servis:   {service}\n\
+Klon ilk açılışta MAC değişikliğini görüp eta-112'yi çağıracak; başarıdan \
+sonra servis disable olur ve parolayı içeren script silinir. Kaynak tahtanın \
+BIOS'una bu akışta dokunulmadı.\
+"""
+summary_clear = "BIOS parola TEMİZLEME servisi imaja gömüldü; klonun ilk açılışında çalışacak."
+summary_set = "BIOS parola AYARLAMA servisi imaja gömüldü; klonun ilk açılışında çalışacak."
+
+[m14.read]
+ready = "eta-112 hazır: {path}"
+unsupported = "Bu donanım eta-112 tarafından desteklenmiyor."
+unsupported_details = """\
+Anakart: {board}\n\
+BIOS: {bios}\
+"""
+model_line = "Model: {model}  ·  Parola: {pw_min}-{pw_max} A-Z 0-9"
+reading = "Mevcut parolalar okunuyor (bios read --json)..."
+read_bad_json = "eta-112 'read' beklenen JSON çıktısını vermedi."
+read_failed = "BIOS parolaları okunamadı: {error}"
+supervisor = "Yönetici parolası: {value}"
+not_set = "(ayarlı değil)"
+protection = "Koruma modu:       {protection}"
+current = "Mevcut yönetici parolası: {value}"
+none = "BIOS'ta yönetici parolası ayarlı değil."
+details = """\
+Model: {model}\n\
+Koruma modu: {protection}\n\
+Bu değerler aşağıdaki form alanlarına otomatik yazıldı; değiştirmek \
+isterseniz üzerine yeni değeri girin.\
+"""
+
+[m14.local]
+unsupported = "Bu donanım eta-112 tarafından desteklenmiyor; işlem yapılmaz."
+clearing = "BIOS yönetici parolası TEMİZLENİYOR..."
+setting = "BIOS yönetici parolası AYARLANIYOR (uzunluk {length}, koruma {protection})..."
+faz1_always = "her açılışta (yön+kul aynı parola atanıyor)"
+faz1_setup = "yalnız BIOS setup'a girilirken (yalnız yönetici)"
+setting_faz1 = "BIOS yönetici parolası AYARLANIYOR (Faz 1 davranışı: {mode})..."
+writing_flash = "(flash'a yazılıyor; bu birkaç saniye sürebilir)"
+write_bad_json = "eta-112 yazma komutu beklenen JSON çıktısını vermedi."
+failed = "BIOS işlemi başarısız: {error}"
+unchanged = "Değişiklik yapılmadı — BIOS zaten istenen durumdaydı."
+not_verified = "Yazıldı ama doğrulama tutmadı — BIOS okumayı tekrar denemek için sayfayı tazeleyin."
+cleared = """\
+Bu makinenin BIOS yönetici parolası temizlendi. BIOS değişikliğinin tamamen \
+etkili olması için makineyi YENİDEN BAŞLATIN.\
+"""
+set = """\
+Bu makinenin BIOS yönetici parolası ayarlandı (koruma: {protection}). BIOS \
+değişikliğinin etkili olması için makineyi YENİDEN BAŞLATIN.\
+"""
+set_faz1 = """\
+Bu makinenin BIOS yönetici parolası ayarlandı (Faz 1: {mode}). BIOS \
+değişikliğinin etkili olması için makineyi YENİDEN BAŞLATIN.\
+"""
+details = """\
+İşlem 'eta-112 {argv}' ile gerçekleştirildi.\n\
+Bu adımdaki Uygula akışı KURMADI — yalnız bu makineye yazıldı.\
+"""
+
+[m14.undo]
+deleted = "{path} silindi"
+script_deleted = "{path} silindi (parola yok edildi)"
+mac_deleted = "{path} silindi (yalnız m14 yazmıştı)"
+done = "BIOS parola servisi geri alındı."
+
+[m14.report]
+clear_done = """\
+Klon tahtaların ilk açılışında BIOS yönetici parolasını TEMİZLEYECEK bir \
+servisi imaja yerleştirdiniz; klonlarda BIOS parola koruması olmayacak.\
+"""
+when_always = "her açılışta"
+when_setup = "yalnızca BIOS ayarlarına girilirken"
+set_done = """\
+Klon tahtaların ilk açılışında BIOS yönetici parolasını parolanıza \
+ayarlayacak tek seferlik bir servisi imaja yerleştirdiniz; parola {when} \
+sorulacak.\
+"""
+set_done_len = """\
+Klon tahtaların ilk açılışında BIOS yönetici parolasını {length} karakterlik \
+parolanıza ayarlayacak tek seferlik bir servisi imaja yerleştirdiniz; \
+parola {when} sorulacak.\
+"""
+faz1_both = "Faz 1 modeli: yönetici ve kullanıcı parolasına aynı değer atanacak."
+faz1_admin = "Faz 1 modeli: yalnız yönetici parolası atanacak."
+model = "Servis {model} modeli için hazırlandı."
+source_untouched = "Bu tahtanın (kaynak) BIOS'una bu adımda dokunulmadı."
+test_journal = """\
+Klonu ilk kez açıp oturum açın: `sudo journalctl -t tiha-first-boot-bios -b` \
+çıktısında \"BIOS yönetici parolası işlemi başarılı\" satırını ve \
+`/usr/local/sbin/tiha-first-boot-bios.py` dosyasının artık OLMADIĞINI \
+doğrulayın.\
+"""
+test_clear = "Klonu yeniden başlatıp BIOS'a girin; parola sorulmamalı."
+test_set = """\
+Klonu yeniden başlatıp BIOS'a girin; parola sorulmalı ve yazdığınız parola \
+kabul edilmeli. Gömülen parola normalleştirilmiş hâlidir (küçük harfler \
+büyütülür, 'I' ve harf/rakam dışı karakterler atılır).{suffix}\
+"""
+test_set_always = " Her açılışta işletim sisteminden önce parola sorulmalı."
+test_set_setup = " Normal açılış parola sormamalı."
+test_persist = "Klonu bir kez daha yeniden başlatıp BIOS parolasının hâlâ yerinde olduğunu doğrulayın."
+test_source = "Kaynak tahtayı yeniden başlattığınızda onun BIOS parolasının DEĞİŞMEDİĞİNİ doğrulayın."
+note_flash = """\
+Klonun ilk açılışında BIOS flash belleğine yazılır; bu işlem her tahtada \
+tekrar eder. Önce tek bir klonda, sonra filodaki her tahta modelinden bir \
+klonda deneyin.\
+"""
+note_plaintext = """\
+Parola, kaynak tahtada ve imajda düz metin bir betikte duruyor \
+(/usr/local/sbin/tiha-first-boot-bios.py); klonda yalnız işlem başarılı \
+olunca silinir. İmaj dosyalarını buna göre koruyun.\
+"""
+local_cleared = "Bu tahtanın (kaynak) BIOS yönetici parolasını doğrudan temizlediniz."
+local_set = "Bu tahtanın (kaynak) BIOS yönetici parolasını doğrudan ayarladınız."
+note_local = """\
+Kaynak tahtanın BIOS'unda yaptığınız değişiklik imajla taşınmaz; yalnız bu \
+tahtayı etkiler.\
+"""
+
+# ==========================================================================
+# Adım 16: GRUB koruması (m16_grub_protection)
+# ==========================================================================
+
+[m16]
+title = "GRUB koruması"
+sidebar_title = "GRUB koruması"
+apply_hint = """\
+İşaretliyken: `e` düzenleme kipi ve GRUB shell, kullanıcı adı `{user}` + \
+buraya yazdığınız parolanın arkasına alınır; kurtarma girdisi menüde kalır \
+ama o da aynı parolayı ister. İşaretsizken: varsa mevcut koruma kaldırılır, \
+GRUB eski hâline döner.\
+"""
+rationale = """\
+GRUB açılış menüsünde ``e`` tuşu kernel komut satırının düzenlenmesine izin \
+verir. Yerel klavye erişimi olan biri buraya ``init=/bin/bash`` yazarak \
+tahtayı doğrudan root shell'e düşürebilir; root parolasını sıfırlamak, diski \
+okumak, kalıcı arka kapı bırakmak buradan mümkündür. m02 (Açılışta parola \
+temizliği) etkin olsa dahi o oturum içindeki hasar sınırsızdır. Aynı vektör \
+kurtarma (recovery) girdisi üzerinden de açıktır: kurtarma kipi parola \
+sormadan root kabuğu verir.\n\
+\n\
+Bu adım aşağıdaki 'GRUB yönetici parolası' alanına yazdığınız parolayı \
+PBKDF2-SHA512 hash'i olarak GRUB'a tanımlar (kullanıcı adı: ``etapadmin``) \
+ve normal menü girdilerini ``--unrestricted`` işaretler. Kurtarma girdisi \
+menüde kalır ama bu işareti almaz: onu açmak da aynı kullanıcı adı ve \
+parolayı ister. 'Gelişmiş seçenekler' alt menüsü de parolalıdır. Boot akışı \
+bu parolayı sormaz; yalnız kullanıcı menüde ``e`` (düzenle) kipine \
+girdiğinde, GRUB shell'ine (``c`` tuşu) düştüğünde ya da kurtarma/gelişmiş \
+seçenekleri açtığında sorulur. Aynı hash bütün klonlara aynen taşınır; \
+operatör tek bir parolayı hatırlar.\n\
+\n\
+Kutucuk adıma girildiğinde sistemin o anki durumunu gösterir: GRUB zaten \
+korumalıysa işaretli gelir. İşaretini kaldırıp uygularsanız koruma \
+kaldırılır ve GRUB yedeklerden eski hâline döndürülür. Koruma etkinken \
+parola alanını boş bırakıp uygularsanız mevcut parola korunur. Düz parola \
+sistemde tutulmaz; imaja yalnız hash gömülür.\
+"""
+recovery_reopen = "Kurtarma girdisi yeniden açılıyor (GRUB_DISABLE_RECOVERY yoruma alınıyor)…"
+saved_reset = "Kayıtlı açılış varsayılanı alt menüyü gösteriyor ({saved}); sıfırlanıyor…"
+
+[m16.preview]
+include = "01_tiha_grub_password  : {state}"
+include_exists = "zaten var, yeniden yazılacak"
+include_new = "yazılacak"
+linux = "10_linux yaması        : {state}"
+linux_patched = "zaten uygulanmış"
+linux_to_patch = "uygulanacak (--unrestricted eklenir)"
+lines_missing = """\
+\u0020\u0020UYARI: 10_linux içinde beklenen satırlar bulunamadı.\n\
+\u0020\u0020GRUB paketi güncellenmiş olabilir; yama uygulanamaz.\
+"""
+recovery = "Kurtarma girdisi       : {state}"
+recovery_protected = "parola korumalı"
+recovery_to_protect = "parolayla korunacak"
+recovery_disabled = """\
+\u0020\u0020Şu an menüde yok (GRUB_DISABLE_RECOVERY=\"true\"); TiHA'nın eski \
+sürümü kapatmış olabilir — uygulanınca yeniden açılır.\
+"""
+superuser = "Superuser (kullanıcı adı): {user}"
+hash = "Hash algoritması       : PBKDF2-SHA512, {iterations} iterasyon, 64 bayt salt"
+footer = """\
+\n\
+GRUB önce 'Enter username:' sorar, sonra parolayı ister:\n\
+\u0020\u0020- 'e' kipine ('e' tuşu)  → kullanıcı adı: {user}, sonra parola\n\
+\u0020\u0020- GRUB shell'e ('c' tuşu) → kullanıcı adı: {user}, sonra parola\n\
+\u0020\u0020- Kurtarma girdisi       → kullanıcı adı: {user}, sonra parola\n\
+\u0020\u0020- Gelişmiş seçenekler    → kullanıcı adı: {user}, sonra parola\n\
+\u0020\u0020- Normal açılış          → parola sormaz\n\
+\n\
+Klonlarda:\n\
+\u0020\u0020- Aynı hash tüm klonlara aynen gömülür.\n\
+\u0020\u0020- Tek parola bütün filoda geçerli olur.\
+"""
+
+[m16.apply]
+skip_no_lock = "GRUB koruması kutucuğu işaretli değil ve koruma zaten yok — değişiklik yapılmadı."
+removing = "Kutucuk işaretsiz — mevcut GRUB koruması kaldırılıyor…"
+upgrading = """\
+Koruma etkin, parola korunuyor; eski sürümün yaması yükseltiliyor (kurtarma \
+girdisi parolalı)…\
+"""
+kept = "GRUB koruması zaten etkin; parola alanı boş bırakıldığı için mevcut parola korundu."
+kept_details = """\
+Kullanıcı adı    : {user}\n\
+Parolayı değiştirmek isterseniz alana yeni parolayı\n\
+yazıp adımı tekrar uygulayın. Korumayı kaldırmak için\n\
+kutucuğun işaretini kaldırıp uygulayın.\
+"""
+empty_pw = "GRUB yönetici parolası boş bırakılamaz."
+empty_pw_details = """\
+Kutucuk işaretli olduğunda 'GRUB yönetici parolası'\n\
+alanına en az bir karakter yazılmalıdır. Bu parolanın\n\
+PBKDF2-SHA512 hash'i imaja gömülür ve 'e' kipi ile\n\
+GRUB shell'ini açmak isteyenden bu parola sorulur.\
+"""
+short_pw = "GRUB yönetici parolası çok kısa (en az 8 karakter)."
+short_pw_details = """\
+GRUB parolası fiziksel klavye erişimi olan birine\n\
+karşı savunmadır; brute-force denemesi hızlı\n\
+yapılamasa da 8 karakterin altına düşülmemelidir.\
+"""
+verifying = "Beklenen 10_linux satırı doğrulanıyor…"
+linux_unreadable = "{path} okunamadı; GRUB kurulumunu kontrol edin."
+anchor_missing = "10_linux içinde kurtarma girdisini korumak için beklenen satır bulunamadı."
+anchor_missing_details = """\
+TiHA, linux_entry fonksiyonundaki ``type=\"$3\"`` satırını\n\
+arar. GRUB paketi güncellenmiş olabilir. Güvenli tarafta\n\
+kalıp hiçbir değişiklik yapmadım.\
+"""
+class_missing = "10_linux içinde beklenen CLASS satırı bulunamadı."
+class_missing_details = """\
+TiHA yalnızca Debian 12 / Pardus ETAP 23'ün varsayılan\n\
+CLASS satırını (``{needle}``) tanır. GRUB paketi\n\
+güncellenmiş ya da başka bir araç dosyayı değiştirmiş\n\
+olabilir. Güvenli tarafta kalıp hiçbir değişiklik\n\
+yapmadım.\
+"""
+hashing = "Parola hash'i hesaplanıyor (PBKDF2-SHA512)…"
+checking_backups = "10_linux ve /etc/default/grub yedekleri denetleniyor…"
+backup_failed = "Yedek alınamadı: {error}"
+writing_include = "{path} yazılıyor…"
+include_failed = "Include yazılamadı: {error}"
+patching = "/etc/grub.d/10_linux yamalanıyor (normal girdiler parolasız, kurtarma girdisi parolalı)…"
+linux_failed = "10_linux güncellenemedi: {error}"
+update_grub_running = "update-grub çalıştırılıyor…"
+update_grub_failed = "update-grub başarısız oldu."
+update_grub_done = "update-grub tamamlandı."
+recovery_open = "Kurtarma girdisi üretilen menüde hâlâ parolasız görünüyor."
+recovery_open_details = """\
+{count} kurtarma girdisinde --unrestricted var ({cfg}). 10_linux yaması \
+beklendiği gibi çalışmamış olabilir; geri alıp GRUB paketini denetleyin.\
+"""
+rec_line = "Kurtarma girdisi : menüde ({count} adet), {user} + parola ister"
+rec_line_none = """\
+Kurtarma girdisi : menüde yok (GRUB_DISABLE_RECOVERY sizin\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020ayarınızla \
+kapalı); eklenirse parola ister\
+"""
+success_kept = """\
+GRUB koruması güncellendi — mevcut parola korundu, kurtarma girdisi \
+parolalı; kullanıcı adı: {user}\
+"""
+success = "GRUB koruması etkinleştirildi — kullanıcı adı: {user}"
+restored_note = """\
+Kurtarma girdisi TiHA'nın eski sürümünün kapattığı yerden\n\
+yeniden açıldı.\n\
+\
+"""
+saved_reset_note = """\
+Kayıtlı açılış varsayılanı alt menüdeki bir girdiyi\n\
+gösteriyordu; sıfırlandı (gözetimsiz açılış parola\n\
+ekranında beklemesin).\n\
+\
+"""
+details = """\
+Kullanıcı adı    : {user}\n\
+Include          : {include}\n\
+{rec_line}\n\
+{restored_note}{saved_reset_note}10_linux yedeği  : {linux_backup}\n\
+grub yedeği      : {defaults_backup}\n\
+\n\
+Bir sonraki açılıştan itibaren `e` düzenleme kipi, GRUB\n\
+komut satırı, kurtarma girdisi ve 'Gelişmiş seçenekler'\n\
+önce 'Enter username:' sorar — buraya {user} yazılır —\n\
+ardından formda girdiğiniz parolayı ister. Normal açılış\n\
+bu parolayı sormaz. Aynı hash bu tahtadan alınacak tüm\n\
+klonlarda geçerlidir. Düz parola sistemde tutulmaz.\
+"""
+
+[m16.undo]
+already_removed = """\
+Bu adım korumayı kaldırmıştı; geri alınacak değişiklik yok. Yeniden kurmak \
+için kutucuğu işaretleyip parola girin.\
+"""
+
+[m16.remove]
+deleting_include = "{path} siliniyor…"
+unpatching = "10_linux'teki TiHA yamaları sökülüyor…"
+done = "GRUB koruması kaldırıldı; menü ve kurtarma girdisi eski hâline döndü."
+
+[m16.params.enable_grub_lock]
+label = "GRUB koruması etkin"
+help = """\
+Kutucuk, adıma girildiğinde sistemin o anki durumunu gösterir; GRUB zaten \
+korumalıysa işaretli gelir. İŞARETİ KALDIRIP UYGULARSANIZ koruma kaldırılır: \
+01_tiha_grub_password silinir, 10_linux'teki TiHA yamaları sökülür, \
+update-grub çalıştırılır; menü, kurtarma girdisi dahil, parolasız hâline \
+döner. Koruma etkinken parola alanını boş bırakıp uygularsanız mevcut parola \
+korunur.\n\
+\n\
+İşaretlenirse GRUB önyükleme menüsünde 'e' (düzenle) kipine girildiğinde ya \
+da GRUB shell'ine ('c' tuşu) düşüldüğünde GRUB önce KULLANICI ADI sorar — \
+aşağıdaki salt okunur 'GRUB kullanıcı adı' kutusundaki değer — ardından \
+'GRUB yönetici parolası' alanına yazılan parolayı ister. Kurtarma (recovery) \
+girdisi menüde kalır; onu ve 'Gelişmiş seçenekler' alt menüsünü açmak da \
+aynı kullanıcı adı ve parolayı ister (kurtarma kipi parolasız root kabuğu \
+verdiği için). Boot akışının kendisi bu parolayı sormaz; yalnız menüye elle \
+müdahale eden kişi görür.\n\
+\n\
+Neden gerekli? GRUB varsayılan olarak fiziksel klavye erişimi olan herkese \
+kernel komut satırını düzenleme hakkı verir. Buraya 'init=/bin/bash' \
+yazılırsa sistem doğrudan root shell açar; oradan da parola değiştirmek, \
+diski okumak, tahtayı kalıcı olarak ele geçirmek mümkündür. Bu kutucuk o \
+vektörü tek bir hash ile tüm klonlarda kapatır.\n\
+\n\
+Nasıl çalışır? Adım, aşağıya yazdığınız parolanın PBKDF2-SHA512 hash'ini \
+/etc/grub.d/01_tiha_grub_password içine yazar; /etc/grub.d/10_linux'ta menü \
+girdilerine --unrestricted bayrağı ekler (menü seçilirken parola sorulmasın \
+diye), kurtarma girdilerini bu bayraktan muaf tutar ve alt menü girdilerinin \
+açılış varsayılanı olarak kaydedilmesini engeller (gözetimsiz açılış parola \
+ekranında beklemesin); update-grub çalıştırıp üretilen menüyü denetler. \
+TiHA'nın eski sürümü kurtarma girdisini GRUB_DISABLE_RECOVERY ile \
+kapatıyordu; bu adım onu geri açar. Hash imaja gömüldüğü için aynı parola \
+tüm klonlarda geçerli olur; düz parola sistemde tutulmaz.\
+"""
+
+[m16.params.grub_username]
+label = "GRUB kullanıcı adı"
+help = """\
+GRUB, parolayı sormadan önce bir kullanıcı adı ister ('Enter username:'). \
+Açılış ekranında bu kutudaki adı yazacaksınız. Değer adımın kendisi \
+tarafından belirlenir, değiştirilemez; GRUB'ın kendi kullanıcı listesinde \
+tanımlı bir addır, sistemdeki etapadmin hesabıyla ve onun parolasıyla ilgisi \
+yoktur.\
+"""
+
+[m16.params.grub_password]
+label = "GRUB yönetici parolası"
+help = """\
+GRUB menü kipine ('e' tuşu) ya da GRUB shell'ine ('c' tuşu) girmeye çalışan \
+kullanıcıdan istenecek parola. GRUB ekranında önce 'Enter username:' çıkar; \
+oraya yukarıdaki 'GRUB kullanıcı adı' kutusundaki ad yazılır, sonra bu \
+parola girilir. Bu adımda girdiğiniz metnin PBKDF2-SHA512 hash'i \
+/etc/grub.d/01_tiha_grub_password içine yazılır ve klon imajına gömülür; düz \
+parola sistemde tutulmaz. Kutucuk işaretsizken bu alan pasiftir. Aynı \
+parolayı bütün klonlar kullanır — operatörün hatırlaması gereken tek bir \
+parola olur.\
+"""
+
+[m16.report]
+removed = """\
+GRUB korumasını kaldırdınız; menü düzenleme, komut satırı ve kurtarma \
+(recovery) girdisi artık parolasız.\
+"""
+test_removed = """\
+Klonun açılış menüsünde 'e' tuşuyla düzenleme ekranının parola sormadan \
+açıldığını doğrulayın.\
+"""
+protected = """\
+GRUB açılış menüsünü korumaya aldınız: menü düzenleme ('e') ve GRUB komut \
+satırı ('c') artık 'etapadmin' GRUB kullanıcı adı ve bu adımda \
+belirlediğiniz GRUB parolasıyla açılıyor. Kurtarma (recovery) girdisi menüde \
+kalıyor ama onu açmak da aynı kullanıcı adı ve parolayı istiyor; 'Gelişmiş \
+seçenekler' alt menüsü de parolalı. Normal açılış parola sormuyor.\
+"""
+recovery_restored = "TiHA'nın eski sürümünün menüden kaldırdığı kurtarma girdisini geri getirdiniz."
+note_recovery_disabled = """\
+Kurtarma girdisi menüde yok: /etc/default/grub'da GRUB_DISABLE_RECOVERY ile \
+kapatılmış (TiHA'dan önceki bir ayar). Açılırsa o da parola ister.\
+"""
+saved_entry_reset = """\
+Kayıtlı açılış varsayılanı parolalı alt menüyü gösteriyordu; sıfırladınız \
+(gözetimsiz açılış parola ekranında beklemesin).\
+"""
+already = "GRUB koruması zaten etkindi; mevcut GRUB parolasını değiştirmeden korudunuz."
+not_enabled = "GRUB korumasını etkinleştirmediniz; klonlarda açılış menüsü parola korumasız olacak."
+note_not_enabled = """\
+Tahtaya klavyeyle erişen biri açılış menüsünde 'e' ile tahtayı doğrudan \
+yönetici kabuğuna düşürebilir.\
+"""
+fallback_default = "GRUB korumasını ayarladınız"
+test_edit = """\
+Klonun açılış menüsünde bir girdinin üzerindeyken 'e' tuşuna basın: \
+kullanıcı adı olarak etapadmin, ardından GRUB parolası sorulmalı; yanlış \
+parolayla düzenleme ekranı açılmamalı. Menü görünmüyorsa açılışta Shift ya \
+da Esc tuşunu basılı tutun.\
+"""
+test_console = "'c' tuşuyla GRUB komut satırında da aynı iki sorunun geldiğini doğrulayın."
+test_default_boot = """\
+Varsayılan girdiyle ve zaman aşımıyla açılışın HİÇ parola sormadan \
+ilerlediğini doğrulayın.\
+"""
+test_recovery = """\
+\"Gelişmiş seçenekler\" altındaki kurtarma (recovery mode) girdisini seçin: \
+etapadmin kullanıcı adı ve GRUB parolası sorulmalı, parolayla kurtarma \
+kipine girilebilmeli; yanlış parolayla girilememeli.\
+"""
+test_after_recovery = """\
+Kurtarma kipinden çıkıp tahtayı yeniden başlatın: sonraki açılış normal \
+girdiyle ve parola sormadan gerçekleşmeli (alt menü girdileri açılış \
+varsayılanı olarak kaydedilmez).\
+"""
+test_keyboard = """\
+Parolayı fiziksel bir USB klavyeyle deneyin: GRUB'da dokunmatik ve ekran \
+klavyesi yoktur, klavye düzeni ABD'dir.\
+"""
+test_advanced = """\
+\"Gelişmiş seçenekler\" alt menüsünün de parola istediğini doğrulayın; eski \
+çekirdekle açmak gerekirse GRUB parolası gerekir.\
+"""
+note = """\
+GRUB parolası sistemdeki etapadmin parolası değildir ve hiçbir yerden geri \
+okunamaz; bütün klonlarda aynıdır. Türkçe karakter (ç, ğ, ı, ö, ş, ü) içeren \
+bir parola GRUB'ın ABD klavye düzeninde yazılamayabilir.\
+"""
+
+# ==========================================================================
+# Adım 17: İmaj öncesi temizlik (m10_image_sanitize)
+# ==========================================================================
+
+[m10]
+title = "İmaj öncesi temizlik"
+sidebar_title = "İmaj öncesi temizlik"
+apply_hint = "Son adım: tekil kimlikler ve izler temizlenir — imaj alınabilir."
+rationale = """\
+İmaj almadan önce çalıştırılan ZORUNLU bir adım. Aksi hâlde imajdan çıkan \
+bütün tahtalarda aynı makine kimliği (machine-id), aynı SSH ana bilgisayar \
+anahtarı, aynı NetworkManager bağlantı UUID'si ve aynı kabuk geçmişi olur. \
+Bu sanki çalışıyor gibi görünür ama journald günlüklerinin karışması, SSH \
+istemcilerinde 'ana bilgisayar anahtarı değişti' uyarısı ve kablosuz ağ \
+parolasının 50 tahtaya aynen sızması gibi sonuçlar doğurur. TiHA bu adımda \
+tüm tekil kimlikleri temizler, ilk açılışta kendi benzersiz SSH anahtarını \
+üreten bir servis bırakır ve tahtanın imaj alınmaya hazır olmasını sağlar. \
+Geri alma anlamlı değildir — silinen kimliği yeniden üretemeyiz.\n\
+\n\
+Ahenk (LiderAhenk) ajan kimliği bu adımda dokunulmaz; bunun için ayrı bir \
+adım vardır (Ahenk kimliği sıfırla). O adım kısmi geri almayı destekler, bu \
+sanitize adımı desteklemez.\
+"""
+
+[m10.preview]
+body = """\
+Bu adım uygulandıktan sonra tahta imaj alınmaya hazırdır.\n\
+Tahtayı KAPATIN ve işletim sistemiyle açmadan imajı canlı USB'den\n\
+(Clonezilla vb.) alın. Açarsanız makine kimliği ve SSH anahtarları\n\
+yeniden üretilir ve bütün klonlara aynen gider.\n\
+\n\
+Aşağıdaki kategoriler temizlenecek (geri alınamaz):\n\
+\n\
+Tekil kimlikler (her kopya kendi kimliğini üretir):\n\
+\u0020\u0020- /etc/machine-id ve /var/lib/dbus/machine-id\n\
+\u0020\u0020- /etc/ssh/ssh_host_* (SSH ana bilgisayar anahtarları)\n\
+\u0020\u0020- /etc/NetworkManager/system-connections/*\n\
+\u0020\u0020\u0020\u0020(kablosuz ağ parolaları dahil bağlantı tanımları)\n\
+\u0020\u0020- DHCP/DHCP6 kira (lease) dosyaları\n\
+\u0020\u0020- /var/lib/systemd/random-seed\n\
+\u0020\u0020- SSH anahtar üretiminin 'yapıldı' işareti\n\
+\n\
+TiHA'nın hassas yedekleri (/var/lib/tiha, imaja gider):\n\
+\u0020\u0020- Parola değişikliğinden önceki /etc/shadow yedeği ve\n\
+\u0020\u0020\u0020\u0020kenara alınmış anahtarlıklar\n\
+\u0020\u0020- PIN kâğıtları (bütün anahtarlar QR kodlarıyla) ve anahtar\n\
+\u0020\u0020\u0020\u0020yedeği. Kâğıdı bu adımdan önce yazdırın ya da \
+kaydedin;\n\
+\u0020\u0020\u0020\u0020gerekirse PIN adımı yeniden uygulanarak yeniden \
+üretilir.\n\
+\u0020\u0020- Bu yedekler silindiği için 'Kullanıcı parolaları' ve PIN\n\
+\u0020\u0020\u0020\u0020adımları bu adımdan sonra geri alınamaz.\n\
+\n\
+Not: ahenk (LiderAhenk) ajan kimliği bu adımda dokunulmaz -\n\
+klon-yeniden-talep mekanizması bir önceki adımda (m12)\n\
+imaja gömülür; credential temizliği klonun ilk açılışında\n\
+boot servisi tarafından otomatik yapılır.\n\
+\n\
+Yer açan ve iz silen temizlikler:\n\
+\u0020\u0020- APT önbelleği ve indirilmiş .deb paketleri\n\
+\u0020\u0020- Yetim paketler (apt-get autoremove --purge)\n\
+\u0020\u0020- Kalıntı yapılandırmalar (rc durumundaki paketler tasfiye \
+edilir)\n\
+\u0020\u0020- systemd journal (boyut 1 KB'a indirilir)\n\
+\u0020\u0020- /var/log altındaki dosyalar (yapı korunur, içerik boşaltılır)\n\
+\u0020\u0020- Çökme raporları (/var/crash, /var/lib/whoopsie)\n\
+\u0020\u0020- Posta / cups / anacron kuyrukları\n\
+\u0020\u0020- man / fontconfig / debconf / lightdm önbellekleri\n\
+\u0020\u0020- dpkg yedek dosyaları (*.dpkg-old, *.dpkg-dist, *.ucf-*)\n\
+\u0020\u0020- Tüm kullanıcıların ~/.cache, ~/.local/share/Trash ve çeşitli\n\
+\u0020\u0020\u0020\u0020geçmiş dosyaları (.bash_history, .lesshst, .viminfo, \
+.python_history)\n\
+\u0020\u0020- Web tarayıcı önbellekleri ve gezinti verileri\n\
+\u0020\u0020\u0020\u0020(Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, \
+Opera, Yandex)\n\
+\u0020\u0020\u0020\u0020- gezinti geçmişi, çerezler, indirme geçmişi, \
+oturumlar, yerel\n\
+\u0020\u0020\u0020\u0020\u0020\u0020depolama; tarayıcı tercihleri ve yer \
+imleri korunur\n\
+\u0020\u0020\u0020\u0020- bayat kilit dosyaları da silinir (Chromium \
+türevlerinde\n\
+\u0020\u0020\u0020\u0020\u0020\u0020SingletonLock/Socket/Cookie, Firefox'ta \
+lock + .parentlock);\n\
+\u0020\u0020\u0020\u0020\u0020\u0020aksi hâlde klonlanmış tahtada tarayıcı \
+açılmayı reddedebilir\n\
+\u0020\u0020- GNOME anahtarlıkları (~/.local/share/keyrings)\n\
+\u0020\u0020\u0020\u0020- Chrome Safe Storage anahtarı, uygulamaların \
+kaydettiği\n\
+\u0020\u0020\u0020\u0020\u0020\u0020parolalar ve PKCS#11 sertifika deposu; \
+imajla kopyalanırsa\n\
+\u0020\u0020\u0020\u0020\u0020\u0020aynı sır bütün tahtalara dağılır \
+(parolasız anahtarlıklar\n\
+\u0020\u0020\u0020\u0020\u0020\u0020diskte düz metin tutulduğu için doğrudan \
+okunabilir)\n\
+\u0020\u0020\u0020\u0020- klon tahtada parola yeniden tanımlandığında \
+anahtarlık eski\n\
+\u0020\u0020\u0020\u0020\u0020\u0020parolada kalır ve girişte asla \
+geçilemeyen 'parola artık\n\
+\u0020\u0020\u0020\u0020\u0020\u0020giriş anahtarlığınızla uyuşmuyor' \
+diyaloğu çıkar\n\
+\u0020\u0020\u0020\u0020- her tahta ilk girişinde kendi anahtarlığını \
+otomatik üretir\n\
+\u0020\u0020- /tmp ve /var/tmp içerikleri\n\
+\u0020\u0020- Kullanılmayan diller için yerelleştirme dosyaları\n\
+\u0020\u0020\u0020\u0020({locales} dışındakiler /usr/share/locale altından \
+silinir)\n\
+\n\
+Uyguladıktan sonra: tahtayı kapatın ve imaj alma aracınızı\n\
+(Clonezilla vb.) canlı USB'den başlatın. Otomatik Ahenk Kaydı\n\
+adımının bu adımdan ÖNCE uygulanmış olması gerekir.\
+"""
+
+[m10.apply]
+start = "İmaj sanitizasyon başlatılıyor..."
+image_info_written = "İmaj damgası yazıldı: {path}"
+image_info_progress = "  ✓ İmaj damgası: {path}"
+identities = "Tekil kimlikler temizleniyor..."
+machine_id = "machine-id temizlendi"
+ssh_sentinel_removed = "SSH anahtar üretimi 'yapıldı' işareti silindi: {path}"
+ssh_keys = "SSH host anahtarları silindi, ilk açılışta yenilenecek"
+nm_removed = "{count} NetworkManager bağlantı dosyası silindi"
+dhcp_removed = "{count} DHCP lease dosyası silindi"
+random_seed = "systemd random-seed sıfırlandı"
+state_removed = "TiHA'nın hassas yedekleri silindi: {items}"
+state_removed_progress = "  ✓ TiHA'nın hassas yedekleri: {count} öğe"
+apt = "APT önbelleği ve yetim paketler temizleniyor..."
+rc_purged = "{count} kalıntı paket purge edildi"
+apt_archive = "APT arşivinden {count} öğe silindi"
+apt_lists = "APT paket listesi temizlendi ({count} dosya)"
+logs = "Sistem logları ve journal temizleniyor..."
+journal = "systemd journal vakumlandı"
+var_log = "/var/log: {truncated} dosya boşaltıldı, {removed} eski dosya silindi"
+installer_logs = "Debian installer logları silindi"
+crash = "{count} crash/telemetri öğesi silindi"
+spool = "Spool kuyruklarından {count} öğe silindi"
+caches = "Sistem önbelleklerinden {count} öğe silindi"
+cloud_init = "cloud-init durumu sıfırlandı"
+dpkg_backups = "{count} dpkg/ucf yedek dosyası silindi"
+locales = "{count} kullanılmayan locale dizini silindi"
+homes_progress = "Kullanıcı ev dizinleri temizleniyor (cache, geçmiş, tarayıcı verileri)..."
+homes = """\
+{homes} ev dizininde: {history} geçmiş dosyası silindi, {cache} cache öğesi \
+temizlendi, {trash} çöp kutusu öğesi silindi\
+"""
+browsers = "Tarayıcılardan (Firefox/Chrome/Edge/Brave/...) {count} önbellek/veri öğesi silindi"
+keyrings = """\
+{count} GNOME anahtarlık dosyası silindi (ilk girişte yenisi oluşur; klonda \
+parola uyuşmazlığı olmaz)\
+"""
+tmp = "/tmp ve /var/tmp: {count} öğe silindi"
+finishing = "Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor..."
+freed_unknown = "ölçülemedi"
+done = "İmaj öncesi temizlik tamamlandı; ~{freed} alan boşaltıldı."
+detail_item = "• {item}"
+
+[m10.undo]
+not_supported = "Bu işlem geri alınamaz."
+
+[m10.report]
+done_identity = """\
+İmajı klonlamaya hazırlamak için kimlik temizliği yaptınız: makine kimliğini \
+(machine-id) sıfırladınız, SSH anahtarlarını sildiniz (her klon ilk \
+açılışta kendi anahtarını üretecek), kayıtlı ağ bağlantılarını ve Wi-Fi \
+parolalarını temizlediniz.\
+"""
+done_cleanup = """\
+Günlükleri, APT önbelleğini ve paket listelerini, kabuk geçmişlerini, \
+kullanıcı önbelleklerini, tarayıcı gezinti verilerini (yer imleri \
+korunarak), GNOME anahtarlıklarını ve geçici dosyaları sildiniz.\
+"""
+done_cleanup_freed = """\
+Günlükleri, APT önbelleğini ve paket listelerini, kabuk geçmişlerini, \
+kullanıcı önbelleklerini, tarayıcı gezinti verilerini (yer imleri \
+korunarak), GNOME anahtarlıklarını ve geçici dosyaları sildiniz; yaklaşık \
+{freed} disk alanı boşalttınız.\
+"""
+done_stamp = """\
+İmaja /etc/tiha-image-info.json damgasını yazdınız; sahada bu dosyadan \
+imajın sürümü ve uygulanan adımlar görülebilir (yalnız root okuyabilir).\
+"""
+done_sensitive = """\
+TiHA'nın imajla klonlara gidecek hassas yedeklerini (parola değişikliği \
+öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, PIN kâğıtları ve \
+anahtar yedeği) sildiniz; bu yüzden Kullanıcı parolaları ve PIN adımları \
+artık geri alınamaz.\
+"""
+test_identity = """\
+İki farklı klonda `cat /etc/machine-id` ve `ssh-keygen -lf \
+/etc/ssh/ssh_host_ed25519_key.pub` çıktılarının FARKLI olduğunu doğrulayın.\
+"""
+test_ssh = """\
+Klonda `ls /etc/ssh/ssh_host_*` ile SSH anahtarlarının üretildiğini ve (SSH \
+kuruluysa) `systemctl is-active ssh` çıktısının active olduğunu doğrulayın.\
+"""
+test_network = """\
+Kablolu ağın klonda kendiliğinden bağlandığını doğrulayın; Wi-Fi \
+kullanılacaksa bağlantıyı yeniden tanımlamanız gerekir (Wi-Fi parolaları \
+imajdan silindi).\
+"""
+test_login = """\
+etapadmin ve bir öğretmen hesabıyla girişte \"anahtarlık parolası \
+uyuşmuyor\" uyarısı çıkmadığını, Firefox ve Chrome'un açıldığını doğrulayın.\
+"""
+test_apt = """\
+Klonda `sudo apt update` komutunun çalıştığını ve `sudo cat \
+/etc/tiha-image-info.json` çıktısının beklediğiniz sürümü gösterdiğini \
+doğrulayın; `ls -l /etc/tiha-image-info.json` yalnız root'a okuma izni \
+(-rw-------) göstermeli.\
+"""
+note = """\
+Temizlikten sonra kaynak tahtayı işletim sistemiyle YENİDEN AÇMAYIN: kapatın \
+ve imajı canlı USB'den (Clonezilla vb.) alın. Açarsanız makine kimliği ve \
+SSH anahtarları kaynak tahtada yeniden üretilir ve bütün klonlara aynen \
+gider.\
+"""

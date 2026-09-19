@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .. import __version__
+from .i18n import t
 from .logger import get_logger
 
 log = get_logger(__name__)
@@ -80,11 +81,11 @@ def _format_body(releases: list[dict[str, Any]]) -> str:
     for r in releases:
         tag = _normalize(r.get("tag_name") or "")
         body = (r.get("body") or "").strip()
-        title = f"v{tag}" if tag else (r.get("name") or "Sürüm")
+        title = f"v{tag}" if tag else (r.get("name") or t("core.update_check.release_fallback_title"))
         if body:
             chunks.append(f"### {title}\n\n{body}")
         else:
-            chunks.append(f"### {title}\n\n(Bu sürüm için ayrıntı notu girilmemiş.)")
+            chunks.append(f"### {title}\n\n{t('core.update_check.no_release_notes')}")
     return "\n\n".join(chunks)
 
 

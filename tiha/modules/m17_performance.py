@@ -69,6 +69,7 @@ import re
 import shutil
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd, run_cmd_stream
@@ -172,9 +173,9 @@ XORG_LOG = Path("/var/log/Xorg.0.log")
 # kurulu geliyor ve Intel tahtalarda X onu seçiyor; o sürücünün SWcursor
 # seçeneği de yok. Bu yüzden ilk çare modesetting'e geçmek, ikincisi ona ek
 # olarak donanımsal imleci tamamen kapatmak.
-CURSOR_XORG_OFF = "Kapalı"
-CURSOR_XORG_MODESETTING = "modesetting sürücüsüne geç"
-CURSOR_XORG_SWCURSOR = "modesetting + yazılımsal imleç (SWcursor)"
+CURSOR_XORG_OFF = t("m17.params.cursor_xorg_fix.opt_off")
+CURSOR_XORG_MODESETTING = t("m17.params.cursor_xorg_fix.opt_modesetting")
+CURSOR_XORG_SWCURSOR = t("m17.params.cursor_xorg_fix.opt_swcursor")
 CURSOR_XORG_CHOICES = {
     CURSOR_XORG_OFF: None,
     CURSOR_XORG_MODESETTING: False,
@@ -616,8 +617,8 @@ def _light_user_traces(user: _UserRef, dump: dict[str, str] | None = None) -> li
 
 class PerformanceModule(Module):
     id = "m17_performance"
-    title = "Başarım (Deneysel)"
-    sidebar_title = "Başarım (Deneysel)"
+    title = t("m17.title")
+    sidebar_title = t("m17.sidebar_title")
     experimental = True
     streams_output = True
     popup_on_success = True
@@ -625,47 +626,9 @@ class PerformanceModule(Module):
         "https://github.com/enseitankado/tiha/blob/main/"
         "docs/m17-basarim-deneysel.md"
     )
-    doc_label = "Başarım (Deneysel) — mekanizma, ölçümler ve tahtada deneme"
-    apply_hint = (
-        "Oturum kapanınca kalan süreçler sonlandırılır (açılıştan sonra); "
-        "seçilirse ETA Hafif Mod tüm kullanıcılara uygulanır ve imleç "
-        "düzeltmesi kurulur."
-    )
-    rationale = (
-        "Bir öğretmen tarayıcısını kapatmadan oturumunu kapattığında "
-        "Firefox, Chrome ve bütün alt süreçleri arka planda çalışmaya "
-        "devam eder. Dört sekmeli bir tarayıcı 600 MB – 1 GB bellek tutar "
-        "ve işlemci harcamayı sürdürür. Tahta gün içinde yeniden "
-        "başlatılmadığında her yeni öğretmen oturumu bu yükün üstüne "
-        "eklenir.\n\n"
-        "\"Eski oturum kalıntılarını temizle\" seçeneği, oturum kapanınca o "
-        "oturumdan kalan her süreci sistemin kendi oturum yöneticisine "
-        "(systemd-logind) sonlandırtır. Ayar bir sonraki açılışta etkin "
-        "olur.\n\n"
-        "ETA Hafif Mod, Pardus'un düşük donanımlı tahtalar için hazırladığı "
-        "eta-light-mode paketidir. Seçilen ayarlar tahtadaki bütün "
-        "kullanıcılara her oturum açılışında uygulanır. Çözünürlük ve "
-        "yenileme hızı düşürme ekranı ve kalem çizgisini bulanıklaştırır; "
-        "önce tek bir tahtada deneyin.\n\n"
-        "Hafif mod kutusu sistemin o anki durumunu gösterir. Kutu işaretliyken "
-        "kaldırılıp uygulanırsa hafif mod sistemden kaldırılır ve daha önce "
-        "giriş yapmış hesapların masaüstü ayarları da geri alınır. Paket "
-        "kaldırılmaz: ETAP imajının parçası, kaldırılması ayarları geri "
-        "almaya yetmez ve geri almak için gereken aracı da yok eder.\n\n"
-        "⚠ DİKKAT: Bu adımın uyguladığı değişiklikler — özellikle hafif "
-        "mod (kompozitör kapatma, çözünürlük düşürme, yenileme hızı 50 Hz, "
-        "yazı/ikon ölçekleme) — hâlihazırda Pardus ETAP üzerinde "
-        "kullandığınız uygulama programlarının görsel arayüzlerinde renk "
-        "ve fiziksel ölçü açısından kullanımı olumsuz etkileyebilecek "
-        "sonuçlara yol açabilir: pencereler beklenenden farklı boyutta "
-        "açılabilir, buton/menü hizaları bozulabilir, kalem çizgisi "
-        "bulanıklaşabilir, video/tam ekran içeriklerde renk yırtılması "
-        "görülebilir. Klonlamaya başlamadan önce ÖRNEK MAKİNEDE gerekli "
-        "kontrolleri ve testleri yapmayı unutmayın; sınıfta kullanılan "
-        "eğitim yazılımları, EBA içerikleri, sunum araçları ve tarayıcı "
-        "üzerinde açık video/etkileşimli içeriklerle bir tur çalıştırıp "
-        "davranışlarını gözle doğrulayın."
-    )
+    doc_label = t("m17.doc_label")
+    apply_hint = t("m17.apply_hint")
+    rationale = t("m17.rationale")
 
     # ------------------------------------------------------------------
     # Formun sistemden dolan alanları (params.py "default_from")
@@ -715,47 +678,49 @@ class PerformanceModule(Module):
     # ------------------------------------------------------------------
 
     def preview(self) -> str:
-        lines = ["Oturum kalıntıları"]
+        lines = [t("m17.preview.sessions_header")]
         runtime = _runtime_kill_user_processes()
         dropin_ours = self._dropin_is_ours()
         if runtime is True:
-            state = "etkin (oturum kapanınca süreçler sonlandırılıyor)"
+            state = t("m17.preview.state_active")
         elif dropin_ours:
-            state = "yapılandırıldı, açılışta etkin olacak"
+            state = t("m17.preview.state_configured")
         elif runtime is False:
-            state = "kapalı (Pardus varsayılanı; süreçler asılı kalıyor)"
+            state = t("m17.preview.state_off")
         else:
-            state = "okunamadı"
-        lines.append(f"  Durum            : {state}")
+            state = t("m17.preview.unreadable")
+        lines.append(t("m17.preview.state", state=state))
 
         lingering = _lingering_sessions()
         if lingering:
             total = sum(s["anon"] for s in lingering)
-            lines.append(
-                f"  Asılı oturum     : {len(lingering)} "
-                f"(toplam ~{_mb(total)} bellek)"
-            )
+            lines.append(t(
+                "m17.preview.lingering", count=len(lingering), memory=_mb(total),
+            ))
             for s in lingering:
-                lines.append(
-                    f"    - {s['name']} (oturum {s['id']}, {s['service']}, "
-                    f"{s['since']}) ~{_mb(s['anon'])}"
-                )
+                lines.append(t(
+                    "m17.preview.lingering_item",
+                    name=s["name"], id=s["id"], service=s["service"],
+                    since=s["since"], memory=_mb(s["anon"]),
+                ))
         else:
-            lines.append("  Asılı oturum     : yok")
+            lines.append(t("m17.preview.lingering_none"))
 
-        lines += ["", "ETA Hafif Mod"]
+        lines += ["", t("m17.preview.light_header")]
         version = _pkg_version(LIGHT_PKG)
-        lines.append(
-            f"  Paket            : {version + ' kurulu' if version else 'kurulu değil (uygulanırsa kurulur)'}"
-        )
+        if version:
+            lines.append(t("m17.preview.package_installed", version=version))
+        else:
+            lines.append(t("m17.preview.package_missing"))
         settings = _read_light_settings()
         if settings is not None and LIGHT_AUTOSTART.exists():
             active = sorted(k for k, v in settings.items() if v is True)
-            lines.append(
-                "  Tüm kullanıcılar : etkin — " + (", ".join(active) or "(seçili ayar yok)")
-            )
+            lines.append(t(
+                "m17.preview.all_users_on",
+                keys=", ".join(active) or t("m17.preview.no_keys_selected"),
+            ))
         else:
-            lines.append("  Tüm kullanıcılar : etkin değil")
+            lines.append(t("m17.preview.all_users_off"))
 
         affected = [
             (user[0], traces)
@@ -764,30 +729,34 @@ class PerformanceModule(Module):
             if traces
         ]
         if affected:
-            lines.append(
-                f"  İzi taşıyan hesap: {len(affected)} — "
-                + ", ".join(f"{name} ({len(t)} ayar)" for name, t in affected)
-            )
-            lines.append(
-                "                     (hafif mod kaldırılırsa bu hesapların "
-                "ayarları da geri alınır)"
-            )
+            lines.append(t(
+                "m17.preview.traced_accounts",
+                count=len(affected),
+                accounts=", ".join(
+                    t("m17.preview.traced_account_item", name=name, count=len(traces))
+                    for name, traces in affected
+                ),
+            ))
+            lines.append(t("m17.preview.traced_note"))
         else:
-            lines.append("  İzi taşıyan hesap: yok")
+            lines.append(t("m17.preview.traced_none"))
 
-        lines += ["", "Fare imleci (ekran modu değişimi)"]
+        lines += ["", t("m17.preview.cursor_header")]
         driver = _x_driver()
-        lines.append(f"  Ekran sürücüsü   : {driver or 'okunamadı'}")
+        lines.append(t(
+            "m17.preview.driver", driver=driver or t("m17.preview.unreadable"),
+        ))
         if CURSOR_XORG_CONF.exists():
             conf = _read_file(CURSOR_XORG_CONF)
             mode = CURSOR_XORG_SWCURSOR if "SWcursor" in conf else CURSOR_XORG_MODESETTING
-            lines.append(f"  Xorg düzeltmesi  : var — {mode}")
+            lines.append(t("m17.preview.xorg_fix_on", mode=mode))
         else:
-            lines.append("  Xorg düzeltmesi  : yok")
-        lines.append(
-            "  Tazeleme servisi : "
-            + ("kurulu" if CURSOR_AUTOSTART.exists() else "kurulu değil")
-        )
+            lines.append(t("m17.preview.xorg_fix_off"))
+        lines.append(t(
+            "m17.preview.cursor_service",
+            state=t("m17.preview.installed") if CURSOR_AUTOSTART.exists()
+            else t("m17.preview.not_installed"),
+        ))
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -811,7 +780,7 @@ class PerformanceModule(Module):
 
         if not (kill_processes or light_mode or light_remove
                 or cursor_xorg_on or cursor_service):
-            return ApplyResult(False, "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı.")
+            return ApplyResult(False, t("m17.apply.nothing_selected"))
 
         def say(line: str) -> None:
             if progress:
@@ -846,15 +815,14 @@ class PerformanceModule(Module):
                 for key in field_keys
             ]
             if not keys:
-                failures.append(
-                    "ETA Hafif Mod işaretli ama hiçbir alt ayar seçilmedi; "
-                    "hafif mod uygulanmadı."
-                )
+                failures.append(t("m17.apply.light_no_subkeys"))
             else:
                 ok, text = self._apply_light_mode(original, keys, say, warnings)
                 if ok:
                     summary.append(text)
-                    details.append(f"Hafif mod: {LIGHT_SETTINGS} → {', '.join(keys)}")
+                    details.append(t(
+                        "m17.apply.details_light", path=LIGHT_SETTINGS, keys=", ".join(keys),
+                    ))
                     data["light_mode_keys"] = keys
                 else:
                     failures.append(text)
@@ -863,7 +831,7 @@ class PerformanceModule(Module):
             ok, text = self._remove_light_mode(original, say, warnings)
             if ok:
                 summary.append(text)
-                details.append("Hafif mod kaldırıldı (sistem + kullanıcı ayarları)")
+                details.append(t("m17.apply.details_light_removed"))
                 data["light_mode_removed"] = True
             else:
                 failures.append(text)
@@ -872,7 +840,9 @@ class PerformanceModule(Module):
             ok, text = self._apply_cursor_xorg(original, cursor_xorg, say)
             if ok:
                 summary.append(text)
-                details.append(f"İmleç (Xorg): {CURSOR_XORG_CONF} — {cursor_xorg}")
+                details.append(t(
+                    "m17.apply.details_cursor_xorg", path=CURSOR_XORG_CONF, choice=cursor_xorg,
+                ))
                 data["cursor_xorg_fix"] = cursor_xorg
             else:
                 failures.append(text)
@@ -881,7 +851,7 @@ class PerformanceModule(Module):
             ok, text = self._apply_cursor_service(original, say)
             if ok:
                 summary.append(text)
-                details.append(f"İmleç (servis): {CURSOR_SCRIPT}")
+                details.append(t("m17.apply.details_cursor_service", path=CURSOR_SCRIPT))
                 data["cursor_refresh_service"] = True
             else:
                 failures.append(text)
@@ -900,52 +870,48 @@ class PerformanceModule(Module):
         )
 
     def _apply_logind(self, original: dict, say, warnings: list[str]) -> tuple[bool, str]:
-        say("==== Oturum kalıntıları: systemd-logind ====")
+        say(t("m17.logind.header"))
         try:
             current = LOGIND_DROPIN.read_text(encoding="utf-8") if LOGIND_DROPIN.exists() else None
             if current != LOGIND_DROPIN_CONTENT:
                 LOGIND_DROPIN.parent.mkdir(parents=True, exist_ok=True)
                 LOGIND_DROPIN.write_text(LOGIND_DROPIN_CONTENT, encoding="utf-8")
                 LOGIND_DROPIN.chmod(0o644)
-                say(f"Yazıldı: {LOGIND_DROPIN}")
+                say(t("m17.say.written", path=LOGIND_DROPIN))
             else:
-                say(f"Zaten yazılı: {LOGIND_DROPIN}")
+                say(t("m17.say.already_written", path=LOGIND_DROPIN))
         except OSError as exc:
-            return False, f"logind ayar dosyası yazılamadı: {exc}"
+            return False, t("m17.logind.write_failed", error=exc)
         original["touched"]["logind"] = True
         self._save_original(original)
 
         for path in _logind_conflicts():
-            warnings.append(
-                f"{path} dosyası KillUserProcesses ayarını TiHA'dan sonra "
-                "okunarak ezebilir; içeriğini denetleyin."
-            )
+            warnings.append(t("m17.logind.conflict", path=path))
 
         if _runtime_kill_user_processes() is True:
-            return True, "Oturum kalıntı temizliği etkin."
-        say("systemd-logind yapılandırmayı yeniden okuyamıyor (systemd 252); "
-            "ayar bir sonraki açılışta etkin olacak.")
-        return True, "Oturum kalıntı temizliği yapılandırıldı (yeniden başlatınca etkin)."
+            return True, t("m17.logind.active")
+        say(t("m17.logind.reload_impossible"))
+        return True, t("m17.logind.configured")
 
     def _apply_light_mode(
         self, original: dict, keys: list[str], say, warnings: list[str],
     ) -> tuple[bool, str]:
-        say("\n==== ETA Hafif Mod ====")
+        say(t("m17.light.header"))
         version = _pkg_version(LIGHT_PKG)
         if version is None:
             env = {"DEBIAN_FRONTEND": "noninteractive"}
             say("\n==== apt-get update ====")
             if not run_cmd_stream(["apt-get", "update"], progress=say, env=env, timeout=300).ok:
-                return False, "apt-get update başarısız; eta-light-mode kurulamadı."
+                return False, t("m17.light.apt_update_failed")
             say(f"\n==== apt-get install {LIGHT_PKG} ====")
             if not run_cmd_stream(
                 ["apt-get", "install", "-y", LIGHT_PKG], progress=say, env=env, timeout=600,
             ).ok:
-                return False, f"{LIGHT_PKG} kurulamadı."
+                return False, t("m17.light.install_failed", package=LIGHT_PKG)
             version = _pkg_version(LIGHT_PKG)
             if version is None:
-                return False, f"{LIGHT_PKG} kurulumu doğrulanamadı."
-        say(f"{LIGHT_PKG} sürümü: {version}")
+                return False, t("m17.light.install_unverified", package=LIGHT_PKG)
+        say(t("m17.light.version", package=LIGHT_PKG, version=version))
         # Kullanıcı ayarlarının TiHA öncesi hâli bu noktada hâlâ el
         # değmemiş: autostart yazılmadan kimse yeni ayarla oturum açmadı.
         self._capture_user_state(original, say)
@@ -953,23 +919,20 @@ class PerformanceModule(Module):
         self._save_original(original)
 
         if version not in LIGHT_TESTED_VERSIONS:
-            warnings.append(
-                f"{LIGHT_PKG} {version} sürümü TiHA ile denenmedi "
-                f"(denenen: {', '.join(LIGHT_TESTED_VERSIONS)}). Ayarların "
-                "tahtada uygulandığını ilk oturumda gözle doğrulayın."
-            )
+            warnings.append(t(
+                "m17.light.untested_version",
+                package=LIGHT_PKG, version=version,
+                tested=", ".join(LIGHT_TESTED_VERSIONS),
+            ))
         known = _light_mode_keys()
         unknown = [k for k in keys if k not in known]
         if unknown:
-            warnings.append(
-                "Kurulu eta-light-mode şu ayarları tanımıyor, atlandı: "
-                + ", ".join(unknown)
-            )
+            warnings.append(t("m17.light.unknown_keys", keys=", ".join(unknown)))
             keys[:] = [k for k in keys if k in known]
         if not keys:
-            return False, "Seçilen hafif mod ayarlarının hiçbiri kurulu pakette yok."
+            return False, t("m17.light.no_known_keys")
         if not LIGHT_ACTION.is_file():
-            return False, f"{LIGHT_ACTION} bulunamadı; paket yapısı değişmiş olabilir."
+            return False, t("m17.light.action_missing", path=LIGHT_ACTION)
 
         # Daha önce açık olup bu kez seçilmeyen ayarlar. JSON'dan düşmeleri
         # yetmez: paket bir anahtarı yoksaydığında kullanıcıdaki değeri
@@ -982,19 +945,21 @@ class PerformanceModule(Module):
             input_data=json.dumps(payload), timeout=30,
         )
         if not r.ok:
-            return False, f"eta-light-mode ayarları yazılamadı: {r.stderr.strip() or r.returncode}"
+            return False, t(
+                "m17.light.write_failed", error=r.stderr.strip() or r.returncode,
+            )
         if _read_light_settings() != payload or not LIGHT_AUTOSTART.exists():
-            return False, "eta-light-mode ayarları yazıldı görünüyor ama doğrulanamadı."
-        say(f"Yazıldı: {LIGHT_SETTINGS} ({', '.join(keys)})")
-        say(f"Autostart: {LIGHT_AUTOSTART}")
+            return False, t("m17.light.write_unverified")
+        say(t("m17.say.written_keys", path=LIGHT_SETTINGS, keys=", ".join(keys)))
+        say(t("m17.say.autostart", path=LIGHT_AUTOSTART))
 
         if dropped:
-            say(f"\nSeçimden çıkarılan ayarlar geri alınıyor: {', '.join(dropped)}")
+            say(t("m17.light.reverting_dropped", keys=", ".join(dropped)))
             reverted, errors = self._revert_user_state(original, set(dropped), say)
             warnings.extend(errors)
             if reverted:
-                say(f"Etkilenen hesap: {', '.join(reverted)}")
-        return True, "ETA Hafif Mod tüm kullanıcılara uygulandı (sonraki oturum açılışında)."
+                say(t("m17.light.affected_accounts", accounts=", ".join(reverted)))
+        return True, t("m17.light.applied")
 
     def _remove_light_mode(
         self, original: dict, say, warnings: list[str],
@@ -1008,40 +973,36 @@ class PerformanceModule(Module):
         ``/usr/bin/eta-light-mode`` aracını siler ve ETAP imajını depodaki
         standart kurulumdan uzaklaştırır.
         """
-        say("\n==== ETA Hafif Mod kaldırılıyor ====")
+        say(t("m17.remove.header"))
         # Kullanıcıların TiHA öncesi hâli kaydedilmemişse (hafif modu TiHA
         # açmadıysa) şimdi kaydetmenin anlamı yok: ayar zaten uygulanmış
         # durumda. Bu durumda geri alma sistem varsayılanına döner.
         if LIGHT_ACTION.is_file():
             r = run_cmd(["python3", str(LIGHT_ACTION), "disable"], timeout=30)
             if not r.ok:
-                return False, (
-                    "eta-light-mode kapatılamadı: "
-                    f"{r.stderr.strip() or r.returncode}"
+                return False, t(
+                    "m17.remove.disable_failed", error=r.stderr.strip() or r.returncode,
                 )
         else:
-            say(f"{LIGHT_ACTION} yok; sistem dosyaları doğrudan siliniyor.")
+            say(t("m17.remove.action_missing", path=LIGHT_ACTION))
             for path in (LIGHT_SETTINGS, LIGHT_AUTOSTART):
                 try:
                     if path.exists():
                         path.unlink()
                 except OSError as exc:
-                    return False, f"{path} silinemedi: {exc}"
+                    return False, t("m17.remove.delete_failed", path=path, error=exc)
         if self.light_mode_active():
-            return False, "Hafif mod kapatıldı görünüyor ama doğrulanamadı."
-        say(f"Silindi: {LIGHT_SETTINGS}")
-        say(f"Silindi: {LIGHT_AUTOSTART}")
-        say(f"{LIGHT_PKG} paketi kaldırılmadı (ETAP imajının parçası).")
+            return False, t("m17.remove.unverified")
+        say(t("m17.say.deleted", path=LIGHT_SETTINGS))
+        say(t("m17.say.deleted", path=LIGHT_AUTOSTART))
+        say(t("m17.remove.package_kept", package=LIGHT_PKG))
 
         reverted, errors = self._revert_user_state(original, None, say)
         warnings.extend(errors)
         if reverted:
-            say(f"Kullanıcı ayarları geri alındı: {', '.join(reverted)}")
-            return True, (
-                "ETA Hafif Mod kaldırıldı; "
-                f"{len(reverted)} hesabın masaüstü ayarı geri alındı."
-            )
-        return True, "ETA Hafif Mod kaldırıldı (izi taşıyan hesap yoktu)."
+            say(t("m17.remove.users_reverted", accounts=", ".join(reverted)))
+            return True, t("m17.remove.done_with_users", count=len(reverted))
+        return True, t("m17.remove.done_no_users")
 
     # ------------------------------------------------------------------
     # Geri al
@@ -1052,30 +1013,29 @@ class PerformanceModule(Module):
         """Xorg parçasını yazar (modesetting, istenirse + SWcursor)."""
         swcursor = CURSOR_XORG_CHOICES.get(choice)
         if swcursor is None:
-            return False, f"Bilinmeyen imleç seçeneği: {choice}"
-        say("\n==== Fare imleci: Xorg yapılandırması ====")
+            return False, t("m17.cursor.unknown_choice", choice=choice)
+        say(t("m17.cursor.xorg_header"))
         content = _cursor_xorg_content(swcursor)
         try:
             CURSOR_XORG_CONF.parent.mkdir(parents=True, exist_ok=True)
             if _read_file(CURSOR_XORG_CONF) != content:
                 CURSOR_XORG_CONF.write_text(content, encoding="utf-8")
                 CURSOR_XORG_CONF.chmod(0o644)
-                say(f"Yazıldı: {CURSOR_XORG_CONF}")
+                say(t("m17.say.written", path=CURSOR_XORG_CONF))
             else:
-                say(f"Zaten yazılı: {CURSOR_XORG_CONF}")
+                say(t("m17.say.already_written", path=CURSOR_XORG_CONF))
         except OSError as exc:
-            return False, f"Xorg imleç yapılandırması yazılamadı: {exc}"
+            return False, t("m17.cursor.xorg_write_failed", error=exc)
         original["touched"]["cursor_xorg"] = True
         self._save_original(original)
         driver = _x_driver()
         if driver:
-            say(f"Şu an yüklü sürücü: {driver} (yeni ayar oturum yeniden "
-                "başlayınca geçerli olur)")
-        return True, f"İmleç düzeltmesi yazıldı ({choice.lower()})."
+            say(t("m17.cursor.current_driver", driver=driver))
+        return True, t("m17.cursor.xorg_written", choice=choice.lower())
 
     def _apply_cursor_service(self, original: dict, say) -> tuple[bool, str]:
         """Mod değişiminde imleci tazeleyen kullanıcı servisini kurar."""
-        say("\n==== Fare imleci: tazeleme servisi ====")
+        say(t("m17.cursor.service_header"))
         try:
             CURSOR_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
             CURSOR_SCRIPT.write_text(CURSOR_SCRIPT_CONTENT, encoding="utf-8")
@@ -1084,23 +1044,23 @@ class PerformanceModule(Module):
             CURSOR_AUTOSTART.write_text(CURSOR_AUTOSTART_CONTENT, encoding="utf-8")
             CURSOR_AUTOSTART.chmod(0o644)
         except OSError as exc:
-            return False, f"İmleç tazeleme servisi kurulamadı: {exc}"
+            return False, t("m17.cursor.service_failed", error=exc)
         original["touched"]["cursor_service"] = True
         self._save_original(original)
-        say(f"Yazıldı: {CURSOR_SCRIPT}")
-        say(f"Autostart: {CURSOR_AUTOSTART}")
-        return True, "İmleç tazeleme servisi kuruldu (sonraki oturum açılışında)."
+        say(t("m17.say.written", path=CURSOR_SCRIPT))
+        say(t("m17.say.autostart", path=CURSOR_AUTOSTART))
+        return True, t("m17.cursor.service_installed")
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         original = self._load_original()
         if original is None:
-            return ApplyResult(False, "Özgün durum kaydı bulunamadı; geri alınacak değişiklik yok.")
+            return ApplyResult(False, t("m17.undo.no_original"))
         done: list[str] = []
         errors: list[str] = []
 
         if original["touched"].get("logind"):
             if self._restore_or_remove("logind_dropin", original, errors):
-                done.append("logind ayarı eski hâline döndü (yeniden başlatınca etkin)")
+                done.append(t("m17.undo.logind_restored"))
 
         if original["touched"].get("light"):
             light_ok = all([
@@ -1113,11 +1073,14 @@ class PerformanceModule(Module):
                     env={"DEBIAN_FRONTEND": "noninteractive"}, timeout=600,
                 )
                 if r.ok:
-                    done.append(f"{LIGHT_PKG} kaldırıldı")
+                    done.append(t("m17.undo.package_removed", package=LIGHT_PKG))
                 else:
-                    errors.append(f"{LIGHT_PKG} kaldırılamadı: {r.stderr.strip()}")
+                    errors.append(t(
+                        "m17.undo.package_remove_failed",
+                        package=LIGHT_PKG, error=r.stderr.strip(),
+                    ))
             if light_ok:
-                done.append("ETA Hafif Mod tüm kullanıcılar için kapatıldı")
+                done.append(t("m17.undo.light_disabled"))
                 # Sistem dosyalarını geri almak yetmez: ayarlar her oturum
                 # açılışında kullanıcıların kendi dconf'una yazıldı ve orada
                 # kalır. Bunları da TiHA öncesi hâline döndür.
@@ -1126,33 +1089,29 @@ class PerformanceModule(Module):
                 )
                 errors.extend(revert_errors)
                 if reverted:
-                    done.append(
-                        f"{len(reverted)} hesabın masaüstü ayarları geri alındı "
-                        f"({', '.join(reverted)})"
-                    )
+                    done.append(t(
+                        "m17.undo.users_reverted",
+                        count=len(reverted), accounts=", ".join(reverted),
+                    ))
 
         if original["touched"].get("cursor_xorg"):
             if self._restore_or_remove("cursor_xorg", original, errors):
-                done.append("Xorg imleç yapılandırması eski hâline döndü")
+                done.append(t("m17.undo.cursor_xorg_restored"))
 
         if original["touched"].get("cursor_service"):
             if all([
                 self._restore_or_remove("cursor_script", original, errors),
                 self._restore_or_remove("cursor_autostart", original, errors),
             ]):
-                done.append("İmleç tazeleme servisi kaldırıldı")
+                done.append(t("m17.undo.cursor_service_removed"))
 
         if errors:
-            return ApplyResult(False, "Geri alma kısmen başarısız.", details="\n".join(done + errors))
+            return ApplyResult(False, t("m17.undo.partial"), details="\n".join(done + errors))
         shutil.rmtree(self.state_dir, ignore_errors=True)
         return ApplyResult(
             True,
-            "; ".join(done) + "." if done else "Geri alınacak değişiklik yoktu.",
-            details=(
-                "Hafif modun kullanıcı hesaplarına yazdığı ayarlar (yazı boyutu, "
-                "ikon boyutu, çözünürlük vb.) de TiHA öncesi hâline döndürüldü. "
-                "Ekranda görülmesi için o hesabın oturumu yeniden açılmalı."
-            ),
+            "; ".join(done) + "." if done else t("m17.undo.nothing"),
+            details=t("m17.undo.details"),
         )
 
     # ------------------------------------------------------------------
@@ -1197,7 +1156,7 @@ class PerformanceModule(Module):
                     log.warning("%s monitors.xml yedeklenemedi: %s", name, exc)
         original["user_dconf"] = snapshot
         self._save_original(original)
-        say(f"{len(snapshot)} hesabın masaüstü ayarı geri alma için kaydedildi.")
+        say(t("m17.light.users_captured", count=len(snapshot)))
 
     def _revert_user_state(
         self, original: dict, keys: set[str] | None, say,
@@ -1226,10 +1185,7 @@ class PerformanceModule(Module):
             name, _uid, home = user
             dump = _dconf_dump(user)
             if dump is None:
-                errors.append(
-                    f"{name}: hesabın ayarları okunamadı, geri alınamadı "
-                    "(elle denetleyin)"
-                )
+                errors.append(t("m17.revert.unreadable", name=name))
                 continue
             # Kayıtta olmayan hesap (hafif mod uygulandıktan SONRA açılmış):
             # TiHA öncesi değeri yok, anahtarı silmek doğru davranış —
@@ -1247,15 +1203,16 @@ class PerformanceModule(Module):
                 if ok:
                     changed.append(path.rsplit("/", 1)[-1])
                 else:
-                    errors.append(
-                        f"{name}: {path} geri alınamadı ({err or 'bilinmeyen hata'})"
-                    )
+                    errors.append(t(
+                        "m17.revert.key_failed", name=name, path=path,
+                        error=err or t("m17.revert.unknown_error"),
+                    ))
             if monitors and _monitors_xml_is_light(home):
                 ok, err = self._restore_user_monitors(user, backup_dir)
                 if ok:
                     changed.append("cinnamon-monitors.xml")
                 else:
-                    errors.append(f"{name}: monitors.xml geri alınamadı ({err})")
+                    errors.append(t("m17.revert.monitors_failed", name=name, error=err))
             if changed:
                 reverted.append(name)
                 say(f"  {name}: {', '.join(changed)}")

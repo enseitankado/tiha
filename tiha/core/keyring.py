@@ -55,6 +55,7 @@ import pwd
 import shutil
 from pathlib import Path
 
+from .i18n import t
 from .logger import get_logger
 
 log = get_logger(__name__)
@@ -209,9 +210,9 @@ def describe_keyrings(username: str) -> list[str]:
         if path.name == DEFAULT_POINTER:
             continue
         if is_password_protected(path):
-            described.append(f"{path.name} (parola korumalı)")
+            described.append(t("core.keyring.protected", name=path.name))
         else:
-            described.append(f"{path.name} (parolasız)")
+            described.append(t("core.keyring.unprotected", name=path.name))
     return described
 
 

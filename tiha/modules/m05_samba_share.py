@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.async_state import AsyncValue
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import SAMBA_SHARE_CONF, SAMBA_SMB_CONF
@@ -64,31 +65,12 @@ _samba_installed = AsyncValue(
 
 class SambaShareModule(Module):
     id = "m05_samba_share"
-    title = "Dosya sunucusu"
+    title = t("m05.title")
+    sidebar_title = t("m05.sidebar_title")
     rationale_inline = True
-    apply_hint = (
-        "Samba kurulur, kök '/' paylaşımı açılır."
-    )
+    apply_hint = t("m05.apply_hint")
     streams_output = True
-    rationale = (
-        "Bu adım, tahtanın tüm diskine ağ üzerinden dosya gezgininden "
-        "ulaşmanızı sağlar. Windows bilgisayarda \"Bilgisayarım\" "
-        "penceresinin adres çubuğuna yazmanız yeterlidir — sürükle-bırak "
-        "ile dosya taşırsınız.\n\n"
-        "Kısacası: bu tahtaya, başına gitmeden ya da USB belleğe dosya "
-        "yüklemek zorunda kalmadan; uzaktaki bilgisayarınızdan erişirsiniz. "
-        "Güncelleme dosyası bırakmak, öğrenci çalışmalarını almak, hata "
-        "günlüklerini kopyalamak için kullanışlıdır.\n\n"
-        "Tahtayla aynı ağda olmanız gerekir. Okulda tahtalar ve "
-        "kablosuz erişim noktaları (AP) genellikle `10.x.x.x` "
-        "aralığındadır; bu ağdaki bir bilgisayardan paylaşıma ulaşabilirsiniz. "
-        "Farklı bir ağdan (örn. öğrenci/misafir ağları) ulaşılamaz; bu "
-        "bilinçli bir güvenlik kısıtıdır.\n\n"
-        "Nasıl ulaşılır?\n"
-        "  • Windows Dosya Gezgini adres çubuğuna:  `\\\\<tahta-ip>\\root`\n"
-        f"  • Linux Dosya Gezgini adres çubuğuna:  `smb://<tahta-ip>/{SHARE_NAME}`\n"
-        "  • Ardından belirlediğiniz kullanıcı adı ve parolayı girin."
-    )
+    rationale = t("m05.rationale", share=SHARE_NAME)
 
     def preview(self) -> str:
         # samba kurulum durumu async cache'ten - UI'yı bloke etmez.
@@ -106,17 +88,17 @@ class SambaShareModule(Module):
                 pass
 
         if installed is None:
-            return "samba kurulum durumu kontrol ediliyor..."
+            return t("m05.preview.checking")
         if installed and share_exists and include_exists:
-            return "samba kurulu ve paylaşım tanımı mevcut - yapılandırma güncellenecek."
+            return t("m05.preview.update")
         elif installed and (share_exists or include_exists):
-            return "samba kurulu, kısmi yapılandırma mevcut - tamamlanacak."
+            return t("m05.preview.partial")
         elif installed:
-            return "samba zaten kurulu - paylaşım tanımı eklenecek."
+            return t("m05.preview.add_share")
         elif share_exists:
-            return "samba kurulacak - mevcut paylaşım tanımı korunacak."
+            return t("m05.preview.install_keep_share")
         else:
-            return "samba kurulacak ve paylaşım tanımı eklenecek."
+            return t("m05.preview.install_add_share")
 
     def prefetch_preview_state(self, on_ready=None) -> None:
         _samba_installed.get_async(on_ready)
@@ -126,13 +108,13 @@ class SambaShareModule(Module):
         username = (params.get("samba_user") or "root").strip()
         password = params.get("samba_password") or ""
         if not password:
-            return ApplyResult(False, "Samba parolası verilmeli.")
+            return ApplyResult(False, t("m05.apply.password_required"))
 
         was_installed_before = _is_package_installed("samba")
         conf_existed_before = SAMBA_SHARE_CONF.exists()
 
         if progress:
-            progress(f"Başlangıç: samba {'kurulu' if was_installed_before else 'kurulu değil'}")
+            progress(t("m05.apply.start_pkg", state=t("m05.apply.state_installed") if was_installed_before else t("m05.apply.state_not_installed")))
 
         # Kurulum
         if not was_installed_before:
@@ -141,7 +123,7 @@ class SambaShareModule(Module):
             upd = run_cmd_stream(["apt-get", "update"], progress=progress,
                                  env={"DEBIAN_FRONTEND": "noninteractive"}, timeout=300)
             if not upd.ok:
-                return ApplyResult(False, "apt-get update başarısız.",
+                return ApplyResult(False, t("m05.apply.apt_update_failed"),
                                    data={"was_installed_before": was_installed_before})
             if progress:
                 progress("\n==== apt-get install samba ====")
@@ -152,7 +134,7 @@ class SambaShareModule(Module):
                 timeout=600,
             )
             if not inst.ok:
-                return ApplyResult(False, "samba kurulamadı.",
+                return ApplyResult(False, t("m05.apply.install_failed"),
                                    data={"was_installed_before": was_installed_before})
 
         # Paylaşım ek yapılandırma dosyası
@@ -161,7 +143,7 @@ class SambaShareModule(Module):
             SAMBA_SHARE_CONF.write_text(_render_share(username), encoding="utf-8")
             SAMBA_SHARE_CONF.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"Samba ek yapılandırma dosyası yazılamadı: {exc}",
+            return ApplyResult(False, t("m05.apply.conf_write_failed", error=exc),
                                data={"was_installed_before": was_installed_before,
                                      "conf_existed_before": conf_existed_before})
 
@@ -176,7 +158,7 @@ class SambaShareModule(Module):
                     encoding="utf-8",
                 )
         except OSError as exc:
-            return ApplyResult(False, f"smb.conf güncellenemedi: {exc}",
+            return ApplyResult(False, t("m05.apply.smbconf_failed", error=exc),
                                data={"was_installed_before": was_installed_before,
                                      "conf_existed_before": conf_existed_before})
 
@@ -186,7 +168,7 @@ class SambaShareModule(Module):
             input_data=f"{password}\n{password}\n",
         )
         if not smbpw.ok:
-            return ApplyResult(False, "smbpasswd başarısız.", details=smbpw.stderr,
+            return ApplyResult(False, t("m05.apply.smbpasswd_failed"), details=smbpw.stderr,
                                data={"was_installed_before": was_installed_before,
                                      "conf_existed_before": conf_existed_before})
         run_cmd(["smbpasswd", "-e", username])
@@ -195,16 +177,13 @@ class SambaShareModule(Module):
         run_cmd(["systemctl", "reload", "smbd"])
         _samba_installed.invalidate()
         if progress:
-            progress(f"Paylaşım aktif: //<tahta-ip>/{SHARE_NAME} (kullanıcı: {username})")
+            progress(t("m05.apply.share_active", share=SHARE_NAME, user=username))
 
         return ApplyResult(
             True,
-            f"Samba paylaşımı '//<tahta-ip>/{SHARE_NAME}' olarak hazır ({username} kullanıcısıyla).",
-            details=(
-                f"Ek yapılandırma dosyası: {SAMBA_SHARE_CONF}\n"
-                f"Kullanıcı: {username}\n"
-                f"İstemciden örnek: smbclient //<tahta-ip>/{SHARE_NAME} -U {username}"
-            ),
+            t("m05.apply.summary", share=SHARE_NAME, user=username),
+            details=t("m05.apply.details", path=SAMBA_SHARE_CONF,
+                      user=username, share=SHARE_NAME),
             data={
                 "was_installed_before": was_installed_before,
                 "conf_existed_before": conf_existed_before,
@@ -253,9 +232,9 @@ class SambaShareModule(Module):
                     env={"DEBIAN_FRONTEND": "noninteractive"})
             _samba_installed.invalidate()
             if not purge.ok:
-                return ApplyResult(False, "Samba paketleri kaldırılamadı.", details=purge.stderr)
-            return ApplyResult(True, "Samba paylaşımı ve paketleri tamamen kaldırıldı.")
+                return ApplyResult(False, t("m05.undo.purge_failed"), details=purge.stderr)
+            return ApplyResult(True, t("m05.undo.removed"))
 
         run_cmd(["systemctl", "reload", "smbd"])
         _samba_installed.invalidate()
-        return ApplyResult(True, f"[{SHARE_NAME}] paylaşımı kaldırıldı (Samba paketleri başlangıçta kuruluydu, korundu).")
+        return ApplyResult(True, t("m05.undo.kept_pkg", share=SHARE_NAME))

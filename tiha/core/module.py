@@ -24,6 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .i18n import t
 from .logger import get_logger
 from .paths import STATE_DIR
 
@@ -177,7 +178,7 @@ class Module:
             log.error("Modül: %s", self.id)
             log.error("Süre: %.2f saniye", duration)
             log.error("İstisna: %s", exc, exc_info=True)
-            return ApplyResult(False, f"Beklenmeyen hata: {exc}")
+            return ApplyResult(False, t("core.module.unexpected_error", error=exc))
 
     def apply(
         self,
@@ -237,7 +238,7 @@ class Module:
             log.error("Modül: %s", self.id)
             log.error("Süre: %.2f saniye", duration)
             log.error("İstisna: %s", exc, exc_info=True)
-            return ApplyResult(False, f"Beklenmeyen hata: {exc}")
+            return ApplyResult(False, t("core.module.unexpected_error", error=exc))
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         """Daha önce uygulanan işlemi geri alır.

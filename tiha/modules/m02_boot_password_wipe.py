@@ -39,6 +39,7 @@ from __future__ import annotations
 import json
 import pwd
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.paths import BOOT_WIPE_SCRIPT, BOOT_WIPE_SERVICE, OTP_SECRETS_FILE
@@ -120,21 +121,10 @@ def _user_exists(username: str) -> bool:
 
 class BootPasswordWipeModule(Module):
     id = "m02_boot_password_wipe"
-    title = "Her açılışta parola temizliği"
-    sidebar_title = "Otomatik parola temizliği"
-    apply_hint = (
-        "Açılışta parola temizleme servisi kurulur ve etkinleştirilir."
-    )
-    rationale = (
-        "Tahta her yeniden başladığında etapadmin dışındaki hesapların "
-        "(ortak `ogretmen`, `ogrenci` ve kişisel öğretmen hesapları) "
-        "parolasını otomatik olarak rastgele bir değere çeviren sistem "
-        "servisi kurar. Böylece tahtaya dokunarak yazılan ve sızdırılan "
-        "herhangi bir parola bir sonraki açılışta işe yaramaz; tahta "
-        "yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\n"
-        "Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. "
-        "Teknik bakım erişimi (yerel yönetim, SSH) her zaman korunur."
-    )
+    title = t("m02.title")
+    sidebar_title = t("m02.sidebar_title")
+    apply_hint = t("m02.apply_hint")
+    rationale = t("m02.rationale")
 
     def preview(self) -> str:
         existing = BOOT_WIPE_SERVICE.exists()
@@ -145,18 +135,15 @@ class BootPasswordWipeModule(Module):
         # Tablo görünümü kullanılmıyor - yatay kaydırma oluşmasın diye satır
         # kırılabilen serbest metin biçimindedir.
         lines: list[str] = []
-        lines.append(
-            f"Servis durumu : {'zaten kurulu, yeniden yazılacak' if existing else 'kurulacak ve etkinleştirilecek'}"
+        status = (
+            t("m02.preview.service_existing") if existing
+            else t("m02.preview.service_new")
         )
+        lines.append(t("m02.preview.service_status", status=status))
         lines.append("")
-        lines.append(
-            "Bu servis her açılışta, root ve etapadmin dışındaki hesapların "
-            "parolasını kriptografik olarak rastgele bir değere çevirir. Bu "
-            "hesaplarda parola YAZARAK giriş yapılamaz - yalnız EBA-QR, PIN "
-            "veya USB bellek ile giriş yapılabilir."
-        )
+        lines.append(t("m02.preview.intro"))
         lines.append("")
-        lines.append("DOKUNULMAZ (bakım erişimi korunur):")
+        lines.append(t("m02.preview.protected_header"))
         lines.append("  - root")
         lines.append("  - etapadmin")
         lines.append("")
@@ -164,7 +151,7 @@ class BootPasswordWipeModule(Module):
         # Ortak hesaplar
         ortak = [u for u in ("ogretmen", "ogrenci") if _user_exists(u)]
         if ortak:
-            lines.append("Ortak hesaplar - parola yazarak giriş yapılamayacak:")
+            lines.append(t("m02.preview.shared_header"))
             for u in ortak:
                 lines.append(f"  - {u}")
             lines.append("")
@@ -172,23 +159,20 @@ class BootPasswordWipeModule(Module):
         # Kişisel hesaplar
         missing: list[str] = []
         if extras:
-            lines.append("Kişisel hesaplar - parola yazarak giriş yapılamayacak:")
+            lines.append(t("m02.preview.personal_header"))
             for u in extras:
                 if u in otp_users:
-                    lines.append(f"  - {u}  (PIN anahtarı var - EBA-QR / PIN / USB ile girer)")
+                    lines.append(t("m02.preview.personal_with_pin", user=u))
                 else:
-                    lines.append(f"  - {u}  (PIN anahtarı yok - bu hesap parola yazarak giremez)")
+                    lines.append(t("m02.preview.personal_without_pin", user=u))
                     missing.append(u)
             lines.append("")
 
         if missing:
-            lines.append(
-                f"DİKKAT: {len(missing)} kişisel hesabın PIN anahtarı yok "
-                f"({', '.join(missing)}). Bu servis etkinken bu hesaplara "
-                "parola yazarak da PIN ile de giriş yapılamaz. Önce "
-                "\"Öğretmen PIN anahtarları\" adımına dönüp onlar için de "
-                "PIN anahtarı üretin."
-            )
+            lines.append(t(
+                "m02.preview.missing_warning",
+                count=len(missing), users=", ".join(missing),
+            ))
         return "\n".join(lines)
 
     def apply(self, params=None, progress=None) -> ApplyResult:
@@ -197,19 +181,19 @@ class BootPasswordWipeModule(Module):
             BOOT_WIPE_SCRIPT.chmod(0o750)
             BOOT_WIPE_SERVICE.write_text(SERVICE_CONTENT, encoding="utf-8")
         except OSError as exc:
-            return ApplyResult(False, f"Dosya yazılamadı: {exc}")
+            return ApplyResult(False, t("m02.apply.write_failed", error=exc))
 
         run_cmd(["systemctl", "daemon-reload"])
         enable = run_cmd(["systemctl", "enable", BOOT_WIPE_SERVICE.name])
         if not enable.ok:
-            return ApplyResult(False, "Servis etkinleştirilemedi.", details=enable.stderr)
+            return ApplyResult(False, t("m02.apply.enable_failed"), details=enable.stderr)
 
         return ApplyResult(
             True,
-            "Açılışta parola temizleme servisi kuruldu ve etkinleştirildi.",
-            details=(
-                f"Script: {BOOT_WIPE_SCRIPT}\nServis: {BOOT_WIPE_SERVICE}\n"
-                "Servis bir sonraki açılıştan itibaren her boot'ta bir kez çalışır."
+            t("m02.apply.done"),
+            details=t(
+                "m02.apply.done_details",
+                script=BOOT_WIPE_SCRIPT, service=BOOT_WIPE_SERVICE,
             ),
         )
 
@@ -220,18 +204,8 @@ class BootPasswordWipeModule(Module):
             return None
         lines = "\n".join(f"    • {u}" for u in extras)
         return {
-            "title": "Ek kullanıcı hesapları da silinsin mi?",
-            "message": (
-                "Sistemde etapadmin/ogretmen/ogrenci dışında şu kullanıcı "
-                "hesapları var:\n\n"
-                f"{lines}\n\n"
-                "Açılış parola temizleme servisi kaldırılacak. Ek hesaplar "
-                "sistemde kalırsa yerel parolayla girilemediği için atıl "
-                "kalır. Bu ek hesapları ev dizinleri ve kayıtlarıyla "
-                "birlikte tamamen silmemi ister misiniz?\n\n"
-                "• EVET → hesaplar 'userdel -r' ile silinir (geri alınamaz).\n"
-                "• HAYIR → yalnızca açılış servisi kaldırılır, hesaplar kalır."
-            ),
+            "title": t("m02.undo_prompt.title"),
+            "message": t("m02.undo_prompt.message", users=lines),
             "yes_params": {"remove_extras": True, "extras": extras},
             "no_params": {"remove_extras": False},
         }
@@ -259,7 +233,7 @@ class BootPasswordWipeModule(Module):
                 else:
                     log.warning("userdel başarısız %s: %s", user, res.stderr.strip())
 
-        msg = "Açılış parola temizleme servisi kaldırıldı."
+        msg = t("m02.undo.done")
         if removed:
-            msg += f" Ayrıca şu ek hesaplar ve ev dizinleri silindi: {', '.join(removed)}."
+            msg += t("m02.undo.removed_extras", users=", ".join(removed))
         return ApplyResult(True, msg)

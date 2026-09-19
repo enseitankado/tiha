@@ -26,6 +26,7 @@ import subprocess
 from pathlib import Path
 
 from ..core.async_state import AsyncValue
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.privilege import invoking_username
@@ -104,7 +105,7 @@ def fix_repositories(progress=None) -> bool:
         # Bozuk dosyaları temizle
         if issues["broken_files"]:
             if progress:
-                progress(f"{len(issues['broken_files'])} bozuk repository dosyası siliniyor...")
+                progress(t("m09.fix.deleting_broken", count=len(issues['broken_files'])))
             for broken_file in issues["broken_files"]:
                 try:
                     Path(broken_file).unlink()
@@ -116,7 +117,7 @@ def fix_repositories(progress=None) -> bool:
         # Ana depoları düzelt
         if issues["missing_main_repos"]:
             if progress:
-                progress("Ana Pardus ETAP depoları ekleniyor...")
+                progress(t("m09.fix.adding_main"))
 
             sources_list = Path("/etc/apt/sources.list")
 
@@ -149,17 +150,17 @@ def fix_repositories(progress=None) -> bool:
 
         if fixed_count > 0:
             if progress:
-                progress(f"✅ {fixed_count} repository sorunu düzeltildi")
+                progress(t("m09.fix.fixed", count=fixed_count))
             return True
         else:
             if progress:
-                progress("✅ Repository yapılandırması sağlıklı")
+                progress(t("m09.fix.healthy"))
             return True
 
     except Exception as exc:
         log.error("Repository düzeltme hatası: %s", exc)
         if progress:
-            progress(f"❌ Repository düzeltme hatası: {exc}")
+            progress(t("m09.fix.error", error=exc))
         return False
 
 
@@ -184,22 +185,14 @@ _pending_updates = AsyncValue(_compute_pending_update_count, name="m09.pending")
 
 class SystemUpdateModule(Module):
     id = "m09_system_update"
-    title = "Sistem güncellemesi (apt)"
-    sidebar_title = "Sistem güncellemesi"
-    apply_hint = (
-        "Repository sağlığı düzeltilir, apt update + full-upgrade + temizlik çalışır (uzun sürer)."
-    )
-    rationale = (
-        "Tahtadaki paketleri en güncel sürüme çıkarır. Güvenlik yamaları ve "
-        "kararlılık düzeltmeleri için imaj öncesi tavsiye edilir. Çıktı "
-        "ekranda canlı olarak akar; güncelleme uzun sürebilir.\n\n"
-        "Bekleyen yükseltme yoksa bu adım atlanabilir; alttaki “İleri” "
-        "düğmesi ya da soldaki listeden bir sonraki adıma geçebilirsiniz."
-    )
+    title = t("m09.title")
+    sidebar_title = t("m09.sidebar_title")
+    apply_hint = t("m09.apply_hint")
+    rationale = t("m09.rationale")
     undo_supported = False
     streams_output = True
     extra_links = [
-        {"label": "Pardus Güncelleyici'yi aç", "action": "launch_pardus_update_gui_action"},
+        {"label": t("m09.links.pardus_update"), "action": "launch_pardus_update_gui_action"},
     ]
 
     def pending_update_count(self) -> int:
@@ -232,43 +225,37 @@ class SystemUpdateModule(Module):
         checking = cached is None and _pending_updates.in_progress()
 
         lines: list[str] = []
-        lines.append(
-            "Ana Pardus depoları  : "
-            + _status(repo_issues["missing_main_repos"],
-                      "mevcut", "eksik")
-        )
-        lines.append(
-            "Bozuk depo dosyaları : "
-            + (f"{len(repo_issues['broken_files'])} adet"
-               if repo_issues["broken_files"] else "yok")
-        )
-        lines.append(
-            "sources.list         : "
-            + _status(repo_issues["empty_sources_list"],
-                      "geçerli", "boş veya eksik")
-        )
+        lines.append(t(
+            "m09.preview.main_repos",
+            status=_status(repo_issues["missing_main_repos"],
+                           t("m09.preview.main_repos_ok"),
+                           t("m09.preview.main_repos_bad")),
+        ))
+        lines.append(t(
+            "m09.preview.broken_files",
+            status=(t("m09.preview.broken_files_count",
+                      count=len(repo_issues['broken_files']))
+                    if repo_issues["broken_files"]
+                    else t("m09.preview.broken_files_none")),
+        ))
+        lines.append(t(
+            "m09.preview.sources_list",
+            status=_status(repo_issues["empty_sources_list"],
+                           t("m09.preview.sources_list_ok"),
+                           t("m09.preview.sources_list_bad")),
+        ))
         if checking:
-            lines.append(
-                "Bekleyen yükseltme   : arka planda kontrol ediliyor..."
-            )
+            lines.append(t("m09.preview.pending_checking"))
         elif count < 0:
-            lines.append(
-                "Bekleyen yükseltme   : tespit edilemedi (apt erişilemedi)"
-            )
+            lines.append(t("m09.preview.pending_unknown"))
         elif count == 0:
-            lines.append(
-                "Bekleyen yükseltme   : yok, sistem güncel görünüyor"
-            )
+            lines.append(t("m09.preview.pending_none"))
         else:
-            lines.append(
-                f"Bekleyen yükseltme   : {count} paket"
-            )
+            lines.append(t("m09.preview.pending_count", count=count))
         lines.append("")
-        lines.append("Bu adım uygulandığında:")
-        lines.append("  - Depo yapılandırma sorunları düzeltilir")
-        lines.append("  - apt update > full-upgrade > autoremove > clean çalışır")
+        lines.append(t("m09.preview.will_do"))
         if count > 0 or checking:
-            lines.append("  - İşlem uzun sürebilir")
+            lines.append(t("m09.preview.long_running"))
         return "\n".join(lines)
 
     def apply(self, params=None, progress: ProgressCallback | None = None) -> ApplyResult:
@@ -277,14 +264,14 @@ class SystemUpdateModule(Module):
 
         # 1. Repository sağlığını düzelt
         if progress:
-            progress("\n==== Repository sağlığı kontrol ediliyor ====")
+            progress(t("m09.apply.checking_repos"))
         log.info("Repository sağlığı kontrol ediliyor...")
 
         if not fix_repositories(progress):
             return ApplyResult(
                 False,
-                "Repository düzeltme başarısız oldu.",
-                details="Repository yapılandırması düzeltilemedi. Manuel müdahale gerekebilir.",
+                t("m09.apply.repo_fix_failed"),
+                details=t("m09.apply.repo_fix_failed_details"),
             )
 
         # 2. Sistem güncellemesi adımları
@@ -297,13 +284,13 @@ class SystemUpdateModule(Module):
 
         for label, cmd in steps:
             if progress:
-                progress(f"\n==== {label} ====")
+                progress(t("m09.apply.step_header", label=label))
             log.info("%s çalıştırılıyor…", label)
             result = run_cmd_stream(cmd, progress=progress, env=env, timeout=3600)
             if not result.ok:
                 failed.append(label)
                 if progress:
-                    progress(f"[HATA] {label} başarısız (çıkış kodu {result.returncode})")
+                    progress(t("m09.apply.step_failed", label=label, code=result.returncode))
                 log.error("%s başarısız", label)
 
         # Paket envanteri değişti (veya değişmiş olabilir) — cache'i tazele.
@@ -312,10 +299,10 @@ class SystemUpdateModule(Module):
         if failed:
             return ApplyResult(
                 False,
-                "Bazı güncelleme adımları başarısız oldu.",
-                details="Başarısız olanlar: " + ", ".join(failed),
+                t("m09.apply.some_failed"),
+                details=t("m09.apply.some_failed_details", steps=", ".join(failed)),
             )
-        return ApplyResult(True, "Sistem güncel.")
+        return ApplyResult(True, t("m09.apply.done"))
 
     def launch_pardus_update_gui_action(self, params: dict | None = None) -> ApplyResult:
         """Pardus Güncelleyici GUI'sini kullanıcının X oturumunda açar."""
@@ -323,8 +310,8 @@ class SystemUpdateModule(Module):
         if not binary.exists():
             return ApplyResult(
                 False,
-                "Pardus Güncelleyici uygulaması bulunamadı.",
-                details=f"{binary} mevcut değil; pardus-update paketi kurulu mu?",
+                t("m09.gui.not_found"),
+                details=t("m09.gui.not_found_details", binary=binary),
             )
 
         user = invoking_username()
@@ -341,12 +328,12 @@ class SystemUpdateModule(Module):
         except OSError as exc:
             return ApplyResult(
                 False,
-                "Pardus Güncelleyici başlatılamadı.",
+                t("m09.gui.start_failed"),
                 details=str(exc),
             )
 
         return ApplyResult(
             True,
-            f"Pardus Güncelleyici '{user}' oturumunda açıldı.",
-            details="Pencereyi kapattığınızda bu adımdaki bekleyen güncelleme sayısı yenilenir.",
+            t("m09.gui.opened", user=user),
+            details=t("m09.gui.opened_details"),
         )

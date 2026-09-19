@@ -34,6 +34,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import STATE_DIR, VAR_ROOT
@@ -126,7 +127,7 @@ def _eta_112_call(args: list[str], timeout: int = 30, *,
     """
     script = _ensure_eta_112(allow_download=allow_download)
     if not script:
-        return {}, "eta-112.py bulunamadı (env, cache ve indirme başarısız)"
+        return {}, t("m14.eta112.not_found")
     try:
         proc = subprocess.run(
             ["python3", str(script), "bios", *args, "--json"],
@@ -134,7 +135,7 @@ def _eta_112_call(args: list[str], timeout: int = 30, *,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
         log.warning("eta-112 %s çalıştırılamadı: %s", args, exc)
-        return {}, f"çalıştırılamadı: {exc}"
+        return {}, t("m14.eta112.run_failed", error=exc)
 
     raw = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
@@ -142,9 +143,9 @@ def _eta_112_call(args: list[str], timeout: int = 30, *,
     # kodunu yutuyoruz, JSON içeriğine bakıyoruz.
     if not raw:
         return {}, (
-            f"stdout boş geldi (exit={proc.returncode}).\n"
-            f"stderr: {err[:500]}" if err else
-            f"stdout ve stderr boş (exit={proc.returncode})"
+            t("m14.eta112.stdout_empty", code=proc.returncode, stderr=err[:500])
+            if err else
+            t("m14.eta112.both_empty", code=proc.returncode)
         )
     # JSON çıktı genelde tek satır; bazı sürümlerde renkli print'lerle karışabilir.
     for line in raw.splitlines():
@@ -158,9 +159,9 @@ def _eta_112_call(args: list[str], timeout: int = 30, *,
         return json.loads(raw), ""
     except json.JSONDecodeError:
         log.warning("eta-112 JSON parse edilemedi: %s", raw[:200])
-        return {}, (
-            f"JSON parse hatası (exit={proc.returncode}).\n"
-            f"stdout: {raw[:500]}\nstderr: {err[:500]}"
+        return {}, t(
+            "m14.eta112.json_error",
+            code=proc.returncode, stdout=raw[:500], stderr=err[:500],
         )
 
 
@@ -268,11 +269,11 @@ def _validate_password(raw: str, pw_min: int, pw_max: int) -> tuple[str, str | N
     norm = "".join(c for c in raw.upper()
                    if c != "I" and (("A" <= c <= "Z") or ("0" <= c <= "9")))
     if not norm:
-        return "", "Parola yalnızca BÜYÜK harf (I hariç) ve rakamdan oluşmalı."
+        return "", t("m14.validate.charset")
     if len(norm) < pw_min:
-        return norm, f"Parola en az {pw_min} karakter olmalı (verilen: {len(norm)})."
+        return norm, t("m14.validate.too_short", min=pw_min, given=len(norm))
     if len(norm) > pw_max:
-        return norm, f"Parola en fazla {pw_max} karakter olabilir (verilen: {len(norm)})."
+        return norm, t("m14.validate.too_long", max=pw_max, given=len(norm))
     return norm, None
 
 
@@ -288,6 +289,8 @@ def _normalize_protection(raw: str | None) -> str:
     if raw is None:
         return "setup"
     s = str(raw).strip().lower()
+    if s == t("m14.params.protection_mode.opt_always").strip().lower():
+        return "always"
     if "always" in s or "her açılışta" in s or "her aclista" in s:
         return "always"
     return "setup"
@@ -560,20 +563,26 @@ def _build_first_boot_service() -> str:
             .replace("@@SCRIPT@@", str(FIRST_BOOT_SCRIPT)))
 
 
+def _protection_label(protection: str | None) -> str:
+    """eta-112'nin koruma değeri için ekranda gösterilen açıklama."""
+    if protection == "always":
+        return t("m14.protection.always")
+    if protection == "setup":
+        return t("m14.protection.setup")
+    return t("m14.protection.unknown")
+
+
 # --- Modül ------------------------------------------------------------------
 
 class BiosPasswordModule(Module):
     id = "m14_bios_password"
-    title = "BIOS yönetici parolası"
-    sidebar_title = "BIOS parolası"
+    title = t("m14.title")
+    sidebar_title = t("m14.sidebar_title")
     # Açıklayıcı bir etiket KOYMUYORUZ — link metni doğrudan URL olsun.
     # (UI rationale'ın hemen altına 🔗 + URL satırı çizer.)
     doc_url = "https://github.com/enseitankado/eta-112"
-    doc_label = "https://github.com/enseitankado/eta-112"
-    apply_hint = (
-        "Klonun ilk açılışında BIOS yönetici parolasını ayarlayacak "
-        "tek-seferlik boot servisi imaja gömülür."
-    )
+    doc_label = t("m14.doc_label")
+    apply_hint = t("m14.apply_hint")
     popup_on_success = True
 
     # Donanım desteği bayrağı: None → henüz bilinmiyor, True/False → bilinen.
@@ -601,111 +610,45 @@ class BiosPasswordModule(Module):
             if info:
                 self._supported_cache = bool(info.get("supported"))
         return self._supported_cache is not False
-    rationale = (
-        "Bu adım, klon makinelerin ilk açılışında BIOS yönetici "
-        "parolasını sizin belirlediğiniz değere ayarlayan tek-seferlik "
-        "bir boot servisi imaja yerleştirir. Kaynak tahtada (yani "
-        "şu an üzerinde çalıştığınız tahta) BIOS parolasına standart "
-        "Uygula AKIŞINDA DOKUNULMAZ — değişiklik sadece klonda ilk "
-        "açılışta yapılır, başarıyla tamamlandığında servis kendini "
-        "disable eder ve parolayı içeren script silinir.\n\n"
-        "Yalnız bu makinenin BIOS parolasını şimdi değiştirmek/temizlemek "
-        "isterseniz “Bu makinenin BIOS parolasını ayarla” düğmesini "
-        "kullanın — bu düğme klon servisi kurmaz; yalnızca buradaki "
-        "donanıma yazar.\n\n"
-        "Parola kutusu BOŞ uygulanırsa parola temizlenir (BIOS koruması "
-        "fiilen kalkar) — bu hem klon servisinin hem de “şimdi uygula” "
-        "düğmesinin davranışıdır.\n\n"
-        "Koruma modu: yönetici parolası her açılışta mı yoksa yalnız "
-        "BIOS setup'a girilirken mi sorulsun? Aşağıdan seçin. Faz 2 "
-        "modellerinde eta-112 bu ayarı BIOS'a doğrudan yazar; Faz 1 "
-        "modellerinde ayrı bir 'ne zaman sorulsun' byte'ı olmadığı "
-        "için arka planda parolaları farklı atayarak aynı sonuç elde "
-        "edilir (yalnız yönetici = setup, yönetici+kullanıcı = her "
-        "açılışta).\n\n"
-        "Bu adım YALNIZCA eta-112 tarafından kalibre edilmiş donanım "
-        "modellerinde uygulanabilir (Faz 2 Vestel Gri vb.). Donanım "
-        "desteklenmiyorsa form gizlenir.\n\n"
-        "Mevcut parolaları manuel olarak okumak/değiştirmek veya yeni "
-        "donanım sürümlerini kalibre etmek için aracın GitHub sayfasını "
-        "kullanabilirsiniz."
-    )
+    rationale = t("m14.rationale")
     undo_supported = True
 
     def preview(self) -> str:
         info = query_bios_info()
         if not info:
             self._supported_cache = None
-            return (
-                "Bu adımın hazırlık bilgisi henüz alınmadı.\n\n"
-                "Aşağıdaki “Mevcut yönetici parolasını oku” düğmesine "
-                "basarak eta-112'yi indirip donanımı sorgulayabilirsiniz; "
-                "böylece form da donanım desteğine göre güncellenir."
-            )
+            return t("m14.preview.no_info")
         self._supported_cache = bool(info.get("supported"))
         if not info.get("supported"):
-            board = info.get("board") or "(tespit edilemedi)"
-            bios = info.get("bios") or "(tespit edilemedi)"
-            return (
-                " Bu donanım eta-112 tarafından DESTEKLENMİYOR.\n\n"
-                f"  Anakart: {board}\n"
-                f"  BIOS:    {bios}\n\n"
-                "Bu adım uygulanmaz; uygula tıklansa bile servis kurulmaz. "
-                "Diğer adımlara devam edebilirsiniz."
-            )
-        model = info.get("model") or "(adsız)"
-        chip = info.get("chip") or "(yok)"
+            board = info.get("board") or t("m14.preview.not_detected")
+            bios = info.get("bios") or t("m14.preview.not_detected")
+            return t("m14.preview.unsupported", board=board, bios=bios)
+        model = info.get("model") or t("m14.preview.unnamed")
+        chip = info.get("chip") or t("m14.preview.no_chip")
         pw_min = info.get("pw_min") or 4
         pw_max = info.get("pw_max") or 12
         supports_koruma = _model_supports_protection_toggle(info.get("model"))
         passwords = query_bios_passwords()
         current = passwords.get("supervisor") if passwords.get("ok") else None
         prot = passwords.get("protection") if passwords.get("ok") else None
-        prot_label = {
-            "always": "her açılışta sorulur",
-            "setup":  "yalnızca BIOS ayarlarına girilirken sorulur",
-        }.get(prot, "(okunamadı)")
-        mac = _primary_mac() or "(tespit edilemedi)"
+        prot_label = _protection_label(prot)
+        mac = _primary_mac() or t("m14.preview.not_detected")
         lines = [
-            " Donanım destekleniyor.",
-            f"  Model:           {model}",
-            f"  Flash çipi:      {chip}",
-            f"  Parola uzunluğu: {pw_min}-{pw_max} karakter, BÜYÜK A-Z 0-9",
-            "",
-            f"  Mevcut yönetici parolası: {current or '(ayarlanmamış)'}",
-            f"  Mevcut koruma modu:       {prot_label}",
-            "",
+            t(
+                "m14.preview.supported",
+                model=model, chip=chip, pw_min=pw_min, pw_max=pw_max,
+                current=current or t("m14.preview.not_set"),
+                protection=prot_label,
+            ),
         ]
         if not supports_koruma:
-            lines.extend([
-                " Faz 1 farkı: BIOS'ta ayrı bir 'parola ne zaman sorulsun' "
-                "byte'ı yok.",
-                "  Koruma seçiminize göre eta-112 parolaları şöyle ayarlar:",
-                "    - Yalnız BIOS ayarlarına girilirken (setup)  >  "
-                "sadece yönetici parolası",
-                "    - Her açılışta (always)                      >  "
-                "yönetici + kullanıcı parolasına aynı değer",
-                "",
-            ])
-        lines.extend([
-            "Bu adımda yapılacaklar:",
-            f"  - Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
-            f"  - eta-112 > {BUNDLED_ETA_112}",
-            f"  - Boot scripti > {FIRST_BOOT_SCRIPT} (chmod 700, parola gömülü)",
-            f"  - Systemd unit > {FIRST_BOOT_SERVICE}",
-            f"  - systemctl enable {FIRST_BOOT_SERVICE_NAME}",
-            "",
-            "Klon makinedeki davranış (yalnızca ilk açılışta):",
-            "  ┌── Sentinel mevcut ────────- çık (zaten yapıldı)",
-            "  ├── İmza yok ──────────────- çık (klon değil/uygulanmamış)",
-            "  ├── MAC eşit ──────────────- çık (kaynak tahta)",
-            "  └── MAC farklı (klon)",
-            "       └── eta-112 set --yonetici PASS",
-            "             > sentinel yaz, servisi disable et, parola scriptini sil",
-            "             > sentinel yazma; sonraki boot tekrar dene",
-            "",
-            "Geri al: boot scripti + servis + sentinel + paketlenmiş eta-112 silinir.",
-        ])
+            lines.append(t("m14.preview.faz1"))
+        lines.append(t(
+            "m14.preview.plan",
+            mac=mac, mac_file=IMAGED_MAC_FILE, eta=BUNDLED_ETA_112,
+            script=FIRST_BOOT_SCRIPT, unit=FIRST_BOOT_SERVICE,
+            unit_name=FIRST_BOOT_SERVICE_NAME,
+        ))
         return "\n".join(lines)
 
     def apply(
@@ -719,37 +662,37 @@ class BiosPasswordModule(Module):
 
         # 1) eta-112 erişimi
         if progress:
-            progress("eta-112 aracı hazırlanıyor...")
+            progress(t("m14.common.preparing"))
         eta_script = _ensure_eta_112()
         if not eta_script:
             return ApplyResult(
                 False,
-                "eta-112.py bulunamadı; indirilemedi de.",
-                details=(
-                    f"Beklenen yerler: $TIHA_ETA_112_DIR, {ETA_112_CACHE_DIR}\n"
-                    f"İnternet bağlantısı veya {ETA_112_RAW_BASE} erişimi yok olabilir."
+                t("m14.apply.not_found"),
+                details=t(
+                    "m14.apply.not_found_details",
+                    cache=ETA_112_CACHE_DIR, url=ETA_112_RAW_BASE,
                 ),
             )
 
         # 2) Donanım desteği
         if progress:
-            progress("Donanım modeli sorgulanıyor (bios info --json)...")
+            progress(t("m14.common.querying_model"))
         info, info_debug = _eta_112_call(["info"], allow_download=False)
         if not info:
             return ApplyResult(
                 False,
-                "eta-112 'info' komutu beklenen JSON çıktısını vermedi.",
-                details=info_debug or "(boş çıktı)",
+                t("m14.apply.info_bad_json"),
+                details=info_debug or t("m14.common.empty_output"),
             )
         if not info.get("supported"):
             self._supported_cache = False
             return ApplyResult(
                 False,
-                "Bu donanım eta-112 tarafından desteklenmiyor; adım uygulanmaz.",
-                details=(
-                    f"Anakart: {info.get('board')}\n"
-                    f"BIOS:    {info.get('bios')}\n"
-                    f"Hata:    {info.get('error') or '-'}"
+                t("m14.apply.unsupported"),
+                details=t(
+                    "m14.apply.unsupported_details",
+                    board=info.get("board"), bios=info.get("bios"),
+                    error=info.get("error") or "-",
                 ),
             )
         self._supported_cache = True
@@ -765,52 +708,37 @@ class BiosPasswordModule(Module):
         clear_mode = (pw == "")
         if progress:
             if clear_mode:
-                progress("Parola kutusu boş — klonda 'bios clear yonetici' "
-                         "çalıştırılacak (BIOS koruması kalkar).")
+                progress(t("m14.apply.clear_note"))
             elif supports_koruma:
-                progress(
-                    f"Klona gömülecek komut: bios set --yonetici <{len(pw)} kr> "
-                    f"--koruma {protection}"
-                )
+                progress(t("m14.apply.cmd_koruma", length=len(pw), protection=protection))
             else:
                 # Faz 1 yolu: koruma byte'ı yok; davranış parola atamasıyla
                 # belirleniyor. Kullanıcıya da bunu söyle.
                 if protection == "always":
-                    progress(
-                        f"Klona gömülecek komut: bios set --yonetici <{len(pw)} kr> "
-                        f"--kullanici <{len(pw)} kr> (Faz 1: her açılışta sorulması "
-                        "için kullanıcı parolası da set ediliyor)"
-                    )
+                    progress(t("m14.apply.cmd_faz1_always", length=len(pw)))
                 else:
-                    progress(
-                        f"Klona gömülecek komut: bios set --yonetici <{len(pw)} kr> "
-                        "(Faz 1: yalnız yönetici → BIOS setup'a girilirken sorulur)"
-                    )
+                    progress(t("m14.apply.cmd_faz1_setup", length=len(pw)))
 
         # 4) MAC imzası — m12 paylaşımlı (idempotent)
         mac = _primary_mac()
         if not mac:
-            return ApplyResult(
-                False,
-                "Birincil ağ arayüzünün MAC adresi tespit edilemedi; "
-                "klon tespiti için imza yazılamaz.",
-            )
+            return ApplyResult(False, t("m14.apply.no_mac"))
         try:
             IMAGED_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            return ApplyResult(False, f"İmza dizini oluşturulamadı: {exc}")
+            return ApplyResult(False, t("m14.apply.mac_dir_failed", error=exc))
         wrote_mac = False
         if not IMAGED_MAC_FILE.exists():
             try:
                 IMAGED_MAC_FILE.write_text(mac + "\n", encoding="utf-8")
                 wrote_mac = True
                 if progress:
-                    progress(f"MAC imzası yazıldı: {IMAGED_MAC_FILE} = {mac}")
+                    progress(t("m14.apply.mac_written", path=IMAGED_MAC_FILE, mac=mac))
             except OSError as exc:
-                return ApplyResult(False, f"İmza dosyası yazılamadı: {exc}")
+                return ApplyResult(False, t("m14.apply.mac_write_failed", error=exc))
         else:
             if progress:
-                progress(f"MAC imzası zaten mevcut: {IMAGED_MAC_FILE} (paylaşımlı)")
+                progress(t("m14.apply.mac_exists", path=IMAGED_MAC_FILE))
 
         # 5) eta-112'yi sisteme kopyala
         try:
@@ -818,9 +746,9 @@ class BiosPasswordModule(Module):
             shutil.copy2(eta_script, BUNDLED_ETA_112)
             BUNDLED_ETA_112.chmod(0o755)
         except OSError as exc:
-            return ApplyResult(False, f"eta-112 sisteme kopyalanamadı: {exc}")
+            return ApplyResult(False, t("m14.apply.copy_failed", error=exc))
         if progress:
-            progress(f"eta-112 kopyalandı: {BUNDLED_ETA_112}")
+            progress(t("m14.apply.copied", path=BUNDLED_ETA_112))
 
         # 6) First-boot script + service
         try:
@@ -837,10 +765,10 @@ class BiosPasswordModule(Module):
             )
             FIRST_BOOT_SERVICE.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"Boot servis dosyaları yazılamadı: {exc}")
+            return ApplyResult(False, t("m14.apply.files_failed", error=exc))
         if progress:
-            progress(f"Boot scripti yazıldı: {FIRST_BOOT_SCRIPT} (chmod 700)")
-            progress(f"Systemd unit yazıldı: {FIRST_BOOT_SERVICE}")
+            progress(t("m14.apply.script_written", path=FIRST_BOOT_SCRIPT))
+            progress(t("m14.apply.unit_written", path=FIRST_BOOT_SERVICE))
 
         # 7) Daemon reload + enable
         run_cmd(["systemctl", "daemon-reload"], check=False)
@@ -850,7 +778,7 @@ class BiosPasswordModule(Module):
         if not en.ok:
             return ApplyResult(
                 False,
-                f"{FIRST_BOOT_SERVICE_NAME} enable edilemedi.",
+                t("m14.apply.enable_failed", name=FIRST_BOOT_SERVICE_NAME),
                 details=en.stderr,
                 data={
                     "wrote_mac": wrote_mac, "model": info.get("model"),
@@ -858,7 +786,7 @@ class BiosPasswordModule(Module):
                 },
             )
         if progress:
-            progress(f"{FIRST_BOOT_SERVICE_NAME} enable edildi.")
+            progress(t("m14.apply.enabled", name=FIRST_BOOT_SERVICE_NAME))
 
         # Önceki bir kurulumdan kalan sentinel varsa kaldır — bu apply
         # yeni parolanın klonda ayarlanmasını garantilemek istiyor.
@@ -868,38 +796,25 @@ class BiosPasswordModule(Module):
             pass
 
         if clear_mode:
-            action_summary = "klonda parola TEMİZLENECEK (bios clear yonetici)"
+            action_summary = t("m14.apply.plan_clear")
         elif supports_koruma:
-            action_summary = (
-                f"klonda parola AYARLANACAK ({len(pw)} kr, koruma={protection})"
-            )
+            action_summary = t("m14.apply.plan_set", length=len(pw), protection=protection)
         else:
             # Faz 1 örtük davranış açıklamasıyla
             mode_human = (
-                "her açılışta (yön+kul aynı parola)"
+                t("m14.apply.faz1_always")
                 if protection == "always"
-                else "yalnız BIOS setup'a girilirken (yalnız yön.)"
+                else t("m14.apply.faz1_setup")
             )
-            action_summary = (
-                f"klonda parola AYARLANACAK ({len(pw)} kr) — Faz 1: {mode_human}"
-            )
-        details = (
-            f"Model:    {info.get('model')}\n"
-            f"Anakart:  {info.get('board')}  ·  BIOS: {info.get('bios')}\n"
-            f"Plan:     {action_summary}\n"
-            f"MAC:      {mac}\n"
-            f"Script:   {FIRST_BOOT_SCRIPT} (chmod 700)\n"
-            f"Servis:   {FIRST_BOOT_SERVICE}\n"
-            "Klon ilk açılışta MAC değişikliğini görüp eta-112'yi çağıracak; "
-            "başarıdan sonra servis disable olur ve parolayı içeren script silinir. "
-            "Kaynak tahtanın BIOS'una bu akışta dokunulmadı."
+            action_summary = t("m14.apply.plan_faz1", length=len(pw), mode=mode_human)
+        details = t(
+            "m14.apply.details",
+            model=info.get("model"), board=info.get("board"), bios=info.get("bios"),
+            plan=action_summary, mac=mac, script=FIRST_BOOT_SCRIPT,
+            service=FIRST_BOOT_SERVICE,
         )
         summary = (
-            "BIOS parola TEMİZLEME servisi imaja gömüldü; "
-            "klonun ilk açılışında çalışacak."
-            if clear_mode else
-            "BIOS parola AYARLAMA servisi imaja gömüldü; "
-            "klonun ilk açılışında çalışacak."
+            t("m14.apply.summary_clear") if clear_mode else t("m14.apply.summary_set")
         )
         return ApplyResult(
             True,
@@ -925,26 +840,23 @@ class BiosPasswordModule(Module):
         UI tarafı bu değeri parola kutusuna doldurur.
         """
         if progress:
-            progress("eta-112 aracı hazırlanıyor...")
+            progress(t("m14.common.preparing"))
         script = _ensure_eta_112(allow_download=True)
         if not script:
             return ApplyResult(
                 False,
-                "eta-112 aracı indirilemedi.",
-                details=(
-                    "İnternet bağlantısı ya da "
-                    f"{ETA_112_RAW_BASE} erişimi yok olabilir."
-                ),
+                t("m14.common.download_failed"),
+                details=t("m14.common.download_failed_details", url=ETA_112_RAW_BASE),
             )
         if progress:
-            progress(f"eta-112 hazır: {script}")
-            progress("Donanım modeli sorgulanıyor (bios info --json)...")
+            progress(t("m14.read.ready", path=script))
+            progress(t("m14.common.querying_model"))
         info, info_debug = _eta_112_call(["info"], allow_download=False)
         if not info:
             return ApplyResult(
                 False,
-                "eta-112 'info' beklenen JSON çıktısını vermedi.",
-                details=info_debug or "(boş çıktı)",
+                t("m14.common.info_bad_json"),
+                details=info_debug or t("m14.common.empty_output"),
             )
         if not info.get("supported"):
             self._supported_cache = False
@@ -952,35 +864,34 @@ class BiosPasswordModule(Module):
             bios = info.get("bios") or "(?)"
             return ApplyResult(
                 False,
-                "Bu donanım eta-112 tarafından desteklenmiyor.",
-                details=f"Anakart: {board}\nBIOS: {bios}",
+                t("m14.read.unsupported"),
+                details=t("m14.read.unsupported_details", board=board, bios=bios),
             )
         self._supported_cache = True
         if progress:
-            progress(f"Model: {info.get('model')}  ·  "
-                     f"Parola: {info.get('pw_min')}-{info.get('pw_max')} A-Z 0-9")
-            progress("Mevcut parolalar okunuyor (bios read --json)...")
+            progress(t(
+                "m14.read.model_line", model=info.get("model"),
+                pw_min=info.get("pw_min"), pw_max=info.get("pw_max"),
+            ))
+            progress(t("m14.read.reading"))
         pwds, read_debug = _eta_112_call(["read"], allow_download=False, timeout=45)
         if not pwds:
             return ApplyResult(
                 False,
-                "eta-112 'read' beklenen JSON çıktısını vermedi.",
-                details=read_debug or "(boş çıktı)",
+                t("m14.read.read_bad_json"),
+                details=read_debug or t("m14.common.empty_output"),
             )
         if not pwds.get("ok"):
             return ApplyResult(
                 False,
-                f"BIOS parolaları okunamadı: {pwds.get('error') or 'bilinmeyen hata'}",
+                t("m14.read.read_failed", error=pwds.get("error") or t("m14.common.unknown_error")),
             )
         supervisor = pwds.get("supervisor") or ""
         protection = pwds.get("protection")
-        prot_label = {
-            "always": "her açılışta sorulur",
-            "setup":  "yalnızca BIOS ayarlarına girilirken sorulur",
-        }.get(protection, "(okunamadı)")
+        prot_label = _protection_label(protection)
         if progress:
-            progress(f"Yönetici parolası: {supervisor or '(ayarlı değil)'}")
-            progress(f"Koruma modu:       {prot_label}")
+            progress(t("m14.read.supervisor", value=supervisor or t("m14.read.not_set")))
+            progress(t("m14.read.protection", protection=prot_label))
         # data['protection_mode'] sadece eta-112 sözleşmesindeki iki
         # değerden biriyse döndürürüz — combo'yu doğru index'e çekmek
         # için UI tarafı buna bakar.
@@ -989,14 +900,9 @@ class BiosPasswordModule(Module):
             data["protection_mode"] = protection
         return ApplyResult(
             True,
-            (f"Mevcut yönetici parolası: {supervisor}"
-             if supervisor else "BIOS'ta yönetici parolası ayarlı değil."),
-            details=(
-                f"Model: {info.get('model')}\n"
-                f"Koruma modu: {prot_label}\n"
-                "Bu değerler aşağıdaki form alanlarına otomatik yazıldı; "
-                "değiştirmek isterseniz üzerine yeni değeri girin."
-            ),
+            (t("m14.read.current", value=supervisor)
+             if supervisor else t("m14.read.none")),
+            details=t("m14.read.details", model=info.get("model"), protection=prot_label),
             data=data,
         )
 
@@ -1021,36 +927,30 @@ class BiosPasswordModule(Module):
         protection = _normalize_protection(params.get("protection_mode"))
 
         if progress:
-            progress("eta-112 aracı hazırlanıyor...")
+            progress(t("m14.common.preparing"))
         script = _ensure_eta_112(allow_download=True)
         if not script:
             return ApplyResult(
                 False,
-                "eta-112 aracı indirilemedi.",
-                details=(
-                    "İnternet bağlantısı ya da "
-                    f"{ETA_112_RAW_BASE} erişimi yok olabilir."
-                ),
+                t("m14.common.download_failed"),
+                details=t("m14.common.download_failed_details", url=ETA_112_RAW_BASE),
             )
 
         if progress:
-            progress("Donanım modeli sorgulanıyor (bios info --json)...")
+            progress(t("m14.common.querying_model"))
         info, info_debug = _eta_112_call(["info"], allow_download=False)
         if not info:
             return ApplyResult(
                 False,
-                "eta-112 'info' beklenen JSON çıktısını vermedi.",
-                details=info_debug or "(boş çıktı)",
+                t("m14.common.info_bad_json"),
+                details=info_debug or t("m14.common.empty_output"),
             )
         if not info.get("supported"):
             self._supported_cache = False
             return ApplyResult(
                 False,
-                "Bu donanım eta-112 tarafından desteklenmiyor; işlem yapılmaz.",
-                details=(
-                    f"Anakart: {info.get('board')}\n"
-                    f"BIOS:    {info.get('bios')}"
-                ),
+                t("m14.local.unsupported"),
+                details=t("m14.common.board_bios", board=info.get("board"), bios=info.get("bios")),
             )
         self._supported_cache = True
         pw_min = int(info.get("pw_min") or 4)
@@ -1070,85 +970,61 @@ class BiosPasswordModule(Module):
         )
         call_args = full_argv[1:-1]  # 'bios' ve '--json' arasındaki kısım
         if pw == "":
-            human = "BIOS yönetici parolası TEMİZLENİYOR..."
+            human = t("m14.local.clearing")
         elif supports_koruma:
-            human = (
-                f"BIOS yönetici parolası AYARLANIYOR "
-                f"(uzunluk {len(pw)}, koruma {protection})..."
-            )
+            human = t("m14.local.setting", length=len(pw), protection=protection)
         else:
             mode_human = (
-                "her açılışta (yön+kul aynı parola atanıyor)"
+                t("m14.local.faz1_always")
                 if protection == "always"
-                else "yalnız BIOS setup'a girilirken (yalnız yönetici)"
+                else t("m14.local.faz1_setup")
             )
-            human = (
-                f"BIOS yönetici parolası AYARLANIYOR "
-                f"(Faz 1 davranışı: {mode_human})..."
-            )
+            human = t("m14.local.setting_faz1", mode=mode_human)
         if progress:
             progress(human)
-            progress("(flash'a yazılıyor; bu birkaç saniye sürebilir)")
+            progress(t("m14.local.writing_flash"))
 
         # Yazma + doğrulama — eta-112 kendi içinde yapıyor. 180 sn yeter.
         result, debug = _eta_112_call(call_args, allow_download=False, timeout=180)
         if not result:
             return ApplyResult(
                 False,
-                "eta-112 yazma komutu beklenen JSON çıktısını vermedi.",
-                details=debug or "(boş çıktı)",
+                t("m14.local.write_bad_json"),
+                details=debug or t("m14.common.empty_output"),
             )
         if not result.get("ok"):
             return ApplyResult(
                 False,
-                f"BIOS işlemi başarısız: "
-                f"{result.get('error') or 'bilinmeyen hata'}",
+                t("m14.local.failed", error=result.get("error") or t("m14.common.unknown_error")),
             )
         verified = result.get("verified", True)
         changed = result.get("changed", True)
         if not changed:
             return ApplyResult(
                 True,
-                "Değişiklik yapılmadı — BIOS zaten istenen durumdaydı.",
+                t("m14.local.unchanged"),
                 data={"clear_mode": (pw == ""), "protection": protection},
             )
         if not verified:
             return ApplyResult(
                 False,
-                "Yazıldı ama doğrulama tutmadı — BIOS okumayı tekrar "
-                "denemek için sayfayı tazeleyin.",
+                t("m14.local.not_verified"),
             )
         if pw == "":
-            summary = (
-                "Bu makinenin BIOS yönetici parolası temizlendi. "
-                "BIOS değişikliğinin tamamen etkili olması için "
-                "makineyi YENİDEN BAŞLATIN."
-            )
+            summary = t("m14.local.cleared")
         elif supports_koruma:
-            summary = (
-                f"Bu makinenin BIOS yönetici parolası ayarlandı "
-                f"(koruma: {protection}). BIOS değişikliğinin etkili olması "
-                "için makineyi YENİDEN BAŞLATIN."
-            )
+            summary = t("m14.local.set", protection=protection)
         else:
             faz1_human = (
-                "her açılışta (yön+kul aynı parola)"
+                t("m14.apply.faz1_always")
                 if protection == "always"
-                else "yalnız BIOS setup'a girilirken (yalnız yön.)"
+                else t("m14.apply.faz1_setup")
             )
-            summary = (
-                "Bu makinenin BIOS yönetici parolası ayarlandı "
-                f"(Faz 1: {faz1_human}). BIOS değişikliğinin etkili olması "
-                "için makineyi YENİDEN BAŞLATIN."
-            )
+            summary = t("m14.local.set_faz1", mode=faz1_human)
         return ApplyResult(
             True,
             summary,
-            details=(
-                "İşlem 'eta-112 "
-                f"{' '.join(full_argv)}' ile gerçekleştirildi.\n"
-                "Bu adımdaki Uygula akışı KURMADI — yalnız bu makineye yazıldı."
-            ),
+            details=t("m14.local.details", argv=" ".join(full_argv)),
             data={"clear_mode": (pw == ""), "protection": protection},
         )
 
@@ -1160,21 +1036,21 @@ class BiosPasswordModule(Module):
             ["systemctl", "disable", FIRST_BOOT_SERVICE_NAME], check=False,
         )
         if _rm(FIRST_BOOT_SERVICE):
-            notes.append(f"{FIRST_BOOT_SERVICE} silindi")
+            notes.append(t("m14.undo.deleted", path=FIRST_BOOT_SERVICE))
         if _rm(FIRST_BOOT_SCRIPT):
-            notes.append(f"{FIRST_BOOT_SCRIPT} silindi (parola yok edildi)")
+            notes.append(t("m14.undo.script_deleted", path=FIRST_BOOT_SCRIPT))
         if _rm(BUNDLED_ETA_112):
-            notes.append(f"{BUNDLED_ETA_112} silindi")
+            notes.append(t("m14.undo.deleted", path=BUNDLED_ETA_112))
         if _rm(FIRST_BOOT_SENTINEL):
-            notes.append(f"{FIRST_BOOT_SENTINEL} silindi")
+            notes.append(t("m14.undo.deleted", path=FIRST_BOOT_SENTINEL))
         run_cmd(["systemctl", "daemon-reload"], check=False)
 
         # MAC imzasını YALNIZCA biz yazdıysak sil — m12 de paylaşıyor.
         if data.get("wrote_mac") and _rm(IMAGED_MAC_FILE):
-            notes.append(f"{IMAGED_MAC_FILE} silindi (yalnız m14 yazmıştı)")
+            notes.append(t("m14.undo.mac_deleted", path=IMAGED_MAC_FILE))
 
         return ApplyResult(
             True,
-            "BIOS parola servisi geri alındı.",
+            t("m14.undo.done"),
             details="\n".join(f"• {n}" for n in notes) if notes else None,
         )

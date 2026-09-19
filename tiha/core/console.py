@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 import sys
 
+from .i18n import t
+
 _USE_COLOR = sys.stdout.isatty() and "NO_COLOR" not in os.environ
 
 
@@ -49,7 +51,9 @@ def banner_open(title: str, version: str = "") -> None:
     _write()
 
 
-def banner_close(message: str = "Sihirbaz kapatıldı.") -> None:
+def banner_close(message: str | None = None) -> None:
+    if message is None:
+        message = t("core.console.wizard_closed")
     _write()
     _write(f"  {DIM}{message}{RESET}")
     _write()
@@ -73,7 +77,7 @@ def fail(summary: str) -> None:
 
 
 def undone(title: str) -> None:
-    _write(f"  {YELLOW}↶{RESET} Geri alındı: {title}")
+    _write(f"  {YELLOW}↶{RESET} {t('core.console.undone', title=title)}")
 
 
 def note(text: str) -> None:

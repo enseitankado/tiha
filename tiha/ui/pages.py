@@ -17,6 +17,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
 from ..core import console
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 
@@ -140,77 +141,38 @@ def _scrolled_textview(text: str, *, monospace: bool = False,
 # =========================================================================
 
 
-_WELCOME_INTRO = (
-    "TiHA, Pardus ETAP etkileşimli tahtayı imaj alınmaya hazırlayan bir "
-    "sihirbazdır. Örnek bir tahtayı bu adımlarla hazırlar, imajını alır "
-    "ve onlarca tahtaya dağıtırsınız. Her klon aynı ayarlarla, ama kendi "
-    "kimliğiyle açılır."
-)
+_WELCOME_INTRO = t("ui.welcome.intro")
 
-_WELCOME_FEATURES_TITLE = "Adımlar"
+_WELCOME_FEATURES_TITLE = t("ui.welcome.features_title")
 
 # (başlık, açıklama) çiftleri — hoşgeldiniz sayfasında iki sütunlu bir
 # Grid ile render edilir; böylece açıklamaların ilk harfi aynı hizada
 # başlar. Başlıklar sol menüdeki adlarla birebir aynı ve aynı sırada.
 _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
-    ("Sistem güncellemesi",
-     "Paketleri imaj alınmadan önce günceller."),
-    ("Yerel hesaplar",
-     "root, etapadmin ve ortak öğretmen parolalarını belirler; yedek "
-     "öğretmen hesapları açar."),
-    ("Otomatik parola temizliği",
-     "Her açılışta etapadmin dışındaki hesapların yerel parolalarını "
-     "geçersiz kılar (isteğe bağlı)."),
-    ("Toplu pin anahtarı",
-     "Öğretmen PIN anahtarlarını merkezde üretip imaja gömer; ortak grup "
-     "PIN'i de tanımlanabilir."),
-    ("QR Parola Diyaloğu",
-     "EBA QR ile ilk girişte çıkan parola sorusunu kapatır."),
-    ("SSH Sunucusu",
-     "Tahtaya uzaktan komut ve dosya erişimi sağlar."),
-    ("Dosya sunucusu",
-     "Ağ üzerinden dosya alıp vermeyi sağlar."),
-    ("Merkezi log sunucusu",
-     "Tahta kayıtlarını merkeze kayıpsız iletir; disk sağlığı ve metrik "
-     "izleme eklenebilir."),
-    ("Zaman senkronizasyonu (NTP)",
-     "Tahta saatinin kaymasını önler."),
-    ("Dinamik hostname",
-     "Her klon kendine özgü bir ad alır."),
-    ("Otomatik kapanma",
-     "Unutulan tahtayı belirli saatte ya da boşta kalınca, önce uyararak "
-     "kapatır."),
-    ("Uzaktan uyandırma",
-     "Kapalı tahtanın ağ üzerinden açılabilmesini sağlar."),
-    ("Başarım (Deneysel)",
-     "Oturum kalıntılarını temizler, ETA Hafif Mod'u tüm kullanıcılara "
-     "uygular."),
-    ("Otomatik Ahenk Kaydı",
-     "Klonlanan tahta Lider'e kendi kimliğiyle abone olur."),
-    ("BIOS parolası",
-     "Desteklenen donanımda klonun ilk açılışında BIOS yönetici parolası "
-     "atar."),
-    ("GRUB koruması",
-     "Açılış menüsünün düzenlenmesini parolaya bağlar."),
-    ("İmaj öncesi temizlik",
-     "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya "
-     "hazırlar."),
+    (t("m09.sidebar_title"), t("ui.welcome.features.m09")),
+    (t("m01.sidebar_title"), t("ui.welcome.features.m01")),
+    (t("m02.sidebar_title"), t("ui.welcome.features.m02")),
+    (t("m03.sidebar_title"), t("ui.welcome.features.m03")),
+    (t("m13.sidebar_title"), t("ui.welcome.features.m13")),
+    (t("m04.sidebar_title"), t("ui.welcome.features.m04")),
+    (t("m05.title"), t("ui.welcome.features.m05")),
+    (t("m06.sidebar_title"), t("ui.welcome.features.m06")),
+    (t("m07.title"), t("ui.welcome.features.m07")),
+    (t("m08.sidebar_title"), t("ui.welcome.features.m08")),
+    (t("m11.sidebar_title"), t("ui.welcome.features.m11")),
+    (t("m15.sidebar_title"), t("ui.welcome.features.m15")),
+    (t("m17.sidebar_title"), t("ui.welcome.features.m17")),
+    (t("m12.sidebar_title"), t("ui.welcome.features.m12")),
+    (t("m14.sidebar_title"), t("ui.welcome.features.m14")),
+    (t("m16.sidebar_title"), t("ui.welcome.features.m16")),
+    (t("m10.title"), t("ui.welcome.features.m10")),
 )
 
-_WELCOME_FLOW = (
-    "Adımlar sırayla ilerler. Her adım ne yapacağını ve neden gerektiğini "
-    "açıklar, uygulamadan önce onayınızı alır, sonucu gösterir; "
-    "gerekirse geri alınabilir. İstemediğiniz adımları atlayabilirsiniz. "
-    "İmaj öncesi temizliği en sona, imajı almadan hemen öncesine bırakın. "
-    "Başlamak için soldaki listeden bir adım seçin ya da “İleri” düğmesine "
-    "basın."
-)
+_WELCOME_FLOW = t("ui.welcome.flow")
 
 # Proje deposu (Hoşgeldiniz sayfasında tıklanabilir satır olarak gösterilir).
 _WELCOME_REPO_URL = "https://github.com/enseitankado/tiha"
-_WELCOME_REPO_LABEL = (
-    "Proje deposu: kaynak kod, sürüm geçmişi ve hata bildirimi"
-)
+_WELCOME_REPO_LABEL = t("ui.welcome.repo_label")
 
 
 class WelcomePage(Gtk.Box):
@@ -227,7 +189,7 @@ class WelcomePage(Gtk.Box):
             lbl.set_max_width_chars(110)
             self.pack_start(lbl, False, False, 0)
 
-        heading = _wrapping_label("Hoş geldiniz", klass="tiha-heading")
+        heading = _wrapping_label(t("ui.welcome.heading"), klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
         add_paragraph(_WELCOME_INTRO)
@@ -331,7 +293,7 @@ class ModulePage(Gtk.Box):
             heading_row.pack_start(heading_lbl, False, False, 0)
             help_btn = Gtk.ToggleButton(label="?")
             help_btn.get_style_context().add_class("tiha-help-btn")
-            help_btn.set_tooltip_text("Bu adımın açıklamasını göster / gizle")
+            help_btn.set_tooltip_text(t("ui.pages.rationale_toggle_tip"))
             help_btn.set_valign(Gtk.Align.CENTER)
             heading_row.pack_start(help_btn, False, False, 0)
             self.pack_start(heading_row, False, False, 0)
@@ -340,9 +302,7 @@ class ModulePage(Gtk.Box):
 
         if self.module.experimental:
             banner = _wrapping_label(
-                "Deneysel: Bu adım gerçek tahta donanımında henüz "
-                "doğrulanmadı. Önce tek bir tahtada deneyin; sorun görürseniz "
-                "\"Bu adımı geri al\" ile eski duruma dönün.",
+                t("ui.pages.experimental_banner"),
                 klass="tiha-experimental-banner",
             )
             self.pack_start(banner, False, False, 0)
@@ -354,7 +314,7 @@ class ModulePage(Gtk.Box):
         # İsteğe bağlı: adıma ait teknik belge / algoritma şeması linki.
         # Emoji kullanılmıyor — sadece linkin kendisi.
         if self.module.doc_url:
-            label = self.module.doc_label or "Algoritma akış şeması ve gerekçeler"
+            label = self.module.doc_label or t("ui.pages.doc_link_default")
             doc_lbl = Gtk.Label(xalign=0)
             doc_lbl.set_markup(
                 f'<a href="{GLib.markup_escape_text(self.module.doc_url)}">'
@@ -461,14 +421,13 @@ class ModulePage(Gtk.Box):
         banner.get_style_context().add_class("tiha-prev-banner")
         banner.pack_start(
             _wrapping_label(
-                f"ℹ Bu adım daha önce ({when}) bir TiHA oturumunda uygulanmış.\n"
-                f"Son durum: {entry.summary}",
+                t("ui.pages.previous_apply", when=when, summary=entry.summary),
                 selectable=True,
             ),
             False, False, 0,
         )
         if self.module.undo_supported:
-            undo_btn = Gtk.Button(label="Bu adımı geri al")
+            undo_btn = Gtk.Button(label=t("ui.pages.undo_step"))
             undo_btn.get_style_context().add_class("destructive-action")
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
             banner.pack_start(undo_btn, False, False, 0)
@@ -900,17 +859,17 @@ class ModulePage(Gtk.Box):
                 entry.set_placeholder_text(placeholder)
             box.pack_start(entry, True, True, 0)
 
-            browse_btn = Gtk.Button(label="📁 Göz at…")
+            browse_btn = Gtk.Button(label=t("ui.pages.browse"))
 
             def on_browse(_btn, _entry=entry, _field=field):
                 dlg = Gtk.FileChooserDialog(
-                    title=f"Dosya seç — {_field.get('label', '')}",
+                    title=t("ui.pages.choose_file_title", label=_field.get("label", "")),
                     transient_for=self.get_toplevel(),
                     action=Gtk.FileChooserAction.OPEN,
                 )
                 dlg.add_buttons(
-                    "İptal", Gtk.ResponseType.CANCEL,
-                    "Seç", Gtk.ResponseType.ACCEPT,
+                    t("ui.main.cancel"), Gtk.ResponseType.CANCEL,
+                    t("ui.pages.choose"), Gtk.ResponseType.ACCEPT,
                 )
                 # Başlangıç klasörü seçimi.
                 # Mevcut entry değeri varsa ilk konum olarak aç; aksi
@@ -963,7 +922,7 @@ class ModulePage(Gtk.Box):
                 # "Görsel dosyaları"na geçilebilir. Uzantı kontrolü zaten
                 # apply tarafında yapılıyor.
                 any_fil = Gtk.FileFilter()
-                any_fil.set_name("Tüm dosyalar")
+                any_fil.set_name(t("ui.pages.filter_all_files"))
                 any_fil.add_pattern("*")
                 dlg.add_filter(any_fil)
                 dlg.set_filter(any_fil)  # default aktif
@@ -971,7 +930,7 @@ class ModulePage(Gtk.Box):
                 # Yardımcı "Görsel dosyaları" filter'ı — kullanıcı ister
                 # ve düzgün çalışırsa kullansın diye eklenir.
                 img_fil = Gtk.FileFilter()
-                img_fil.set_name("Görsel dosyaları")
+                img_fil.set_name(t("ui.pages.filter_images"))
                 img_fil.add_pixbuf_formats()
                 dlg.add_filter(img_fil)
                 try:
@@ -1026,7 +985,7 @@ class ModulePage(Gtk.Box):
                 )
                 entry.set_icon_tooltip_text(
                     Gtk.EntryIconPosition.SECONDARY,
-                    "Parolayı göster / gizle",
+                    t("ui.pages.password_toggle_tip"),
                 )
                 entry.set_icon_activatable(Gtk.EntryIconPosition.SECONDARY, True)
 
@@ -1072,9 +1031,11 @@ class ModulePage(Gtk.Box):
                           "#2e7d32", "#1b5e20")
                 color = colors[s.score]
                 main = (
-                    f'<span foreground="{color}"><b>Güç: '
-                    f'{GLib.markup_escape_text(s.label)} '
-                    f'({s.score}/4)</b></span>'
+                    f'<span foreground="{color}"><b>'
+                    + GLib.markup_escape_text(
+                        t("ui.pages.strength", label=s.label, score=s.score)
+                    )
+                    + '</b></span>'
                 )
                 if s.warnings:
                     warn = GLib.markup_escape_text(" ".join(s.warnings))
@@ -1185,7 +1146,7 @@ class ModulePage(Gtk.Box):
         spinner.start()
         self._working_row.pack_start(spinner, False, False, 0)
         self._working_row.pack_start(
-            _wrapping_label("Çalışıyor… Lütfen bekleyin."),
+            _wrapping_label(t("ui.pages.working_row")),
             False, False, 0,
         )
         self.result_holder.pack_start(self._working_row, False, False, 0)
@@ -1195,10 +1156,10 @@ class ModulePage(Gtk.Box):
         # işlemleri (hesap silme, anahtar silme) sistemi kalıcı olarak
         # değiştiriyor; terminal dökümünde izi kalmalı.
         label = button.get_label() if button is not None else ""
-        console.step(f"{self.module.title} — {label}" if label else self.module.title)
+        console.step(t("ui.pages.console_action", title=self.module.title, label=label) if label else self.module.title)
 
         # Canlı çıktıyı modalda göster
-        self._open_stream_dialog(f"{self.module.title} — çalışıyor")
+        self._open_stream_dialog(t("ui.pages.stream_title_running", title=self.module.title))
 
         def progress_callback(text: str) -> None:
             GLib.idle_add(self._append_stream_line, text)
@@ -1226,7 +1187,7 @@ class ModulePage(Gtk.Box):
                         result = action_func()
                 GLib.idle_add(self._on_button_action_complete, result)
             except Exception as exc:
-                error_result = ApplyResult(False, f"Button action hatası: {exc}")
+                error_result = ApplyResult(False, t("ui.pages.action_error", error=exc))
                 GLib.idle_add(self._on_button_action_complete, error_result)
 
         self._applying = True
@@ -1277,7 +1238,7 @@ class ModulePage(Gtk.Box):
             return
         params, missing = self._collect_params()
         if missing:
-            self._show_result(ApplyResult(False, "Eksik alanlar: " + ", ".join(missing)))
+            self._show_result(ApplyResult(False, t("ui.pages.missing_fields", fields=", ".join(missing))))
             return
 
         self._applying = True
@@ -1292,7 +1253,7 @@ class ModulePage(Gtk.Box):
         spinner.start()
         self._working_row.pack_start(spinner, False, False, 0)
         self._working_row.pack_start(
-            _wrapping_label("Uygulanıyor… Bu adım tamamlanana kadar lütfen bekleyin."),
+            _wrapping_label(t("ui.pages.applying_row")),
             False, False, 0,
         )
         self.result_holder.pack_start(self._working_row, False, False, 0)
@@ -1301,7 +1262,7 @@ class ModulePage(Gtk.Box):
         # Tüm adımlarda: canlı çıktı / sonuç için modal aç. Modül akış
         # yayınlamıyorsa modal boş kalır ve iş bitince özet + detay
         # oraya yazılır. Kapat düğmesi iş bitene kadar pasif kalır.
-        self._open_stream_dialog(f"{self.module.title} — uygulanıyor")
+        self._open_stream_dialog(t("ui.pages.stream_title_applying", title=self.module.title))
 
         thread = threading.Thread(
             target=self._apply_thread_body,
@@ -1325,7 +1286,7 @@ class ModulePage(Gtk.Box):
                 result = self.module.apply_with_logging(params)
         except Exception as exc:
             log.exception("Modül uygulanamadı: %s", self.module.id)
-            result = ApplyResult(False, f"Beklenmeyen hata: {exc}")
+            result = ApplyResult(False, t("ui.pages.unexpected_error", error=exc))
 
         GLib.idle_add(self._apply_thread_done, result)
 
@@ -1339,7 +1300,7 @@ class ModulePage(Gtk.Box):
         """Canlı çıktı modalını açar (varsa yeniden kullanır)."""
         if self._stream_dialog is not None:
             self._stream_buffer.set_text("")
-            self._stream_status.set_text("Çalışıyor… lütfen bekleyin.")
+            self._stream_status.set_text(t("ui.pages.stream_working"))
             self._stream_spinner.start()
             self._stream_close_btn.set_sensitive(False)
             self._stream_dialog.present()
@@ -1364,7 +1325,7 @@ class ModulePage(Gtk.Box):
         self._stream_spinner = Gtk.Spinner()
         self._stream_spinner.start()
         status_row.pack_start(self._stream_spinner, False, False, 0)
-        self._stream_status = Gtk.Label(label="Çalışıyor… lütfen bekleyin.")
+        self._stream_status = Gtk.Label(label=t("ui.pages.stream_working"))
         self._stream_status.set_xalign(0.0)
         self._stream_status.set_line_wrap(True)
         status_row.pack_start(self._stream_status, True, True, 0)
@@ -1382,7 +1343,7 @@ class ModulePage(Gtk.Box):
         scroll.add(self.stream_view)
         content.pack_start(scroll, True, True, 0)
 
-        self._stream_close_btn = dlg.add_button("Kapat", Gtk.ResponseType.CLOSE)
+        self._stream_close_btn = dlg.add_button(t("ui.main.close"), Gtk.ResponseType.CLOSE)
         self._stream_close_btn.set_sensitive(False)
 
         def on_response(_dlg, _response):
@@ -1418,8 +1379,10 @@ class ModulePage(Gtk.Box):
         if self._stream_dialog is None:
             return
         self._stream_spinner.stop()
-        prefix = "Tamamlandı" if success else "BAŞARISIZ"
-        self._stream_status.set_text(f"{prefix} — {summary}")
+        self._stream_status.set_text(
+            t("ui.pages.stream_done", summary=summary) if success
+            else t("ui.pages.stream_failed", summary=summary)
+        )
 
         if self._stream_buffer is not None:
             end = self._stream_buffer.get_end_iter()
@@ -1428,13 +1391,13 @@ class ModulePage(Gtk.Box):
             report = "\n\n".join(
                 part.strip() for part in (details, copyable) if part and part.strip()
             )
-            trailing = f"\n───\nSonuç: {summary}\n"
+            trailing = t("ui.pages.stream_result_trailing", summary=summary)
             if report:
                 trailing += "\n" + report + "\n"
             if not has_content:
                 # Akış yayınlanmadıysa baştan yaz — çirkin ayraç olmasın.
                 self._stream_buffer.set_text(
-                    f"Sonuç: {summary}\n"
+                    t("ui.pages.stream_result", summary=summary)
                     + (("\n" + report + "\n") if report else "")
                 )
             else:
@@ -1525,7 +1488,7 @@ class ModulePage(Gtk.Box):
             warn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             warn_box.get_style_context().add_class("tiha-result-fail")
             warn_box.pack_start(
-                _wrapping_label(f"⚠ {result.warning}", selectable=True),
+                _wrapping_label(t("ui.pages.warning_line", warning=result.warning), selectable=True),
                 False, False, 0,
             )
             box.pack_start(warn_box, False, False, 0)
@@ -1555,12 +1518,12 @@ class ModulePage(Gtk.Box):
         if result.copyable:
             # Buton satırı: panoya kopyala + dosyaya kaydet
             btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            copy_btn = Gtk.Button(label="Panoya kopyala")
+            copy_btn = Gtk.Button(label=t("ui.pages.copy_clipboard"))
             # Ekranda görünen birleşik metni kopyalar.
             copy_btn.connect("clicked", lambda *_: self._copy_to_clipboard(report))
             btn_row.pack_start(copy_btn, False, False, 0)
 
-            save_btn = Gtk.Button(label="Dosyaya kaydet…")
+            save_btn = Gtk.Button(label=t("ui.pages.save_to_file"))
             # Modül kaydedilecek içeriği ayrıca verdiyse (ör. m03'ün
             # yazdırılabilir HTML kâğıdı) ekrandaki metin yerine onu
             # kaydediyoruz; dosya adının uzantısı biçimi belirler.
@@ -1590,18 +1553,14 @@ class ModulePage(Gtk.Box):
             and self.module.undo_supported
             and self.journal.last_applied(self.module.id) is not None
         ):
-            undo_btn = Gtk.Button(label="Bu adımı geri al")
+            undo_btn = Gtk.Button(label=t("ui.pages.undo_step"))
             undo_btn.get_style_context().add_class("destructive-action")
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
             box.pack_start(undo_btn, False, False, 0)
 
         if not result.success:
-            report_btn = Gtk.Button(label="🐛 GitHub'a hata bildir…")
-            report_btn.set_tooltip_text(
-                "Adım id'si, TiHA sürümü, hata özeti ve son log satırlarını "
-                "içeren bir GitHub Issue formunu tarayıcıda açar. Göndermeden "
-                "önce içeriği gözden geçirebilirsiniz."
-            )
+            report_btn = Gtk.Button(label=t("ui.pages.report_bug"))
+            report_btn.set_tooltip_text(t("ui.pages.report_bug_tip"))
             report_btn.connect("clicked", lambda *_: self._report_failure(result))
             box.pack_start(report_btn, False, False, 0)
 
@@ -1629,29 +1588,23 @@ class ModulePage(Gtk.Box):
                 for ln in lines[-50:]:
                     low = ln.lower()
                     if any(s in low for s in ("password", "parola", "secret", "smbpasswd")):
-                        sanitized.append("[satır parola/secret içerebileceği için maskelendi]")
+                        sanitized.append(t("ui.pages.issue.masked_line"))
                     else:
                         sanitized.append(ln)
                 log_tail = "\n".join(sanitized)
         except OSError:
-            log_tail = "(log okunamadı)"
+            log_tail = t("ui.pages.issue.log_unreadable")
 
-        body = (
-            f"**Modül:** `{self.module.id}` — {self.module.title}\n"
-            f"**TiHA sürümü:** {__version__}\n"
-            f"**Tarih:** {datetime.now().isoformat(timespec='seconds')}\n\n"
-            f"### Hata özeti\n\n```\n{result.summary}\n```\n\n"
+        body = t(
+            "ui.pages.issue.head",
+            module_id=self.module.id, title=self.module.title,
+            version=__version__,
+            date=datetime.now().isoformat(timespec="seconds"),
+            summary=result.summary,
         )
         if result.details:
-            body += f"### Detay\n\n```\n{result.details[:1500]}\n```\n\n"
-        body += (
-            f"### Log son 50 satır (parola benzeri satırlar maskelendi)\n\n"
-            f"```\n{log_tail[-4000:]}\n```\n\n"
-            "---\n"
-            "_Bu rapor TiHA içinden otomatik oluşturuldu. Göndermeden önce "
-            "içeriği gözden geçirip kişisel bilgileri (IP, hostname, "
-            "kullanıcı adları) kaldırabilirsiniz._\n"
-        )
+            body += t("ui.pages.issue.details", details=result.details[:1500])
+        body += t("ui.pages.issue.log", log_tail=log_tail[-4000:])
         title = f"[{self.module.id}] {result.summary[:80]}"
 
         url = (
@@ -1700,11 +1653,9 @@ class ModulePage(Gtk.Box):
                 transient_for=self.get_toplevel(), modal=True,
                 message_type=Gtk.MessageType.WARNING,
                 buttons=Gtk.ButtonsType.OK,
-                text="Tarayıcı otomatik açılamadı",
+                text=t("ui.pages.browser_failed"),
             )
-            dlg.format_secondary_text(
-                "Aşağıdaki URL'i tarayıcınıza kopyalayın:\n\n" + url
-            )
+            dlg.format_secondary_text(t("ui.pages.browser_failed_body", url=url))
             dlg.run()
             dlg.destroy()
 
@@ -1725,13 +1676,13 @@ class ModulePage(Gtk.Box):
         from pathlib import Path
 
         dlg = Gtk.FileChooserDialog(
-            title="Dosyaya kaydet",
+            title=t("ui.pages.save_dialog_title"),
             transient_for=self.get_toplevel(),
             action=Gtk.FileChooserAction.SAVE,
         )
         dlg.add_buttons(
-            "İptal", Gtk.ResponseType.CANCEL,
-            "Kaydet", Gtk.ResponseType.ACCEPT,
+            t("ui.main.cancel"), Gtk.ResponseType.CANCEL,
+            t("ui.main.save"), Gtk.ResponseType.ACCEPT,
         )
         dlg.set_current_name(default_name)
         dlg.set_do_overwrite_confirmation(True)
@@ -1744,7 +1695,7 @@ class ModulePage(Gtk.Box):
         if forced_suffix:
             html_filter = Gtk.FileFilter()
             label = forced_suffix.lstrip(".").upper()
-            html_filter.set_name(f"{label} dosyası (*{forced_suffix})")
+            html_filter.set_name(t("ui.pages.file_filter", kind=label, suffix=forced_suffix))
             html_filter.add_pattern(f"*{forced_suffix}")
             dlg.add_filter(html_filter)
 
@@ -1778,9 +1729,9 @@ class ModulePage(Gtk.Box):
                         os.chown(path, etap_pw.pw_uid, etap_pw.pw_gid)
                 except (KeyError, OSError):
                     pass
-                self._toast(f"Dosyaya kaydedildi: {path}")
+                self._toast(t("ui.pages.saved_to", path=path))
             except OSError as exc:
-                self._toast(f"Dosya yazılamadı: {exc}", error=True)
+                self._toast(t("ui.pages.save_failed", error=exc), error=True)
         dlg.destroy()
 
     def _confirm_action(self, spec: dict) -> bool:
@@ -1795,7 +1746,7 @@ class ModulePage(Gtk.Box):
             destroy_with_parent=True,
             message_type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.YES_NO,
-            text=spec.get("title", "Emin misiniz?"),
+            text=spec.get("title", t("ui.pages.confirm_default_title")),
         )
         message = spec.get("message")
         if message:
@@ -1813,7 +1764,7 @@ class ModulePage(Gtk.Box):
             destroy_with_parent=True,
             message_type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.OK,
-            text="Dikkat edilmesi gereken bir durum var",
+            text=t("ui.pages.warning_dialog_title"),
         )
         dlg.format_secondary_text(message)
         dlg.run()
@@ -1835,7 +1786,7 @@ class ModulePage(Gtk.Box):
     def _undo_clicked(self) -> None:
         entry = self.journal.last_applied(self.module.id)
         if not entry:
-            self._show_result(ApplyResult(False, "Geri alınacak kayıt bulunamadı."))
+            self._show_result(ApplyResult(False, t("ui.pages.undo_nothing")))
             return
 
         # Modül geri alma öncesi bir onay istiyor mu?
@@ -1848,7 +1799,7 @@ class ModulePage(Gtk.Box):
                 destroy_with_parent=True,
                 message_type=Gtk.MessageType.QUESTION,
                 buttons=Gtk.ButtonsType.YES_NO,
-                text=prompt.get("title", "Onay"),
+                text=prompt.get("title", t("ui.pages.undo_prompt_default_title")),
             )
             dlg.format_secondary_text(prompt.get("message", ""))
             response = dlg.run()
@@ -1863,7 +1814,7 @@ class ModulePage(Gtk.Box):
         try:
             u_result = self.module.undo_with_logging(entry.data, undo_params)
         except Exception as exc:
-            u_result = ApplyResult(False, f"Geri alma sırasında hata: {exc}")
+            u_result = ApplyResult(False, t("ui.pages.undo_error", error=exc))
         if u_result.success:
             self.journal.mark_undone(self.module.id)
             console.undone(self.module.title)
@@ -1901,7 +1852,7 @@ class SummaryPage(Gtk.Box):
 
         self.get_style_context().add_class("tiha-summary")
 
-        heading = _wrapping_label("Özet", klass="tiha-heading")
+        heading = _wrapping_label(t("ui.summary.heading"), klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
         # "Bu imajda neler yaptınız" raporu: giriş, adımlar arası uyarılar,
@@ -1928,11 +1879,7 @@ class SummaryPage(Gtk.Box):
         self.pack_start(self.tests_exp, False, False, 0)
 
         info = _wrapping_label(
-            "Bu tahtada geri alınabilir durumdaki adımlar aşağıda "
-            "listelenmiştir. Daha önceki bir oturumda uygulanmış olsa bile, "
-            "modül geri almayı destekliyorsa ve günce kaydı hâlâ etkinse "
-            "buradan geri alabilirsiniz. Alttaki 'Bitir' düğmesi uygulamayı "
-            "kapatır.",
+            t("ui.summary.undo_info"),
             klass="tiha-rationale",
         )
         summary_box.pack_start(info, False, False, 0)
@@ -1941,17 +1888,13 @@ class SummaryPage(Gtk.Box):
         summary_box.pack_start(self.entries_box, False, False, 0)
 
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        refresh = Gtk.Button(label="Listeyi yenile")
+        refresh = Gtk.Button(label=t("ui.summary.refresh"))
         refresh.connect("clicked", lambda *_: self.refresh())
         btn_row.pack_start(refresh, False, False, 0)
 
         if self.on_export_preset is not None:
-            export_btn = Gtk.Button(label="📦 Preset olarak dışa aktar…")
-            export_btn.set_tooltip_text(
-                "Bu oturumda uygulanmış adımların parametrelerini JSON "
-                "dosyasına kaydeder. Diğer tahtalarda CLI ile aynı "
-                "ayarları uygulayabilirsiniz: tiha --preset <dosya> --apply"
-            )
+            export_btn = Gtk.Button(label=t("ui.summary.export_preset"))
+            export_btn.set_tooltip_text(t("ui.summary.export_preset_tip"))
             export_btn.connect("clicked", lambda *_: self.on_export_preset())
             btn_row.pack_start(export_btn, False, False, 0)
 
@@ -1975,7 +1918,9 @@ class SummaryPage(Gtk.Box):
 
     @staticmethod
     def _set_group_title(exp: Gtk.Expander, title: str, detail: str) -> None:
-        exp.get_label_widget().set_text(f"{title} ({detail})" if detail else title)
+        exp.get_label_widget().set_text(
+            t("ui.summary.group_title", title=title, detail=detail) if detail else title
+        )
 
     def refresh(self) -> None:
         """Tüm geçmiş kayıtlar arasından her modül için en son durumu
@@ -2002,14 +1947,14 @@ class SummaryPage(Gtk.Box):
             and m.undo_supported
         )
         self._set_group_title(
-            self.summary_exp, "Özet ve geri alma",
-            f"{len(entries)} adım, {undoable} geri alınabilir" if entries else "",
+            self.summary_exp, t("ui.summary.group_undo"),
+            t("ui.summary.group_undo_detail", count=len(entries), undoable=undoable)
+            if entries else "",
         )
 
         if not entries:
             empty = _wrapping_label(
-                "Geri alınabilecek bir adım yok — henüz hiçbir modül "
-                "uygulanmamış ya da uygulanan tüm adımlar zaten geri alınmış.",
+                t("ui.summary.undo_empty"),
                 klass="tiha-rationale",
             )
             self.entries_box.pack_start(empty, False, False, 0)
@@ -2043,7 +1988,7 @@ class SummaryPage(Gtk.Box):
 
             module = self.modules.get(entry.module_id)
             if entry.status == "applied" and module and module.undo_supported:
-                btn = Gtk.Button(label="Geri al")
+                btn = Gtk.Button(label=t("ui.summary.undo"))
                 btn.get_style_context().add_class("destructive-action")
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._make_undo_handler(module, entry))
@@ -2072,7 +2017,7 @@ class SummaryPage(Gtk.Box):
         except Exception as exc:  # rapor hatası Özet sayfasını düşürmesin
             log.warning("Özet raporu kurulamadı: %s", exc)
             self.report_box.pack_start(
-                _wrapping_label(f"Rapor oluşturulamadı: {exc}", klass="tiha-rationale"),
+                _wrapping_label(t("ui.summary.report_failed", error=exc), klass="tiha-rationale"),
                 False, False, 0,
             )
             self.report_box.show_all()
@@ -2084,7 +2029,7 @@ class SummaryPage(Gtk.Box):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         card.get_style_context().add_class("tiha-report")
         card.pack_start(
-            _wrapping_label("Bu imajda neler yaptınız?", klass="tiha-section-title"),
+            _wrapping_label(t("ui.summary.report_title"), klass="tiha-section-title"),
             False, False, 0,
         )
         card.pack_start(_wrapping_label(report.intro, selectable=True), False, False, 0)
@@ -2097,11 +2042,17 @@ class SummaryPage(Gtk.Box):
 
         if not report.is_empty:
             self.done_box.pack_start(self._report_steps(report.steps), False, False, 0)
-            self._set_group_title(self.done_exp, "Yapılanlar", f"{len(report.steps)} adım")
+            self._set_group_title(
+                self.done_exp, t("ui.summary.group_done"),
+                t("ui.summary.group_done_detail", count=len(report.steps)),
+            )
             tests_box = self._report_tests(report)
             self.tests_box.pack_start(tests_box, False, False, 0)
             n_tests = sum(len(s.tests) for s in report.steps) + len(report.general_tests)
-            self._set_group_title(self.tests_exp, "Kontrol et", f"{n_tests} deneme")
+            self._set_group_title(
+                self.tests_exp, t("ui.summary.group_tests"),
+                t("ui.summary.group_tests_detail", count=n_tests),
+            )
             _no_focus_labels(self.done_box)
             _no_focus_labels(self.tests_box)
             self.done_box.show_all()
@@ -2115,14 +2066,11 @@ class SummaryPage(Gtk.Box):
             card.pack_start(closing, False, False, 0)
 
             buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            copy_btn = Gtk.Button(label="Raporu kopyala")
-            copy_btn.set_tooltip_text(
-                "Raporu düz metin olarak panoya kopyalar; e-postaya ya da "
-                "belgeye yapıştırıp klon testinde yanınızda bulundurabilirsiniz."
-            )
+            copy_btn = Gtk.Button(label=t("ui.summary.copy_report"))
+            copy_btn.set_tooltip_text(t("ui.summary.copy_report_tip"))
             copy_btn.connect("clicked", lambda *_: self._copy_report())
             buttons.pack_start(copy_btn, False, False, 0)
-            save_btn = Gtk.Button(label="Raporu dosyaya kaydet…")
+            save_btn = Gtk.Button(label=t("ui.summary.save_report"))
             save_btn.connect("clicked", lambda *_: self._save_report())
             buttons.pack_start(save_btn, False, False, 0)
             card.pack_start(buttons, False, False, 0)
@@ -2152,11 +2100,12 @@ class SummaryPage(Gtk.Box):
         for step in steps:
             title = step.title
             if step.failed:
-                title += " — BAŞARISIZ"
+                title = t("ui.summary.step_failed", title=title)
             elif step.skipped:
-                title += " — atlandı"
-            elif step.experimental and "deneysel" not in title.lower():
-                title += " (deneysel)"
+                title = t("ui.summary.step_skipped", title=title)
+            elif (step.experimental
+                  and t("ui.summary.experimental_marker") not in title.lower()):
+                title = t("ui.summary.step_experimental", title=title)
             head = _wrapping_label(title, klass="tiha-summary-title")
             if step.failed:
                 head.get_style_context().add_class("tiha-report-failed")
@@ -2175,7 +2124,7 @@ class SummaryPage(Gtk.Box):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.get_style_context().add_class("tiha-report-warnings")
         box.pack_start(
-            _wrapping_label("Dikkat", klass="tiha-report-subtitle"),
+            _wrapping_label(t("ui.summary.warnings_title"), klass="tiha-report-subtitle"),
             False, False, 0,
         )
         box.pack_start(self._bullets(warnings, "⚠"), False, False, 0)
@@ -2185,15 +2134,14 @@ class SummaryPage(Gtk.Box):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.pack_start(
             _wrapping_label(
-                "İmajı en az bir tahtaya yazın ve aşağıdakilerin her birini o "
-                "klon tahtada deneyin.",
+                t("ui.summary.tests_intro"),
                 klass="tiha-rationale",
             ),
             False, False, 0,
         )
         groups = [(s.title, s.tests) for s in report.steps if s.tests]
         if report.general_tests:
-            groups.append(("Genel", report.general_tests))
+            groups.append((t("ui.summary.tests_general"), report.general_tests))
         for title, tests in groups:
             box.pack_start(_wrapping_label(title, klass="tiha-summary-title"), False, False, 0)
             items = self._bullets(tests, "☐")
@@ -2212,11 +2160,11 @@ class SummaryPage(Gtk.Box):
         if self._report is None:
             return
         dlg = Gtk.FileChooserDialog(
-            title="Raporu kaydet",
+            title=t("ui.summary.save_report_title"),
             parent=self.get_toplevel() if isinstance(self.get_toplevel(), Gtk.Window) else None,
             action=Gtk.FileChooserAction.SAVE,
         )
-        dlg.add_buttons("İptal", Gtk.ResponseType.CANCEL, "Kaydet", Gtk.ResponseType.ACCEPT)
+        dlg.add_buttons(t("ui.main.cancel"), Gtk.ResponseType.CANCEL, t("ui.main.save"), Gtk.ResponseType.ACCEPT)
         dlg.set_current_name("tiha-imaj-raporu.txt")
         dlg.set_do_overwrite_confirmation(True)
         try:
@@ -2235,7 +2183,7 @@ class SummaryPage(Gtk.Box):
             try:
                 result = module.undo_with_logging(entry.data)
             except Exception as exc:
-                result = ApplyResult(False, f"Hata: {exc}")
+                result = ApplyResult(False, t("ui.summary.undo_error", error=exc))
             if result.success:
                 self.journal.mark_undone(module.id)
             self.refresh()

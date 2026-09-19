@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import pwd
 
+from .i18n import t
 from .utils import is_root
 
 # Sistemin beklediği yönetici kullanıcı adı. eta-register de aynı kontrolü yapar.
@@ -50,14 +51,8 @@ def require_root_and_admin() -> tuple[bool, str]:
         gösterilebilecek Türkçe bir ileti içerir.
     """
     if not is_root():
-        return False, (
-            "TiHA yönetici (kök) yetkisi gerektirir. Uygulamayı terminalden "
-            "`sudo tiha` ile ya da menüdeki kısayoldan (parola ister) başlatın."
-        )
+        return False, t("core.privilege.root_required")
     user = invoking_username()
     if user != ADMIN_USER:
-        return False, (
-            f"TiHA yalnızca '{ADMIN_USER}' kullanıcısı tarafından kullanılabilir. "
-            f"Şu anda '{user}' hesabıyla çalışıyorsunuz."
-        )
+        return False, t("core.privilege.admin_only", admin=ADMIN_USER, user=user)
     return True, ""

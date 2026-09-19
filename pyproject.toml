@@ -36,4 +36,4 @@ Issues = "https://github.com/enseitankado/tiha/issues"
 include = ["tiha*"]
 
 [tool.setuptools.package-data]
-tiha = ["data/*.css", "data/*.svg", "data/*.txt"]
+tiha = ["data/*.css", "data/*.svg", "data/*.txt", "locale/*.toml"]

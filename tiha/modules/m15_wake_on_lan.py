@@ -45,6 +45,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd
@@ -162,12 +163,12 @@ def _check_wol_support(iface: str) -> str:
     """ethtool kart hakkında ne diyor? 'destek yok', 'kapalı', 'aktif',
     'okunamadı' gibi kısa bir tanı satırı döner."""
     if not iface:
-        return "arayüz yok"
+        return t("m15.wol.no_iface")
     if not _is_ethtool_installed():
-        return "ethtool paketi henüz kurulu değil"
+        return t("m15.wol.ethtool_missing")
     res = run_cmd(["ethtool", iface], check=False)
     if not res.ok:
-        return "sorgulanamadı"
+        return t("m15.wol.query_failed")
     wake_current = ""
     supported = ""
     for line in res.stdout.splitlines():
@@ -177,101 +178,49 @@ def _check_wol_support(iface: str) -> str:
         elif s.lower().startswith("supports wake-on:"):
             supported = s.split(":", 1)[1].strip()
     if not supported:
-        return "kart WoL desteği bildirmedi"
+        return t("m15.wol.no_support_reported")
     if "g" not in supported:
-        return f"kart magic packet desteklemiyor (destek: {supported})"
+        return t("m15.wol.no_magic", supported=supported)
     if not wake_current:
-        return f"kart destekliyor (Supports: {supported}), durum okunamadı"
+        return t("m15.wol.state_unknown", supported=supported)
     if wake_current == "d":
-        return f"kart destekliyor ama şu an KAPALI (Wake-on: {wake_current})"
-    return f"kart destekliyor ve AKTİF (Wake-on: {wake_current})"
+        return t("m15.wol.off", current=wake_current)
+    return t("m15.wol.on", current=wake_current)
 
 
 # --- Modül -------------------------------------------------------------------
 
 class WakeOnLanModule(Module):
     id = "m15_wake_on_lan"
-    title = "Uzaktan uyandırma (Wake-on-LAN)"
-    sidebar_title = "Uzaktan uyandırma"
-    apply_hint = (
-        "Ağ kartının magic packet dinleme ayarı her boot'ta yeniden yazılır."
-    )
+    title = t("m15.title")
+    sidebar_title = t("m15.sidebar_title")
+    apply_hint = t("m15.apply_hint")
     popup_on_success = True
-    rationale = (
-        "Bu adım, klonlanmış tahtaların ağ kartını her açılışta Wake-on-LAN "
-        "modunda tutar. Böylece bakımcı merkez bilgisayarından tahtaya "
-        "'magic packet' göndererek kapalı tahtayı uzaktan açabilir; sabah "
-        "07:50'de tüm sınıflar açılmış hâlde 09:00 dersine hazır bekler.\n\n"
-        "Bu adımın çalışması için üç katman gerekir: (1) BIOS/UEFI setup'ta "
-        "'Wake on LAN' (veya 'WOL') AÇIK; 'Power On by PCI-E' AÇIK; ve — "
-        "en kritik nokta — 'ErP' ile 'Deep Sleep' KAPALI olmalı. ErP veya "
-        "Deep Sleep açık bırakılırsa BIOS, tahta kapatıldığında ağ kartına "
-        "standby gücü kesecek şekilde davranır ve magic packet duyulmaz "
-        "(Linux WoL doğru olsa bile tahta uyanmaz). (2) Linux tarafında "
-        "ethtool ile magic packet dinleme modu yazılmalı — bu ayar kalıcı "
-        "olmadığı için TiHA'nın bu adımda kurduğu servis her boot'ta "
-        "yeniden yazar. (3) Ethernet kablosu takılı olmalı ve switch, "
-        "kapalı bilgisayarın portuna güç kesmemelidir.\n\n"
-        "BIOS ayarları imaj klonlamayla taşınmaz (CMOS'ta tutulur, disk "
-        "imajından bağımsızdır) — her tahta için bir kez elle yapılır. "
-        "Faz 2 Vestel modellerinde fabrika ayarı olarak WoL genelde AÇIK "
-        "gelir; ancak ErP/Deep Sleep açık gelebilir, bu yüzden sahada "
-        "her tahta için BIOS'a girip bu iki seçeneğin KAPALI olduğunu "
-        "doğrulamak gerekir. Linux katmanı ise bu adımın kurduğu systemd "
-        "servisi ile her klonda otomatik hazır olur.\n\n"
-        "Merkezden uyandırma için bakımcı kendi bilgisayarında "
-        "'wakeonlan <mac>' veya 'etherwake <mac>' komutunu kullanır. "
-        "TiHA merkez betiği yazmaz; bakımcının kendi tarafında bir cron "
-        "işiyle sabah tüm tahtaları toplu uyandırabilir."
-    )
+    rationale = t("m15.rationale")
     undo_supported = True
 
     def preview(self) -> str:
         iface, mac = _detect_primary_iface_mac()
         wol_installed = WOL_SERVICE.exists() and WOL_SCRIPT.exists()
         ethtool_ok = _is_ethtool_installed()
-        wol_status = _check_wol_support(iface) if iface else "arayüz yok"
+        wol_status = _check_wol_support(iface) if iface else t("m15.wol.no_iface")
+        installed, to_install = t("m15.preview.installed"), t("m15.preview.to_install")
 
         lines: list[str] = []
-        lines.append(
-            f"Birincil ağ arayüzü  : {iface or '(tespit edilemedi)'}"
-        )
-        lines.append(
-            f"MAC adresi           : {mac or '(okunamadı)'}"
-        )
-        lines.append(
-            f"ethtool paketi       : {'kurulu' if ethtool_ok else 'kurulacak'}"
-        )
-        lines.append(
-            f"TiHA WoL servisi     : {'kurulu' if wol_installed else 'kurulacak'}"
-        )
-        lines.append(f"Ağ kartı WoL durumu  : {wol_status}")
+        lines.append(t("m15.preview.iface", iface=iface or t("m15.preview.not_detected")))
+        lines.append(t("m15.preview.mac", mac=mac or t("m15.preview.unreadable")))
+        lines.append(t("m15.preview.ethtool", state=installed if ethtool_ok else to_install))
+        lines.append(t("m15.preview.service", state=installed if wol_installed else to_install))
+        lines.append(t("m15.preview.wol_state", status=wol_status))
         lines.append("")
-        lines.append("Bu adım uygulandığında:")
-        lines.append(f"  - {WOL_SCRIPT} yazılır (birincil arayüzü tespit eder,")
-        lines.append("    ethtool ile magic packet dinlemeyi açar)")
-        lines.append(f"  - {WOL_SERVICE} yazılır (systemd oneshot)")
+        lines.append(t("m15.preview.on_apply"))
+        lines.append(t("m15.preview.script_written", script=WOL_SCRIPT))
+        lines.append(t("m15.preview.service_written", service=WOL_SERVICE))
         lines.append(f"  - systemctl enable {WOL_SERVICE_NAME}")
         lines.append("")
-        lines.append(
-            "Klon makinede her açılışta servis çalışır; ağ kartına magic "
-            "packet dinleme yazılır. Bilgisayar kapatıldığında kart "
-            "dinlemede kalır; merkezden 'wakeonlan <MAC>' komutu ile "
-            "uyandırılabilir."
-        )
+        lines.append(t("m15.preview.clone_note"))
         lines.append("")
-        lines.append("BIOS setup'ta yapılması gereken ayarlar")
-        lines.append("(disk imajıyla taşınmaz, her tahtada bir kez elle):")
-        lines.append("  - 'Wake on LAN' / 'WOL'          → Enabled")
-        lines.append("  - 'Power On by PCI-E' / 'PCIe Wake' → Enabled")
-        lines.append("  - 'ErP' / 'ErP Ready'            → Disabled")
-        lines.append("  - 'Deep Sleep'                   → Disabled")
-        lines.append("")
-        lines.append("Kritik: ErP veya Deep Sleep AÇIK bırakılırsa BIOS")
-        lines.append("kapatma sonrası ağ kartına standby gücü kesilir ve")
-        lines.append("magic packet duyulmaz — Linux tarafındaki WoL doğru")
-        lines.append("olsa bile tahta uyanmaz. Faz 2 Vestel'de WoL fabrika")
-        lines.append("ayarı genelde açık; ErP/Deep Sleep ise açık gelebilir.")
+        lines.append(t("m15.preview.bios"))
         return "\n".join(lines)
 
     def apply(
@@ -284,18 +233,14 @@ class WakeOnLanModule(Module):
             params.get("enable_wol_listen", "False")
         ).lower() in ("true", "1", "yes", "on")
         if not enable:
-            return ApplyResult(
-                False,
-                "Ağ kartını magic packet dinleme moduna alma seçeneği "
-                "işaretlenmedi. Adım atlandı.",
-            )
+            return ApplyResult(False, t("m15.apply.not_selected"))
 
         was_ethtool_installed = _is_ethtool_installed()
 
         # 1) ethtool paketini garantile
         if not was_ethtool_installed:
             if progress:
-                progress("ethtool paketi kuruluyor...")
+                progress(t("m15.apply.ethtool_installing"))
             inst = run_cmd(
                 ["apt-get", "install", "-y", "ethtool"],
                 env={"DEBIAN_FRONTEND": "noninteractive"},
@@ -304,17 +249,17 @@ class WakeOnLanModule(Module):
             if not inst.ok:
                 return ApplyResult(
                     False,
-                    "ethtool paketi kurulamadı.",
+                    t("m15.apply.ethtool_failed"),
                     details=inst.stderr,
                 )
             if progress:
-                progress("ethtool kuruldu.")
+                progress(t("m15.apply.ethtool_installed"))
         elif progress:
-            progress("ethtool zaten kurulu.")
+            progress(t("m15.apply.ethtool_present"))
 
         # 2) Boot script + systemd unit
         if progress:
-            progress(f"Boot scripti yazılıyor: {WOL_SCRIPT}")
+            progress(t("m15.apply.writing_script", path=WOL_SCRIPT))
         try:
             WOL_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
             WOL_SCRIPT.write_text(WOL_SCRIPT_CONTENT, encoding="utf-8")
@@ -323,11 +268,11 @@ class WakeOnLanModule(Module):
         except OSError as exc:
             return ApplyResult(
                 False,
-                f"WoL servis dosyaları yazılamadı: {exc}",
+                t("m15.apply.write_failed", error=exc),
                 data={"was_ethtool_installed": was_ethtool_installed},
             )
         if progress:
-            progress(f"Systemd unit yazıldı: {WOL_SERVICE_NAME}")
+            progress(t("m15.apply.unit_written", name=WOL_SERVICE_NAME))
 
         # 3) Servisi hazırla — daemon-reload + enable + hemen bir kez
         # çalıştır (canlı tahtada WoL ayarını da o an yazsın).
@@ -338,37 +283,35 @@ class WakeOnLanModule(Module):
         if not en.ok:
             return ApplyResult(
                 False,
-                f"{WOL_SERVICE_NAME} enable edilemedi.",
+                t("m15.apply.enable_failed", name=WOL_SERVICE_NAME),
                 details=en.stderr,
                 data={"was_ethtool_installed": was_ethtool_installed},
             )
         if progress:
-            progress(f"{WOL_SERVICE_NAME} enable edildi.")
+            progress(t("m15.apply.enabled", name=WOL_SERVICE_NAME))
         # Şimdi bir kez çalıştır — kaynak tahtada da WoL bayrağı yazılsın
         run_cmd(
             ["systemctl", "start", WOL_SERVICE_NAME], check=False,
         )
         if progress:
-            progress("Servis bir kez çalıştırıldı; ağ kartı WoL modunda.")
+            progress(t("m15.apply.ran_once"))
 
         # 4) Doğrulama — ne yazıldı?
         iface, mac = _detect_primary_iface_mac()
-        wol_status = _check_wol_support(iface) if iface else "arayüz yok"
+        wol_status = _check_wol_support(iface) if iface else t("m15.wol.no_iface")
 
-        details = (
-            f"Arayüz : {iface or '(?)'}\n"
-            f"MAC    : {mac or '(?)'}\n"
-            f"Durum  : {wol_status}\n\n"
-            f"Servis : {WOL_SERVICE}\n"
-            f"Script : {WOL_SCRIPT}\n\n"
-            "Klon her boot'ta bu servisi çalıştırıp ağ kartını magic "
-            "packet dinleme moduna alacak. Bakımcı merkez bilgisayarından "
-            f"'wakeonlan {mac or '<MAC>'}' ile tahtayı uzaktan "
-            "uyandırabilir."
+        details = t(
+            "m15.apply.details",
+            iface=iface or "(?)",
+            mac=mac or "(?)",
+            status=wol_status,
+            service=WOL_SERVICE,
+            script=WOL_SCRIPT,
+            wake_mac=mac or "<MAC>",
         )
         return ApplyResult(
             True,
-            "Uzaktan uyandırma (Wake-on-LAN) servisi kuruldu ve etkinleştirildi.",
+            t("m15.apply.success"),
             details=details,
             data={"was_ethtool_installed": was_ethtool_installed},
         )
@@ -384,13 +327,13 @@ class WakeOnLanModule(Module):
         if WOL_SERVICE.exists():
             try:
                 WOL_SERVICE.unlink()
-                notes.append(f"{WOL_SERVICE} silindi")
+                notes.append(t("m15.undo.deleted", path=WOL_SERVICE))
             except OSError as exc:
                 log.warning("%s silinemedi: %s", WOL_SERVICE, exc)
         if WOL_SCRIPT.exists():
             try:
                 WOL_SCRIPT.unlink()
-                notes.append(f"{WOL_SCRIPT} silindi")
+                notes.append(t("m15.undo.deleted", path=WOL_SCRIPT))
             except OSError as exc:
                 log.warning("%s silinemedi: %s", WOL_SCRIPT, exc)
         run_cmd(["systemctl", "daemon-reload"], check=False)
@@ -403,16 +346,14 @@ class WakeOnLanModule(Module):
                 timeout=180,
             )
             if purge.ok:
-                notes.append("ethtool paketi kaldırıldı (TiHA kurmuştu)")
+                notes.append(t("m15.undo.ethtool_removed"))
             else:
-                notes.append(
-                    "ethtool paketi kaldırılamadı (apt hatası) - manuel kaldırma önerilir"
-                )
+                notes.append(t("m15.undo.ethtool_remove_failed"))
         elif was_ethtool_installed:
-            notes.append("ethtool paketi korundu (başlangıçta zaten kuruluydu)")
+            notes.append(t("m15.undo.ethtool_kept"))
 
         return ApplyResult(
             True,
-            "Uzaktan uyandırma servisi kaldırıldı.",
+            t("m15.undo.done"),
             details="\n".join(f"- {n}" for n in notes) if notes else None,
         )

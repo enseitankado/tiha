@@ -25,10 +25,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
+from .i18n import t
 from .report_log import REPORT_PARAMS_KEY, ActionLog, ActionRecord
 from .undo import Journal, JournalEntry
 
-CLOSING = "Bu imajı yaymadan önce kapsamlı bir testten geçirmeyi unutmayın."
+CLOSING = t("core.report.closing")
 
 
 # --- Veri modeli -------------------------------------------------------------
@@ -63,30 +64,30 @@ class Report:
         """Panoya kopyalanabilir / dosyaya yazılabilir düz metin."""
         out = [self.intro, ""]
         if self.steps:
-            out.append("YAPTIKLARINIZ")
+            out.append(t("core.report.text.section_done"))
             for s in self.steps:
                 head = f"■ {s.title}"
                 if s.failed:
-                    head += " (BAŞARISIZ)"
+                    head += t("core.report.text.failed_suffix")
                 elif s.experimental and "deneysel" not in s.title.lower():
-                    head += " (deneysel)"
+                    head += t("core.report.text.experimental_suffix")
                 out.append(head)
                 out += [f"  • {line}" for line in s.done]
                 out += [f"  ! {line}" for line in s.notes]
             out.append("")
         if self.warnings:
-            out.append("DİKKAT")
+            out.append(t("core.report.text.section_warnings"))
             out += [f"  ! {w}" for w in self.warnings]
             out.append("")
         tests = [(s.title, s.tests) for s in self.steps if s.tests]
         if tests or self.general_tests:
-            out.append("KLON TAHTADA DENEYİN")
+            out.append(t("core.report.text.section_tests"))
             for title, items in tests:
                 out.append(f"■ {title}")
-                out += [f"  ☐ {t}" for t in items]
+                out += [f"  ☐ {item}" for item in items]
             if self.general_tests:
-                out.append("■ Genel")
-                out += [f"  ☐ {t}" for t in self.general_tests]
+                out.append(f"■ {t('core.report.text.general')}")
+                out += [f"  ☐ {item}" for item in self.general_tests]
             out.append("")
         out.append(self.closing)
         return "\n".join(out)
@@ -170,11 +171,10 @@ def _fallback(ctx: StepContext, rep: StepReport) -> None:
     if ctx.summary:
         rep.done.append(ctx.summary.rstrip(".") + ".")
     for a in ctx.actions:
-        rep.done.append(f"“{a.label}” işlemini çalıştırdınız: {a.summary.rstrip('.')}.")
-    rep.tests.append(
-        "Bu adımın yaptığı değişikliği klon tahtada yeniden başlattıktan sonra "
-        "gözle doğrulayın."
-    )
+        rep.done.append(t(
+            "core.report.fallback_action", label=a.label, summary=a.summary.rstrip("."),
+        ))
+    rep.tests.append(t("core.report.fallback_test"))
 
 
 def build_report(
@@ -228,15 +228,12 @@ def build_report(
             except Exception as exc:  # bir anlatıcı hatası raporu düşürmesin
                 rep.done = []
                 rep.tests = []
-                rep.notes = [f"Bu adım rapora dökülemedi ({exc})."]
+                rep.notes = [t("core.report.narrator_error", error=exc)]
                 _fallback(ctx, rep)
             if not rep.done:
                 _fallback(ctx, rep)
             if rep.experimental:
-                rep.notes.append(
-                    "Bu adım deneysel olarak işaretli: gerçek tahta donanımında "
-                    "henüz yeterince doğrulanmadı. Klonda özellikle dikkatle deneyin."
-                )
+                rep.notes.append(t("core.report.experimental_note"))
         steps.append(rep)
         contexts[module.id] = ctx
 
@@ -252,22 +249,15 @@ def build_report(
 
 def _intro(steps: list[StepReport]) -> str:
     if not steps:
-        return (
-            "Bu tahtada TiHA ile henüz bir adım uygulanmadı. Adımları "
-            "uyguladıkça burada imaja neyin girdiği ve bir klon tahtada "
-            "neyin denenmesi gerektiği listelenecek."
-        )
+        return t("core.report.intro_empty")
     ok = [s for s in steps if not s.failed and not s.skipped]
     failed = [s for s in steps if s.failed]
+    failed_part = (
+        t("core.report.intro_failed_part", failed=len(failed)) if failed else ""
+    )
     parts = [
-        f"Bu tahtada TiHA ile {len(ok)} adımı uyguladınız"
-        + (f"; {len(failed)} adım başarısız oldu" if failed else "")
-        + ". Aşağıda imaja neyin girdiğini ve her değişikliğin bir klon "
-        "tahtada nasıl sınanacağını bulacaksınız.",
-        "Bu imaj çok sayıda tahtaya kopyalanacak. Burada gözden kaçan her "
-        "ayrıntıyı, imajın yazıldığı tahta sayısı kadar ayrı ayrı düzeltmek "
-        "zorunda kalırsınız. Bu yüzden imajı yaymadan önce en az bir klon "
-        "tahtaya yazıp aşağıdaki denetimleri eksiksiz yapın.",
+        t("core.report.intro_applied", ok=len(ok), failed_part=failed_part),
+        t("core.report.intro_why"),
     ]
     return " ".join(parts)
 

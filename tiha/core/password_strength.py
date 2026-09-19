@@ -25,6 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .i18n import t
+
 # data/common-passwords-top10k.txt proje kökünde (tiha/ paketinin
 # yanında). parents[1] = tiha/, parents[2] = proje kökü.
 _BLACKLIST_PATH = (
@@ -90,7 +92,13 @@ class Strength:
     in_blacklist: bool = False
 
 
-_LABELS = ("Çok zayıf", "Zayıf", "Orta", "İyi", "Güçlü")
+_LABEL_KEYS = (
+    "core.password_strength.label_very_weak",
+    "core.password_strength.label_weak",
+    "core.password_strength.label_medium",
+    "core.password_strength.label_good",
+    "core.password_strength.label_strong",
+)
 
 
 def score_password(pw: str) -> Strength:
@@ -106,11 +114,8 @@ def score_password(pw: str) -> Strength:
     if is_common(pw):
         return Strength(
             score=0,
-            label="Yaygın parola listesinde",
-            warnings=[
-                "Bu parola en yaygın 10.000 parola arasında; ilk denemede "
-                "kırılır.",
-            ],
+            label=t("core.password_strength.label_common"),
+            warnings=[t("core.password_strength.warn_common")],
             in_blacklist=True,
         )
 
@@ -125,7 +130,7 @@ def score_password(pw: str) -> Strength:
         length_pts = 1
     else:
         length_pts = 0
-        warnings.append("Çok kısa — en az 8 karakter önerilir.")
+        warnings.append(t("core.password_strength.warn_too_short"))
 
     # Karakter sınıfı çeşitliliği
     has_lower = any(c.islower() for c in pw)
@@ -140,9 +145,7 @@ def score_password(pw: str) -> Strength:
     elif classes == 3:
         diversity_bonus = 1
     elif classes <= 1:
-        warnings.append(
-            "Yalnız tek tür karakter — büyük harf, rakam ve sembol karışımı ekleyin."
-        )
+        warnings.append(t("core.password_strength.warn_single_class"))
 
     raw = length_pts + diversity_bonus
 
@@ -150,7 +153,7 @@ def score_password(pw: str) -> Strength:
     unique_ratio = len(set(pw)) / max(1, n)
     if unique_ratio < 0.4:
         raw -= 1
-        warnings.append("Çok tekrarlanan karakter var (örn. 'aaaabbbb').")
+        warnings.append(t("core.password_strength.warn_repeated"))
 
     # Ardışık karakter cezası: "abcd", "1234", "efgh" gibi
     consecutive = 0
@@ -163,16 +166,14 @@ def score_password(pw: str) -> Strength:
             consecutive = 0
     if max_consecutive >= 3:
         raw -= 1
-        warnings.append("Ardışık dizi içeriyor (örn. 'abcd', '1234').")
+        warnings.append(t("core.password_strength.warn_sequence"))
 
     # Klavye/dil kalıp cezası
     lower_pw = pw.lower()
     for pat in _KEYBOARD_PATTERNS:
         if pat in lower_pw:
             raw -= 2
-            warnings.append(
-                f"'{pat}' gibi kolay tahmin edilen bir dizi içeriyor."
-            )
+            warnings.append(t("core.password_strength.warn_pattern", pattern=pat))
             break
 
     # Nihai skor 0-4 aralığına sıkıştır
@@ -181,7 +182,7 @@ def score_password(pw: str) -> Strength:
     # UI etiketleri kısa kalsın: en çok 2 uyarı göster
     return Strength(
         score=score,
-        label=_LABELS[score],
+        label=t(_LABEL_KEYS[score]),
         warnings=warnings[:2],
         in_blacklist=False,
     )

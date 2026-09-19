@@ -75,6 +75,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.paths import STATE_DIR
@@ -432,96 +433,38 @@ def _is_ahenk_installed() -> bool:
 
 class AhenkResetModule(Module):
     id = "m12_ahenk_reset"
-    title = "Otomatik Ahenk Kaydı"
-    sidebar_title = "Otomatik Ahenk Kaydı"
+    title = t("m12.title")
+    sidebar_title = t("m12.sidebar_title")
     rationale_inline = True
     streams_output = True
     popup_on_success = True
-    apply_hint = (
-        "Kaynak MAC kaydedilir, ahenk yoksa kurulur, klon-reclaim "
-        "boot servisi devreye alınır."
-    )
+    apply_hint = t("m12.apply_hint")
     # Algoritmanın görsel akış şeması ve ayrıntılı gerekçeleri.
     doc_url = (
         "https://github.com/enseitankado/tiha/blob/main/"
         "docs/m12-clone-reclaim.md"
     )
-    doc_label = "Otomatik Ahenk Kaydı — algoritma akış şeması ve gerekçeler"
-    rationale = (
-        "Sınıftaki tahtaları merkezi yönetim iki katmanlı bir sistemle "
-        "takip eder. Birinci katman, merkezi tahta envanter "
-        "veritabanıdır: her tahta önce buraya MAC adresi ve fiziksel "
-        "konumu (okul, sınıf) esas alınarak, donanım özellikleriyle "
-        "birlikte kaydedilir. Bu kayıt işini tahta üzerindeki "
-        "eta-register uygulaması yapar. İkinci katman Lider yönetim "
-        "sunucusudur: tahta ancak envanterde kayıtlı olduğu "
-        "doğrulandıktan sonra Lider'e abone olabilir — Lider backend, "
-        "abonelik talebinde envanter servisiyle konuşup tahtayı teyit "
-        "eder; onay verildiğinde tahtaya rastgele bir tekil kimlik atar "
-        "ve aboneliği tamamlar. Bu aşamadan sonra tahta Lider "
-        "üzerinden yönetici yetkisiyle uzaktan yönetilebilir hâle "
-        "gelir.\n\n"
-        "Normal işleyişte tahta klonlandıktan sonra en az bir kez "
-        "etapadmin oturumu açılmalıdır: tahta zaten merkez envantere "
-        "kayıtlıysa Lider aboneliği otomatik gerçekleşir ve her şey "
-        "hazır hâle gelir; kayıtlı değilse eta-register uygulaması "
-        "açılıp tahtayı önce envantere eklemenizi ister. Ama bir "
-        "sorun vardır: imajı alınan asıl tahta zaten hem envanterde "
-        "hem de Lider'de kayıtlı olduğu için imaj kopyaları hep aynı "
-        "Lider kimliğiyle boot eder; hepsi tek bir tahtaymış gibi "
-        "görünür, gönderilen komutlar yanlış cihaza düşer, izleme "
-        "güvenilmez olur.\n\n"
-        "Bu adım tam da bu sorunu çözer. Ahenk paketini gerekliyse "
-        "kurar (apt install ahenk), sonra imaja her açılışta "
-        "tahtanın kendisinin \"asıl tahta mı yoksa kopya mı?\" "
-        "olduğunu kontrol eden küçük bir mekanizma yerleştirir. "
-        "Kopyalık tespit edilirse eski Lider kimliği temizlenir ve "
-        "tahta Lider'e kendi yeni kimliğiyle taze abone olur — böylece "
-        "operatörün, envantere önceden kaydedilmiş bir klon tahtada "
-        "Lider tarafını elle yeniden yapılandırması gerekmez, ilk "
-        "etapadmin girişinde abonelik kendiliğinden gerçekleşir.\n\n"
-        "Sınır: bu adım yalnızca Lider kimliği bazlı kilidi çözer. "
-        "Klonlanmış tahta merkez envantere daha önce kaydedilmemişse "
-        "(ör. yeni gelmiş bir donanım) yine klon tahtada etapadmin "
-        "oturumu açıp eta-register üzerinden envanter kaydını yapmanız "
-        "gerekir; envanter kaydı fiziksel lokasyon bilgisi istediği "
-        "için elle yapılan bir adımdır."
-    )
+    doc_label = t("m12.doc_label")
+    rationale = t("m12.rationale")
     undo_supported = True
 
     def preview(self) -> str:
-        mac = _primary_mac() or "(tespit edilemedi)"
+        mac = _primary_mac() or t("m12.preview.mac_unknown")
         ahenk_kurulu = _is_ahenk_installed()
         lines = [
-            "Bu adımda yapılacaklar:",
-            f"  - Kaynak MAC ({mac}) > {IMAGED_MAC_FILE}",
+            t("m12.preview.header"),
+            t("m12.preview.mac_line", mac=mac, path=IMAGED_MAC_FILE),
             (
-                "  - ahenk paketi zaten kurulu - yeniden kurulmayacak."
+                t("m12.preview.ahenk_installed")
                 if ahenk_kurulu
-                else "  - ahenk paketi kurulu DEĞİL - apt update + apt install -y ahenk"
-                     " çalıştırılacak, ahenk.service enable edilecek."
+                else t("m12.preview.ahenk_missing")
             ),
-            f"  - {RECLAIM_SCRIPT}",
-            f"  - {RECLAIM_SERVICE} (Type=oneshot, Before=ahenk.service)",
-            f"  - systemctl enable {RECLAIM_SERVICE_NAME}",
-            "",
-            "Bu wizard'da ahenk credential'larına DOKUNULMAZ - kaynak "
-            "tahta normal çalışmaya devam eder. Tüm credential temizliği "
-            "klonun ilk açılışında, boot servisi tarafından yapılır.",
-            "",
-            "Klon makinedeki davranış (her boot, ahenk'ten önce):",
-            "  - İmza dosyası yok             -> çık (klon değil / uygulanmamış)",
-            "  - MAC eşit                     -> çık (kaynak tahta)",
-            "  - MAC farklı (klon):",
-            "      - API hatası               -> bu boot atla, sonraki dene",
-            "      - Kayıtlı                  -> ahenk credential temizle,",
-            "                                    ahenk restart, servis disable",
-            "      - Kayıtsız                 -> ahenk credential temizle,",
-            "                                    ahenk disable, servis disable",
-            "                                    (kullanıcı eta-register'la kayıt yapar)",
-            "",
-            "Geri al: boot servisi + imza dosyası kaldırılır; ahenk paketi",
-            "TiHA kurduysa apt-get purge ile sökülür, daha önce kuruluysa korunur.",
+            t(
+                "m12.preview.body",
+                script=RECLAIM_SCRIPT,
+                service=RECLAIM_SERVICE,
+                service_name=RECLAIM_SERVICE_NAME,
+            ),
         ]
         return "\n".join(lines)
 
@@ -538,23 +481,22 @@ class AhenkResetModule(Module):
         if not mac:
             return ApplyResult(
                 False,
-                "Birincil ağ arayüzünün MAC adresi tespit edilemedi; "
-                "klon-reclaim servisi kurulamaz, adım iptal edildi.",
+                t("m12.apply.no_mac"),
             )
         if progress:
-            progress(f"Kaynak MAC: {mac}")
+            progress(t("m12.apply.source_mac", mac=mac))
         try:
             IMAGED_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
             IMAGED_MAC_FILE.write_text(mac + "\n", encoding="utf-8")
         except OSError as exc:
-            return ApplyResult(False, f"İmza dosyası yazılamadı: {exc}")
+            return ApplyResult(False, t("m12.apply.mac_write_failed", error=exc))
         if progress:
-            progress(f"İmza yazıldı: {IMAGED_MAC_FILE}")
+            progress(t("m12.apply.mac_written", path=IMAGED_MAC_FILE))
 
         # 2) ahenk yüklü değilse kur (eta-register installer akışını taklit et)
         if not was_installed_before:
             if progress:
-                progress("\n==== apt-get update ====")
+                progress(t("m12.apply.apt_update_header"))
             upd = run_cmd_stream(
                 ["apt-get", "update"],
                 progress=progress,
@@ -564,11 +506,11 @@ class AhenkResetModule(Module):
             if not upd.ok:
                 return ApplyResult(
                     False,
-                    "apt-get update başarısız.",
+                    t("m12.apply.apt_update_failed"),
                     data={"was_installed_before": False},
                 )
             if progress:
-                progress("\n==== apt-get install -y ahenk ====")
+                progress(t("m12.apply.apt_install_header"))
             inst = run_cmd_stream(
                 ["apt-get", "install", "-y", "ahenk"],
                 progress=progress,
@@ -578,20 +520,19 @@ class AhenkResetModule(Module):
             if not inst.ok:
                 return ApplyResult(
                     False,
-                    "ahenk kurulumu başarısız.",
+                    t("m12.apply.install_failed"),
                     data={"was_installed_before": False},
                 )
             if progress:
-                progress("ahenk.service enable ediliyor (start edilmiyor — "
-                         "ahenk kendi kayıt akışı boot'ta çalışır).")
+                progress(t("m12.apply.enabling_ahenk"))
             run_cmd(["systemctl", "enable", "ahenk.service"], check=False)
         else:
             if progress:
-                progress("ahenk paketi zaten kurulu — kurulum atlanıyor.")
+                progress(t("m12.apply.already_installed"))
 
         # 3) Boot servisi: betik + unit yaz, enable et
         if progress:
-            progress(f"\nBoot servisi yazılıyor: {RECLAIM_SERVICE_NAME}")
+            progress(t("m12.apply.writing_service", service=RECLAIM_SERVICE_NAME))
         try:
             RECLAIM_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
             RECLAIM_SCRIPT.write_text(_build_reclaim_script(), encoding="utf-8")
@@ -600,7 +541,7 @@ class AhenkResetModule(Module):
         except OSError as exc:
             return ApplyResult(
                 False,
-                f"Boot servisi dosyaları yazılamadı: {exc}",
+                t("m12.apply.service_write_failed", error=exc),
                 data={"was_installed_before": was_installed_before},
             )
         run_cmd(["systemctl", "daemon-reload"], check=False)
@@ -608,25 +549,25 @@ class AhenkResetModule(Module):
         if not en.ok:
             return ApplyResult(
                 False,
-                f"{RECLAIM_SERVICE_NAME} enable edilemedi.",
+                t("m12.apply.enable_failed", service=RECLAIM_SERVICE_NAME),
                 details=en.stderr,
                 data={"was_installed_before": was_installed_before},
             )
         if progress:
-            progress(f"{RECLAIM_SERVICE_NAME} enable edildi.")
+            progress(t("m12.apply.enabled", service=RECLAIM_SERVICE_NAME))
 
-        details = (
-            f"İmza: {IMAGED_MAC_FILE} = {mac}\n"
-            f"Betik: {RECLAIM_SCRIPT}\n"
-            f"Unit:  {RECLAIM_SERVICE}\n"
-            f"ahenk paketi: {'zaten kuruluydu' if was_installed_before else 'TiHA tarafından kuruldu'}\n"
-            "Boot davranışı: her açılışta ahenk'ten önce çalışır; "
-            "MAC değiştiyse API sorgu sonucuna göre credential temizleyip "
-            "ahenk'i yeniden başlatır veya disable eder."
+        details = t(
+            "m12.apply.details",
+            mac_file=IMAGED_MAC_FILE,
+            mac=mac,
+            script=RECLAIM_SCRIPT,
+            service=RECLAIM_SERVICE,
+            ahenk=(t("m12.apply.ahenk_was_installed") if was_installed_before
+                   else t("m12.apply.ahenk_installed_by_tiha")),
         )
         return ApplyResult(
             True,
-            "Klon-yeniden-talep mekanizması imaja gömüldü.",
+            t("m12.apply.done"),
             details=details,
             data={
                 "was_installed_before": was_installed_before,
@@ -647,14 +588,14 @@ class AhenkResetModule(Module):
         # 1) Boot servisini disable et + dosyaları sil
         run_cmd(["systemctl", "disable", RECLAIM_SERVICE_NAME], check=False)
         if _rm(RECLAIM_SERVICE):
-            notes.append(f"{RECLAIM_SERVICE} silindi")
+            notes.append(t("m12.undo.removed_file", path=RECLAIM_SERVICE))
         if _rm(RECLAIM_SCRIPT):
-            notes.append(f"{RECLAIM_SCRIPT} silindi")
+            notes.append(t("m12.undo.removed_file", path=RECLAIM_SCRIPT))
         run_cmd(["systemctl", "daemon-reload"], check=False)
 
         # 2) İmza dosyasını sil
         if _rm(IMAGED_MAC_FILE):
-            notes.append(f"{IMAGED_MAC_FILE} silindi")
+            notes.append(t("m12.undo.removed_file", path=IMAGED_MAC_FILE))
 
         # 3) ahenk TiHA tarafından kurulduysa kaldır
         if not was_installed_before and _is_ahenk_installed():
@@ -670,18 +611,18 @@ class AhenkResetModule(Module):
                 timeout=300,
             )
             if purge.ok:
-                notes.append("ahenk paketi kaldırıldı (TiHA tarafından kurulmuştu)")
+                notes.append(t("m12.undo.ahenk_removed"))
             else:
                 return ApplyResult(
                     False,
-                    "ahenk paketi kaldırılamadı.",
+                    t("m12.undo.ahenk_remove_failed"),
                     details=purge.stderr,
                 )
         elif was_installed_before:
-            notes.append("ahenk paketi korundu (başlangıçta zaten kuruluydu)")
+            notes.append(t("m12.undo.ahenk_kept"))
 
         return ApplyResult(
             True,
-            "Klon-yeniden-talep mekanizması kaldırıldı.",
-            details="\n".join(f"• {n}" for n in notes) if notes else None,
+            t("m12.undo.done"),
+            details="\n".join(t("m12.undo.detail_item", item=n) for n in notes) if notes else None,
         )

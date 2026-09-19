@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .i18n import t
 from .logger import get_logger
 
 log = get_logger(__name__)
@@ -183,7 +184,7 @@ def run_cmd_stream(
             log.error("AKIŞLI KOMUT ZAMAN AŞIMI: %s (timeout: %s)", cmd_str, timeout)
             proc.kill()
             rc = -1
-            collected.append("[ZAMAN AŞIMI]")
+            collected.append(t("core.utils.stream_timeout"))
 
         log.debug("=== AKIŞLI KOMUT BİTTİ ===")
         return CmdResult(rc, "\n".join(collected), "")

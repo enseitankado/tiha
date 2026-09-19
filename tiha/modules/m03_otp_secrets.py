@@ -100,6 +100,7 @@ from urllib.parse import quote
 import pyotp
 
 from ..core.async_state import AsyncValue
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.private_files import owner_ids
 from ..core.module import ApplyResult, Module, ProgressCallback
@@ -568,14 +569,14 @@ def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
     if user in display_of:
         return display_of[user]
     if user.startswith("@"):
-        return f"{user[1:]} grubu — ORTAK PIN"
+        return t("m03.paper.group_display", group=user[1:])
 
     import pwd as _pwd
     try:
         gecos = _pwd.getpwnam(user).pw_gecos.split(",")[0].strip()
     except KeyError:
         # Anahtarı var ama sistem hesabı yok (hesap sonradan silinmiş).
-        return f"{user} (sistemde hesap yok)"
+        return t("m03.paper.no_account", user=user)
     return gecos or user
 
 
@@ -787,7 +788,7 @@ def reset_to_default_users(
 
     for username in extra_users:
         if progress:
-            progress(f"\n→ {username}: prosesler sonlandırılıyor...")
+            progress("\n" + t("m03.reset.killing", user=username))
         log.info("Kullanıcı için prosesler sonlandırılıyor: %s", username)
         kill_user_processes(username)
 
@@ -799,14 +800,14 @@ def reset_to_default_users(
             removed_users.append(username)
             log.info("Kullanıcı başarıyla silindi: %s", username)
             if progress:
-                progress(f"  ✓ {username} silindi")
+                progress(t("m03.reset.deleted", user=username))
         else:
             err = (result.stderr or result.stdout or "").strip() or \
-                f"deluser çıkış kodu {result.returncode}"
+                t("m03.reset.exit_code", code=result.returncode)
             errors[username] = err
             log.error("Kullanıcı silinemedi %s: %s", username, err)
             if progress:
-                progress(f"  ✗ {username} silinemedi: {err}")
+                progress(t("m03.reset.failed", user=username, error=err))
 
     # PIN kayıtlarına burada dokunulmaz. Eskiden yalnız varsayılan
     # hesapların kayıtları bırakılıyordu; bu, onay metninin "korunur"
@@ -827,56 +828,14 @@ def reset_to_default_users(
 
 class OTPSecretsModule(Module):
     id = "m03_otp_secrets"
-    title = "Öğretmen PIN anahtarları"
-    sidebar_title = "Toplu pin anahtarı"
-    apply_hint = (
-        "Listedeki ve yedek hesaplar için PIN anahtarları üretilir. "
-        "Anahtarı zaten olan hesaplara dokunulmaz; yalnızca eksikler "
-        "tamamlanır. Çıktı, sistemdeki tüm anahtarları QR kodlarıyla "
-        "birlikte içeren yazdırılabilir bir HTML kâğıdıdır."
-    )
+    title = t("m03.title")
+    sidebar_title = t("m03.sidebar_title")
+    apply_hint = t("m03.apply_hint")
     # "Dosyaya kaydet…" yazdırılabilir kâğıdı kaydeder; biçim HTML.
     # apply() gerçek dosya adını (zaman damgalı) result üzerinden verir.
     save_filename = "ogretmen-pin-kagitlari.html"
     streams_output = True
-    rationale = (
-        "Her öğretmen için 6 haneli pin kodu üreten anahtarları toplu "
-        "olarak üretir.\n\n"
-        "Anahtar nedir, kod nedir?\n"
-        "  • Anahtar: Telefona kurulan uygulamada (Google Authenticator vb.) "
-        "saklanan, uzun ve gizli bir tanıtıcıdır — bir tür dijital kimlik "
-        "kartı. Bir kez kurulur, sonra hep telefonda durur.\n"
-        "  • Kod: Bu anahtar kullanılarak zamana bağlı olarak üretilen, "
-        "30 saniyede bir değişen 6 haneli bir sayıdır. Tahtaya giriş "
-        "yaparken bu sayıyı yazarsınız. Geçici bir parola gibi düşünün — "
-        "her seferinde tahtanın kabul ettiği yeni bir kapı şifresi.\n\n"
-        "Olağan kullanımda her öğretmen kendi anahtarını uygulamasından "
-        "üretip her tahtaya tek tek (dışa aktar / içe aktar) yüklemek "
-        "zorundadır; onlarca tahtada bu işlem pratik değil. Bu adım "
-        "anahtarları imaj alınmadan ÖNCE her öğretmen için merkezî olarak "
-        "üretir ve imaja gömer. İmajdan dağıtılan tüm tahtalarda anahtarlar "
-        "hazır gelir; öğretmen yalnızca kendi anahtarını size verdiğimiz "
-        "biçimde (yazılı veya QR kodu olarak) uygulamasına bir kez ekler ve "
-        "sonra ister sınıf 1'deki tahta olsun ister sınıf 50'deki, hepsinde "
-        "kendi PIN kodunu görüp girerek oturum açabilir.\n\n"
-        "Dikkat: Otomatik parola temizliği adımı uygulandıysa öğretmen "
-        "tahtada kendi PIN'ini üretemez (yerel parola bilinmediği için); "
-        "bu durumda anahtarları merkezî olarak üretmek mecburidir. "
-        "Uygulanmadıysa da tek tek kurulumdan çok daha hızlıdır.\n\n"
-        "Önemli: Öğretmenin tahtada kişisel hesabı ilk EBA QR girişiyle "
-        "oluşur; PIN kodu ve USB ile giriş ancak bundan sonra kullanılabilir. "
-        "Kişisel hesabı henüz oluşmamış bir öğretmen, EBA QR çalışmadığında "
-        "(internet yok, uygulama ya da altyapı sorunu) tahtaya yalnızca ortak "
-        "hesapla girebilir. Bu durum için kullanım politikanıza göre ya ortak "
-        "hesabın parolasını paylaşın (sınıfta yazılırken öğrenciler de "
-        "görebilir) ya da 'Ortak öğretmen hesabı (ogretmen) için de PIN "
-        "üret' seçeneğiyle ortak hesaba PIN anahtarı tanımlayın. Not: "
-        "ogretmenler grubu ortak PIN'i ortak ogretmen hesabında geçmez; "
-        "yalnız gruba üye kişisel ve yedek (ogretmen1, ogretmen2 …) "
-        "hesaplarda geçer.\n\n"
-        "Geri alma ile varsayılan kullanıcılar (etapadmin, ogrenci, "
-        "ogretmen) dışındakiler silinir."
-    )
+    rationale = t("m03.rationale")
 
     def prefetch_preview_state(self, on_ready=None) -> None:
         """Sayfa açıldığında eta-otp-cli erişilebilirlik kontrolünü arka
@@ -905,104 +864,78 @@ class OTPSecretsModule(Module):
 
         tool_available = _eta_otp_cli_available.get_async()
         if tool_available is None:
-            tool_line = "kontrol ediliyor"
+            tool_line = t("m03.preview.tool_checking")
         elif tool_available:
-            tool_line = "enseitankado/eta-otp-cli (yalnız OTP anahtarları)"
+            tool_line = t("m03.preview.tool_cli")
         else:
-            tool_line = "TiHA dahili pyotp yolu (yalnız OTP anahtarları)"
+            tool_line = t("m03.preview.tool_internal")
 
         user_count = count_regular_users()
         extra_users = get_extra_users()
 
         lines: list[str] = []
-        lines.append(f"Durum kontrolü       : {current_time}")
-        lines.append(f"Araç                 : {tool_line}")
-        lines.append(f"Sistem kullanıcıları : {user_count} (UID >= 1000)")
-        lines.append(f"Kişisel hesaplar     : {len(personal_users)}")
-        lines.append(
-            f"PIN anahtarlı hesap  : {len(has_otp)}/{len(personal_users)}"
-        )
-        lines.append(f"Toplam PIN kaydı     : {len(existing)}")
-        lines.append(
-            "QR kodları           : "
-            + ("kâğıda gömülecek" if qrcode_available()
-               else "ATLANACAK (python3-qrcode kurulu değil)")
-        )
+        lines.append(t("m03.preview.status_time", time=current_time))
+        lines.append(t("m03.preview.tool", tool=tool_line))
+        lines.append(t("m03.preview.system_users", count=user_count))
+        lines.append(t("m03.preview.personal_count", count=len(personal_users)))
+        lines.append(t(
+            "m03.preview.pin_accounts",
+            done=len(has_otp), total=len(personal_users),
+        ))
+        lines.append(t("m03.preview.total_pins", count=len(existing)))
+        lines.append(t(
+            "m03.preview.qr",
+            state=(t("m03.preview.qr_embedded") if qrcode_available()
+                   else t("m03.preview.qr_skipped")),
+        ))
         if user_count >= MIN_USERS_FOR_CACHE:
             greeter_state = (
-                "kurulu"
+                t("m03.preview.greeter_installed")
                 if GREETER_SERVICE_PATH.exists()
-                else "kurulacak"
+                else t("m03.preview.greeter_pending")
             )
-            lines.append(f"Greeter cache        : {greeter_state}")
+            lines.append(t("m03.preview.greeter", state=greeter_state))
         lines.append("")
 
-        lines.append("Not: Bu adım yalnız OTP anahtarları oluşturur; "
-                     "sistem kullanıcı hesaplarını oluşturmaz. Yedek "
-                     "hesaplar (ogretmen1, ogretmen2 …) 'Kullanıcı "
-                     "parolaları' adımında oluşturulur; bu adım sistemde "
-                     "bulduğu yedek hesapları otomatik olarak PIN "
-                     "listesine ekler.")
+        lines.append(t("m03.preview.note_no_accounts"))
         lines.append("")
-        lines.append("Not: Anahtarı zaten olan hesaplara dokunulmaz — "
-                     "yalnızca eksikler tamamlanır. Öğretmenlerin "
-                     "telefonundaki anahtarlar geçerli kalır, adımı "
-                     "güvenle yeniden uygulayabilirsiniz.")
+        lines.append(t("m03.preview.note_keep_existing"))
         lines.append("")
 
         if has_otp:
-            lines.append("PIN anahtarı kurulu kişisel hesaplar:")
+            lines.append(t("m03.preview.has_otp_header"))
             for u in has_otp:
                 lines.append(f"  - {u}")
             lines.append("")
         if missing_otp:
-            lines.append("PIN anahtarı OLMAYAN kişisel hesaplar:")
+            lines.append(t("m03.preview.missing_otp_header"))
             for u in missing_otp:
                 lines.append(f"  - {u}")
-            lines.append(
-                "  \"Açılışta parola temizliği\" adımı etkinken bu "
-                "hesaplar tahtaya hiç giremez. Anahtar üretmek için "
-                "aşağıdaki listeye adlarını yazın."
-            )
+            lines.append(t("m03.preview.missing_otp_hint"))
             lines.append("")
         if group_secrets:
-            lines.append(
-                "Grup PIN anahtarları (kullanıcı hesabı gerektirmez; "
-                f"gruba üye tüm hesaplarda geçerli): {', '.join(group_secrets)}"
-            )
+            lines.append(t("m03.preview.group_secrets", keys=", ".join(group_secrets)))
             lines.append("")
         if orphan_secrets:
-            lines.append(
-                f"Sistemde hesabı kalmayan PIN kayıtları ({len(orphan_secrets)} "
-                f"adet — hesap silinmiş olabilir): {', '.join(orphan_secrets)}"
-            )
-            lines.append(
-                "  Bu kayıtlar kullanılamaz; imaja gitmemeleri için "
-                "\"Fazladan Hesapları Sil\" düğmesi onları da temizler."
-            )
+            lines.append(t(
+                "m03.preview.orphans",
+                count=len(orphan_secrets), users=", ".join(orphan_secrets),
+            ))
+            lines.append(t("m03.preview.orphans_hint"))
             lines.append("")
 
-        lines.append("Kullanıcı yönetimi")
+        lines.append(t("m03.preview.user_mgmt_header"))
         if extra_users:
             head = extra_users[:10]
             more = len(extra_users) - len(head)
-            lines.append(
-                f"  Fazladan kullanıcı hesabı : {len(extra_users)} adet"
-            )
+            lines.append(t("m03.preview.extra_count", count=len(extra_users)))
             for u in head:
                 lines.append(f"    - {u}")
             if more > 0:
-                lines.append(f"    - ... ve {more} tane daha")
-            lines.append(
-                "  \"Fazladan Hesapları Sil\" düğmesi ile bunları "
-                "kaldırabilirsiniz; sistemde yalnız etapadmin, "
-                "ogrenci ve ogretmen kalır."
-            )
+                lines.append(t("m03.preview.extra_more", count=more))
+            lines.append(t("m03.preview.extra_hint"))
         else:
-            lines.append(
-                "  Sistemde yalnız varsayılan kullanıcılar mevcut "
-                "(etapadmin, ogrenci, ogretmen)."
-            )
+            lines.append(t("m03.preview.only_defaults"))
         return "\n".join(lines)
 
     # -----------------------------------------------------------------
@@ -1043,12 +976,7 @@ class OTPSecretsModule(Module):
         if make_group_pin and not add_teachers_to_group:
             add_teachers_to_group = True
             if progress:
-                progress(
-                    "Not: Grup PIN'i seçili — öğretmen hesaplarını "
-                    f"'{OGRETMENLER_GROUP}' grubuna ekleme otomatik "
-                    "etkinleştirildi (PAM grup PIN'ini yalnız gruba "
-                    "üye kullanıcıya kabul ediyor)."
-                )
+                progress(t("m03.apply.group_forced", group=OGRETMENLER_GROUP))
 
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
 
@@ -1085,12 +1013,8 @@ class OTPSecretsModule(Module):
         if not teacher_names:
             return ApplyResult(
                 False,
-                "Liste boş — öğretmen eklemediniz ve sistemde yedek hesap yok.",
-                details=(
-                    "Lütfen en az bir isim girin ya da 'Kullanıcı "
-                    "parolaları' adımında 'Yedek hesap sayısı' kutusuna "
-                    "sıfırdan büyük bir değer yazıp o adımı uygulayın."
-                ),
+                t("m03.apply.empty_list"),
+                details=t("m03.apply.empty_list_details"),
             )
 
         state = self.ensure_state_dir()
@@ -1122,8 +1046,8 @@ class OTPSecretsModule(Module):
         if not success:
             return ApplyResult(
                 False,
-                "PIN anahtarları üretilemedi.",
-                details="Ayrıntı için /var/log/tiha/tiha.log dosyasına bakın.",
+                t("m03.apply.keys_failed"),
+                details=t("m03.apply.keys_failed_details"),
             )
 
         # reserve_usernames yukarıda apply girişinde hesaplandı; grup
@@ -1155,13 +1079,14 @@ class OTPSecretsModule(Module):
         if add_teachers_to_group:
             if not ensure_ogretmenler_group():
                 if progress:
-                    progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
-                             "grup uyeligi atlandi.")
+                    progress("\n" + t(
+                        "m03.apply.group_create_failed_membership",
+                        group=OGRETMENLER_GROUP,
+                    ))
             else:
                 targets = sorted(requested_users | set(reserve_usernames))
                 if progress:
-                    progress(f"\nOgretmen hesaplari '{OGRETMENLER_GROUP}' "
-                             "grubuna ekleniyor...")
+                    progress("\n" + t("m03.apply.adding_to_group", group=OGRETMENLER_GROUP))
                 for u in targets:
                     # etapadmin bir öğretmen hesabı değil; ortak PIN'in
                     # yönetici hesabına da geçmesi istenmez. Ortak ogretmen
@@ -1174,38 +1099,37 @@ class OTPSecretsModule(Module):
                     if progress:
                         progress(f"  + {u}")
                 if not grouped_users and progress:
-                    progress("  (gruba eklenecek mevcut hesap yok)")
+                    progress(t("m03.apply.no_group_targets"))
                 # Eski sürüm ortak hesabı da gruba ekliyordu; üyeliği kaldır.
                 for u in _excluded_group_members():
                     if run_cmd(["gpasswd", "-d", u, OGRETMENLER_GROUP], check=False).ok:
                         ungrouped_users.append(u)
                         if progress:
-                            progress(f"  - {u} (ortak/yönetici hesap gruptan çıkarıldı)")
+                            progress(t("m03.apply.removed_from_group", user=u))
                 # Sonradan EBA QR ile açılacak hesaplar için izleyici servis
                 if install_auto_group_service():
                     auto_group_service_installed = True
                     if progress:
-                        progress("\nOtomatik grup ekleme servisi kuruldu — "
-                                 "EBA QR ile sonradan acilan ogretmen "
-                                 "hesaplari da gruba dahil edilecek.")
+                        progress("\n" + t("m03.apply.auto_group_installed"))
 
         if make_group_pin:
             if not ensure_ogretmenler_group():
                 if progress:
-                    progress(f"\n'{OGRETMENLER_GROUP}' grubu olusturulamadi; "
-                             "grup-PIN akisi iptal edildi.")
+                    progress("\n" + t(
+                        "m03.apply.group_create_failed_pin",
+                        group=OGRETMENLER_GROUP,
+                    ))
             elif group_key in after_secrets:
                 # Mevcut grup-PIN'i yenilemek telefonlardaki anahtarı
                 # geçersiz kılardı; koruyoruz.
                 if progress:
-                    progress(f"\nMevcut ortak grup-PIN korundu: {group_key} "
-                             "— telefonlardaki anahtar geçerli kalir.")
+                    progress("\n" + t("m03.apply.group_pin_kept", key=group_key))
             else:
                 after_secrets[group_key] = pyotp.random_base32()
                 save_secrets(after_secrets)
                 group_secret_is_new = True
                 if progress:
-                    progress(f"\nOrtak grup-PIN uretildi: {group_key}")
+                    progress("\n" + t("m03.apply.group_pin_created", key=group_key))
 
 
         # ===== Madde: değişen anahtarlar =============================
@@ -1219,18 +1143,17 @@ class OTPSecretsModule(Module):
         )
         if changed_users and progress:
             progress("\n" + "!" * 60)
-            progress(f"UYARI: {len(changed_users)} hesabin PIN anahtari DEGISTI.")
+            progress(t("m03.apply.changed_warning", count=len(changed_users)))
             for user in changed_users:
                 progress(f"  ! {user}")
-            progress("Bu hesaplarin telefonundaki eski kayit artik "
-                     "calismaz; yeni kagidi teslim edin.")
+            progress(t("m03.apply.changed_hint"))
             progress("!" * 60)
 
         if not new_users and not group_secret_is_new and not preserved_users:
             return ApplyResult(
                 False,
-                "Hiç PIN anahtarı üretilemedi.",
-                details=f"Mevcut kayıt sayısı: {len(after_secrets)}",
+                t("m03.apply.none_generated"),
+                details=t("m03.apply.none_generated_details", count=len(after_secrets)),
             )
         # Grup secret'ı da PIN kartı listesine dahil et
         if group_secret_is_new and group_key not in new_users:
@@ -1241,40 +1164,43 @@ class OTPSecretsModule(Module):
         greeter_cache_applied = False
         if total_users >= MIN_USERS_FOR_CACHE:
             if progress:
-                progress(f"{total_users} kullanıcı tespit edildi — greeter cache kurulumu başlatılıyor...")
+                progress(t("m03.apply.greeter_start", count=total_users))
 
             # GitHub'dan script indir
             if not GREETER_SCRIPT_PATH.exists():
                 if progress:
-                    progress("Greeter cache script GitHub'dan indiriliyor...")
+                    progress(t("m03.apply.greeter_downloading"))
                 if not download_greeter_script():
                     log.warning("Greeter cache script indirilemedi, devam ediliyor...")
                 else:
                     if progress:
-                        progress("✓ Greeter cache script indirildi")
+                        progress(t("m03.apply.greeter_downloaded"))
 
             # Systemd service oluştur
             if not GREETER_SERVICE_PATH.exists() and GREETER_SCRIPT_PATH.exists():
                 if progress:
-                    progress("Otomatik greeter cache service oluşturuluyor...")
+                    progress(t("m03.apply.greeter_service_creating"))
                 if not create_greeter_service():
                     log.warning("Greeter cache service oluşturulamadı, devam ediliyor...")
                 else:
                     if progress:
-                        progress("✓ Greeter cache service oluşturuldu")
+                        progress(t("m03.apply.greeter_service_created"))
 
             # Script'i bir kez çalıştır (yeni kullanıcıları cache'e al)
             if GREETER_SCRIPT_PATH.exists():
                 if progress:
-                    progress("Greeter cache güncellemesi yapılıyor...")
+                    progress(t("m03.apply.greeter_updating"))
                 if run_greeter_script_once():
                     greeter_cache_applied = True
                     if progress:
-                        progress("✓ Greeter cache güncellendi")
+                        progress(t("m03.apply.greeter_updated"))
                 else:
                     log.warning("Greeter cache güncellemesi başarısız, devam ediliyor...")
         elif progress:
-            progress(f"{total_users} kullanıcı var — greeter cache gerekli değil (limit: {MIN_USERS_FOR_CACHE})")
+            progress(t(
+                "m03.apply.greeter_not_needed",
+                count=total_users, limit=MIN_USERS_FOR_CACHE,
+            ))
 
         # Tam adları username -> display map'e koy (rapor için)
         display_of: dict[str, str] = {}
@@ -1282,58 +1208,43 @@ class OTPSecretsModule(Module):
             u = _eta_otp_cli_normalize(name) if cli_script else normalize_username(name)
             if u in new_users:
                 if u == "etapadmin":
-                    display_of[u] = "Sistem Yöneticisi (etapadmin)"
+                    display_of[u] = t("m03.apply.display_admin")
                     continue
                 display_of[u] = name
         # Grup-PIN kartı için özel etiket
         if group_key in new_users:
-            display_of[group_key] = "Ogretmenler grubu — ORTAK PIN"
+            display_of[group_key] = t("m03.apply.display_group")
 
         # Rapor
         report_lines: list[str] = []
         report_lines.append("─" * 76)
-        report_lines.append(f"  {len(new_users)} hesap için PIN anahtarı üretildi.")
+        report_lines.append(t("m03.pin_report.generated", count=len(new_users)))
         if preserved_users:
-            report_lines.append(
-                f"  {len(preserved_users)} hesabın mevcut anahtarı korundu "
-                "(yeniden üretilmedi)."
-            )
+            report_lines.append(t("m03.pin_report.preserved", count=len(preserved_users)))
         if changed_users:
-            report_lines.append(
-                f"  DİKKAT: {len(changed_users)} hesabın anahtarı DEĞİŞTİ — "
-                "eski kayıtları çalışmaz."
-            )
-        report_lines.append(f"  Toplam PIN kaydı: {len(after_secrets)}")
-        report_lines.append(f"  Dosya: {OTP_SECRETS_FILE}")
-        report_lines.append(f"  Üretici: Issuer = \"{OTP_ISSUER}\", 6 hane, 30 sn periyot.")
+            report_lines.append(t("m03.pin_report.changed", count=len(changed_users)))
+        report_lines.append(t("m03.pin_report.total", count=len(after_secrets)))
+        report_lines.append(t("m03.pin_report.file", path=OTP_SECRETS_FILE))
+        report_lines.append(t("m03.pin_report.issuer", issuer=OTP_ISSUER))
         if cli_script:
-            report_lines.append("  Araç:   enseitankado/eta-otp-cli  →  toplu-kullanici-olustur.py")
+            report_lines.append(t("m03.pin_report.tool"))
         report_lines.append("─" * 76)
         for idx, user in enumerate(sorted(new_users), 1):
             secret = after_secrets[user]
-            display = display_of.get(user, "(yedek hesap)")
+            display = display_of.get(user, t("m03.pin_report.reserve_display"))
             report_lines.append("")
             report_lines.append(f"[{idx:02d}]  {display}")
-            report_lines.append(f"     Kullanıcı adı : {user}")
-            report_lines.append(f"     PIN anahtarı  : {secret}")
+            report_lines.append(t("m03.pin_report.username", user=user))
+            report_lines.append(t("m03.pin_report.secret", secret=secret))
         if preserved_users:
             report_lines.append("")
             report_lines.append("─" * 76)
-            report_lines.append(
-                "  Mevcut anahtarı korunan hesaplar (dokunulmadı — "
-                "telefondaki anahtar geçerli):"
-            )
+            report_lines.append(t("m03.pin_report.preserved_header"))
             for user in preserved_users:
                 report_lines.append(f"     · {user}")
         report_lines.append("")
         report_lines.append("─" * 76)
-        report_lines.append(
-            "Kullanım: öğretmenler bu anahtarı Google Authenticator vb.\n"
-            "uygulamaya elle girebilir; daha kolayı, yazdırılabilir\n"
-            "kâğıttaki QR kodunu uygulamayla taratmaktır. Anahtarları\n"
-            "yalnızca özelden (şifreli mesaj, gizli dağıtım listesi)\n"
-            "teslim edin."
-        )
+        report_lines.append(t("m03.pin_report.usage"))
         copyable = "\n".join(report_lines)
 
         # Yazdırılabilir HTML kâğıt — sistemdeki BÜTÜN anahtarlar için
@@ -1351,7 +1262,7 @@ class OTPSecretsModule(Module):
             state_dir=state,
         )
         if html_path and progress:
-            progress(f"🖨️ Yazdırılabilir kâğıt ({len(all_users)} anahtar): {html_path}")
+            progress(t("m03.apply.paper_written", count=len(all_users), path=html_path))
 
         # details, UI'da aşağıdaki metin raporuyla TEK alanda birleşerek
         # gösteriliyor. Bu yüzden burada sayıları yinelemiyoruz —
@@ -1360,47 +1271,35 @@ class OTPSecretsModule(Module):
         # bilgi yazılır: kâğıdın nerede olduğu ve ne yapılacağı.
         details_lines: list[str] = []
         if html_path:
-            details_lines.append(
-                f"🖨️ Yazdırılabilir öğretmen kâğıdı — "
-                f"sistemdeki {len(all_users)} anahtarın tamamı:"
-            )
+            details_lines.append(t("m03.apply.paper_header", count=len(all_users)))
             details_lines.append(f"  {html_path}")
-            details_lines.append(
-                "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin."
-            )
-            details_lines.append(
-                "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
-            )
-            details_lines.append(
-                "  'Dosyaya kaydet…' bu kâğıdı HTML olarak kaydeder."
-            )
+            details_lines.append(t("m03.apply.paper_print_hint"))
+            details_lines.append(t("m03.apply.paper_autoopen"))
+            details_lines.append(t("m03.apply.paper_save_hint"))
         details = "\n".join(details_lines)
 
         # Greeter cache bilgisini ekle
         if new_users:
             summary_parts = [
-                f"{len(new_users)} PIN anahtarı üretildi ve "
-                f"{OTP_SECRETS_FILE} dosyasına yazıldı."
+                t("m03.apply.summary_new", count=len(new_users), path=OTP_SECRETS_FILE)
             ]
         else:
-            summary_parts = [
-                "Yeni anahtar gerekmedi; listedeki hesapların anahtarı "
-                "zaten vardı ve korundu."
-            ]
+            summary_parts = [t("m03.apply.summary_none_new")]
         if preserved_users and new_users:
             summary_parts.append(
-                f"{len(preserved_users)} hesabın mevcut anahtarına dokunulmadı."
+                t("m03.apply.summary_preserved", count=len(preserved_users))
             )
         if greeter_cache_applied:
-            summary_parts.append("Greeter cache güncellendi ve otomatik çalıştırma ayarlandı.")
+            summary_parts.append(t("m03.apply.summary_greeter_ok"))
         elif total_users >= MIN_USERS_FOR_CACHE:
-            summary_parts.append("Greeter cache kurulumu tamamlanamadı.")
+            summary_parts.append(t("m03.apply.summary_greeter_failed"))
         if grouped_users:
-            summary_parts.append(
-                f"{len(grouped_users)} hesap {OGRETMENLER_GROUP} grubuna eklendi."
-            )
+            summary_parts.append(t(
+                "m03.apply.summary_grouped",
+                count=len(grouped_users), group=OGRETMENLER_GROUP,
+            ))
         if auto_group_service_installed:
-            summary_parts.append("Yeni öğretmen hesabı → ogretmenler grubu servis kuruldu.")
+            summary_parts.append(t("m03.apply.summary_auto_group"))
 
         return ApplyResult(
             success=True,
@@ -1413,12 +1312,10 @@ class OTPSecretsModule(Module):
             save_payload=html_text,
             save_filename=(html_path.name if html_path else None),
             warning=(
-                "Bu adımda {n} hesabın PIN anahtarı DEĞİŞTİ:\n\n{liste}\n\n"
-                "Bu hesapların telefonlarındaki eski kayıt artık "
-                "çalışmaz. Yeni PIN kâğıdını bu öğretmenlere mutlaka "
-                "yeniden teslim edin.".format(
-                    n=len(changed_users),
-                    liste=", ".join(changed_users),
+                t(
+                    "m03.apply.changed_dialog",
+                    count=len(changed_users),
+                    users=", ".join(changed_users),
                 )
                 if changed_users else None
             ),
@@ -1463,6 +1360,16 @@ class OTPSecretsModule(Module):
         ts = _dt.now().strftime("%Y%m%d-%H%M%S")
         out = state_dir / f"ogretmen-pin-kagitlari-{ts}.html"
 
+        badge_html = f'<span class="badge">{t("m03.paper.badge_new")}</span>'
+        meta = t(
+            "m03.paper.meta",
+            created=ts.replace("-", " "),
+            total=len(all_users),
+            new=len(new_users),
+            badge=badge_html,
+            issuer=_esc(OTP_ISSUER),
+        )
+
         cards: list[str] = []
         for user in all_users:
             secret = secrets.get(user, "")
@@ -1477,48 +1384,42 @@ class OTPSecretsModule(Module):
                 qr_block = (
                     '  <aside class="qr">\n'
                     f'    {svg}\n'
-                    '    <div class="qr-label">Uygulamayla taratın</div>\n'
+                    f'    <div class="qr-label">{t("m03.paper.qr_label")}</div>\n'
                     '  </aside>'
                 )
             else:
                 qr_block = ""
             is_group = user.startswith("@")
             if is_group:
+                group_esc = _esc(user[1:])
                 user_line = (
-                    f'<div class="user">Grup: <code>{_esc(user[1:])}</code> '
-                    "— bu PIN, gruba üye tüm öğretmen hesaplarına giriş için "
-                    "geçerlidir.</div>"
+                    '<div class="user">'
+                    f'{t("m03.paper.group_line", group=group_esc)}</div>'
                 )
-                instructions = f'''    <ol>
-      <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
-          bir uygulama kurun.</li>
-      <li>Uygulamada <em>"+ Anahtar ekle"</em> &gt; <em>"QR kodu tara"</em>'yı
-          seçip yandaki kodu taratın. QR okunamazsa <em>"Anahtarı manuel
-          gir"</em> ile yukarıdaki anahtarı yazın.</li>
-      <li>Hesap adı olarak <em>istediğiniz</em> bir etiket yazın
-          (örn. <code>Sınıf-PIN</code>).</li>
-      <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
-      <li>Kaydedin. Bu PIN, tahtada <strong>{_esc(user[1:])}</strong>
-          grubuna üye herhangi bir hesabın giriş ekranında
-          kullanılabilir.</li>
-    </ol>'''
+                steps = [
+                    t("m03.paper.step_install"),
+                    t("m03.paper.group_step_scan"),
+                    t("m03.paper.group_step_label"),
+                    t("m03.paper.step_type"),
+                    t("m03.paper.group_step_save", group=group_esc),
+                ]
             else:
                 user_line = (
-                    f'<div class="user">Kullanıcı adı: '
-                    f'<code>{_esc(user)}</code></div>'
+                    '<div class="user">'
+                    f'{t("m03.paper.user_line", user=_esc(user))}</div>'
                 )
-                instructions = f'''    <ol>
-      <li>Telefonunuza <strong>Google Authenticator</strong> veya benzeri
-          bir uygulama kurun.</li>
-      <li>Uygulamada <em>"+ Anahtar ekle"</em> &gt; <em>"QR kodu tara"</em>'yı
-          seçip yandaki kodu taratın. QR okunamazsa <em>"Anahtarı manuel
-          gir"</em> ile yukarıdaki anahtarı ve hesap adı olarak
-          <code>{_esc(user)}</code> yazın.</li>
-      <li>Tür: <em>Zaman tabanlı</em> (varsayılan).</li>
-      <li>Kaydedin. Artık her 30 saniyede yeni bir 6 haneli PIN üretilir;
-          tahta giriş ekranında bu PIN'i girersiniz.</li>
-    </ol>'''
-            badge = '<span class="badge">YENİ</span>' if is_new else ""
+                steps = [
+                    t("m03.paper.step_install"),
+                    t("m03.paper.user_step_scan", user=_esc(user)),
+                    t("m03.paper.step_type"),
+                    t("m03.paper.user_step_save"),
+                ]
+            instructions = (
+                "    <ol>\n"
+                + "".join(f"      <li>{step}</li>\n" for step in steps)
+                + "    </ol>"
+            )
+            badge = badge_html if is_new else ""
             cards.append(f'''
 <article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}">
   <div class="body">
@@ -1527,7 +1428,7 @@ class OTPSecretsModule(Module):
       {user_line}
     </header>
     <section class="secret">
-      <div class="label">PIN anahtarı (QR okunmazsa elle girin):</div>
+      <div class="label">{t("m03.paper.secret_label")}</div>
       <div class="key">{_esc(grouped)}</div>
     </section>
     <section class="instructions">
@@ -1539,9 +1440,9 @@ class OTPSecretsModule(Module):
 ''')
 
         html = f'''<!DOCTYPE html>
-<html lang="tr"><head>
+<html lang="{t("m03.paper.html_lang")}"><head>
 <meta charset="utf-8">
-<title>Öğretmen PIN kâğıtları — {ts}</title>
+<title>{t("m03.paper.title", ts=ts)}</title>
 <style>
   body {{ font-family: Ubuntu, sans-serif; margin: 20px; color: #222; }}
   h1 {{ font-size: 16pt; border-bottom: 2px solid #2e7d32; padding-bottom: 6px; }}
@@ -1596,12 +1497,9 @@ class OTPSecretsModule(Module):
   }}
 </style>
 </head><body>
-<h1>Öğretmen PIN Kâğıtları</h1>
+<h1>{t("m03.paper.heading")}</h1>
 <div class="meta">
-  Oluşturulma: {ts.replace("-", " ")} ·
-  Toplam: {len(all_users)} kâğıt ({len(new_users)} tanesi bu turda üretildi,
-  <span class="badge">YENİ</span> etiketli) ·
-  TiHA tarafından üretildi · Issuer: <em>{_esc(OTP_ISSUER)}</em>
+  {meta}
 </div>
 {"".join(cards)}
 </body></html>
@@ -1649,7 +1547,7 @@ class OTPSecretsModule(Module):
         telefonundaki anahtarı geçersiz kılardı.
         """
         if progress:
-            progress("enseitankado/eta-otp-cli aracı çalıştırılıyor (sadece OTP anahtarları)…")
+            progress(t("m03.apply.tool_running"))
 
         # otp-cli.py dosyası aynı dizinde olmalı
         otp_cli_script = script.parent / "otp-cli.py"
@@ -1671,8 +1569,10 @@ class OTPSecretsModule(Module):
             if username in keep_users:
                 kept_count += 1
                 if progress:
-                    progress(f"  {idx}/{total_count}: {full_name} → {username} "
-                             "— mevcut anahtar korundu, dokunulmadı")
+                    progress(t(
+                        "m03.apply.tool_kept",
+                        idx=idx, total=total_count, name=full_name, user=username,
+                    ))
                 continue
 
             attempted += 1
@@ -1687,15 +1587,17 @@ class OTPSecretsModule(Module):
             if result.ok:
                 success_count += 1
                 if progress:
-                    progress(f"    ✓ OTP anahtarı oluşturuldu: {username}")
+                    progress(t("m03.apply.tool_ok", user=username))
             else:
                 log.error("OTP anahtarı oluşturulamadı %s: %s", username, result.stderr)
                 if progress:
-                    progress(f"    ✗ Hata: {username}")
+                    progress(t("m03.apply.tool_error", user=username))
 
         if progress:
-            progress(f"Tamamlandı: {success_count}/{attempted} yeni OTP anahtarı "
-                     f"üretildi, {kept_count} mevcut anahtar korundu")
+            progress(t(
+                "m03.apply.tool_done",
+                ok=success_count, attempted=attempted, kept=kept_count,
+            ))
 
         # Üretilecek yeni anahtar yoksa bu bir hata değil: adımın aynı
         # listeyle yeniden uygulanması olağan bir durumdur.
@@ -1716,7 +1618,7 @@ class OTPSecretsModule(Module):
         çok ad/soyad alanını günceller).
         """
         if progress:
-            progress("Dahili pyotp yolu kullanılıyor.")
+            progress(t("m03.apply.internal_start"))
 
         secrets = load_secrets()
         for name in names:
@@ -1726,11 +1628,11 @@ class OTPSecretsModule(Module):
             create_user(user, full_name=name)
             if user in keep_users:
                 if progress:
-                    progress(f"  • {user} ({name}): mevcut PIN anahtarı korundu")
+                    progress(t("m03.apply.internal_kept", user=user, name=name))
                 continue
             secrets[user] = pyotp.random_base32()
             if progress:
-                progress(f"  • {user} ({name}): PIN anahtarı üretildi")
+                progress(t("m03.apply.internal_created", user=user, name=name))
         save_secrets(secrets)
         return True
 
@@ -1759,7 +1661,7 @@ class OTPSecretsModule(Module):
             if set_user_full_name(user, name):
                 updated += 1
         if progress and updated:
-            progress(f"  • {updated} kullanıcının ad/soyad alanı güncellendi")
+            progress(t("m03.apply.gecos_updated", count=updated))
         return updated
 
     # -----------------------------------------------------------------
@@ -1825,11 +1727,11 @@ class OTPSecretsModule(Module):
 
         summary_parts = []
         if removed:
-            summary_parts.append(f"{len(removed)} kullanıcı silindi")
-        summary_parts.append("önceki PIN anahtar dosyası geri yüklendi")
+            summary_parts.append(t("m03.undo.removed", count=len(removed)))
+        summary_parts.append(t("m03.undo.restored"))
 
         if greeter_cache_removed:
-            summary_parts.append("greeter cache kurulumu kaldırıldı")
+            summary_parts.append(t("m03.undo.greeter_removed"))
 
         summary = "; ".join(summary_parts) + "."
         return ApplyResult(True, summary)
@@ -1855,7 +1757,7 @@ class OTPSecretsModule(Module):
         """'Tüm PIN Anahtarlarını Sil' düğmesinin dinamik etiketi.
         Adımın her aksiyonundan sonra yeniden hesaplanır."""
         n = len(load_secrets())
-        return f"Tüm PIN Anahtarlarını Sil ({n} anahtar)"
+        return t("m03.buttons.purge_all", count=n)
 
     def label_remove_extra_users(self) -> str:
         """'Fazladan Hesapları Sil' düğmesinin dinamik etiketi.
@@ -1866,9 +1768,9 @@ class OTPSecretsModule(Module):
         # extras arasında PIN kaydı olan hesap sayısı — silme onunla
         # birlikte otp-secrets.json'dan da bu kayıtları düşürür.
         matching_keys = sum(1 for u in extras if u in secrets)
-        return (
-            f"Fazladan Hesapları Sil "
-            f"({len(extras)} hesap, {matching_keys} anahtar)"
+        return t(
+            "m03.buttons.remove_extra",
+            accounts=len(extras), keys=matching_keys,
         )
 
     def purge_all_secrets_action(
@@ -1889,8 +1791,8 @@ class OTPSecretsModule(Module):
         if not secrets:
             return ApplyResult(
                 False,
-                "Silinecek PIN anahtarı yok.",
-                details=f"{OTP_SECRETS_FILE} boş ya da mevcut değil.",
+                t("m03.purge.none"),
+                details=t("m03.purge.none_details", path=OTP_SECRETS_FILE),
             )
 
         users = order_secret_users(secrets)
@@ -1899,7 +1801,7 @@ class OTPSecretsModule(Module):
         backup = backup_file(OTP_SECRETS_FILE, state)
 
         if progress:
-            progress(f"{len(users)} PIN anahtari siliniyor...")
+            progress(t("m03.purge.deleting", count=len(users)))
             for user in users:
                 progress(f"  - {user}")
 
@@ -1918,32 +1820,20 @@ class OTPSecretsModule(Module):
         harden_secret_store(state)
 
         details = [
-            f"{len(users)} anahtar silindi: {', '.join(users)}",
-            f"{OTP_SECRETS_FILE} artık boş.",
+            t("m03.purge.deleted_list", count=len(users), users=", ".join(users)),
+            t("m03.purge.file_empty", path=OTP_SECRETS_FILE),
         ]
         if removed_papers:
-            details.append(
-                f"{removed_papers} yazdırılabilir kâğıt da silindi "
-                "(silinen anahtarları içeriyordu)."
-            )
+            details.append(t("m03.purge.papers_removed", count=removed_papers))
         if backup is not None:
-            details.append(f"Silme öncesi yedek: {backup}")
-        details.append(
-            "Dağıtılmış anahtarlar artık geçersiz. Öğretmenlerin PIN ile "
-            "giriş yapabilmesi için adımı yeniden uygulayıp yeni kâğıtları "
-            "teslim etmeniz gerekir."
-        )
+            details.append(t("m03.purge.backup", path=backup))
+        details.append(t("m03.purge.redistribute"))
 
         return ApplyResult(
             True,
-            f"{len(users)} PIN anahtarı silindi; dosya boşaltıldı.",
+            t("m03.purge.summary", count=len(users)),
             details="\n".join(details),
-            warning=(
-                f"{len(users)} PIN anahtarı silindi. Bu anahtarların "
-                "telefonlardaki kayıtları artık çalışmaz. Öğretmenlerin "
-                "PIN ile giriş yapabilmesi için adımı yeniden uygulayıp "
-                "yeni kâğıtları teslim etmelisiniz."
-            ),
+            warning=t("m03.purge.warning", count=len(users)),
             data={"purged_users": users},
         )
 
@@ -1980,8 +1870,7 @@ class OTPSecretsModule(Module):
         backup_file(OTP_SECRETS_FILE, state)
 
         if progress:
-            progress(f"\nKarsiligi kalmayan {len(orphans)} PIN kaydi "
-                     "temizleniyor...")
+            progress("\n" + t("m03.purge.orphans_cleaning", count=len(orphans)))
         for user in orphans:
             del secrets[user]
             if progress:
@@ -2034,10 +1923,8 @@ class OTPSecretsModule(Module):
         if not extra_users and not orphan_names:
             return ApplyResult(
                 False,
-                "Silinecek fazladan kullanıcı ya da yetim PIN kaydı bulunamadı.",
-                details="Sistemde sadece varsayılan kullanıcılar (etapadmin, "
-                        "ogrenci, ogretmen) mevcut ve tüm PIN kayıtlarının "
-                        "karşılığı var."
+                t("m03.remove_extra.nothing"),
+                details=t("m03.remove_extra.nothing_details"),
             )
 
         # Silinecek hesap yok ama yetim kayıt var: yalnız temizlik yap.
@@ -2045,18 +1932,17 @@ class OTPSecretsModule(Module):
             purged = self._purge_orphan_secrets(progress=progress)
             return ApplyResult(
                 True,
-                f"Fazladan hesap yoktu; karşılığı kalmayan {len(purged)} "
-                "PIN kaydı temizlendi.",
-                details="Silinen kayıtlar (imaja ölü sır gitmesin):\n"
+                t("m03.remove_extra.only_orphans", count=len(purged)),
+                details=t("m03.remove_extra.only_orphans_details") + "\n"
                         + "\n".join(f"  · {u}" for u in purged),
                 data={"removed_users": [], "purged_secrets": purged},
             )
 
         if progress:
-            progress(
-                f"{len(extra_users)} fazladan hesap silinecek: "
-                + ", ".join(extra_users)
-            )
+            progress(t(
+                "m03.remove_extra.will_delete",
+                count=len(extra_users), users=", ".join(extra_users),
+            ))
 
         success, removed, errors = reset_to_default_users(progress=progress)
 
@@ -2069,38 +1955,39 @@ class OTPSecretsModule(Module):
         # Detay metni — hem başarılı hem başarısız kayıtları topla
         detail_parts: list[str] = []
         if removed:
-            detail_parts.append("Silinen hesaplar:")
+            detail_parts.append(t("m03.remove_extra.removed_header"))
             detail_parts.extend(f"  ✓ {u}" for u in removed)
         if errors:
             detail_parts.append("")
-            detail_parts.append("Silinemeyen hesaplar:")
+            detail_parts.append(t("m03.remove_extra.failed_header"))
             for u, err in errors.items():
                 # deluser çıktısı çok satırlı olabilir; girintili göster
-                err_indented = "\n      ".join(err.splitlines()) or "(boş çıktı)"
+                err_indented = (
+                    "\n      ".join(err.splitlines())
+                    or t("m03.remove_extra.empty_output")
+                )
                 detail_parts.append(f"  ✗ {u}\n      {err_indented}")
 
         if purged_secrets:
             detail_parts.append("")
             detail_parts.append(
-                f"Karşılığı kalmayan {len(purged_secrets)} PIN kaydı da "
-                "silindi (imaja ölü sır gitmesin):"
+                t("m03.remove_extra.orphans_removed", count=len(purged_secrets))
             )
             detail_parts.extend(f"  · {u}" for u in purged_secrets)
 
         if success:
             detail_parts.append("")
-            detail_parts.append(
-                "Sistem artık sadece varsayılan hesapları içeriyor:"
-            )
+            detail_parts.append(t("m03.remove_extra.defaults_only"))
             detail_parts.extend([
-                "  • etapadmin (yönetici)",
-                "  • ogrenci (ortak hesap)",
-                "  • ogretmen (ortak hesap)",
+                t("m03.remove_extra.default_admin"),
+                t("m03.remove_extra.default_student"),
+                t("m03.remove_extra.default_teacher"),
             ])
-            summary = (f"{len(removed)} fazladan kullanıcı silindi, "
-                       "sistem varsayılan durumuna getirildi.")
+            summary = t("m03.remove_extra.summary", count=len(removed))
             if purged_secrets:
-                summary += f" {len(purged_secrets)} yetim PIN kaydı temizlendi."
+                summary += t(
+                    "m03.remove_extra.summary_orphans", count=len(purged_secrets),
+                )
             return ApplyResult(
                 True,
                 summary,
@@ -2112,8 +1999,10 @@ class OTPSecretsModule(Module):
             failed_count = len(errors)
             return ApplyResult(
                 False,
-                f"{len(removed)} kullanıcı silindi, "
-                f"{failed_count} kullanıcı silinemedi.",
+                t(
+                    "m03.remove_extra.summary_partial",
+                    removed=len(removed), failed=failed_count,
+                ),
                 details="\n".join(detail_parts),
             )
 

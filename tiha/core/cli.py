@@ -36,6 +36,7 @@ from pathlib import Path
 
 from .. import __version__
 from . import console
+from .i18n import t
 from .logger import get_logger
 from .preset import import_preset
 from .undo import Journal, JournalEntry
@@ -47,25 +48,23 @@ log = get_logger(__name__)
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="tiha",
-        description="TiHA — Tahta İmaj Hazırlık Aracı (CLI mod). "
-                    "Hiçbir bayrak verilmezse GUI açılır.",
+        description=t("cli.description"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Örnek: sudo tiha --apply --preset okul-a.json",
+        epilog=t("cli.epilog"),
     )
     p.add_argument("--version", action="version", version=f"TiHA {__version__}")
     p.add_argument("--list", action="store_true",
-                   help="Modülleri sıralı olarak listele ve çık.")
+                   help=t("cli.help_list"))
     p.add_argument("--apply", action="store_true",
-                   help="Preset'teki modülleri sırasıyla uygula.")
+                   help=t("cli.help_apply"))
     p.add_argument("--info", action="store_true",
-                   help="Preset içeriğini göster; uygulama.")
+                   help=t("cli.help_info"))
     p.add_argument("--preset", type=Path,
-                   help="Preset JSON dosyasının yolu.")
+                   help=t("cli.help_preset"))
     p.add_argument("--only",
-                   help="Yalnızca verilen modül id'lerini uygula "
-                        "(virgülle ayır).")
+                   help=t("cli.help_only"))
     p.add_argument("--skip",
-                   help="Verilen modül id'lerini atla (virgülle ayır).")
+                   help=t("cli.help_skip"))
     return p
 
 
@@ -77,7 +76,7 @@ def is_cli_invocation(argv: list[str]) -> bool:
 
 def cmd_list() -> int:
     from ..modules import all_modules
-    console.banner_open("TiHA Modülleri", f"v{__version__}")
+    console.banner_open(t("cli.list_title"), f"v{__version__}")
     for idx, m in enumerate(all_modules(), 1):
         name = m.sidebar_title or m.title or m.id
         print(f"  {idx:2d}. {m.id:30s} {name}")
@@ -88,24 +87,24 @@ def cmd_info(preset_path: Path) -> int:
     try:
         params_by_module = import_preset(preset_path)
     except (OSError, ValueError) as exc:
-        print(f"HATA: preset okunamadı: {exc}", file=sys.stderr)
+        print(t("cli.preset_read_error", error=exc), file=sys.stderr)
         return 10
 
     from ..modules import all_modules
     known = {m.id: m for m in all_modules()}
 
-    console.banner_open("Preset İçeriği", str(preset_path))
-    print(f"Toplam modül: {len(params_by_module)}\n")
+    console.banner_open(t("cli.info_title"), str(preset_path))
+    print(t("cli.info_total", count=len(params_by_module)))
     for mid, params in params_by_module.items():
         mod = known.get(mid)
-        title = mod.title if mod else "(tanımsız modül!)"
+        title = mod.title if mod else t("cli.unknown_module")
         print(f"• {mid}  —  {title}")
         for k, v in params.items():
             print(f"    {k} = {v}")
         print()
     unknown = [mid for mid in params_by_module if mid not in known]
     if unknown:
-        print(f"⚠ Tanımsız modül id'leri: {', '.join(unknown)}", file=sys.stderr)
+        print(t("cli.unknown_ids", ids=", ".join(unknown)), file=sys.stderr)
         return 11
     return 0
 
@@ -118,7 +117,7 @@ def cmd_apply(
     try:
         params_by_module = import_preset(preset_path)
     except (OSError, ValueError) as exc:
-        print(f"HATA: preset okunamadı: {exc}", file=sys.stderr)
+        print(t("cli.preset_read_error", error=exc), file=sys.stderr)
         return 10
 
     from ..modules import all_modules
@@ -138,16 +137,16 @@ def cmd_apply(
 
     unknown_in_preset = [mid for mid in params_by_module if mid not in known]
     if unknown_in_preset:
-        print(f"⚠ Preset'te tanımsız modül id'leri (atlanacak): "
-              f"{', '.join(unknown_in_preset)}", file=sys.stderr)
+        print(t("cli.unknown_ids_skipped", ids=", ".join(unknown_in_preset)),
+              file=sys.stderr)
 
     if not targets:
-        print("Uygulanacak modül yok (filtre/yokluk).", file=sys.stderr)
+        print(t("cli.nothing_to_apply"), file=sys.stderr)
         return 0
 
-    console.banner_open("TiHA — CLI Apply", f"v{__version__}")
-    print(f"Preset : {preset_path}")
-    print(f"Hedef  : {len(targets)} modül\n")
+    console.banner_open(t("cli.apply_title"), f"v{__version__}")
+    print(t("cli.apply_preset", path=preset_path))
+    print(t("cli.apply_targets", count=len(targets)))
 
     journal = Journal()
     failed_count = 0
@@ -162,10 +161,10 @@ def cmd_apply(
             result = mod.apply_with_logging(params, progress=progress)
         except Exception as exc:
             result = None
-            print(f"  ✗ İSTİSNA: {exc}", file=sys.stderr)
+            print(t("cli.exception_line", error=exc), file=sys.stderr)
             failed_count += 1
             entry = JournalEntry.new(mod.id, mod.title)
-            entry.summary = f"İstisna: {exc}"
+            entry.summary = t("cli.exception_summary", error=exc)
             entry.status = "failed"
             journal.record(entry)
             continue
@@ -188,8 +187,7 @@ def cmd_apply(
             failed_count += 1
 
     console.banner_close(
-        f"CLI Apply tamamlandı — başarı: {len(targets) - failed_count}, "
-        f"hata: {failed_count}"
+        t("cli.apply_done", ok=len(targets) - failed_count, failed=failed_count)
     )
     return 1 if failed_count else 0
 
@@ -203,12 +201,12 @@ def run(argv: list[str]) -> int:
 
     if args.info:
         if not args.preset:
-            parser.error("--info için --preset gereklidir")
+            parser.error(t("cli.info_needs_preset"))
         return cmd_info(args.preset)
 
     if args.apply:
         if not args.preset:
-            parser.error("--apply için --preset gereklidir")
+            parser.error(t("cli.apply_needs_preset"))
         only = _csv_set(args.only) if args.only else None
         skip = _csv_set(args.skip) if args.skip else None
         return cmd_apply(args.preset, only, skip)

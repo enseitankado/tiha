@@ -19,6 +19,7 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 
 from .. import __version__
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.undo import Journal
 from ..core.update_check import (
@@ -45,205 +46,205 @@ ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
 # çıkar, tıklanamaz.
 _CREDITS_SECTIONS: tuple[dict, ...] = (
     {
-        "title": "Geliştirici",
+        "title": t("ui.credits.sections.developer"),
         "items": (
             (
-                "Özgür Koca",
+                t("ui.credits.items.ozgur_koca.name"),
                 "https://github.com/enseitankado",
-                "—",
-                "TiHA'nın tasarımı, kodu ve sürdürülmesi.",
+                t("ui.credits.items.ozgur_koca.license"),
+                t("ui.credits.items.ozgur_koca.desc"),
             ),
             (
-                "tankado.com",
+                t("ui.credits.items.tankado_com.name"),
                 "https://tankado.com",
-                "—",
-                "Geliştiricinin kişisel sitesi; yazılar, notlar ve iletişim.",
+                t("ui.credits.items.tankado_com.license"),
+                t("ui.credits.items.tankado_com.desc"),
             ),
         ),
     },
     {
-        "title": "Pardus ve ETAP ekosistemi",
+        "title": t("ui.credits.sections.pardus"),
         "items": (
             (
-                "Pardus",
+                t("ui.credits.items.pardus.name"),
                 "https://www.pardus.org.tr/",
-                "Karışık (özgür yazılım)",
-                "Ulusal GNU/Linux dağıtımı; TiHA doğrudan Pardus ETAP 23 üzerine yazıldı.",
+                t("ui.credits.items.pardus.license"),
+                t("ui.credits.items.pardus.desc"),
             ),
             (
-                "Pardus / ETAP kaynakları",
+                t("ui.credits.items.pardus_etap_kaynaklari.name"),
                 "https://github.com/pardus",
-                "GPL-3.0+",
-                "eta-* paketlerinin ortak deposu.",
+                t("ui.credits.items.pardus_etap_kaynaklari.license"),
+                t("ui.credits.items.pardus_etap_kaynaklari.desc"),
             ),
             (
-                "eta-otp-lock",
+                t("ui.credits.items.eta_otp_lock.name"),
                 "https://github.com/pardus/eta-otp-lock",
-                "GPL-3.0+",
-                "Öğretmen PIN mekanizması, @grup PIN'i, pam_otp; Öğretmen PIN adımının temeli.",
+                t("ui.credits.items.eta_otp_lock.license"),
+                t("ui.credits.items.eta_otp_lock.desc"),
             ),
             (
-                "eta-otp-cli",
+                t("ui.credits.items.eta_otp_cli.name"),
                 "https://github.com/pardus/eta-otp-cli",
-                "GPL-3.0+",
-                "eta-otp-lock'un komut satırı arayüzü.",
+                t("ui.credits.items.eta_otp_cli.license"),
+                t("ui.credits.items.eta_otp_cli.desc"),
             ),
             (
-                "eta-112",
+                t("ui.credits.items.eta_112.name"),
                 "https://github.com/pardus/eta-112",
-                "GPL-3.0+",
-                "Vestel Faz 2 BIOS'una supervisor parola yazan araç; BIOS parolası adımı bunu kullanır.",
+                t("ui.credits.items.eta_112.license"),
+                t("ui.credits.items.eta_112.desc"),
             ),
             (
-                "eta-light-mode",
+                t("ui.credits.items.eta_light_mode.name"),
                 "https://github.com/pardus/eta-light-mode",
-                "GPL-3.0+",
-                "Düşük donanımlı tahtalar için hafif arayüz modu.",
+                t("ui.credits.items.eta_light_mode.license"),
+                t("ui.credits.items.eta_light_mode.desc"),
             ),
             (
-                "Ahenk / Lider",
+                t("ui.credits.items.ahenk_lider.name"),
                 "https://github.com/Pardus-LiderAhenk",
-                "GPL-3.0+",
-                "Merkezi tahta yönetim istemcisi ve sunucusu; klon sonrası kayıt yenileme buna teslim eder.",
+                t("ui.credits.items.ahenk_lider.license"),
+                t("ui.credits.items.ahenk_lider.desc"),
             ),
         ),
     },
     {
-        "title": "Sistem araçları",
+        "title": t("ui.credits.sections.system_tools"),
         "items": (
             (
-                "Debian",
+                t("ui.credits.items.debian.name"),
                 "https://www.debian.org/",
-                "Karışık (DFSG)",
-                "Pardus'un tabanı.",
+                t("ui.credits.items.debian.license"),
+                t("ui.credits.items.debian.desc"),
             ),
             (
-                "systemd",
+                t("ui.credits.items.systemd.name"),
                 "https://systemd.io/",
-                "LGPL-2.1+",
-                "logind, servisler, path unit'ları; birçok adım bu altyapıyı kullanır.",
+                t("ui.credits.items.systemd.license"),
+                t("ui.credits.items.systemd.desc"),
             ),
             (
-                "GNU GRUB",
+                t("ui.credits.items.gnu_grub.name"),
                 "https://www.gnu.org/software/grub/",
-                "GPL-3.0+",
-                "PBKDF2 parola hash mekanizması (GRUB koruması adımı).",
+                t("ui.credits.items.gnu_grub.license"),
+                t("ui.credits.items.gnu_grub.desc"),
             ),
             (
-                "rsyslog",
+                t("ui.credits.items.rsyslog.name"),
                 "https://www.rsyslog.com/",
-                "GPL-3.0 / LGPL-3.0",
-                "Dayanıklı merkezi log iletiminin belkemiği.",
+                t("ui.credits.items.rsyslog.license"),
+                t("ui.credits.items.rsyslog.desc"),
             ),
             (
-                "Prometheus node_exporter",
+                t("ui.credits.items.prometheus_node_exporter.name"),
                 "https://github.com/prometheus/node_exporter",
-                "Apache-2.0",
-                "Opsiyonel metrik dışa aktarımı (CPU, RAM, disk, sıcaklık, ağ, boot).",
+                t("ui.credits.items.prometheus_node_exporter.license"),
+                t("ui.credits.items.prometheus_node_exporter.desc"),
             ),
             (
-                "smartmontools",
+                t("ui.credits.items.smartmontools.name"),
                 "https://www.smartmontools.org/",
-                "GPL-2.0+",
-                "SMART disk sağlığı izleme.",
+                t("ui.credits.items.smartmontools.license"),
+                t("ui.credits.items.smartmontools.desc"),
             ),
             (
-                "lm-sensors",
+                t("ui.credits.items.lm_sensors.name"),
                 "https://github.com/lm-sensors/lm-sensors",
-                "LGPL-2.1+",
-                "Sıcaklık okuma.",
+                t("ui.credits.items.lm_sensors.license"),
+                t("ui.credits.items.lm_sensors.desc"),
             ),
             (
-                "ethtool",
+                t("ui.credits.items.ethtool.name"),
                 "https://mj.ucw.cz/sw/ethtool/",
-                "GPL-2.0",
-                "Wake-on-LAN dinleme modunun anahtarı.",
+                t("ui.credits.items.ethtool.license"),
+                t("ui.credits.items.ethtool.desc"),
             ),
         ),
     },
     {
-        "title": "Arayüz ve dil",
+        "title": t("ui.credits.sections.ui_lang"),
         "items": (
             (
-                "Python 3",
+                t("ui.credits.items.python_3.name"),
                 "https://www.python.org/",
-                "PSF-2.0",
-                "TiHA'nın dili.",
+                t("ui.credits.items.python_3.license"),
+                t("ui.credits.items.python_3.desc"),
             ),
             (
-                "GTK 3",
+                t("ui.credits.items.gtk_3.name"),
                 "https://www.gtk.org/",
-                "LGPL-2.1+",
-                "Sihirbaz penceresi, form alanları, canlı çıktı modali.",
+                t("ui.credits.items.gtk_3.license"),
+                t("ui.credits.items.gtk_3.desc"),
             ),
             (
-                "PyGObject",
+                t("ui.credits.items.pygobject.name"),
                 "https://pygobject.gnome.org/",
-                "LGPL-2.1+",
-                "GTK'nın Python bağlaması.",
+                t("ui.credits.items.pygobject.license"),
+                t("ui.credits.items.pygobject.desc"),
             ),
         ),
     },
     {
-        "title": "Veri kümeleri ve algoritmalar",
+        "title": t("ui.credits.sections.datasets"),
         "items": (
             (
-                "SecLists",
+                t("ui.credits.items.seclists.name"),
                 "https://github.com/danielmiessler/SecLists",
-                "MIT",
-                "En yaygın 10.000 parolanın listesi (Daniel Miessler ve katkıcılar); Kullanıcı parolaları adımı bunu kullanır.",
+                t("ui.credits.items.seclists.license"),
+                t("ui.credits.items.seclists.desc"),
             ),
             (
-                "zxcvbn",
+                t("ui.credits.items.zxcvbn.name"),
                 "https://github.com/dropbox/zxcvbn",
-                "MIT",
-                "Parola gücü skorlama fikri (Dropbox); TiHA basit bir uyarlamasını çalıştırır.",
+                t("ui.credits.items.zxcvbn.license"),
+                t("ui.credits.items.zxcvbn.desc"),
             ),
         ),
     },
     {
-        "title": "Hedef platform ve saha",
+        "title": t("ui.credits.sections.platform"),
         "items": (
             (
-                "Vestel Faz 2 E-Tahta",
+                t("ui.credits.items.vestel_faz_2_e_tahta.name"),
                 "",
-                "Donanım",
-                "TiHA'nın öncelikli hedef donanımı; her modül bu donanımda doğrulanır.",
+                t("ui.credits.items.vestel_faz_2_e_tahta.license"),
+                t("ui.credits.items.vestel_faz_2_e_tahta.desc"),
             ),
             (
-                "MEB EBA programı",
+                t("ui.credits.items.meb_eba_programi.name"),
                 "https://www.eba.gov.tr/",
-                "Devlet programı",
-                "İhtiyacın kaynağı; PIN, imaj temizliği ve klonlama akışları bu programın günlük gerçeklerine göre biçimlendi.",
+                t("ui.credits.items.meb_eba_programi.license"),
+                t("ui.credits.items.meb_eba_programi.desc"),
             ),
             (
-                "Öğretmenler ve okul yöneticileri",
+                t("ui.credits.items.ogretmenler_ve_okul_yoneticileri.name"),
                 "",
-                "Saha",
-                "Geri bildirim ve saha testi için.",
+                t("ui.credits.items.ogretmenler_ve_okul_yoneticileri.license"),
+                t("ui.credits.items.ogretmenler_ve_okul_yoneticileri.desc"),
             ),
         ),
     },
     {
-        "title": "TiHA'ya ulaşmak",
+        "title": t("ui.credits.sections.contact"),
         "items": (
             (
-                "Kaynak kodu",
+                t("ui.credits.items.kaynak_kodu.name"),
                 "https://github.com/enseitankado/tiha",
-                "GPL-3.0+",
-                "Kaynak kodu, sürüm geçmişi ve dokümantasyon.",
+                t("ui.credits.items.kaynak_kodu.license"),
+                t("ui.credits.items.kaynak_kodu.desc"),
             ),
             (
-                "Hata bildirimi ve öneri",
+                t("ui.credits.items.hata_bildirimi_ve_oneri.name"),
                 "https://github.com/enseitankado/tiha/issues",
-                "GitHub Issues",
-                "Doğrudan GitHub üzerinden.",
+                t("ui.credits.items.hata_bildirimi_ve_oneri.license"),
+                t("ui.credits.items.hata_bildirimi_ve_oneri.desc"),
             ),
             (
-                "E-posta",
+                t("ui.credits.items.e_posta.name"),
                 "mailto:ozgur.koca@linux.org.tr",
-                "İletişim",
-                "Sorun, öneri ya da geri bildirim için doğrudan yazabilirsiniz.",
+                t("ui.credits.items.e_posta.license"),
+                t("ui.credits.items.e_posta.desc"),
             ),
         ),
     },
@@ -263,7 +264,7 @@ class TiHAWindow(Gtk.Window):
     MIN_HEIGHT = 640
 
     def __init__(self) -> None:
-        super().__init__(title="TiHA — Tahta İmaj Hazırlık Aracı")
+        super().__init__(title=t("ui.main.window_title"))
         self.get_style_context().add_class("tiha")
         self.set_default_size(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
         self.set_size_request(self.MIN_WIDTH, self.MIN_HEIGHT)
@@ -302,25 +303,24 @@ class TiHAWindow(Gtk.Window):
 
         if not collected:
             self._info_dialog(
-                "Dışa aktarılacak parametre yok",
-                "Henüz bu oturumda parametre alan bir modül "
-                "uygulanmamış. En az bir adımı uygulayıp tekrar deneyin.",
+                t("ui.main.export_empty_title"),
+                t("ui.main.export_empty_body"),
             )
             return
 
         dlg = Gtk.FileChooserDialog(
-            title="Preset'i kaydet",
+            title=t("ui.main.export_dialog_title"),
             parent=self,
             action=Gtk.FileChooserAction.SAVE,
         )
         dlg.add_buttons(
-            "İptal", Gtk.ResponseType.CANCEL,
-            "Kaydet", Gtk.ResponseType.ACCEPT,
+            t("ui.main.cancel"), Gtk.ResponseType.CANCEL,
+            t("ui.main.save"), Gtk.ResponseType.ACCEPT,
         )
         dlg.set_current_name("tiha-preset.json")
         dlg.set_do_overwrite_confirmation(True)
         fil = Gtk.FileFilter()
-        fil.set_name("JSON dosyaları (*.json)")
+        fil.set_name(t("ui.main.json_filter"))
         fil.add_pattern("*.json")
         dlg.add_filter(fil)
         try:
@@ -329,16 +329,14 @@ class TiHAWindow(Gtk.Window):
                 try:
                     written = export_preset(collected, target=target)
                     self._info_dialog(
-                        "Preset kaydedildi",
-                        f"{len(collected)} modülün parametreleri "
-                        f"şu dosyaya yazıldı:\n\n{written}\n\n"
-                        "Diğer tahtalarda uygulamak için:\n"
-                        f"  sudo tiha --preset {written.name} --apply",
+                        t("ui.main.export_done_title"),
+                        t("ui.main.export_done_body", count=len(collected),
+                          path=written, name=written.name),
                     )
                 except Exception as exc:
                     self._info_dialog(
-                        "Kayıt başarısız",
-                        f"Preset yazılamadı: {exc}",
+                        t("ui.main.export_failed_title"),
+                        t("ui.main.export_failed_body", error=exc),
                         error=True,
                     )
         finally:
@@ -363,22 +361,18 @@ class TiHAWindow(Gtk.Window):
     def _apply_update_badge(self, info: UpdateInfo) -> None:
         """Sidebar'daki güncelleme rozetini doldur ve göster."""
         self._update_info = info
-        markup = (
-            f'🔔 Yeni sürüm: '
-            f'<a href="tiha-update">'
-            f'v{GLib.markup_escape_text(info.latest_version)}</a>'
+        markup = t(
+            "ui.main.update_badge",
+            version=GLib.markup_escape_text(info.latest_version),
         )
         self.update_badge.set_markup(markup)
         if info.newer_count > 1:
-            tip = (
-                f"Şu an v{info.current_version}. {info.newer_count} sürüm "
-                "gerideisin — tıklayınca yenilikleri özet halinde görürsün."
+            tip = t(
+                "ui.main.update_tip_many",
+                current=info.current_version, count=info.newer_count,
             )
         else:
-            tip = (
-                f"Şu an v{info.current_version}. Tıklayınca bu sürümde "
-                "neler değiştiğini gösterir."
-            )
+            tip = t("ui.main.update_tip_one", current=info.current_version)
         self.update_badge.set_tooltip_text(tip)
         self.update_badge.show()
 
@@ -399,13 +393,13 @@ class TiHAWindow(Gtk.Window):
     def _show_update_notes_dialog(self, info: UpdateInfo) -> None:
         """Kullanıcının sürümünden bu yana çıkan release notlarını gösterir."""
         title = (
-            f"Yenilikler — v{info.latest_version}"
+            t("ui.main.notes_title_one", version=info.latest_version)
             if info.newer_count <= 1
-            else f"Yenilikler — son {info.newer_count} sürüm"
+            else t("ui.main.notes_title_many", count=info.newer_count)
         )
         dlg = Gtk.Dialog(title=title, transient_for=self, modal=True)
-        dlg.add_button("GitHub'da aç", Gtk.ResponseType.APPLY)
-        dlg.add_button("Kapat", Gtk.ResponseType.CLOSE)
+        dlg.add_button(t("ui.main.open_github"), Gtk.ResponseType.APPLY)
+        dlg.add_button(t("ui.main.close"), Gtk.ResponseType.CLOSE)
         dlg.set_default_size(680, 520)
 
         box = dlg.get_content_area()
@@ -416,10 +410,11 @@ class TiHAWindow(Gtk.Window):
         box.set_margin_end(12)
 
         header = Gtk.Label(xalign=0)
-        header.set_markup(
-            f"<b>Şu an:</b> v{GLib.markup_escape_text(info.current_version)}  ·  "
-            f"<b>Son sürüm:</b> v{GLib.markup_escape_text(info.latest_version)}"
-        )
+        header.set_markup(t(
+            "ui.main.notes_header",
+            current=GLib.markup_escape_text(info.current_version),
+            latest=GLib.markup_escape_text(info.latest_version),
+        ))
         box.pack_start(header, False, False, 0)
 
         scrolled = Gtk.ScrolledWindow()
@@ -433,10 +428,7 @@ class TiHAWindow(Gtk.Window):
         tv.set_right_margin(10)
         tv.set_top_margin(8)
         tv.set_bottom_margin(8)
-        body = info.body.strip() or (
-            "Yeni sürüm var ama not yazılmamış. Ayrıntılar için "
-            "GitHub'ı açabilirsin."
-        )
+        body = info.body.strip() or t("ui.main.notes_empty")
         tv.get_buffer().set_text(body)
         scrolled.add(tv)
         box.pack_start(scrolled, True, True, 0)
@@ -451,8 +443,8 @@ class TiHAWindow(Gtk.Window):
         """TiHA'nın omzunda durduğu açık kaynak projeler, veri kümeleri
         ve ekipler için teşekkür diyaloğu — bölümlü, ızgara tabanlı,
         her satırda lisans rozetiyle."""
-        dlg = Gtk.Dialog(title="Emeği Geçenler", transient_for=self, modal=True)
-        dlg.add_button("Kapat", Gtk.ResponseType.CLOSE)
+        dlg = Gtk.Dialog(title=t("ui.credits.title"), transient_for=self, modal=True)
+        dlg.add_button(t("ui.main.close"), Gtk.ResponseType.CLOSE)
         dlg.set_default_size(820, 660)
 
         content = dlg.get_content_area()
@@ -471,7 +463,8 @@ class TiHAWindow(Gtk.Window):
 
         title_lbl = Gtk.Label(xalign=0)
         title_lbl.set_markup(
-            '<span size="xx-large" weight="bold">Emeği Geçenler</span>'
+            '<span size="xx-large" weight="bold">'
+            f'{GLib.markup_escape_text(t("ui.credits.title"))}</span>'
         )
         header.pack_start(title_lbl, False, False, 0)
 
@@ -479,11 +472,8 @@ class TiHAWindow(Gtk.Window):
         subtitle.set_line_wrap(True)
         subtitle.set_max_width_chars(96)
         subtitle.set_markup(
-            '<span foreground="#4b5563">TiHA, kendisi küçük bir Python '
-            'sihirbazı olsa da büyük ve olgun bir açık kaynak ekosistemin '
-            'omuzlarında duruyor. Aşağıdaki proje, veri kümesi ve '
-            'topluluklara — her adımın altında görünmeyen emek verenlere '
-            '— teşekkür eder.</span>'
+            '<span foreground="#4b5563">'
+            f'{GLib.markup_escape_text(t("ui.credits.subtitle"))}</span>'
         )
         header.pack_start(subtitle, False, False, 0)
         content.pack_start(header, False, False, 0)
@@ -655,9 +645,9 @@ class TiHAWindow(Gtk.Window):
         sidebar_outer.get_style_context().add_class("tiha-sidebar")
         sidebar_outer.set_size_request(240, -1)
 
-        title = Gtk.Label(label="TiHA", xalign=0)
+        title = Gtk.Label(label=t("ui.main.sidebar_title"), xalign=0)
         title.get_style_context().add_class("tiha-sidebar-title")
-        subtitle = Gtk.Label(label="Tahta İmaj Hazırlık Aracı", xalign=0)
+        subtitle = Gtk.Label(label=t("ui.main.sidebar_subtitle"), xalign=0)
         subtitle.get_style_context().add_class("tiha-sidebar-subtitle")
         title_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         title_col.pack_start(title, False, False, 0)
@@ -739,7 +729,10 @@ class TiHAWindow(Gtk.Window):
         # "Emeği Geçenler" — TiHA'nın omuzunda durduğu açık kaynak projeler
         # ve topluluklara referans. Tıklanınca modal diyalog açılır.
         credits_lbl = Gtk.Label(xalign=0)
-        credits_lbl.set_markup('<a href="tiha:credits">Emeği Geçenler</a>')
+        credits_lbl.set_markup(
+            '<a href="tiha:credits">'
+            f'{GLib.markup_escape_text(t("ui.credits.link"))}</a>'
+        )
         credits_lbl.set_use_markup(True)
         credits_lbl.set_track_visited_links(False)
         credits_lbl.get_style_context().add_class("tiha-author-web")
@@ -772,7 +765,7 @@ class TiHAWindow(Gtk.Window):
         self.action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.action_bar.get_style_context().add_class("tiha-actions")
 
-        self.btn_back = Gtk.Button(label="◀  Geri")
+        self.btn_back = Gtk.Button(label=t("ui.main.btn_back"))
         self.btn_back.connect("clicked", self._on_back)
         self.action_bar.pack_start(self.btn_back, False, False, 0)
 
@@ -784,13 +777,13 @@ class TiHAWindow(Gtk.Window):
         self.lbl_apply_hint.get_style_context().add_class("tiha-apply-hint")
         self.action_bar.pack_start(self.lbl_apply_hint, True, True, 0)
 
-        self.btn_apply = Gtk.Button(label="Uygula")
+        self.btn_apply = Gtk.Button(label=t("ui.main.btn_apply"))
         self.btn_apply.get_style_context().add_class("suggested-action")
         self.btn_apply.set_no_show_all(True)
         self.btn_apply.connect("clicked", self._on_apply)
         self.action_bar.pack_start(self.btn_apply, False, False, 0)
 
-        self.btn_next = Gtk.Button(label="İleri  ▶")
+        self.btn_next = Gtk.Button(label=t("ui.main.btn_next"))
         self.btn_next.connect("clicked", self._on_next)
         self.action_bar.pack_start(self.btn_next, False, False, 0)
 
@@ -803,7 +796,7 @@ class TiHAWindow(Gtk.Window):
         page = WelcomePage()
         self.pages.append(page)
         self.stack.add_named(page, "welcome")
-        self._add_sidebar_entry("Hoş geldiniz")
+        self._add_sidebar_entry(t("ui.main.sidebar_welcome"))
 
     def _build_module_pages(self) -> None:
         # Karşılama bir adım değildir; modüller 1'den başlayarak numaralandırılır.
@@ -826,7 +819,7 @@ class TiHAWindow(Gtk.Window):
         )
         self.pages.append(page)
         self.stack.add_named(page, "summary")
-        self._add_sidebar_entry("Özet")
+        self._add_sidebar_entry(t("ui.main.sidebar_summary"))
 
     def _add_sidebar_entry(self, label: str, *, module_id: str | None = None) -> None:
         row = Gtk.ListBoxRow()
@@ -869,11 +862,11 @@ class TiHAWindow(Gtk.Window):
             elif entry.status == "applied":
                 status_lbl.set_text("✓")
                 ctx.add_class("tiha-step-status-ok")
-                status_lbl.set_tooltip_text(f"Uygulandı: {entry.summary}")
+                status_lbl.set_tooltip_text(t("ui.main.status_applied", summary=entry.summary))
             elif entry.status == "failed":
                 status_lbl.set_text("⚠")
                 ctx.add_class("tiha-step-status-fail")
-                status_lbl.set_tooltip_text(f"Hata: {entry.summary}")
+                status_lbl.set_tooltip_text(t("ui.main.status_failed", summary=entry.summary))
             elif entry.status == "undone":
                 status_lbl.set_text("")
                 status_lbl.set_tooltip_text("")
@@ -953,7 +946,7 @@ class TiHAWindow(Gtk.Window):
         show_apply = is_module and not page.module.auto_apply
         self.btn_apply.set_visible(show_apply)
         hint = page.module.apply_hint if is_module else ""
-        self.lbl_apply_hint.set_text(f"Uygulandığında: {hint}" if (show_apply and hint) else "")
+        self.lbl_apply_hint.set_text(t("ui.main.apply_hint", hint=hint) if (show_apply and hint) else "")
         self.lbl_apply_hint.set_visible(bool(show_apply and hint))
 
         # Auto-apply modüllerini (salt-okunur) bir kez kendi tetikle
@@ -963,7 +956,7 @@ class TiHAWindow(Gtk.Window):
 
         # Özet sayfasında "Bitir" gösterelim
         is_last = index >= len(self.pages) - 1
-        self.btn_next.set_label("Bitir" if is_last else "İleri  ▶")
+        self.btn_next.set_label(t("ui.main.btn_finish") if is_last else t("ui.main.btn_next"))
 
         self._update_navigation_gate()
 

@@ -52,6 +52,7 @@ import os
 import shutil
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.image_info import IMAGE_INFO_FILE, write_image_info
 from ..core.keyring import purge_keyrings
 from ..core.logger import get_logger
@@ -333,100 +334,23 @@ def _clean_browser_data(home: Path) -> int:
 
 class ImageSanitizeModule(Module):
     id = "m10_image_sanitize"
-    title = "İmaj öncesi temizlik"
+    title = t("m10.title")
+    sidebar_title = t("m10.sidebar_title")
     rationale_inline = True
-    apply_hint = (
-        "Son adım: tekil kimlikler ve izler temizlenir — imaj alınabilir."
-    )
+    apply_hint = t("m10.apply_hint")
     popup_on_success = True
-    rationale = (
-        "İmaj almadan önce çalıştırılan ZORUNLU bir adım. Aksi hâlde "
-        "imajdan çıkan bütün tahtalarda aynı makine kimliği "
-        "(machine-id), aynı SSH ana bilgisayar anahtarı, aynı "
-        "NetworkManager bağlantı UUID'si ve aynı kabuk geçmişi olur. "
-        "Bu sanki çalışıyor gibi görünür ama journald günlüklerinin "
-        "karışması, SSH istemcilerinde 'ana bilgisayar anahtarı "
-        "değişti' uyarısı ve kablosuz ağ parolasının 50 tahtaya aynen "
-        "sızması gibi sonuçlar doğurur. TiHA bu adımda tüm tekil "
-        "kimlikleri temizler, ilk açılışta kendi benzersiz SSH "
-        "anahtarını üreten bir servis bırakır ve tahtanın imaj "
-        "alınmaya hazır olmasını sağlar. Geri alma anlamlı değildir — "
-        "silinen kimliği yeniden üretemeyiz.\n\n"
-        "Ahenk (LiderAhenk) ajan kimliği bu adımda dokunulmaz; bunun "
-        "için ayrı bir adım vardır (Ahenk kimliği sıfırla). O adım "
-        "kısmi geri almayı destekler, bu sanitize adımı desteklemez."
-    )
+    rationale = t("m10.rationale")
     undo_supported = False
 
     def preview(self) -> str:
-        return (
-            "Bu adım uygulandıktan sonra tahta imaj alınmaya hazırdır.\n"
-            "Tahtayı KAPATIN ve işletim sistemiyle açmadan imajı canlı USB'den\n"
-            "(Clonezilla vb.) alın. Açarsanız makine kimliği ve SSH anahtarları\n"
-            "yeniden üretilir ve bütün klonlara aynen gider.\n\n"
-            "Aşağıdaki kategoriler temizlenecek (geri alınamaz):\n\n"
-            "Tekil kimlikler (her kopya kendi kimliğini üretir):\n"
-            "  - /etc/machine-id ve /var/lib/dbus/machine-id\n"
-            "  - /etc/ssh/ssh_host_* (SSH ana bilgisayar anahtarları)\n"
-            "  - /etc/NetworkManager/system-connections/*\n"
-            "    (kablosuz ağ parolaları dahil bağlantı tanımları)\n"
-            "  - DHCP/DHCP6 kira (lease) dosyaları\n"
-            "  - /var/lib/systemd/random-seed\n"
-            "  - SSH anahtar üretiminin 'yapıldı' işareti\n\n"
-            "TiHA'nın hassas yedekleri (/var/lib/tiha, imaja gider):\n"
-            "  - Parola değişikliğinden önceki /etc/shadow yedeği ve\n"
-            "    kenara alınmış anahtarlıklar\n"
-            "  - PIN kâğıtları (bütün anahtarlar QR kodlarıyla) ve anahtar\n"
-            "    yedeği. Kâğıdı bu adımdan önce yazdırın ya da kaydedin;\n"
-            "    gerekirse PIN adımı yeniden uygulanarak yeniden üretilir.\n"
-            "  - Bu yedekler silindiği için 'Kullanıcı parolaları' ve PIN\n"
-            "    adımları bu adımdan sonra geri alınamaz.\n\n"
-            "Not: ahenk (LiderAhenk) ajan kimliği bu adımda dokunulmaz -\n"
-            "klon-yeniden-talep mekanizması bir önceki adımda (m12)\n"
-            "imaja gömülür; credential temizliği klonun ilk açılışında\n"
-            "boot servisi tarafından otomatik yapılır.\n\n"
-            "Yer açan ve iz silen temizlikler:\n"
-            "  - APT önbelleği ve indirilmiş .deb paketleri\n"
-            "  - Yetim paketler (apt-get autoremove --purge)\n"
-            "  - Kalıntı yapılandırmalar (rc durumundaki paketler tasfiye edilir)\n"
-            "  - systemd journal (boyut 1 KB'a indirilir)\n"
-            "  - /var/log altındaki dosyalar (yapı korunur, içerik boşaltılır)\n"
-            "  - Çökme raporları (/var/crash, /var/lib/whoopsie)\n"
-            "  - Posta / cups / anacron kuyrukları\n"
-            "  - man / fontconfig / debconf / lightdm önbellekleri\n"
-            "  - dpkg yedek dosyaları (*.dpkg-old, *.dpkg-dist, *.ucf-*)\n"
-            "  - Tüm kullanıcıların ~/.cache, ~/.local/share/Trash ve çeşitli\n"
-            "    geçmiş dosyaları (.bash_history, .lesshst, .viminfo, .python_history)\n"
-            "  - Web tarayıcı önbellekleri ve gezinti verileri\n"
-            "    (Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Yandex)\n"
-            "    - gezinti geçmişi, çerezler, indirme geçmişi, oturumlar, yerel\n"
-            "      depolama; tarayıcı tercihleri ve yer imleri korunur\n"
-            "    - bayat kilit dosyaları da silinir (Chromium türevlerinde\n"
-            "      SingletonLock/Socket/Cookie, Firefox'ta lock + .parentlock);\n"
-            "      aksi hâlde klonlanmış tahtada tarayıcı açılmayı reddedebilir\n"
-            "  - GNOME anahtarlıkları (~/.local/share/keyrings)\n"
-            "    - Chrome Safe Storage anahtarı, uygulamaların kaydettiği\n"
-            "      parolalar ve PKCS#11 sertifika deposu; imajla kopyalanırsa\n"
-            "      aynı sır bütün tahtalara dağılır (parolasız anahtarlıklar\n"
-            "      diskte düz metin tutulduğu için doğrudan okunabilir)\n"
-            "    - klon tahtada parola yeniden tanımlandığında anahtarlık eski\n"
-            "      parolada kalır ve girişte asla geçilemeyen 'parola artık\n"
-            "      giriş anahtarlığınızla uyuşmuyor' diyaloğu çıkar\n"
-            "    - her tahta ilk girişinde kendi anahtarlığını otomatik üretir\n"
-            "  - /tmp ve /var/tmp içerikleri\n"
-            "  - Kullanılmayan diller için yerelleştirme dosyaları\n"
-            f"    ({', '.join(KEEP_LOCALES)} dışındakiler /usr/share/locale altından silinir)\n\n"
-            "Uyguladıktan sonra: tahtayı kapatın ve imaj alma aracınızı\n"
-            "(Clonezilla vb.) canlı USB'den başlatın. Otomatik Ahenk Kaydı\n"
-            "adımının bu adımdan ÖNCE uygulanmış olması gerekir."
-        )
+        return t("m10.preview.body", locales=', '.join(KEEP_LOCALES))
 
     def apply(self, params: dict | None = None, progress: ProgressCallback | None = None) -> ApplyResult:
         ops: list[str] = []
         before_kb = _disk_used_kb()
 
         if progress:
-            progress("İmaj sanitizasyon başlatılıyor...")
+            progress(t("m10.apply.start"))
 
         # ===== 0) İmaj metadata damgası =================================
         # Sanitize /etc'i korur; bu dosya imaj boyunca kalır.
@@ -434,19 +358,19 @@ class ImageSanitizeModule(Module):
         #   sudo cat /etc/tiha-image-info.json (yalnız root okuyabilir, 0600)
         try:
             write_image_info(Journal())
-            ops.append(f"İmaj damgası yazıldı: {IMAGE_INFO_FILE}")
+            ops.append(t("m10.apply.image_info_written", path=IMAGE_INFO_FILE))
             if progress:
-                progress(f"  ✓ İmaj damgası: {IMAGE_INFO_FILE}")
+                progress(t("m10.apply.image_info_progress", path=IMAGE_INFO_FILE))
         except OSError as exc:
             log.warning("İmaj damgası yazılamadı (devam): %s", exc)
 
         # ===== 1) Tekil kimlikler =====================================
         if progress:
-            progress("Tekil kimlikler temizleniyor...")
+            progress(t("m10.apply.identities"))
         # machine-id
         _truncate(Path("/etc/machine-id"))
         _rm(Path("/var/lib/dbus/machine-id"))
-        ops.append("machine-id temizlendi")
+        ops.append(t("m10.apply.machine_id"))
 
         # SSH host anahtarları + ilk açılışta üretme servisi
         for p in Path("/etc/ssh").glob("ssh_host_*"):
@@ -456,49 +380,47 @@ class ImageSanitizeModule(Module):
         # servis hiç çalışmaz ve klonlar SSH anahtarı üretmez.
         if REGEN_SSH_SENTINEL.exists():
             _rm(REGEN_SSH_SENTINEL)
-            ops.append(f"SSH anahtar üretimi 'yapıldı' işareti silindi: {REGEN_SSH_SENTINEL}")
+            ops.append(t("m10.apply.ssh_sentinel_removed", path=REGEN_SSH_SENTINEL))
         REGEN_SSH_SCRIPT.write_text(REGEN_SSH_SCRIPT_CONTENT, encoding="utf-8")
         REGEN_SSH_SCRIPT.chmod(0o755)
         REGEN_SSH_SERVICE.write_text(REGEN_SSH_SERVICE_CONTENT, encoding="utf-8")
         run_cmd(["systemctl", "daemon-reload"])
         run_cmd(["systemctl", "enable", REGEN_SSH_SERVICE.name])
-        ops.append("SSH host anahtarları silindi, ilk açılışta yenilenecek")
+        ops.append(t("m10.apply.ssh_keys"))
 
         # NetworkManager bağlantıları
         nm_dir = Path("/etc/NetworkManager/system-connections")
         if nm_dir.exists():
             n = _empty_dir(nm_dir)
             if n:
-                ops.append(f"{n} NetworkManager bağlantı dosyası silindi")
+                ops.append(t("m10.apply.nm_removed", count=n))
 
         # DHCP lease dosyaları (her klon kendi lease'ını alacak)
         n = _glob_remove(Path("/var/lib/dhcp"), ["*.leases", "*.leases~"])
         n += _glob_remove(Path("/var/lib/NetworkManager"), ["*.lease", "*.leases"])
         if n:
-            ops.append(f"{n} DHCP lease dosyası silindi")
+            ops.append(t("m10.apply.dhcp_removed", count=n))
 
         # systemd random-seed (sonraki açılışta yeniden üretilir)
         if _rm(Path("/var/lib/systemd/random-seed")):
-            ops.append("systemd random-seed sıfırlandı")
+            ops.append(t("m10.apply.random_seed"))
 
         # ===== 1b) TiHA'nın hassas yedekleri ==========================
         removed_state = _purge_sensitive_state()
         if removed_state:
-            ops.append(
-                "TiHA'nın hassas yedekleri silindi: " + ", ".join(removed_state)
-            )
+            ops.append(t("m10.apply.state_removed", items=", ".join(removed_state)))
             if progress:
-                progress(f"  ✓ TiHA'nın hassas yedekleri: {len(removed_state)} öğe")
+                progress(t("m10.apply.state_removed_progress", count=len(removed_state)))
 
         # ===== 2) APT önbelleği ve paket temizliği ====================
         if progress:
-            progress("APT önbelleği ve yetim paketler temizleniyor...")
+            progress(t("m10.apply.apt"))
         # rc-state paketleri (silindi ama config kalmış)
         rc_pkgs = run_cmd(["bash", "-lc",
                            "dpkg -l | awk '/^rc/ {print $2}'"]).stdout.split()
         if rc_pkgs:
             run_cmd(["dpkg", "--purge", *rc_pkgs])
-            ops.append(f"{len(rc_pkgs)} kalıntı paket purge edildi")
+            ops.append(t("m10.apply.rc_purged", count=len(rc_pkgs)))
 
         # autoremove + clean
         env = {"DEBIAN_FRONTEND": "noninteractive"}
@@ -508,19 +430,19 @@ class ImageSanitizeModule(Module):
         n = _glob_remove(Path("/var/cache/apt/archives"),
                          ["*.deb", "partial/*", "lock"])
         if n:
-            ops.append(f"APT arşivinden {n} öğe silindi")
+            ops.append(t("m10.apply.apt_archive", count=n))
         # apt list cache (sonraki apt update yeniden çeker)
         n = _empty_dir(Path("/var/lib/apt/lists"))
         if n:
-            ops.append(f"APT paket listesi temizlendi ({n} dosya)")
+            ops.append(t("m10.apply.apt_lists", count=n))
 
         # ===== 3) Journal & loglar ====================================
         if progress:
-            progress("Sistem logları ve journal temizleniyor...")
+            progress(t("m10.apply.logs"))
         # Journald: önce rotate, sonra boyut 1K'a indir
         run_cmd(["journalctl", "--rotate"])
         run_cmd(["journalctl", "--vacuum-size=1K"])
-        ops.append("systemd journal vakumlandı")
+        ops.append(t("m10.apply.journal"))
 
         # /var/log altındaki tüm dosyalar (yapıyı koruyarak boşalt)
         # Rotated/eski .gz, .1, .2 vb. dosyaları tamamen sil
@@ -541,19 +463,19 @@ class ImageSanitizeModule(Module):
                 else:
                     if _truncate(item):
                         truncated += 1
-            ops.append(f"/var/log: {truncated} dosya boşaltıldı, {removed} eski dosya silindi")
+            ops.append(t("m10.apply.var_log", truncated=truncated, removed=removed))
 
         # Installer logları (Debian kurulum izleri)
         n = _glob_remove(Path("/var/log"), ["installer/*", "installer"])
         if n:
-            ops.append("Debian installer logları silindi")
+            ops.append(t("m10.apply.installer_logs"))
 
         # ===== 4) Crash & telemetri ===================================
         n = _empty_dir(Path("/var/crash"))
         n += _glob_remove(Path("/var/lib/whoopsie"), ["*"])
         n += _glob_remove(Path("/var/lib/apport"), ["coredump/*"])
         if n:
-            ops.append(f"{n} crash/telemetri öğesi silindi")
+            ops.append(t("m10.apply.crash", count=n))
 
         # ===== 5) Spool kuyrukları ====================================
         spool_clean = 0
@@ -568,7 +490,7 @@ class ImageSanitizeModule(Module):
         ]:
             spool_clean += _empty_dir(spool)
         if spool_clean:
-            ops.append(f"Spool kuyruklarından {spool_clean} öğe silindi")
+            ops.append(t("m10.apply.spool", count=spool_clean))
 
         # ===== 6) Sistem önbellekleri =================================
         cache_clean = 0
@@ -583,12 +505,12 @@ class ImageSanitizeModule(Module):
         ]:
             cache_clean += _empty_dir(cache_dir)
         if cache_clean:
-            ops.append(f"Sistem önbelleklerinden {cache_clean} öğe silindi")
+            ops.append(t("m10.apply.caches", count=cache_clean))
 
         # cloud-init varsa kendi temizliğini çalıştır
         if shutil.which("cloud-init"):
             run_cmd(["cloud-init", "clean", "--logs", "--seed"])
-            ops.append("cloud-init durumu sıfırlandı")
+            ops.append(t("m10.apply.cloud_init"))
 
         # ===== 7) dpkg yedek/diff dosyaları ===========================
         # Ayar paketleri yükseltmesinde kalan eski/distro/kullanıcı sürümleri
@@ -603,7 +525,7 @@ class ImageSanitizeModule(Module):
                      "find /etc /var \\( -name '*.dpkg-old' -o "
                      "-name '*.dpkg-dist' -o -name '*.dpkg-new' -o "
                      "-name '*.ucf-old' -o -name '*.ucf-dist' \\) -delete"])
-            ops.append(f"{n} dpkg/ucf yedek dosyası silindi")
+            ops.append(t("m10.apply.dpkg_backups", count=n))
 
         # ===== 8) Locale temizliği ====================================
         locale_root = Path("/usr/share/locale")
@@ -620,11 +542,11 @@ class ImageSanitizeModule(Module):
                 if _rm(entry):
                     removed += 1
             if removed:
-                ops.append(f"{removed} kullanılmayan locale dizini silindi")
+                ops.append(t("m10.apply.locales", count=removed))
 
         # ===== 9) Tüm kullanıcıların ev dizinleri =====================
         if progress:
-            progress("Kullanıcı ev dizinleri temizleniyor (cache, geçmiş, tarayıcı verileri)...")
+            progress(t("m10.apply.homes_progress"))
         homes: list[Path] = [Path("/root")]
         home_root = Path("/home")
         if home_root.is_dir():
@@ -669,41 +591,35 @@ class ImageSanitizeModule(Module):
             # "parola artık giriş anahtarlığınızla uyuşmuyor" diyaloğu
             # doğar. Silinen anahtarlık ilk girişte otomatik oluşur.
             keyring_total += purge_keyrings(home)
-        ops.append(
-            f"{len(homes)} ev dizininde: {history_total} geçmiş dosyası "
-            f"silindi, {cache_subdirs_total} cache öğesi temizlendi, "
-            f"{trash_total} çöp kutusu öğesi silindi"
-        )
+        ops.append(t(
+            "m10.apply.homes",
+            homes=len(homes), history=history_total,
+            cache=cache_subdirs_total, trash=trash_total,
+        ))
         if browser_total:
-            ops.append(
-                f"Tarayıcılardan (Firefox/Chrome/Edge/Brave/...) "
-                f"{browser_total} önbellek/veri öğesi silindi"
-            )
+            ops.append(t("m10.apply.browsers", count=browser_total))
         if keyring_total:
-            ops.append(
-                f"{keyring_total} GNOME anahtarlık dosyası silindi "
-                f"(ilk girişte yenisi oluşur; klonda parola uyuşmazlığı olmaz)"
-            )
+            ops.append(t("m10.apply.keyrings", count=keyring_total))
 
         # ===== 10) /tmp ve /var/tmp ===================================
         tmp_n = 0
         for parent in (Path("/tmp"), Path("/var/tmp")):
             tmp_n += _empty_dir(parent)
-        ops.append(f"/tmp ve /var/tmp: {tmp_n} öğe silindi")
+        ops.append(t("m10.apply.tmp", count=tmp_n))
 
         # ===== Disk farkı ============================================
         if progress:
-            progress("Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor...")
+            progress(t("m10.apply.finishing"))
 
         after_kb = _disk_used_kb()
         freed_kb = max(0, before_kb - after_kb)
-        freed_str = _human_kb(freed_kb) if freed_kb else "ölçülemedi"
+        freed_str = _human_kb(freed_kb) if freed_kb else t("m10.apply.freed_unknown")
 
         return ApplyResult(
             True,
-            f"İmaj öncesi temizlik tamamlandı; ~{freed_str} alan boşaltıldı.",
-            details="\n".join(f"• {o}" for o in ops),
+            t("m10.apply.done", freed=freed_str),
+            details="\n".join(t("m10.apply.detail_item", item=o) for o in ops),
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
-        return ApplyResult(False, "Bu işlem geri alınamaz.")
+        return ApplyResult(False, t("m10.undo.not_supported"))

@@ -22,6 +22,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..modules.m10_image_sanitize import SENSITIVE_STATE
+from .i18n import t
 from .paths import STATE_DIR
 from .report import StepContext, StepReport
 
@@ -37,18 +38,15 @@ def _join(items: list[str]) -> str:
         return ""
     if len(items) == 1:
         return items[0]
-    return ", ".join(items[:-1]) + " ve " + items[-1]
+    return ", ".join(items[:-1]) + t("core.report.join_and") + items[-1]
 
 
 def narrate_failed(ctx: StepContext, rep: StepReport) -> None:
     rep.done.append(
-        "Bu adım başarısız oldu"
-        + (f": {ctx.summary.rstrip('.')}." if ctx.summary else ".")
+        t("core.report.failed_done_reason", reason=ctx.summary.rstrip("."))
+        if ctx.summary else t("core.report.failed_done")
     )
-    rep.notes.append(
-        "Başarısız adım imaja yarım bir değişiklik bırakmış olabilir. İmajı "
-        "almadan önce adımı düzeltip yeniden uygulayın ya da geri alın."
-    )
+    rep.notes.append(t("core.report.failed_note"))
 
 
 # ---------------------------------------------------------------------------
@@ -57,29 +55,11 @@ def narrate_failed(ctx: StepContext, rep: StepReport) -> None:
 
 
 def narrate_m09(ctx: StepContext, rep: StepReport) -> None:
-    rep.done.append(
-        "Sistem güncellemesini çalıştırdınız: depo yapılandırması denetlendi, "
-        "paketler en güncel sürüme yükseltildi ve gereksiz paketler temizlendi."
-    )
-    rep.tests.append(
-        "Güncelleme yeni çekirdek ve sürücüler getirmiş olabilir. Klonda "
-        "ekranın, dokunmatiğin, kalemin, sesin ve ağın (kablolu ve kablosuz) "
-        "çalıştığını doğrulayın."
-    )
-    rep.tests.append(
-        "EBA QR girişini ve sık kullanılan ETAP uygulamalarını klonda açıp "
-        "deneyin."
-    )
-    rep.tests.append(
-        "Terminalde `sudo apt-get update` komutunun hatasız bittiğini ve "
-        "/etc/apt/sources.list dosyasındaki depo satırlarının beklediğiniz "
-        "gibi olduğunu doğrulayın. Bu adım bozuk depo dosyasını yeniden "
-        "yazabilir; kurum içi özel depo satırlarınız varsa silinmiş olabilir."
-    )
-    rep.notes.append(
-        "Paket yükseltmeleri geri alınamaz: bir güncellemeden kaynaklanan "
-        "sorun imajla birlikte bütün klonlara gider."
-    )
+    rep.done.append(t("m09.report.done"))
+    rep.tests.append(t("m09.report.test_hardware"))
+    rep.tests.append(t("m09.report.test_eba"))
+    rep.tests.append(t("m09.report.test_apt"))
+    rep.notes.append(t("m09.report.note_irreversible"))
 
 
 # ---------------------------------------------------------------------------
@@ -111,86 +91,51 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
     admins = [u for u in ("root", "etapadmin") if u in ok]
     if admins:
         rep.done.append(
-            f"{_join(admins)} "
-            + ("parolalarını" if len(admins) > 1 else "parolasını")
-            + " ayarladınız."
+            t("m01.report.admins_set_many", users=_join(admins)) if len(admins) > 1
+            else t("m01.report.admins_set_one", users=_join(admins))
         )
     if "ogretmen" in ok:
-        rep.done.append(
-            "Ortak öğretmen hesabının (ogretmen) parolasını ayarlayıp hesabın "
-            "kilidini açtınız."
-        )
+        rep.done.append(t("m01.report.ogretmen_set"))
     for user in failed:
-        rep.notes.append(
-            f"{user} parolasını ayarlamaya çalıştınız ama işlem başarısız oldu; "
-            "bu hesabın parolası değişmedi."
-        )
+        rep.notes.append(t("m01.report.failed_user", user=user))
     if d.get("teacher_skipped_no_account"):
-        rep.notes.append(
-            "Öğretmen parolası girdiniz ama tahtada ortak ogretmen hesabı "
-            "olmadığı için parola hiçbir hesaba uygulanmadı."
-        )
+        rep.notes.append(t("m01.report.teacher_no_account"))
     for user, files in (d.get("keyrings_moved") or {}).items():
         if files:
-            rep.done.append(
-                f"{user} hesabının eski parolayla şifreli kalan anahtarlık "
-                "dosyalarını kenara aldınız; ilk girişte yeni parolayla "
-                "yenisi oluşacak."
-            )
+            rep.done.append(t("m01.report.keyrings_moved", user=user))
 
     created = list(d.get("created_reserve") or [])
     skipped = list(d.get("skipped_reserve") or [])
     if created:
-        rep.done.append(
-            f"{len(created)} yedek öğretmen hesabı oluşturdunuz "
-            f"({created[0]}{' – ' + created[-1] if len(created) > 1 else ''}). "
-            "Hesaplar parolasız (kilitli) açıldı; bu hesaplara PIN anahtarı "
-            "adımında üretilen kodlarla girilir."
-        )
+        span = created[0] + (" – " + created[-1] if len(created) > 1 else "")
+        rep.done.append(t("m01.report.reserve_created", count=len(created), span=span))
     elif skipped:
-        rep.done.append(
-            f"Yedek hesap sayısını {len(skipped)} olarak bıraktınız; bu "
-            "hesaplar zaten vardı, yeni hesap açılmadı."
-        )
+        rep.done.append(t("m01.report.reserve_kept", count=len(skipped)))
     removed = list(d.get("removed_users") or [])
     if removed:
         rep.done.append(
-            f"{_join(removed)} ortak "
-            + ("hesaplarını" if len(removed) > 1 else "hesabını")
-            + " ev dizinleriyle birlikte sildiniz."
+            t("m01.report.removed_many", users=_join(removed)) if len(removed) > 1
+            else t("m01.report.removed_one", users=_join(removed))
         )
     student_removed = bool(ctx.action("remove_student_user_action"))
     if student_removed:
-        rep.done.append("Öğrenci (ogrenci) hesabını ev diziniyle birlikte sildiniz.")
+        rep.done.append(t("m01.report.student_removed"))
 
     # Klonda deneyin
     if "etapadmin" in ok:
-        rep.tests.append(
-            "Klonu yeniden başlatıp giriş ekranında etapadmin ile yeni parolayla "
-            "oturum açın; \"giriş anahtarlığınızın parolası uyuşmuyor\" uyarısı "
-            "çıkmamalı."
-        )
+        rep.tests.append(t("m01.report.test_etapadmin"))
     if "root" in ok:
-        rep.tests.append("Klonda bir terminalde `su -` ile yeni root parolasını deneyin.")
+        rep.tests.append(t("m01.report.test_root"))
     if "ogretmen" in ok:
-        rep.tests.append("Ortak öğretmen hesabına (ogretmen) yeni parolayla girin.")
+        rep.tests.append(t("m01.report.test_ogretmen"))
     if created or skipped:
-        rep.tests.append(
-            "Giriş ekranında yedek öğretmen hesaplarının göründüğünü doğrulayın. "
-            "Terminalde `id ogretmen1` çıktısında audio, video, plugdev gibi "
-            "cihaz gruplarının bulunduğunu kontrol edin."
-        )
+        rep.tests.append(t("m01.report.test_reserve"))
     if student_removed or "ogrenci" in removed:
-        rep.tests.append(
-            "Giriş ekranında öğrenci hesabının artık görünmediğini doğrulayın."
-        )
+        rep.tests.append(t("m01.report.test_student"))
     if admins:
         rep.notes.append(
-            f"{_join(admins)} "
-            + ("parolaları" if len(admins) > 1 else "parolası")
-            + " bütün klonlarda aynı olacak ve geri okunamaz. Parolayı güvenli "
-            "bir yerde saklayın; unutulursa her tahtada ayrı ayrı erişim sorunu "
-            "yaşanır."
+            t("m01.report.note_admins_many", users=_join(admins)) if len(admins) > 1
+            else t("m01.report.note_admins_one", users=_join(admins))
         )
 
 
@@ -200,33 +145,12 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
 
 
 def narrate_m02(ctx: StepContext, rep: StepReport) -> None:
-    rep.done.append(
-        "Her açılışta etapadmin dışındaki tüm yerel hesapların (ortak "
-        "öğretmen/öğrenci, yedek ve kişisel öğretmen hesapları) parolasını "
-        "rastgele bir değere çeviren açılış servisini kurdunuz. Bu hesaplara "
-        "artık yalnız EBA QR, PIN ya da USB bellek ile girilebilir."
-    )
-    rep.tests.append(
-        "Klonu yeniden başlatın; etapadmin ile parolayla girebildiğinizi "
-        "doğrulayın (bu hesaba dokunulmaz)."
-    )
-    rep.tests.append(
-        "Ortak öğretmen hesabına bilinen parolasıyla girmeyi deneyin; giriş "
-        "reddedilmeli."
-    )
-    rep.tests.append(
-        "Bir öğretmen ve bir yedek hesaba PIN ile (ya da USB ile) girin; "
-        "tahtayı yeniden başlattıktan sonra da girilebildiğini doğrulayın."
-    )
-    rep.tests.append(
-        "Terminalde `journalctl -t tiha-boot-wipe -b` çıktısında HATA satırı "
-        "olmadığını doğrulayın."
-    )
-    rep.notes.append(
-        "Servis bütün klonlarda her açılışta çalışır. PIN ya da USB ile giriş "
-        "kurulu ve çalışır değilse öğretmenler hiçbir tahtaya giremez; "
-        "yalnız etapadmin kalır."
-    )
+    rep.done.append(t("m02.report.done"))
+    rep.tests.append(t("m02.report.test_etapadmin"))
+    rep.tests.append(t("m02.report.test_ogretmen"))
+    rep.tests.append(t("m02.report.test_pin"))
+    rep.tests.append(t("m02.report.test_journal"))
+    rep.notes.append(t("m02.report.note"))
 
 
 # ---------------------------------------------------------------------------
@@ -251,165 +175,82 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
 
     if teachers:
         if used_tool:
-            rep.done.append(
-                f"Listeye girdiğiniz {len(teachers)} öğretmen için PIN anahtarı "
-                "hazırladınız. Bu öğretmenlerin tahtadaki kişisel hesabı ilk "
-                "EBA QR girişlerinde oluşacak; PIN ile giriş ancak bundan sonra "
-                "çalışır."
-            )
+            rep.done.append(t("m03.report.teachers_tool", count=len(teachers)))
         else:
-            rep.done.append(
-                f"Listeye girdiğiniz {len(teachers)} öğretmen için hem yerel "
-                "hesap açtınız hem PIN anahtarı ürettiniz (TiHA'nın dahili "
-                "yolu; kullanıcı adları 'ad.soyad' biçiminde)."
-            )
-            rep.notes.append(
-                "PIN aracı (eta-otp-cli) kullanılamadı, dahili yol devreye girdi. "
-                "Bu yolun açtığı kullanıcı adları EBA QR'ın açacağı adlardan "
-                "farklı olabilir; klonda mutlaka deneyin."
-            )
+            rep.done.append(t("m03.report.teachers_internal", count=len(teachers)))
+            rep.notes.append(t("m03.report.note_internal"))
     if reserves:
         span = reserves[0] + (f" – {reserves[-1]}" if len(reserves) > 1 else "")
-        rep.done.append(
-            f"Tahtadaki {len(reserves)} yedek öğretmen hesabını ({span}) PIN "
-            "listesine eklediniz."
-        )
-    for user, label in (("etapadmin", "Sistem yöneticisi (etapadmin)"),
-                        ("ogretmen", "Ortak öğretmen hesabı (ogretmen)")):
+        rep.done.append(t("m03.report.reserves", count=len(reserves), span=span))
+    for user, label in (("etapadmin", t("m03.report.label_etapadmin")),
+                        ("ogretmen", t("m03.report.label_ogretmen"))):
         if user in created:
-            rep.done.append(f"{label} için de PIN anahtarı ürettiniz.")
+            rep.done.append(t("m03.report.key_created", label=label))
         elif user in preserved:
-            rep.done.append(f"{label} için mevcut PIN anahtarını korudunuz.")
+            rep.done.append(t("m03.report.key_preserved", label=label))
     if new_keys:
-        rep.done.append(
-            f"Toplam {len(new_keys)} yeni PIN anahtarı üretildi ve imaja girecek."
-        )
+        rep.done.append(t("m03.report.new_keys", count=len(new_keys)))
     if preserved:
-        rep.done.append(
-            f"{len(preserved)} hesabın mevcut PIN anahtarına dokunulmadı; "
-            "öğretmenlerin telefonlarındaki kayıtlar geçerli kalıyor."
-        )
+        rep.done.append(t("m03.report.preserved", count=len(preserved)))
 
     group_new = "@ogretmenler" in created
     if group_new:
-        rep.done.append(
-            "ogretmenler grubu için ortak PIN anahtarı oluşturdunuz; bu kod "
-            "gruba üye kişisel ve yedek öğretmen hesaplarında geçerli."
-        )
+        rep.done.append(t("m03.report.group_new"))
     elif ctx.flag("make_group_pin"):
-        rep.done.append(
-            "ogretmenler grubu için ortak PIN'in açık kalmasını seçtiniz; "
-            "mevcut ortak anahtar korundu."
-        )
+        rep.done.append(t("m03.report.group_kept"))
     if grouped:
-        rep.done.append(f"{len(grouped)} hesabı ogretmenler grubuna eklediniz.")
+        rep.done.append(t("m03.report.grouped", count=len(grouped)))
     if d.get("ungrouped_users"):
-        rep.done.append(
-            "Ortak öğretmen hesabını ogretmenler grubundan çıkardınız; grup PIN'i "
-            "artık ortak hesapta geçmiyor."
-        )
+        rep.done.append(t("m03.report.ungrouped"))
     if d.get("auto_group_service_installed"):
-        rep.done.append(
-            "EBA QR ile sonradan açılacak öğretmen hesaplarını ogretmenler "
-            "grubuna kendiliğinden ekleyen servisi etkinleştirdiniz."
-        )
+        rep.done.append(t("m03.report.auto_group"))
     total = d.get("total_users")
     if d.get("greeter_cache_applied"):
-        rep.done.append(
-            f"Tahtada {total} kullanıcı olduğu için giriş ekranı önbelleği "
-            "servisini kurdunuz."
-        )
+        rep.done.append(t("m03.report.greeter_applied", total=total))
     elif isinstance(total, int) and total >= 50:
-        rep.notes.append(
-            f"Kullanıcı sayısı {total} ama giriş ekranı önbelleği kurulamadı; "
-            "bazı hesaplar giriş ekranında görünmeyebilir."
-        )
+        rep.notes.append(t("m03.report.note_greeter_missing", total=total))
     changed = list(d.get("changed_users") or [])
     if changed:
-        rep.notes.append(
-            f"{len(changed)} hesabın PIN anahtarı DEĞİŞTİ ({_join(changed)}). "
-            "Bu öğretmenlerin telefonundaki eski kayıt artık çalışmaz; yeni "
-            "PIN kâğıdını onlara yeniden teslim edin."
-        )
+        rep.notes.append(t(
+            "m03.report.note_changed", count=len(changed), users=_join(changed),
+        ))
     if ctx.applied:
-        rep.done.append(
-            "Tüm anahtarları QR kodlarıyla içeren yazdırılabilir PIN kâğıdı "
-            "üretildi; öğretmenlere yalnızca özelden teslim edin."
-        )
+        rep.done.append(t("m03.report.paper"))
 
     # Düğme eylemleri
     applied_at = ctx.entry.timestamp if ctx.entry else ""
     for a in ctx.action("purge_all_secrets_action"):
         n = len(a.data.get("purged_users") or [])
         rep.done.append(
-            "Tüm PIN anahtarlarını sildiniz" + (f" ({n} anahtar)." if n else ".")
+            t("m03.report.purged_count", count=n) if n else t("m03.report.purged")
         )
         if applied_at and a.timestamp > applied_at:
-            rep.notes.append(
-                "PIN anahtarlarını, anahtar üretiminden SONRA sildiniz. Yukarıda "
-                "üretildiği yazan anahtarlar artık tahtada yok; imajı almadan "
-                "önce PIN adımını yeniden uygulayın."
-            )
+            rep.notes.append(t("m03.report.note_purged_after"))
     for a in ctx.action("remove_extra_users_action"):
-        rep.done.append(
-            "Fazladan hesapları (yedek ve kişisel öğretmen hesapları) ev "
-            "dizinleriyle birlikte sildiniz."
-        )
+        rep.done.append(t("m03.report.extra_removed"))
 
     # Klonda deneyin
     if not ctx.applied:
         return
-    rep.tests.append(
-        "Klonun tarih, saat ve saat diliminin doğru olduğunu doğrulayın. PIN "
-        "kodları saate bağlıdır; saat birkaç dakika bile kaymışsa bütün PIN "
-        "girişleri reddedilir."
-    )
-    rep.tests.append(
-        "PIN kâğıdındaki bir QR kodu telefondaki doğrulayıcı uygulamaya okutun; "
-        "klonu yeniden başlatıp o hesaba telefonun gösterdiği 6 haneli kodla "
-        "girin."
-    )
+    rep.tests.append(t("m03.report.test_time"))
+    rep.tests.append(t("m03.report.test_qr"))
     if teachers and used_tool:
-        rep.tests.append(
-            "Listedeki bir öğretmenle klonda önce EBA QR ile giriş yapın, sonra "
-            "oturumu kapatıp aynı hesaba PIN ile girin. Ad soyad MEBBİS'teki "
-            "yazımdan farklı girildiyse o öğretmenin PIN'i hiçbir tahtada "
-            "çalışmaz."
-        )
+        rep.tests.append(t("m03.report.test_teacher"))
     if reserves:
-        rep.tests.append(f"Bir yedek hesaba (ör. {reserves[0]}) PIN ile girin.")
+        rep.tests.append(t("m03.report.test_reserve", user=reserves[0]))
     if "etapadmin" in created or "etapadmin" in preserved:
-        rep.tests.append(
-            "etapadmin'e hem PIN ile hem de parolayla girilebildiğini doğrulayın."
-        )
+        rep.tests.append(t("m03.report.test_etapadmin"))
     if "ogretmen" in created or "ogretmen" in preserved:
-        rep.tests.append("Ortak öğretmen hesabına (ogretmen) PIN ile girin.")
+        rep.tests.append(t("m03.report.test_ogretmen"))
     if group_new or ctx.flag("make_group_pin"):
-        rep.tests.append(
-            "Kâğıttaki ORTAK PIN kartını okutup bir yedek ya da kişisel öğretmen "
-            "hesabına ortak kodla girin."
-        )
+        rep.tests.append(t("m03.report.test_group"))
     if d.get("auto_group_service_installed"):
-        rep.tests.append(
-            "Klonda EBA QR ile yeni bir öğretmen girişi yaptıktan sonra bu "
-            "hesabın ogretmenler grubuna eklendiğini doğrulayın (terminalde "
-            "`id <kullanıcı>`)."
-        )
+        rep.tests.append(t("m03.report.test_auto_group"))
     if d.get("greeter_cache_applied"):
-        rep.tests.append(
-            "Yeniden başlatmadan sonra giriş ekranında bütün hesapların (yedekler "
-            "dahil) listelendiğini doğrulayın."
-        )
-    rep.notes.append(
-        "PIN anahtarları imajla birlikte bütün klonlara aynen kopyalanır; bu "
-        "bilinçli bir tasarım. Tek bir tahtadan ya da kâğıttan sızan anahtar "
-        "bütün tahtaları etkiler."
-    )
+        rep.tests.append(t("m03.report.test_greeter"))
+    rep.notes.append(t("m03.report.note_copied"))
     if group_new or ctx.flag("make_group_pin"):
-        rep.notes.append(
-            "Ortak PIN, kişisel PIN'lerden daha zayıf bir önlemdir: gruptaki "
-            "herkes aynı kodu kullanır."
-        )
+        rep.notes.append(t("m03.report.note_group_weak"))
 
 
 # ---------------------------------------------------------------------------
@@ -419,29 +260,12 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
 
 def narrate_m13(ctx: StepContext, rep: StepReport) -> None:
     if ctx.data.get("was_already_hidden"):
-        rep.done.append(
-            "EBA QR ilk giriş parola penceresi zaten kapalıydı; bu adımda "
-            "değişiklik yapılmadı."
-        )
+        rep.done.append(t("m13.report.already_hidden"))
     else:
-        rep.done.append(
-            "EBA QR ile ilk girişte açılan parola tanımlama penceresini "
-            "kapattınız; öğretmenler sınıfta öğrencilerin önünde parola yazmak "
-            "zorunda kalmayacak."
-        )
-    rep.tests.append(
-        "Klonda o tahtaya daha önce hiç girmemiş bir öğretmenle EBA QR ile ilk "
-        "girişi yapın; masaüstü açıldığında parola tanımlama penceresi "
-        "çıkmamalı."
-    )
-    rep.tests.append(
-        "Aynı öğretmenin oturumu kapatıp ikinci kez QR ile (PIN anahtarı varsa "
-        "PIN ile de) girebildiğini doğrulayın."
-    )
-    rep.notes.append(
-        "Bu hesaplarda parola olmayacak; QR çalışmadığında giriş için PIN ya "
-        "da USB bellek gerekir."
-    )
+        rep.done.append(t("m13.report.hidden"))
+    rep.tests.append(t("m13.report.test_first_login"))
+    rep.tests.append(t("m13.report.test_second_login"))
+    rep.notes.append(t("m13.report.note"))
 
 
 # ---------------------------------------------------------------------------
@@ -452,41 +276,16 @@ def narrate_m13(ctx: StepContext, rep: StepReport) -> None:
 def narrate_m04(ctx: StepContext, rep: StepReport) -> None:
     before = ctx.data.get("was_installed_before")
     if before is False:
-        rep.done.append(
-            "Tahtaya SSH sunucusunu kurdunuz ve root kullanıcısının ağ üzerinden "
-            "parolayla oturum açmasına izin verdiniz."
-        )
+        rep.done.append(t("m04.report.done_installed"))
     elif before is True:
-        rep.done.append(
-            "Tahtada zaten kurulu olan SSH sunucusunda root kullanıcısının ağ "
-            "üzerinden parolayla oturum açmasına izin verdiniz."
-        )
+        rep.done.append(t("m04.report.done_existing"))
     else:
-        rep.done.append("SSH sunucusunu etkinleştirip root girişine izin verdiniz.")
-    rep.tests.append(
-        "Yönetim bilgisayarınızdan `ssh root@<klon-ip>` ile klona bağlanın; "
-        "beklediğiniz root parolasının geçtiğini doğrulayın."
-    )
-    rep.tests.append(
-        "Klonda `systemctl is-active ssh` çıktısının active olduğunu ve "
-        "`sudo sshd -T | grep -Ei 'permitrootlogin|passwordauthentication'` "
-        "çıktısında ikisinin de yes olduğunu doğrulayın (adım, servisin gerçekten "
-        "ayağa kalktığını denetlemiyor)."
-    )
-    rep.tests.append(
-        "İki farklı klonda `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` "
-        "parmak izlerinin FARKLI olduğunu doğrulayın."
-    )
-    rep.tests.append(
-        "Öğrenci ya da misafir ağından klonun SSH portuna erişilemediğini "
-        "doğrulayın."
-    )
-    rep.notes.append(
-        "Root parolası ve parolayla SSH girişi bütün klonlarda aynı olacak; "
-        "parola sızarsa bütün tahtalar uzaktan yönetici erişimine açılır. "
-        "Erişimi güvenlik duvarı ya da VLAN ile yönetim bilgisayarlarına "
-        "sınırlayın."
-    )
+        rep.done.append(t("m04.report.done_generic"))
+    rep.tests.append(t("m04.report.test_ssh"))
+    rep.tests.append(t("m04.report.test_active"))
+    rep.tests.append(t("m04.report.test_fingerprint"))
+    rep.tests.append(t("m04.report.test_network"))
+    rep.notes.append(t("m04.report.note"))
 
 
 # ---------------------------------------------------------------------------
@@ -497,39 +296,22 @@ def narrate_m04(ctx: StepContext, rep: StepReport) -> None:
 def narrate_m05(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
     user = str(d.get("samba_user") or ctx.text("samba_user") or "").strip()
-    who = f"'{user}' kullanıcısı" if user else "belirlediğiniz kullanıcı"
+    who = t("m05.report.who_user", user=user) if user else t("m05.report.who_generic")
     lead = (
-        "Tahtaya Samba'yı kurdunuz ve"
+        t("m05.report.lead_installed")
         if d.get("was_installed_before") is False
-        else "Samba ile"
+        else t("m05.report.lead_existing")
     )
-    rep.done.append(
-        f"{lead} tahtanın tüm diskini (kök '/') ağda \\\\<tahta-ip>\\root "
-        f"adıyla, {who} ve parolasıyla tam yazma yetkisiyle paylaştınız."
-    )
+    rep.done.append(t("m05.report.done", lead=lead, who=who))
     if user and user != "root":
-        rep.done.append(
-            f"Paylaşıma '{user}' ile bağlanılsa da dosyalar root yetkisiyle yazılır."
-        )
-    rep.tests.append(
-        "Bir Windows bilgisayarda Dosya Gezgini'ne \\\\<klon-ip>\\root yazıp "
-        + (f"'{user}' " if user else "")
-        + "kullanıcı adı ve parolayla bağlanın; bir dosya oluşturup silerek "
-        "yazma yetkisini doğrulayın."
-    )
-    rep.tests.append(
-        "Klonda `systemctl is-active smbd` çıktısının active olduğunu doğrulayın "
-        "(adım servisin ayağa kalktığını denetlemiyor)."
-    )
-    rep.tests.append(
-        "Birkaç klon aynı anda ağdayken Windows'un Ağ görünümünde her tahtanın "
-        "kendi adıyla göründüğünü, ad çakışması olmadığını doğrulayın."
-    )
-    rep.notes.append(
-        "Samba parolası bütün klonlarda aynı ve paylaşım diskin tamamına root "
-        "yetkisiyle yazabiliyor; parola sızarsa bütün tahtalar etkilenir. "
-        "Paylaşıma erişimi yönetim ağıyla sınırlayın."
-    )
+        rep.done.append(t("m05.report.user_note", user=user))
+    rep.tests.append(t(
+        "m05.report.test_windows",
+        user_part=t("m05.report.user_part", user=user) if user else "",
+    ))
+    rep.tests.append(t("m05.report.test_active"))
+    rep.tests.append(t("m05.report.test_names"))
+    rep.notes.append(t("m05.report.note"))
 
 
 # ---------------------------------------------------------------------------
@@ -537,10 +319,9 @@ def narrate_m05(ctx: StepContext, rep: StepReport) -> None:
 # ---------------------------------------------------------------------------
 
 _PROFILE_TEXT = {
-    "bakim": "kimlik doğrulama, donanım uyarıları, servis bildirimleri ve "
-             "TiHA/Ahenk kayıtları iletilir",
-    "kapsamli": "bütün kayıtlar iletilir",
-    "guvenlik": "kimlik doğrulama ve kritik hatalar iletilir",
+    "bakim": lambda: t("m06.report.profile_bakim"),
+    "kapsamli": lambda: t("m06.report.profile_kapsamli"),
+    "guvenlik": lambda: t("m06.report.profile_guvenlik"),
 }
 
 
@@ -565,77 +346,42 @@ def narrate_m06(ctx: StepContext, rep: StepReport) -> None:
             host, port, proto, profile_label = m.group(1), int(m.group(2)), m.group(3).lower(), m.group(4)
     profile = _profile_key(profile_label or "")
     if host:
-        rep.done.append(
-            f"Tahtanın sistem günlüklerini {host}:{port} adresindeki merkezi log "
-            f"sunucusuna {proto.upper() or 'ağ'} ile iletecek şekilde ayarladınız "
-            f"(profil: {profile_label or 'Bakım'}; {_PROFILE_TEXT[profile]})."
-        )
+        rep.done.append(t(
+            "m06.report.done",
+            host=host, port=port,
+            proto=proto.upper() or t("m06.report.proto_fallback"),
+            profile=profile_label or t("m06.report.profile_fallback"),
+            profile_text=_PROFILE_TEXT[profile](),
+        ))
     else:
-        rep.done.append("Tahtanın sistem günlüklerini merkezi log sunucusuna yönlendirdiniz.")
+        rep.done.append(t("m06.report.done_generic"))
     if proto == "tcp":
-        rep.done.append(
-            "Sunucuya ulaşılamazsa kayıtlar tahtada en fazla 2 GB'a kadar "
-            "biriktirilip bağlantı gelince gönderilecek."
-        )
+        rep.done.append(t("m06.report.tcp_buffer"))
     elif proto == "udp":
-        rep.notes.append(
-            "UDP seçtiniz: teslim onayı olmadığı için sunucu kapalıyken gönderilen "
-            "kayıtlar kaybolabilir. Kayıpsız iletim için TCP önerilir."
-        )
+        rep.notes.append(t("m06.report.note_udp"))
     smart = d.get("install_smart_monitoring", ctx.flag("install_smart_monitoring"))
     if smart:
-        rep.done.append(
-            "Disk sağlığı (SMART) ve sıcaklık izleme paketlerinin kurulmasını "
-            "istediniz."
-        )
+        rep.done.append(t("m06.report.smart"))
     exporter = d.get("install_node_exporter", ctx.flag("install_node_exporter"))
     if exporter:
         listen = ctx.text("node_exporter_listen")
         rep.done.append(
-            "Metrik izleme ajanının (node_exporter) "
-            + (f"{listen} adresinde " if listen else "")
-            + "dinlemesini istediniz."
+            t("m06.report.exporter_listen", listen=listen) if listen
+            else t("m06.report.exporter")
         )
-        rep.notes.append(
-            "node_exporter metrikleri kimlik doğrulamasız sunar; erişimi yönetim "
-            "ağıyla sınırlayın."
-        )
+        rep.notes.append(t("m06.report.note_exporter"))
     if profile == "kapsamli":
-        rep.notes.append(
-            "Kapsamlı profil bütün kayıtları gönderir; ayıklama içindir. Bütün "
-            "klonlarda kalıcı açık kalırsa ağ ve disk yükü oluşturur."
-        )
+        rep.notes.append(t("m06.report.note_kapsamli"))
 
-    rep.tests.append(
-        "Klonda `logger -p auth.notice \"tiha-klon-test\"` çalıştırın; kaydın "
-        "log sunucusuna ulaştığını ve orada klonun KENDİ bilgisayar adıyla "
-        "(kaynak tahtanın ya da ortak imaj adının değil) göründüğünü doğrulayın."
-    )
-    rep.tests.append(
-        "İki klonu aynı anda açıp log sunucusunda iki ayrı bilgisayar adı ve IP "
-        "gördüğünüzü doğrulayın; bunu ilk açılışta ve bir yeniden başlatmadan "
-        "sonra ayrı ayrı yapın."
-    )
-    rep.tests.append(
-        "Klonun ilk açılışında `sudo ls -la /var/lib/rsyslog/` ile bekleyen bir "
-        "kuyruk dosyası olmadığını doğrulayın; varsa kaynak tahtanın eski "
-        "kayıtları her klondan yeniden gönderiliyor demektir."
-    )
+    rep.tests.append(t("m06.report.test_logger"))
+    rep.tests.append(t("m06.report.test_two_clones"))
+    rep.tests.append(t("m06.report.test_queue"))
     if proto == "tcp":
-        rep.tests.append(
-            "Log sunucusunu ya da ağı kısa süre kesin; bağlantı gelince aradaki "
-            "kayıtların sunucuya ulaştığını doğrulayın."
-        )
+        rep.tests.append(t("m06.report.test_tcp"))
     if smart:
-        rep.tests.append(
-            "Klonda `systemctl is-active smartd` ve `sensors` çalıştırın; farklı "
-            "tahta modellerinde sıcaklığın okunabildiğini doğrulayın."
-        )
+        rep.tests.append(t("m06.report.test_smart"))
     if exporter:
-        rep.tests.append(
-            "İzleme sunucusundan klonun metrik adresine (ör. "
-            "http://<klon-ip>:9100/metrics) erişebildiğinizi doğrulayın."
-        )
+        rep.tests.append(t("m06.report.test_exporter"))
 
 
 # ---------------------------------------------------------------------------
@@ -650,47 +396,25 @@ def narrate_m07(ctx: StepContext, rep: StepReport) -> None:
     if not tz:
         m = _re.search(r"saat dilimi: (.+?)\)", ctx.summary)
         tz = m.group(1) if m else ""
-    tz_part = f" Saat dilimi: {tz}." if tz else ""
+    tz_part = t("m07.report.tz_part", tz=tz) if tz else ""
     if ntp and fallback:
-        rep.done.append(
-            f"Tahtanın saatini {ntp} NTP sunucularıyla eşitleyecek şekilde "
-            f"ayarladınız; bunlara ulaşılamazsa {fallback} kullanılacak.{tz_part}"
-        )
+        rep.done.append(t("m07.report.ntp_both", ntp=ntp, fallback=fallback, tz_part=tz_part))
     elif ntp:
-        rep.done.append(
-            f"Tahtanın saatini {ntp} NTP sunucularıyla eşitleyecek şekilde "
-            f"ayarladınız; yedek sunucu tanımlamadınız.{tz_part}"
-        )
+        rep.done.append(t("m07.report.ntp_only", ntp=ntp, tz_part=tz_part))
     elif fallback:
-        rep.done.append(
-            "Birincil NTP sunucusu tanımlamadınız; tahta saatini yalnız yedek "
-            f"sunucularla ({fallback}) eşitleyecek.{tz_part}"
-        )
+        rep.done.append(t("m07.report.fallback_only", fallback=fallback, tz_part=tz_part))
     else:
         rep.done.append(
-            "Zaman eşitlemesini (NTP) etkinleştirdiniz"
-            + (f" ve saat dilimini {tz} olarak ayarladınız." if tz else ".")
+            t("m07.report.enabled_tz", tz=tz) if tz else t("m07.report.enabled")
         )
     if "pool.ntp.org" in f"{ntp} {fallback}":
-        rep.notes.append(
-            "İnternet NTP havuzunu kullandınız; okul ağı UDP 123 çıkışını "
-            "engelliyorsa saat eşitlenmez. MEB iç NTP adresini biliyorsanız onu "
-            "tercih edin."
-        )
-    rep.tests.append(
-        "Klonu kurulacağı OKUL AĞINDA açıp `timedatectl` çalıştırın; "
-        "\"System clock synchronized: yes\""
-        + (f" ve \"Time zone: {tz}\"" if tz else "")
-        + " görülmeli. Hazırlık ağıyla okul ağı farklı olabilir."
-    )
-    rep.tests.append(
-        "Tahtayı birkaç saat kapalı tutup açın; saatin açılıştan kısa süre sonra "
-        "doğru değere geldiğini doğrulayın."
-    )
-    rep.notes.append(
-        "Geçersiz bir saat dilimi sessizce yok sayılır; yukarıdaki testte saat "
-        "dilimini mutlaka kontrol edin."
-    )
+        rep.notes.append(t("m07.report.note_pool"))
+    rep.tests.append(t(
+        "m07.report.test_timedatectl",
+        tz_check=t("m07.report.tz_check", tz=tz) if tz else "",
+    ))
+    rep.tests.append(t("m07.report.test_off_hours"))
+    rep.notes.append(t("m07.report.note_tz"))
 
 
 # ---------------------------------------------------------------------------
@@ -708,48 +432,20 @@ def narrate_m08(ctx: StepContext, rep: StepReport) -> None:
         if m:
             template, prefix = template or m.group(1), prefix or m.group(2)
     if template and prefix:
-        rep.done.append(
-            f"İmaj için tahtanın bilgisayar adını geçici olarak '{template}' "
-            "yaptınız. İmajdan çıkan her tahta açılışta kablolu ağ kartının MAC "
-            f"adresinden kendi adını üretecek: '{prefix}-XXXXXX' (XXXXXX = MAC'in "
-            "son 6 hanesi)."
-        )
+        rep.done.append(t("m08.report.done_template", template=template, prefix=prefix))
     else:
-        rep.done.append(
-            "Her tahtanın açılışta MAC adresinden kendine özgü bir bilgisayar adı "
-            "üretmesini sağlayan servisi kurdunuz."
-        )
+        rep.done.append(t("m08.report.done_generic"))
     prev = str(ctx.data.get("previous_hostname") or "")
     if prev and template and prev != template:
-        rep.done.append(f"Tahtanın önceki adı '{prev}' idi.")
-    shown = f"'{prefix}-'" if prefix else "önekle"
-    rep.tests.append(
-        f"Klonu açıp `hostnamectl` çalıştırın: ad {shown} ile başlamalı ve son 6 "
-        "hanesi kablolu ağ kartının MAC adresinin (`ip link`) son 6 hanesi "
-        "olmalı. Ad hâlâ imaj adındaysa servis çalışmamıştır."
-    )
-    rep.tests.append(
-        "Klonu ikinci kez yeniden başlatın; adın DEĞİŞMEDİĞİNİ doğrulayın. Her "
-        "açılışta değişiyorsa tahtada kablolu kart bulunamamıştır."
-    )
-    rep.tests.append(
-        "`time sudo true` komutunun anında döndüğünü doğrulayın (10 saniye "
-        "sürüyorsa /etc/hosts güncellenmemiştir)."
-    )
-    rep.tests.append(
-        "Klonun ilk açılışında oturum açıp birkaç uygulama başlatın; ad oturum "
-        "açıldıktan sonra değişirse yeni pencereler açılamayabilir."
-    )
-    rep.tests.append(
-        "İki klonun farklı ad aldığını ve bu adın DHCP/DNS'te, Lider'de ve "
-        "(kuruluysa) log sunucusunda göründüğünü doğrulayın."
-    )
+        rep.done.append(t("m08.report.prev", name=prev))
+    shown = t("m08.report.shown_prefix", prefix=prefix) if prefix else t("m08.report.shown_generic")
+    rep.tests.append(t("m08.report.test_hostnamectl", shown=shown))
+    rep.tests.append(t("m08.report.test_reboot"))
+    rep.tests.append(t("m08.report.test_sudo"))
+    rep.tests.append(t("m08.report.test_session"))
+    rep.tests.append(t("m08.report.test_two"))
     if prefix and (len(prefix) > 8 or not _HOSTNAME_OK.match(prefix)):
-        rep.notes.append(
-            f"Önek '{prefix}' önerilen biçimde değil (küçük harf, rakam ve '-', "
-            "en fazla 8 karakter). Uzun önekler Windows ağ adında (15 karakter "
-            "sınırı) kırpılır ve tahtalar aynı adla görünebilir."
-        )
+        rep.notes.append(t("m08.report.note_prefix", prefix=prefix))
 
 
 # ---------------------------------------------------------------------------
@@ -759,19 +455,16 @@ def narrate_m08(ctx: StepContext, rep: StepReport) -> None:
 
 def _duration(seconds: int) -> str:
     if seconds and seconds % 60 == 0:
-        return f"{seconds // 60} dakika"
-    return f"{seconds} saniye"
+        return t("m11.report.duration_min", count=seconds // 60)
+    return t("m11.report.duration_sec", count=seconds)
 
 
 def narrate_m11(ctx: StepContext, rep: StepReport) -> None:
     if not ctx.has_params:
         rep.done.append(
-            (ctx.summary.rstrip(".") or "Otomatik kapanma sistemini kurdunuz") + "."
+            (ctx.summary.rstrip(".") or t("m11.report.no_params_default")) + "."
         )
-        rep.tests.append(
-            "Klonda kapanma ayarlarının (saat ve boşta süresi) beklediğiniz gibi "
-            "çalıştığını doğrulayın; bu adımın seçenekleri kayıtlı değil."
-        )
+        rep.tests.append(t("m11.report.test_no_params"))
         return
     auto = ctx.flag("auto_enabled")
     idle = ctx.flag("idle_enabled")
@@ -780,67 +473,28 @@ def narrate_m11(ctx: StepContext, rep: StepReport) -> None:
     idle_min = ctx.num("idle_minute", 15) or 15
     cs = ctx.num("countdown_seconds", 120) or 120
     at = f"{hh:02d}:{mm:02d}"
-    warn = (
-        f"Kapanmadan önce ekranda {_duration(cs)} süren bir uyarı penceresi "
-        "çıkacak; kullanıcı kapanmayı 10 dakika erteleyebilecek."
-    )
+    warn = t("m11.report.warn", duration=_duration(cs))
     if auto and idle:
-        rep.done.append(
-            f"Tahtanın her gün {at}'de ve {idle_min} dakika boşta kaldığında "
-            f"kapanmasını ayarladınız. {warn}"
-        )
+        rep.done.append(t("m11.report.both", at=at, idle=idle_min, warn=warn))
     elif auto:
-        rep.done.append(
-            f"Tahtanın her gün {at}'de kapanmasını ayarladınız (boşta kalınca "
-            f"kapanma kapalı). {warn}"
-        )
+        rep.done.append(t("m11.report.auto_only", at=at, warn=warn))
     elif idle:
-        rep.done.append(
-            f"Tahtanın {idle_min} dakika kullanılmadığında kapanmasını "
-            f"ayarladınız (sabit saatte kapanma kapalı). {warn}"
-        )
+        rep.done.append(t("m11.report.idle_only", idle=idle_min, warn=warn))
     else:
-        rep.done.append(
-            "Otomatik kapanma altyapısını kurdunuz ama iki kapanma modunu da "
-            "kapalı bıraktınız; bu imajdan çıkan tahtalar kendiliğinden "
-            "kapanmayacak."
-        )
+        rep.done.append(t("m11.report.none"))
     if idle:
-        rep.tests.append(
-            f"Klonda oturum açıp dokunmadan bırakın; yaklaşık {idle_min + 1} "
-            f"dakika sonra uyarı penceresinin çıktığını ve geri sayımın "
-            f"{_duration(cs)} ile başladığını doğrulayın."
-        )
-        rep.tests.append(
-            "\"10 dakika ertele\" düğmesiyle pencerenin kapandığını ve 10 dakika "
-            "boyunca yeniden açılmadığını, sonra sayacın bitince tahtanın "
-            "kapandığını doğrulayın."
-        )
-        rep.tests.append(
-            "Aynı denemeyi OTURUM AÇMADAN, giriş ekranında yapın; pencere orada "
-            "da çıkmalı. Ekran kararmışsa pencerenin ekranı uyandırdığını görün."
-        )
+        rep.tests.append(t(
+            "m11.report.test_idle", minutes=idle_min + 1, duration=_duration(cs),
+        ))
+        rep.tests.append(t("m11.report.test_postpone"))
+        rep.tests.append(t("m11.report.test_greeter"))
     if auto:
-        rep.tests.append(
-            f"Klonun saatinin doğru olduğundan emin olun; {at}'den {_duration(cs)} "
-            f"önce pencerenin açıldığını ve {at}'de tahtanın kapandığını "
-            f"doğrulayın. Tahtayı {at}'den ÖNCE açmış olmanız gerekir; bu saatten "
-            "sonra açılan tahta o gün sabit saatte kapanmaz."
-        )
-        rep.notes.append(
-            "Sabit saatteki kapanma ertelenirse o günün sabit saat kapanması "
-            "iptal olur; tahta yalnız boşta kalma ile kapanabilir."
-        )
+        rep.tests.append(t("m11.report.test_auto", at=at, duration=_duration(cs)))
+        rep.notes.append(t("m11.report.note_postpone"))
         if cs < 60:
-            rep.notes.append(
-                "Geri sayımı 60 saniyenin altında seçtiniz; sabit saatteki "
-                "kapanma bazı günler kaçırılabilir."
-            )
+            rep.notes.append(t("m11.report.note_short"))
     if auto or idle:
-        rep.tests.append(
-            "Klonda `systemctl is-active eta-shutdown` çıktısının active olduğunu "
-            "doğrulayın."
-        )
+        rep.tests.append(t("m11.report.test_service"))
 
 
 # ---------------------------------------------------------------------------
@@ -851,31 +505,13 @@ _WOL_SERVICE = "/etc/systemd/system/tiha-wake-on-lan.service"
 
 
 def narrate_m15(ctx: StepContext, rep: StepReport) -> None:
-    rep.done.append(
-        "İmajdan çıkan tahtaların ağ kartını her açılışta uzaktan uyandırma "
-        "(Wake-on-LAN) paketini dinleyecek moda alan servisi kurdunuz; kapalı "
-        "tahtalar merkezden `wakeonlan <MAC>` komutuyla açılabilecek."
-    )
+    rep.done.append(t("m15.report.done"))
     if ctx.data.get("was_ethtool_installed") is False:
-        rep.done.append("Bunun için gereken ethtool paketini de kurdunuz.")
-    rep.tests.append(
-        "Klonun BIOS ayarlarında 'Wake on LAN' ve 'Power On by PCI-E' açık, "
-        "'ErP' ve 'Deep Sleep' KAPALI olmalı. BIOS ayarları imajla taşınmaz; "
-        "her tahtada ayrıca yapılmalı."
-    )
-    rep.tests.append(
-        "Klonda `sudo ethtool <arayüz>` çıktısında \"Wake-on: g\" görün ve "
-        "klonun MAC adresini not edin (her klonun MAC'i farklıdır)."
-    )
-    rep.tests.append(
-        "Klonu normal yoldan kapatın; AYNI ağ bölümündeki (VLAN) başka bir "
-        "bilgisayardan `wakeonlan <klon-MAC>` gönderip tahtanın açıldığını "
-        "doğrulayın."
-    )
-    rep.notes.append(
-        "Merkezden uyandırma için bütün klonların MAC adreslerini toplamanız "
-        "gerekir; TiHA bu listeyi tutmaz."
-    )
+        rep.done.append(t("m15.report.ethtool"))
+    rep.tests.append(t("m15.report.test_bios"))
+    rep.tests.append(t("m15.report.test_ethtool"))
+    rep.tests.append(t("m15.report.test_wake"))
+    rep.notes.append(t("m15.report.note_macs"))
 
 
 def narrate_m15_failed(ctx: StepContext, rep: StepReport) -> None:
@@ -887,18 +523,10 @@ def narrate_m15_failed(ctx: StepContext, rep: StepReport) -> None:
     rep.skipped = True
     import os.path
     if os.path.exists(_WOL_SERVICE):
-        rep.done.append(
-            "Bu oturumda uzaktan uyandırma adımını atladınız; ama tahtada daha "
-            "önce kurulmuş uzaktan uyandırma servisi hâlâ etkin ve imaja girecek."
-        )
-        rep.tests.append(
-            "Klonda uzaktan uyandırmanın (Wake-on-LAN) çalıştığını doğrulayın; "
-            "servis imajda kurulu."
-        )
+        rep.done.append(t("m15.report.skipped_active"))
+        rep.tests.append(t("m15.report.test_skipped_active"))
     else:
-        rep.done.append(
-            "Uzaktan uyandırmayı açmadınız; tahtalar merkezden uyandırılamayacak."
-        )
+        rep.done.append(t("m15.report.skipped"))
 
 
 # ---------------------------------------------------------------------------
@@ -910,44 +538,17 @@ def narrate_m12(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
     mac = d.get("imaged_mac")
     rep.done.append(
-        "İmajdan çıkan her tahtanın ilk açılışta kendini kopya olarak tanıyıp "
-        "kaynak tahtanın Lider kimliğini silmesini ve Lider'e kendi kimliğiyle "
-        "yeniden abone olmasını sağlayan mekanizmayı kurdunuz"
-        + (f"; kaynak tahtanın MAC adresi ({mac}) imza olarak kaydedildi." if mac else ".")
+        t("m12.report.done_mac", mac=mac) if mac else t("m12.report.done")
     )
     if d.get("was_installed_before") is False:
-        rep.done.append("Tahtada bulunmayan ahenk paketini de kurdunuz.")
-    rep.done.append(
-        "Kaynak tahtanın kendi Ahenk kimliğine dokunulmadı; imaj alınana kadar "
-        "Lider'e bağlı çalışmaya devam eder."
-    )
-    rep.tests.append(
-        "Klonu ilk kez açmadan önce kablolu ağa bağlayın; klonun "
-        "api-etap.eba.gov.tr adresine erişebildiğinden emin olun."
-    )
-    rep.tests.append(
-        "Açılıştan sonra `sudo journalctl -t tiha-clone-reclaim` çıktısında "
-        "\"klon\" ve ardından \"KAYITLI\" ya da \"KAYITSIZ\" satırını görün. "
-        "\"API'ye ulaşılamadı\" yazıyorsa ağı düzeltip yeniden başlatın."
-    )
-    rep.tests.append(
-        "Lider konsolunda klonun kaynak tahtadan AYRI bir kayıt olarak, kendi "
-        "MAC adresiyle göründüğünü; klona gönderilen bir test komutunun kaynak "
-        "tahtaya düşmediğini doğrulayın."
-    )
-    rep.tests.append(
-        "Envanterde kayıtlı olmayan bir klonda etapadmin ile oturum açınca "
-        "eta-register kayıt ekranının açıldığını, kayıttan sonra tahtanın "
-        "Lider'de göründüğünü doğrulayın."
-    )
-    rep.tests.append(
-        "İki klonu aynı anda açıp Lider'de iki ayrı kayıt oluştuğunu doğrulayın."
-    )
-    rep.notes.append(
-        "Klonun ilk açılışında ağ ya da EBA servisi yoksa ahenk o açılış boyunca "
-        "kaynak tahtanın kimliğiyle Lider'e bağlanır ve komutlar yanlış tahtaya "
-        "gidebilir. Klonları ilk kez ağ hazırken açın."
-    )
+        rep.done.append(t("m12.report.ahenk_installed"))
+    rep.done.append(t("m12.report.source_untouched"))
+    rep.tests.append(t("m12.report.test_network"))
+    rep.tests.append(t("m12.report.test_journal"))
+    rep.tests.append(t("m12.report.test_lider"))
+    rep.tests.append(t("m12.report.test_register"))
+    rep.tests.append(t("m12.report.test_two"))
+    rep.notes.append(t("m12.report.note_first_boot"))
 
 
 # ---------------------------------------------------------------------------
@@ -962,82 +563,46 @@ def narrate_m14(ctx: StepContext, rep: StepReport) -> None:
         faz1 = "Faz 1" in model
         prot = d.get("protection")
         if d.get("clear_mode"):
-            rep.done.append(
-                "Klon tahtaların ilk açılışında BIOS yönetici parolasını "
-                "TEMİZLEYECEK bir servisi imaja yerleştirdiniz; klonlarda BIOS "
-                "parola koruması olmayacak."
-            )
+            rep.done.append(t("m14.report.clear_done"))
         else:
             n = d.get("pw_len")
             when = (
-                "her açılışta" if prot == "always"
-                else "yalnızca BIOS ayarlarına girilirken"
+                t("m14.report.when_always") if prot == "always"
+                else t("m14.report.when_setup")
             )
             rep.done.append(
-                "Klon tahtaların ilk açılışında BIOS yönetici parolasını "
-                + (f"{n} karakterlik " if n else "")
-                + f"parolanıza ayarlayacak tek seferlik bir servisi imaja "
-                f"yerleştirdiniz; parola {when} sorulacak."
+                t("m14.report.set_done_len", length=n, when=when) if n
+                else t("m14.report.set_done", when=when)
             )
             if faz1:
                 rep.done.append(
-                    "Faz 1 modeli: "
-                    + ("yönetici ve kullanıcı parolasına aynı değer atanacak."
-                       if prot == "always" else "yalnız yönetici parolası atanacak.")
+                    t("m14.report.faz1_both") if prot == "always"
+                    else t("m14.report.faz1_admin")
                 )
         if model:
-            rep.done.append(f"Servis {model} modeli için hazırlandı.")
-        rep.done.append("Bu tahtanın (kaynak) BIOS'una bu adımda dokunulmadı.")
+            rep.done.append(t("m14.report.model", model=model))
+        rep.done.append(t("m14.report.source_untouched"))
 
-        rep.tests.append(
-            "Klonu ilk kez açıp oturum açın: `sudo journalctl -t "
-            "tiha-first-boot-bios -b` çıktısında \"BIOS yönetici parolası işlemi "
-            "başarılı\" satırını ve `/usr/local/sbin/tiha-first-boot-bios.py` "
-            "dosyasının artık OLMADIĞINI doğrulayın."
-        )
+        rep.tests.append(t("m14.report.test_journal"))
         if d.get("clear_mode"):
-            rep.tests.append(
-                "Klonu yeniden başlatıp BIOS'a girin; parola sorulmamalı."
-            )
+            rep.tests.append(t("m14.report.test_clear"))
         else:
-            rep.tests.append(
-                "Klonu yeniden başlatıp BIOS'a girin; parola sorulmalı ve "
-                "yazdığınız parola kabul edilmeli. Gömülen parola normalleştirilmiş "
-                "hâlidir (küçük harfler büyütülür, 'I' ve harf/rakam dışı "
-                "karakterler atılır)."
-                + (" Her açılışta işletim sisteminden önce parola sorulmalı."
-                   if prot == "always" else " Normal açılış parola sormamalı.")
-            )
-            rep.tests.append(
-                "Klonu bir kez daha yeniden başlatıp BIOS parolasının hâlâ yerinde "
-                "olduğunu doğrulayın."
-            )
-        rep.tests.append(
-            "Kaynak tahtayı yeniden başlattığınızda onun BIOS parolasının "
-            "DEĞİŞMEDİĞİNİ doğrulayın."
-        )
-        rep.notes.append(
-            "Klonun ilk açılışında BIOS flash belleğine yazılır; bu işlem her "
-            "tahtada tekrar eder. Önce tek bir klonda, sonra filodaki her tahta "
-            "modelinden bir klonda deneyin."
-        )
+            rep.tests.append(t(
+                "m14.report.test_set",
+                suffix=t("m14.report.test_set_always") if prot == "always"
+                else t("m14.report.test_set_setup"),
+            ))
+            rep.tests.append(t("m14.report.test_persist"))
+        rep.tests.append(t("m14.report.test_source"))
+        rep.notes.append(t("m14.report.note_flash"))
         if not d.get("clear_mode"):
-            rep.notes.append(
-                "Parola, kaynak tahtada ve imajda düz metin bir betikte duruyor "
-                "(/usr/local/sbin/tiha-first-boot-bios.py); klonda yalnız işlem "
-                "başarılı olunca silinir. İmaj dosyalarını buna göre koruyun."
-            )
+            rep.notes.append(t("m14.report.note_plaintext"))
     for a in ctx.action("set_local_supervisor_action"):
         clear = a.data.get("clear_mode")
         rep.done.append(
-            "Bu tahtanın (kaynak) BIOS "
-            + ("yönetici parolasını doğrudan temizlediniz."
-               if clear else "yönetici parolasını doğrudan ayarladınız.")
+            t("m14.report.local_cleared") if clear else t("m14.report.local_set")
         )
-        rep.notes.append(
-            "Kaynak tahtanın BIOS'unda yaptığınız değişiklik imajla taşınmaz; "
-            "yalnız bu tahtayı etkiler."
-        )
+        rep.notes.append(t("m14.report.note_local"))
 
 
 # ---------------------------------------------------------------------------
@@ -1048,93 +613,33 @@ def narrate_m14(ctx: StepContext, rep: StepReport) -> None:
 def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
     if d.get("removed"):
-        rep.done.append(
-            "GRUB korumasını kaldırdınız; menü düzenleme, komut satırı ve "
-            "kurtarma (recovery) girdisi artık parolasız."
-        )
-        rep.tests.append(
-            "Klonun açılış menüsünde 'e' tuşuyla düzenleme ekranının parola "
-            "sormadan açıldığını doğrulayın."
-        )
+        rep.done.append(t("m16.report.removed"))
+        rep.tests.append(t("m16.report.test_removed"))
         return
     if "linux_backup" in d:
-        rep.done.append(
-            "GRUB açılış menüsünü korumaya aldınız: menü düzenleme ('e') ve GRUB "
-            "komut satırı ('c') artık 'etapadmin' GRUB kullanıcı adı ve bu adımda "
-            "belirlediğiniz GRUB parolasıyla açılıyor. Kurtarma (recovery) "
-            "girdisi menüde kalıyor ama onu açmak da aynı kullanıcı adı ve "
-            "parolayı istiyor; 'Gelişmiş seçenekler' alt menüsü de parolalı. "
-            "Normal açılış parola sormuyor."
-        )
+        rep.done.append(t("m16.report.protected"))
         if d.get("recovery_restored"):
-            rep.done.append(
-                "TiHA'nın eski sürümünün menüden kaldırdığı kurtarma girdisini "
-                "geri getirdiniz."
-            )
+            rep.done.append(t("m16.report.recovery_restored"))
         if d.get("recovery_protected") and d.get("recovery_entries") == 0:
-            rep.notes.append(
-                "Kurtarma girdisi menüde yok: /etc/default/grub'da "
-                "GRUB_DISABLE_RECOVERY ile kapatılmış (TiHA'dan önceki bir "
-                "ayar). Açılırsa o da parola ister."
-            )
+            rep.notes.append(t("m16.report.note_recovery_disabled"))
         if d.get("saved_entry_reset"):
-            rep.done.append(
-                "Kayıtlı açılış varsayılanı parolalı alt menüyü gösteriyordu; "
-                "sıfırladınız (gözetimsiz açılış parola ekranında beklemesin)."
-            )
+            rep.done.append(t("m16.report.saved_entry_reset"))
     elif "zaten etkin" in ctx.summary:
-        rep.done.append(
-            "GRUB koruması zaten etkindi; mevcut GRUB parolasını değiştirmeden "
-            "korudunuz."
-        )
+        rep.done.append(t("m16.report.already"))
     elif "zaten yok" in ctx.summary or (ctx.has_params and not ctx.flag("enable_grub_lock")):
-        rep.done.append(
-            "GRUB korumasını etkinleştirmediniz; klonlarda açılış menüsü parola "
-            "korumasız olacak."
-        )
-        rep.notes.append(
-            "Tahtaya klavyeyle erişen biri açılış menüsünde 'e' ile tahtayı "
-            "doğrudan yönetici kabuğuna düşürebilir."
-        )
+        rep.done.append(t("m16.report.not_enabled"))
+        rep.notes.append(t("m16.report.note_not_enabled"))
         return
     else:
-        rep.done.append((ctx.summary.rstrip(".") or "GRUB korumasını ayarladınız") + ".")
-    rep.tests.append(
-        "Klonun açılış menüsünde bir girdinin üzerindeyken 'e' tuşuna basın: "
-        "kullanıcı adı olarak etapadmin, ardından GRUB parolası sorulmalı; "
-        "yanlış parolayla düzenleme ekranı açılmamalı. Menü görünmüyorsa "
-        "açılışta Shift ya da Esc tuşunu basılı tutun."
-    )
-    rep.tests.append(
-        "'c' tuşuyla GRUB komut satırında da aynı iki sorunun geldiğini doğrulayın."
-    )
-    rep.tests.append(
-        "Varsayılan girdiyle ve zaman aşımıyla açılışın HİÇ parola sormadan "
-        "ilerlediğini doğrulayın."
-    )
-    rep.tests.append(
-        "\"Gelişmiş seçenekler\" altındaki kurtarma (recovery mode) girdisini "
-        "seçin: etapadmin kullanıcı adı ve GRUB parolası sorulmalı, parolayla "
-        "kurtarma kipine girilebilmeli; yanlış parolayla girilememeli."
-    )
-    rep.tests.append(
-        "Kurtarma kipinden çıkıp tahtayı yeniden başlatın: sonraki açılış "
-        "normal girdiyle ve parola sormadan gerçekleşmeli (alt menü girdileri "
-        "açılış varsayılanı olarak kaydedilmez)."
-    )
-    rep.tests.append(
-        "Parolayı fiziksel bir USB klavyeyle deneyin: GRUB'da dokunmatik ve "
-        "ekran klavyesi yoktur, klavye düzeni ABD'dir."
-    )
-    rep.tests.append(
-        "\"Gelişmiş seçenekler\" alt menüsünün de parola istediğini doğrulayın; "
-        "eski çekirdekle açmak gerekirse GRUB parolası gerekir."
-    )
-    rep.notes.append(
-        "GRUB parolası sistemdeki etapadmin parolası değildir ve hiçbir yerden "
-        "geri okunamaz; bütün klonlarda aynıdır. Türkçe karakter (ç, ğ, ı, ö, "
-        "ş, ü) içeren bir parola GRUB'ın ABD klavye düzeninde yazılamayabilir."
-    )
+        rep.done.append((ctx.summary.rstrip(".") or t("m16.report.fallback_default")) + ".")
+    rep.tests.append(t("m16.report.test_edit"))
+    rep.tests.append(t("m16.report.test_console"))
+    rep.tests.append(t("m16.report.test_default_boot"))
+    rep.tests.append(t("m16.report.test_recovery"))
+    rep.tests.append(t("m16.report.test_after_recovery"))
+    rep.tests.append(t("m16.report.test_keyboard"))
+    rep.tests.append(t("m16.report.test_advanced"))
+    rep.notes.append(t("m16.report.note"))
 
 
 # ---------------------------------------------------------------------------
@@ -1145,167 +650,69 @@ def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
 def narrate_m10(ctx: StepContext, rep: StepReport) -> None:
     m = _re.search(r"~(.+?) alan boşaltıldı", ctx.summary)
     freed = m.group(1) if m else ""
+    rep.done.append(t("m10.report.done_identity"))
     rep.done.append(
-        "İmajı klonlamaya hazırlamak için kimlik temizliği yaptınız: makine "
-        "kimliğini (machine-id) sıfırladınız, SSH anahtarlarını sildiniz (her "
-        "klon ilk açılışta kendi anahtarını üretecek), kayıtlı ağ bağlantılarını "
-        "ve Wi-Fi parolalarını temizlediniz."
+        t("m10.report.done_cleanup_freed", freed=freed)
+        if freed and freed != "ölçülemedi" else t("m10.report.done_cleanup")
     )
-    rep.done.append(
-        "Günlükleri, APT önbelleğini ve paket listelerini, kabuk geçmişlerini, "
-        "kullanıcı önbelleklerini, tarayıcı gezinti verilerini (yer imleri "
-        "korunarak), GNOME anahtarlıklarını ve geçici dosyaları sildiniz"
-        + (f"; yaklaşık {freed} disk alanı boşalttınız." if freed and freed != "ölçülemedi" else ".")
-    )
-    rep.done.append(
-        "İmaja /etc/tiha-image-info.json damgasını yazdınız; sahada bu dosyadan "
-        "imajın sürümü ve uygulanan adımlar görülebilir (yalnız root "
-        "okuyabilir)."
-    )
-    rep.done.append(
-        "TiHA'nın imajla klonlara gidecek hassas yedeklerini (parola "
-        "değişikliği öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, "
-        "PIN kâğıtları ve anahtar yedeği) sildiniz; bu yüzden Kullanıcı "
-        "parolaları ve PIN adımları artık geri alınamaz."
-    )
-    rep.tests.append(
-        "İki farklı klonda `cat /etc/machine-id` ve `ssh-keygen -lf "
-        "/etc/ssh/ssh_host_ed25519_key.pub` çıktılarının FARKLI olduğunu "
-        "doğrulayın."
-    )
-    rep.tests.append(
-        "Klonda `ls /etc/ssh/ssh_host_*` ile SSH anahtarlarının üretildiğini ve "
-        "(SSH kuruluysa) `systemctl is-active ssh` çıktısının active olduğunu "
-        "doğrulayın."
-    )
-    rep.tests.append(
-        "Kablolu ağın klonda kendiliğinden bağlandığını doğrulayın; Wi-Fi "
-        "kullanılacaksa bağlantıyı yeniden tanımlamanız gerekir (Wi-Fi "
-        "parolaları imajdan silindi)."
-    )
-    rep.tests.append(
-        "etapadmin ve bir öğretmen hesabıyla girişte \"anahtarlık parolası "
-        "uyuşmuyor\" uyarısı çıkmadığını, Firefox ve Chrome'un açıldığını "
-        "doğrulayın."
-    )
-    rep.tests.append(
-        "Klonda `sudo apt update` komutunun çalıştığını ve `sudo cat "
-        "/etc/tiha-image-info.json` çıktısının beklediğiniz sürümü gösterdiğini "
-        "doğrulayın; `ls -l /etc/tiha-image-info.json` yalnız root'a okuma izni "
-        "(-rw-------) göstermeli."
-    )
-    rep.notes.append(
-        "Temizlikten sonra kaynak tahtayı işletim sistemiyle YENİDEN AÇMAYIN: "
-        "kapatın ve imajı canlı USB'den (Clonezilla vb.) alın. Açarsanız makine "
-        "kimliği ve SSH anahtarları kaynak tahtada yeniden üretilir ve bütün "
-        "klonlara aynen gider."
-    )
+    rep.done.append(t("m10.report.done_stamp"))
+    rep.done.append(t("m10.report.done_sensitive"))
+    rep.tests.append(t("m10.report.test_identity"))
+    rep.tests.append(t("m10.report.test_ssh"))
+    rep.tests.append(t("m10.report.test_network"))
+    rep.tests.append(t("m10.report.test_login"))
+    rep.tests.append(t("m10.report.test_apt"))
+    rep.notes.append(t("m10.report.note"))
 
 
 # ---------------------------------------------------------------------------
 # m17 — Başarım (Deneysel)
 # ---------------------------------------------------------------------------
 
+# eta-light-mode ayar anahtarı → metin (çağrıldığında katalogdan okunur)
 _LIGHT_LABELS = {
-    "effects": "pencere ve menü animasyonları kapatıldı",
-    "compositor": "tam ekran pencereler doğrudan çiziliyor",
-    "thumbnails": "resim ve video önizlemeleri kapatıldı",
-    "directory-item-counts": "klasör öğesi sayımı kapatıldı",
-    "app-monitoring": "uygulama kullanım izlemesi kapatıldı",
-    "low-resolution": "çözünürlük 1600x900'e düşürüldü",
-    "text-scaling": "yazı boyutu küçültüldü",
-    "file-icon-size": "dosya ve masaüstü simgeleri küçültüldü",
-    "low-refresh-rate": "yenileme hızı 50 Hz'e düşürüldü",
+    "effects": lambda: t("m17.report.light.effects"),
+    "compositor": lambda: t("m17.report.light.compositor"),
+    "thumbnails": lambda: t("m17.report.light.thumbnails"),
+    "directory-item-counts": lambda: t("m17.report.light.directory_item_counts"),
+    "app-monitoring": lambda: t("m17.report.light.app_monitoring"),
+    "low-resolution": lambda: t("m17.report.light.low_resolution"),
+    "text-scaling": lambda: t("m17.report.light.text_scaling"),
+    "file-icon-size": lambda: t("m17.report.light.file_icon_size"),
+    "low-refresh-rate": lambda: t("m17.report.light.low_refresh_rate"),
 }
 
 
 def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
     if d.get("session_cleanup"):
-        rep.done.append(
-            "Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin "
-            "(kapatılmadan bırakılan Firefox/Chrome ve alt süreçleri dahil) "
-            "sonlandırılmasını etkinleştirdiniz. Ayar tahta yeniden "
-            "başlatılınca devreye girer."
-        )
-        rep.tests.append(
-            "Klonu yeniden başlatın. Bir öğretmen hesabıyla tarayıcıda birkaç "
-            "sekme açıp tarayıcıyı kapatmadan oturumu kapatın; başka bir "
-            "hesapla girip Sistem İzleyicisi'nde önceki kullanıcıya ait "
-            "süreç kalmadığını doğrulayın."
-        )
-        rep.tests.append(
-            "Oturum kapatma sonrasında aynı kullanıcının SSH gibi diğer açık "
-            "oturumlarının kapanmadığını doğrulayın."
-        )
+        rep.done.append(t("m17.report.session_done"))
+        rep.tests.append(t("m17.report.test_session"))
+        rep.tests.append(t("m17.report.test_ssh"))
 
     keys = [k for k in d.get("light_mode_keys") or [] if isinstance(k, str)]
     if keys:
-        labels = [_LIGHT_LABELS.get(k, k) for k in keys]
-        rep.done.append(
-            "Başarımı artırmak için ETA Hafif Mod'u tüm kullanıcılara "
-            f"uyguladınız: {_join(labels)}. Ayarlar her kullanıcıya oturum "
-            "açılışında uygulanır; sonradan eklenecek hesaplar dahil."
-        )
-        rep.tests.append(
-            "Klonda öğretmen ve öğrenci hesaplarıyla ayrı ayrı oturum açın; "
-            "hafif mod ayarlarının ilk girişte uygulandığını doğrulayın."
-        )
+        labels = [_LIGHT_LABELS[k]() if k in _LIGHT_LABELS else k for k in keys]
+        rep.done.append(t("m17.report.light_done", labels=_join(labels)))
+        rep.tests.append(t("m17.report.test_light_login"))
         if "low-resolution" in keys:
-            rep.tests.append(
-                "Çözünürlük 1600x900'e düştüğü için tahtaya parmakla ve "
-                "kalemle dokunup dokunma noktasının imleçle aynı yere "
-                "düştüğünü (kalibrasyonun kaymadığını), yazıların ve kalem "
-                "çizgisinin okunaklı olduğunu doğrulayın."
-            )
+            rep.tests.append(t("m17.report.test_low_res"))
         if "low-refresh-rate" in keys:
-            rep.tests.append(
-                "50 Hz'de video oynatıp kalemle hızlı çizim yapın; titreme "
-                "ya da belirgin gecikme olmadığını doğrulayın."
-            )
+            rep.tests.append(t("m17.report.test_50hz"))
         if {"low-resolution", "low-refresh-rate"} & set(keys):
-            rep.tests.append(
-                "USB fare takılıyken oturumu kapatıp başka bir hesaba geçin; "
-                "fare imlecinin görünür kaldığını doğrulayın (ekran modu "
-                "değişiminde imleç kaybolabiliyor)."
-            )
+            rep.tests.append(t("m17.report.test_cursor_mode"))
     if d.get("light_mode_removed"):
-        rep.done.append(
-            "ETA Hafif Mod'u kaldırdınız; daha önce giriş yapmış hesapların "
-            "masaüstü ayarları da geri alındı (paket yerinde bırakıldı)."
-        )
-        rep.tests.append(
-            "Klonda daha önce giriş yapmış bir hesapla oturum açıp yazı "
-            "boyutunun, simgelerin ve çözünürlüğün normale döndüğünü "
-            "doğrulayın."
-        )
+        rep.done.append(t("m17.report.light_removed"))
+        rep.tests.append(t("m17.report.test_light_removed"))
 
     xorg = d.get("cursor_xorg_fix")
     if xorg:
-        rep.done.append(
-            "Ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü "
-            f"değiştirdiniz: {str(xorg).lower()}."
-        )
-        rep.tests.append(
-            "Klonu yeniden başlatın; ekranın açıldığını, dokunmatik ve kalemin "
-            "çalıştığını doğrulayın. Ardından USB fare takılıyken ekran "
-            "ayarlarından çözünürlüğü ya da yenileme hızını değiştirip "
-            "imlecin kaybolmadığını doğrulayın."
-        )
-        rep.notes.append(
-            "Ekran sürücüsü değişikliği tahta modeline (Intel/AMD grafik) göre "
-            "farklı davranabilir. İmajı yayacağınız her tahta modelinde ayrı "
-            "bir klon deneyin."
-        )
+        rep.done.append(t("m17.report.xorg_done", choice=str(xorg).lower()))
+        rep.tests.append(t("m17.report.test_xorg"))
+        rep.notes.append(t("m17.report.note_xorg"))
     if d.get("cursor_refresh_service"):
-        rep.done.append(
-            "Ekran modu değiştiğinde fare imlecini kendiliğinden tazeleyen "
-            "servisi kurdunuz."
-        )
-        rep.tests.append(
-            "Klonda çözünürlüğü değiştirip uygulayın; fare imlecinin bir an "
-            "sonra yeniden göründüğünü doğrulayın."
-        )
+        rep.done.append(t("m17.report.cursor_refresh_done"))
+        rep.tests.append(t("m17.report.test_cursor_refresh"))
 
 
 # ---------------------------------------------------------------------------
@@ -1352,10 +759,11 @@ AHENK_CONF = Path("/etc/ahenk/ahenk.conf")
 TIHA_STATE_DIR = STATE_DIR
 
 _SENSITIVE_LABELS = {
-    ("m01_initial_passwords", "shadow"): "parola değişikliği öncesi /etc/shadow yedeği",
-    ("m01_initial_passwords", "keyrings"): "kenara alınmış anahtarlıklar",
-    ("m03_otp_secrets", "otp-secrets.json"): "PIN anahtarlarının yedeği",
-    ("m03_otp_secrets", "ogretmen-pin-kagitlari-*.html"): "PIN kâğıtları (bütün anahtarlar QR'lı)",
+    ("m01_initial_passwords", "shadow"): lambda: t("core.report.sensitive.shadow"),
+    ("m01_initial_passwords", "keyrings"): lambda: t("core.report.sensitive.keyrings"),
+    ("m03_otp_secrets", "otp-secrets.json"): lambda: t("core.report.sensitive.otp_backup"),
+    ("m03_otp_secrets", "ogretmen-pin-kagitlari-*.html"):
+        lambda: t("core.report.sensitive.pin_papers"),
 }
 
 
@@ -1367,7 +775,8 @@ def _sensitive_leftovers() -> list[str]:
         root = TIHA_STATE_DIR / module_dir
         try:
             if root.is_dir() and any(root.glob(pattern)):
-                found.append(_SENSITIVE_LABELS.get(key, f"{module_dir}/{pattern}"))
+                label = _SENSITIVE_LABELS.get(key)
+                found.append(label() if label else f"{module_dir}/{pattern}")
         except OSError:
             continue
     return found
@@ -1408,7 +817,7 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
         return c.entry.timestamp if c is not None and c.entry is not None else ""
 
     def q(mid: str) -> str:
-        return f"“{titles.get(mid, mid)}”"
+        return t("core.report.quoted", title=titles.get(mid, mid))
 
     get = contexts.get
     m01, m03 = get("m01_initial_passwords"), get("m03_otp_secrets")
@@ -1418,172 +827,99 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
     # --- Başarısız adımlar --------------------------------------------------
     failed = [mid for mid, c in contexts.items() if _really_failed(c)]
     if failed:
-        w.append(
-            f"Başarısız kalan adımlar var: {_join([q(m) for m in failed])}. "
-            "Başarısız bir adım imaja yarım değişiklik bırakabilir; imajı "
-            "almadan önce bu adımları düzeltip yeniden uygulayın ya da geri alın."
-        )
+        w.append(t("core.report.warn.failed", steps=_join([q(m) for m in failed])))
 
     # --- İmaj temizliği (sanitize): varlık, sıra ve sonrası -------------------
     sanitize = "m10_image_sanitize"
     others = applied - {sanitize}
     if sanitize not in applied:
         if others:
-            w.append(
-                f"{q(sanitize)} adımını henüz çalıştırmadınız. Çalıştırmadan imaj "
-                "alırsanız bütün klonlar aynı makine kimliğini ve SSH anahtarını "
-                "paylaşır; Wi-Fi parolaları, kabuk geçmişleri ve tarayıcı verileri "
-                "de imaja girer. Bu adımı en sona, imajı almadan hemen önce "
-                "uygulayın."
-            )
+            w.append(t("core.report.warn.sanitize_missing", step=q(sanitize)))
     else:
         t10 = ts(sanitize)
         later = {titles.get(mid, mid) for mid in others if ts(mid) > t10}
         later |= {a.title for c in contexts.values() for a in c.actions if a.timestamp > t10}
         if later:
-            w.append(
-                "İmaj temizliğinden SONRA şu adımlarda değişiklik yaptınız: "
-                f"{_join(sorted(later))}. Bu değişikliklerin günlük ve önbellek "
-                "izleri imaja girecek; imajı almadan önce temizlik adımını yeniden "
-                "çalıştırın."
-            )
+            w.append(t("core.report.warn.after_sanitize", steps=_join(sorted(later))))
         if _read(MACHINE_ID):
-            w.append(
-                "İmaj temizliğinden sonra bu tahta işletim sistemiyle yeniden "
-                "açılmış görünüyor: makine kimliği (machine-id) yeniden üretilmiş. "
-                "Bu hâliyle alınan imajda bütün klonlar aynı makine kimliğini "
-                "paylaşır. Temizlik adımını yeniden çalıştırın ve tahtayı açmadan, "
-                "canlı USB'den imaj alın."
-            )
+            w.append(t("core.report.warn.machine_id"))
         if SSH_SENTINEL.exists():
-            w.append(
-                "İmaj temizliğinden sonra SSH anahtarları bu tahtada yeniden "
-                f"üretilmiş ve 'yapıldı' işareti ({SSH_SENTINEL}) bırakılmış. Bu "
-                "dosya imajda kalırsa klonlar kendi SSH anahtarlarını ÜRETMEZ: ya "
-                "kaynak tahtanın anahtarını paylaşırlar ya da hiç anahtarları olmaz "
-                "ve SSH çalışmaz. İmajı almadan önce bu dosyayı silip "
-                f"(`sudo rm {SSH_SENTINEL}`) temizlik adımını yeniden çalıştırın."
-            )
+            w.append(t("core.report.warn.ssh_sentinel", path=SSH_SENTINEL))
 
     # --- Lider / Ahenk --------------------------------------------------------
     if "m12_ahenk_reset" not in applied and AHENK_CONF.exists():
-        w.append(
-            f"Tahtada Ahenk kurulu ama {q('m12_ahenk_reset')} adımını "
-            "uygulamadınız. Klonların hepsi Lider'e bu tahtanın kimliğiyle bağlanır; "
-            "tek bir tahtaymış gibi görünür ve komutlar yanlış tahtaya gidebilir."
-        )
+        w.append(t("core.report.warn.ahenk", step=q("m12_ahenk_reset")))
 
     # --- Benzersiz ad ---------------------------------------------------------
     by_name = [m for m in ("m04_ssh_server", "m05_samba_share", "m06_remote_syslog") if m in applied]
     if by_name and "m08_hostname" not in applied:
-        w.append(
-            f"{q('m08_hostname')} adımını uygulamadınız ama "
-            f"{_join([q(m) for m in by_name])} tahtaları ağdaki adlarıyla ayırt "
-            "etmenizi gerektirir. Bütün klonlar ağda ve log sunucusunda aynı adla "
-            "görünecek."
-        )
+        w.append(t(
+            "core.report.warn.hostname",
+            hostname=q("m08_hostname"), steps=_join([q(m) for m in by_name]),
+        ))
 
     # --- Parola, PIN ve QR ilişkileri -----------------------------------------
     if "m02_boot_password_wipe" in applied:
         if m01 is not None and m01.applied and "ogretmen" in _m01_passwords(m01)[0]:
-            w.append(
-                "Ortak öğretmen hesabına (ogretmen) parola belirlediniz ama "
-                f"{q('m02_boot_password_wipe')} adımı da etkin: bu parola klonun ilk "
-                "açılışında rastgele bir değerle ezilecek ve işe yaramayacak."
-            )
+            w.append(t("core.report.warn.wipe_ogretmen", wipe=q("m02_boot_password_wipe")))
         if "m03_otp_secrets" not in applied:
-            w.append(
-                f"{q('m02_boot_password_wipe')} etkin ama {q('m03_otp_secrets')} "
-                "adımını uygulamadınız: öğretmenler tahtaya yalnız EBA QR ya da USB "
-                "bellekle girebilir. QR çalışmadığında hiçbir öğretmen giriş "
-                "yapamaz; yalnız etapadmin kalır."
-            )
+            w.append(t(
+                "core.report.warn.wipe_no_pin",
+                wipe=q("m02_boot_password_wipe"), pin=q("m03_otp_secrets"),
+            ))
     if "m13_password_dialog" in applied and "m03_otp_secrets" not in applied:
-        w.append(
-            f"{q('m13_password_dialog')} adımıyla parola penceresini kapattınız ama "
-            "PIN anahtarı üretmediniz: öğretmen hesaplarında parola olmayacak, QR "
-            "çalışmadığında tahtaya giriş yolu kalmaz."
-        )
+        w.append(t("core.report.warn.qr_no_pin", qr=q("m13_password_dialog")))
     if (m01 is not None and m03 is not None and m01.applied and m03.applied
             and m01.data.get("created_reserve")
             and ts("m01_initial_passwords") > ts("m03_otp_secrets")):
-        w.append(
-            f"Yedek öğretmen hesaplarını {q('m03_otp_secrets')} adımından SONRA "
-            "açtınız; bu yeni hesapların PIN anahtarı yok. PIN adımını yeniden "
-            "uygulayın (mevcut anahtarlara dokunulmaz)."
-        )
+        w.append(t("core.report.warn.reserve_after_pin", pin=q("m03_otp_secrets")))
 
     # --- Saat -----------------------------------------------------------------
     need_time = []
-    if "m03_otp_secrets" in applied:
-        need_time.append("PIN kodları")
+    need_pin_time = "m03_otp_secrets" in applied
+    if need_pin_time:
+        need_time.append(t("core.report.warn.time_pin"))
     if m11 is not None and m11.applied and m11.flag("auto_enabled"):
-        need_time.append("sabit saatte kapanma")
+        need_time.append(t("core.report.warn.time_shutdown"))
     if "m06_remote_syslog" in applied:
-        need_time.append("log kayıtlarının zaman damgaları")
+        need_time.append(t("core.report.warn.time_logs"))
     if need_time and "m07_time_sync" not in applied:
-        w.append(
-            f"{_join(need_time)} doğru saate bağlı ama {q('m07_time_sync')} "
-            "adımını uygulamadınız. Klonların saatinin okul ağında doğru "
-            "eşitlendiğinden emin olun"
-            + ("; PIN kodları saat 30 saniyeden fazla kayınca reddedilir."
-               if "PIN kodları" in need_time else ".")
-        )
+        w.append(t(
+            "core.report.warn.time",
+            items=_join(need_time), step=q("m07_time_sync"),
+            suffix=t("core.report.warn.time_suffix_pin") if need_pin_time
+            else t("core.report.warn.time_suffix"),
+        ))
 
     # --- Uyandırma, kapanma ve BIOS -------------------------------------------
     if m15 is not None and m15.applied and m11 is not None and m11.applied and m11.flag("idle_enabled"):
         idle = m11.num("idle_minute", 15) or 15
         cs = m11.num("countdown_seconds", 120) or 120
-        w.append(
-            "Uzaktan uyandırılan bir tahta, kimse kullanmazsa yaklaşık "
-            f"{idle} dakika + {_duration(cs)} sonra giriş ekranında kendiliğinden "
-            "kapanacak (boşta kapanma giriş ekranında da çalışır). Tahtaları "
-            "dersten çok önce uyandıracaksanız boşta kalma süresini buna göre seçin."
-        )
+        w.append(t("core.report.warn.wol_idle", idle=idle, duration=_duration(cs)))
     if _bios_on(m14) and m15 is not None and m15.applied:
         if m14.data.get("protection") == "always":
-            w.append(
-                "BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan "
-                "uyandırmayı açtınız: uzaktan uyandırılan tahtalar BIOS parola "
-                "ekranında bekleyip işletim sistemine hiç geçmeyecek."
-            )
-        w.append(
-            "Uzaktan uyandırma her tahtada BIOS ayarı (Wake on LAN açık, ErP ve "
-            "Deep Sleep kapalı) ister ve BIOS'a yönetici parolası koyduğunuz için "
-            "bu ayarları yapmak her tahtada o parolayı gerektirecek. BIOS "
-            "ayarlarını mümkünse parola ayarlanmadan önce yapın."
-        )
+            w.append(t("core.report.warn.bios_always_wol"))
+        w.append(t("core.report.warn.bios_wol"))
     if _bios_on(m14) and "m12_ahenk_reset" in applied:
-        w.append(
-            f"{q('m14_bios_password')} ve {q('m12_ahenk_reset')} aynı MAC "
-            "imzasını kullanıyor. BIOS parolası klonun ilk açılışında "
-            "ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki "
-            "açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan "
-            "sonra BIOS'a girerek mutlaka doğrulayın."
-        )
+        w.append(t(
+            "core.report.warn.bios_ahenk",
+            bios=q("m14_bios_password"), ahenk=q("m12_ahenk_reset"),
+        ))
 
     # --- Açılış güvenliği bütünlüğü --------------------------------------------
     if _grub_on(m16) and not _bios_on(m14):
-        w.append(
-            "GRUB menüsünü korudunuz ama BIOS parolası ayarlamadınız: tahtaya "
-            "erişen biri BIOS'tan USB bellekle açıp GRUB korumasını aşabilir."
-        )
+        w.append(t("core.report.warn.grub_no_bios"))
     if _bios_on(m14) and not _grub_on(m16):
-        w.append(
-            "BIOS parolası ayarladınız ama GRUB menüsünü korumadınız: açılış "
-            "menüsünde 'e' tuşuyla tahta doğrudan yönetici kabuğuna düşürülebilir."
-        )
+        w.append(t("core.report.warn.bios_no_grub"))
 
     # --- TiHA'nın kendi hassas yedekleri diskte mi? (canlı denetim) -------------
     left = _sensitive_leftovers()
     if left:
-        w.append(
-            "TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara "
-            f"gidecek hassas yedekler var: {_join(left)}. {q(sanitize)} "
-            "adımı bunları siler; imajı almadan önce o adımı "
-            + ("yeniden " if sanitize in applied else "")
-            + "çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin."
-        )
+        w.append(t(
+            "core.report.warn.sensitive",
+            items=_join(left), step=q(sanitize),
+            again=t("core.report.warn.again") if sanitize in applied else "",
+        ))
     return w
 
 
@@ -1591,28 +927,18 @@ def general_tests(contexts: dict[str, StepContext]) -> list[str]:
     """Her imaj için geçerli, adımlardan bağımsız klon denetimleri."""
     applied = {mid for mid, c in contexts.items() if c.applied}
     tests = [
-        "İmajı en az bir tahtaya yazın ve ilk açılışı başından sonuna izleyin: "
-        "hata ekranı, beklenmedik parola sorusu ya da uzun bekleme olmamalı.",
-        "Klonu en az iki kez yeniden başlatın ve bir kez tamamen kapatıp "
-        "açın; her açılışta aynı sonucu aldığınızı doğrulayın.",
-        "Öğretmen ve öğrenci hesaplarının her biriyle oturum açıp kapatın.",
-        "Tahtanın dokunmatiği, kalemi, sesi ve ağ bağlantısının klonda "
-        "çalıştığını doğrulayın.",
+        t("core.report.general.first_boot"),
+        t("core.report.general.reboot"),
+        t("core.report.general.accounts"),
+        t("core.report.general.hardware"),
     ]
     identity = {"m04_ssh_server", "m05_samba_share", "m06_remote_syslog",
                 "m08_hostname", "m10_image_sanitize", "m12_ahenk_reset"}
     if applied & identity:
-        tests.append(
-            "En az iki klonu aynı anda aynı ağa bağlayın; bilgisayar adlarının, "
-            "IP adreslerinin ve (kullanıyorsanız) Lider kayıtlarının birbirinden "
-            "farklı olduğunu doğrulayın."
-        )
+        tests.append(t("core.report.general.identity"))
     tests += [
-        "İmaj farklı tahta modellerine (ör. Intel ve AMD işlemcili) "
-        "yazılacaksa her modelde en az bir klon deneyin.",
-        "Klonu kurulacağı okulun ağında, gerçek bir öğretmen hesabıyla en az "
-        "bir ders süresince kullanın.",
-        "Testte bulduğunuz her sorunu kaynak tahtada düzeltip imajı yeniden "
-        "alın; sorunu klonlarda tek tek düzeltmeye çalışmayın.",
+        t("core.report.general.models"),
+        t("core.report.general.school"),
+        t("core.report.general.fix_source"),
     ]
     return tests

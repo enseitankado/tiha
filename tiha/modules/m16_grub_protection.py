@@ -56,6 +56,7 @@ import os
 import shutil
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd
@@ -206,43 +207,11 @@ def _menu_audit(cfg: str) -> dict:
 
 class GrubProtectionModule(Module):
     id = "m16_grub_protection"
-    title = "GRUB koruması"
-    sidebar_title = "GRUB koruması"
+    title = t("m16.title")
+    sidebar_title = t("m16.sidebar_title")
     streams_output = True
-    apply_hint = (
-        f"İşaretliyken: `e` düzenleme kipi ve GRUB shell, kullanıcı adı "
-        f"`{SUPERUSER}` + buraya yazdığınız parolanın arkasına alınır; "
-        f"kurtarma girdisi menüde kalır ama o da aynı parolayı ister. "
-        f"İşaretsizken: varsa mevcut koruma kaldırılır, GRUB eski hâline döner."
-    )
-    rationale = (
-        "GRUB açılış menüsünde ``e`` tuşu kernel komut satırının "
-        "düzenlenmesine izin verir. Yerel klavye erişimi olan biri "
-        "buraya ``init=/bin/bash`` yazarak tahtayı doğrudan root "
-        "shell'e düşürebilir; root parolasını sıfırlamak, diski "
-        "okumak, kalıcı arka kapı bırakmak buradan mümkündür. m02 "
-        "(Açılışta parola temizliği) etkin olsa dahi o oturum "
-        "içindeki hasar sınırsızdır. Aynı vektör kurtarma (recovery) "
-        "girdisi üzerinden de açıktır: kurtarma kipi parola sormadan "
-        "root kabuğu verir.\n\n"
-        "Bu adım aşağıdaki 'GRUB yönetici parolası' alanına "
-        "yazdığınız parolayı PBKDF2-SHA512 hash'i olarak GRUB'a "
-        "tanımlar (kullanıcı adı: ``etapadmin``) ve normal menü "
-        "girdilerini ``--unrestricted`` işaretler. Kurtarma girdisi "
-        "menüde kalır ama bu işareti almaz: onu açmak da aynı kullanıcı "
-        "adı ve parolayı ister. 'Gelişmiş seçenekler' alt menüsü de "
-        "parolalıdır. Boot akışı bu parolayı sormaz; yalnız kullanıcı "
-        "menüde ``e`` (düzenle) kipine girdiğinde, GRUB shell'ine "
-        "(``c`` tuşu) düştüğünde ya da kurtarma/gelişmiş seçenekleri "
-        "açtığında sorulur. Aynı hash bütün klonlara aynen taşınır; "
-        "operatör tek bir parolayı hatırlar.\n\n"
-        "Kutucuk adıma girildiğinde sistemin o anki durumunu gösterir: "
-        "GRUB zaten korumalıysa işaretli gelir. İşaretini kaldırıp "
-        "uygularsanız koruma kaldırılır ve GRUB yedeklerden eski hâline "
-        "döndürülür. Koruma etkinken parola alanını boş bırakıp "
-        "uygularsanız mevcut parola korunur. Düz parola sistemde "
-        "tutulmaz; imaja yalnız hash gömülür."
-    )
+    apply_hint = t("m16.apply_hint", user=SUPERUSER)
+    rationale = t("m16.rationale")
 
     def lockdown_active(self) -> bool:
         """GRUB şu an parola korumalı mı? Form kutucuğu bu değerle
@@ -272,48 +241,28 @@ class GrubProtectionModule(Module):
         recovery_disabled = _recovery_disabled(_read_text(GRUB_DEFAULTS))
 
         lines: list[str] = []
-        lines.append(
-            f"01_tiha_grub_password  : "
-            f"{'zaten var, yeniden yazılacak' if include_exists else 'yazılacak'}"
-        )
-        lines.append(
-            f"10_linux yaması        : "
-            f"{'zaten uygulanmış' if already_patched else 'uygulanacak (--unrestricted eklenir)'}"
-        )
+        lines.append(t(
+            "m16.preview.include",
+            state=t("m16.preview.include_exists") if include_exists
+            else t("m16.preview.include_new"),
+        ))
+        lines.append(t(
+            "m16.preview.linux",
+            state=t("m16.preview.linux_patched") if already_patched
+            else t("m16.preview.linux_to_patch"),
+        ))
         if (not already_patched and not needle_present) or (not guard_present and not anchor_ok):
-            lines.append(
-                "  UYARI: 10_linux içinde beklenen satırlar bulunamadı."
-            )
-            lines.append(
-                "  GRUB paketi güncellenmiş olabilir; yama uygulanamaz."
-            )
-        lines.append(
-            f"Kurtarma girdisi       : "
-            f"{'parola korumalı' if guard_present else 'parolayla korunacak'}"
-        )
+            lines.append(t("m16.preview.lines_missing"))
+        lines.append(t(
+            "m16.preview.recovery",
+            state=t("m16.preview.recovery_protected") if guard_present
+            else t("m16.preview.recovery_to_protect"),
+        ))
         if recovery_disabled:
-            lines.append(
-                "  Şu an menüde yok (GRUB_DISABLE_RECOVERY=\"true\"); TiHA'nın eski "
-                "sürümü kapatmış olabilir — uygulanınca yeniden açılır."
-            )
-        lines.append(f"Superuser (kullanıcı adı): {SUPERUSER}")
-        lines.append(
-            f"Hash algoritması       : PBKDF2-SHA512, "
-            f"{PBKDF2_ITERATIONS} iterasyon, 64 bayt salt"
-        )
-        lines.append("")
-        lines.append(
-            "GRUB önce 'Enter username:' sorar, sonra parolayı ister:"
-        )
-        lines.append(f"  - 'e' kipine ('e' tuşu)  → kullanıcı adı: {SUPERUSER}, sonra parola")
-        lines.append(f"  - GRUB shell'e ('c' tuşu) → kullanıcı adı: {SUPERUSER}, sonra parola")
-        lines.append(f"  - Kurtarma girdisi       → kullanıcı adı: {SUPERUSER}, sonra parola")
-        lines.append(f"  - Gelişmiş seçenekler    → kullanıcı adı: {SUPERUSER}, sonra parola")
-        lines.append("  - Normal açılış          → parola sormaz")
-        lines.append("")
-        lines.append("Klonlarda:")
-        lines.append("  - Aynı hash tüm klonlara aynen gömülür.")
-        lines.append("  - Tek parola bütün filoda geçerli olur.")
+            lines.append(t("m16.preview.recovery_disabled"))
+        lines.append(t("m16.preview.superuser", user=SUPERUSER))
+        lines.append(t("m16.preview.hash", iterations=PBKDF2_ITERATIONS))
+        lines.append(t("m16.preview.footer", user=SUPERUSER))
         return "\n".join(lines)
 
     def apply(
@@ -334,12 +283,8 @@ class GrubProtectionModule(Module):
         # varsa kaldırılır, yoksa yapacak iş yoktur.
         if not enabled:
             if not self.lockdown_active():
-                return ApplyResult(
-                    True,
-                    "GRUB koruması kutucuğu işaretli değil ve koruma zaten "
-                    "yok — değişiklik yapılmadı.",
-                )
-            emit("Kutucuk işaretsiz — mevcut GRUB koruması kaldırılıyor…")
+                return ApplyResult(True, t("m16.apply.skip_no_lock"))
+            emit(t("m16.apply.removing"))
             result = self._remove_protection(emit)
             if result.success:
                 result.data = {"removed": True}
@@ -360,86 +305,57 @@ class GrubProtectionModule(Module):
                 or _recovery_disabled(_read_text(GRUB_DEFAULTS))
             ):
                 keep_existing = True
-                emit("Koruma etkin, parola korunuyor; eski sürümün yaması "
-                     "yükseltiliyor (kurtarma girdisi parolalı)…")
+                emit(t("m16.apply.upgrading"))
         if not password and self.lockdown_active() and not keep_existing:
             return ApplyResult(
                 True,
-                "GRUB koruması zaten etkin; parola alanı boş bırakıldığı için "
-                "mevcut parola korundu.",
-                details=(
-                    f"Kullanıcı adı    : {SUPERUSER}\n"
-                    "Parolayı değiştirmek isterseniz alana yeni parolayı\n"
-                    "yazıp adımı tekrar uygulayın. Korumayı kaldırmak için\n"
-                    "kutucuğun işaretini kaldırıp uygulayın."
-                ),
+                t("m16.apply.kept"),
+                details=t("m16.apply.kept_details", user=SUPERUSER),
             )
         if not password and not keep_existing:
             return ApplyResult(
                 False,
-                "GRUB yönetici parolası boş bırakılamaz.",
-                details=(
-                    "Kutucuk işaretli olduğunda 'GRUB yönetici parolası'\n"
-                    "alanına en az bir karakter yazılmalıdır. Bu parolanın\n"
-                    "PBKDF2-SHA512 hash'i imaja gömülür ve 'e' kipi ile\n"
-                    "GRUB shell'ini açmak isteyenden bu parola sorulur."
-                ),
+                t("m16.apply.empty_pw"),
+                details=t("m16.apply.empty_pw_details"),
             )
         if not keep_existing and len(password) < 8:
             return ApplyResult(
                 False,
-                "GRUB yönetici parolası çok kısa (en az 8 karakter).",
-                details=(
-                    "GRUB parolası fiziksel klavye erişimi olan birine\n"
-                    "karşı savunmadır; brute-force denemesi hızlı\n"
-                    "yapılamasa da 8 karakterin altına düşülmemelidir."
-                ),
+                t("m16.apply.short_pw"),
+                details=t("m16.apply.short_pw_details"),
             )
 
         state_dir = self.ensure_state_dir()
         linux_backup = state_dir / "10_linux.bak"
         defaults_backup = state_dir / "grub.defaults.bak"
 
-        emit("Beklenen 10_linux satırı doğrulanıyor…")
+        emit(t("m16.apply.verifying"))
         linux_txt = _read_text(GRUB_LINUX_SCRIPT)
         if not linux_txt:
-            return ApplyResult(
-                False,
-                f"{GRUB_LINUX_SCRIPT} okunamadı; GRUB kurulumunu kontrol edin.",
-            )
+            return ApplyResult(False, t("m16.apply.linux_unreadable", path=GRUB_LINUX_SCRIPT))
         already_patched = CLASS_REPLACE in linux_txt
         guard_present = GUARD_BEGIN in linux_txt
         if not guard_present and linux_txt.count(ENTRY_ANCHOR) != 1:
             return ApplyResult(
                 False,
-                "10_linux içinde kurtarma girdisini korumak için beklenen satır bulunamadı.",
-                details=(
-                    "TiHA, linux_entry fonksiyonundaki ``type=\"$3\"`` satırını\n"
-                    "arar. GRUB paketi güncellenmiş olabilir. Güvenli tarafta\n"
-                    "kalıp hiçbir değişiklik yapmadım."
-                ),
+                t("m16.apply.anchor_missing"),
+                details=t("m16.apply.anchor_missing_details"),
             )
         if not already_patched and CLASS_NEEDLE not in linux_txt:
             return ApplyResult(
                 False,
-                "10_linux içinde beklenen CLASS satırı bulunamadı.",
-                details=(
-                    "TiHA yalnızca Debian 12 / Pardus ETAP 23'ün varsayılan\n"
-                    f"CLASS satırını (``{CLASS_NEEDLE}``) tanır. GRUB paketi\n"
-                    "güncellenmiş ya da başka bir araç dosyayı değiştirmiş\n"
-                    "olabilir. Güvenli tarafta kalıp hiçbir değişiklik\n"
-                    "yapmadım."
-                ),
+                t("m16.apply.class_missing"),
+                details=t("m16.apply.class_missing_details", needle=CLASS_NEEDLE),
             )
 
         if not keep_existing:
-            emit("Parola hash'i hesaplanıyor (PBKDF2-SHA512)…")
+            emit(t("m16.apply.hashing"))
             pw_hash = _pbkdf2_hash(password)
 
         # Yedekler yalnız TiHA dokunmadan önceki hâli tutar: ilk uygulamada
         # alınır, sonraki uygulamalar üzerine yazmaz (eski sürüm her seferinde
         # alıyordu, ikinci uygulamadan sonra yedek yamalı dosya oluyordu).
-        emit("10_linux ve /etc/default/grub yedekleri denetleniyor…")
+        emit(t("m16.apply.checking_backups"))
         try:
             if not already_patched and not guard_present and not (
                 linux_backup.exists() and CLASS_REPLACE not in _read_text(linux_backup)
@@ -448,38 +364,37 @@ class GrubProtectionModule(Module):
             if not defaults_backup.exists():
                 shutil.copy2(GRUB_DEFAULTS, defaults_backup)
         except OSError as exc:
-            return ApplyResult(False, f"Yedek alınamadı: {exc}")
+            return ApplyResult(False, t("m16.apply.backup_failed", error=exc))
 
         if not keep_existing:
-            emit(f"{GRUB_LOCKDOWN_INCLUDE} yazılıyor…")
+            emit(t("m16.apply.writing_include", path=GRUB_LOCKDOWN_INCLUDE))
             try:
                 GRUB_LOCKDOWN_INCLUDE.write_text(
                     _include_content(pw_hash), encoding="utf-8",
                 )
                 GRUB_LOCKDOWN_INCLUDE.chmod(0o755)
             except OSError as exc:
-                return ApplyResult(False, f"Include yazılamadı: {exc}")
+                return ApplyResult(False, t("m16.apply.include_failed", error=exc))
 
         patched = _patch_linux(linux_txt)
         if patched != linux_txt:
-            emit("/etc/grub.d/10_linux yamalanıyor (normal girdiler parolasız, "
-                 "kurtarma girdisi parolalı)…")
+            emit(t("m16.apply.patching"))
             try:
                 GRUB_LINUX_SCRIPT.write_text(patched, encoding="utf-8")
             except OSError as exc:
-                return ApplyResult(False, f"10_linux güncellenemedi: {exc}")
+                return ApplyResult(False, t("m16.apply.linux_failed", error=exc))
 
         recovery_restored = self._restore_recovery(emit)
 
-        emit("update-grub çalıştırılıyor…")
+        emit(t("m16.apply.update_grub_running"))
         r = run_cmd(["update-grub"])
         if not r.ok:
             return ApplyResult(
                 False,
-                "update-grub başarısız oldu.",
+                t("m16.apply.update_grub_failed"),
                 details=(r.stderr or r.stdout).strip(),
             )
-        emit("update-grub tamamlandı.")
+        emit(t("m16.apply.update_grub_done"))
 
         saved_reset = self._reset_saved_submenu_entry(emit)
 
@@ -487,11 +402,10 @@ class GrubProtectionModule(Module):
         if audit["recovery_open"]:
             return ApplyResult(
                 False,
-                "Kurtarma girdisi üretilen menüde hâlâ parolasız görünüyor.",
-                details=(
-                    f"{audit['recovery_open']} kurtarma girdisinde --unrestricted "
-                    f"var ({GRUB_GENERATED_CFG}). 10_linux yaması beklendiği gibi "
-                    "çalışmamış olabilir; geri alıp GRUB paketini denetleyin."
+                t("m16.apply.recovery_open"),
+                details=t(
+                    "m16.apply.recovery_open_details",
+                    count=audit["recovery_open"], cfg=GRUB_GENERATED_CFG,
                 ),
                 data={
                     "linux_backup": str(linux_backup),
@@ -499,40 +413,24 @@ class GrubProtectionModule(Module):
                 },
             )
         if audit["recovery"]:
-            rec_line = (
-                f"Kurtarma girdisi : menüde ({audit['recovery']} adet), "
-                f"{SUPERUSER} + parola ister"
-            )
+            rec_line = t("m16.apply.rec_line", count=audit["recovery"], user=SUPERUSER)
         else:
-            rec_line = (
-                "Kurtarma girdisi : menüde yok (GRUB_DISABLE_RECOVERY sizin\n"
-                "                   ayarınızla kapalı); eklenirse parola ister"
-            )
+            rec_line = t("m16.apply.rec_line_none")
 
         return ApplyResult(
             True,
-            (f"GRUB koruması güncellendi — mevcut parola korundu, kurtarma "
-             f"girdisi parolalı; kullanıcı adı: {SUPERUSER}")
+            t("m16.apply.success_kept", user=SUPERUSER)
             if keep_existing else
-            f"GRUB koruması etkinleştirildi — kullanıcı adı: {SUPERUSER}",
-            details=(
-                f"Kullanıcı adı    : {SUPERUSER}\n"
-                f"Include          : {GRUB_LOCKDOWN_INCLUDE}\n"
-                f"{rec_line}\n"
-                + ("Kurtarma girdisi TiHA'nın eski sürümünün kapattığı yerden\n"
-                   "yeniden açıldı.\n" if recovery_restored else "")
-                + ("Kayıtlı açılış varsayılanı alt menüdeki bir girdiyi\n"
-                   "gösteriyordu; sıfırlandı (gözetimsiz açılış parola\n"
-                   "ekranında beklemesin).\n" if saved_reset else "")
-                + f"10_linux yedeği  : {linux_backup}\n"
-                f"grub yedeği      : {defaults_backup}\n\n"
-                "Bir sonraki açılıştan itibaren `e` düzenleme kipi, GRUB\n"
-                "komut satırı, kurtarma girdisi ve 'Gelişmiş seçenekler'\n"
-                "önce 'Enter username:' sorar — buraya "
-                f"{SUPERUSER} yazılır —\n"
-                "ardından formda girdiğiniz parolayı ister. Normal açılış\n"
-                "bu parolayı sormaz. Aynı hash bu tahtadan alınacak tüm\n"
-                "klonlarda geçerlidir. Düz parola sistemde tutulmaz."
+            t("m16.apply.success", user=SUPERUSER),
+            details=t(
+                "m16.apply.details",
+                user=SUPERUSER,
+                include=GRUB_LOCKDOWN_INCLUDE,
+                rec_line=rec_line,
+                restored_note=t("m16.apply.restored_note") if recovery_restored else "",
+                saved_reset_note=t("m16.apply.saved_reset_note") if saved_reset else "",
+                linux_backup=linux_backup,
+                defaults_backup=defaults_backup,
             ),
             data={
                 "linux_backup": str(linux_backup),
@@ -549,11 +447,7 @@ class GrubProtectionModule(Module):
         # Bu kayıt zaten bir "kaldırma" işlemiyse geri alınacak koruma yok;
         # yeniden kurmak parola ister.
         if data.get("removed"):
-            return ApplyResult(
-                True,
-                "Bu adım korumayı kaldırmıştı; geri alınacak değişiklik yok. "
-                "Yeniden kurmak için kutucuğu işaretleyip parola girin.",
-            )
+            return ApplyResult(True, t("m16.undo.already_removed"))
         return self._remove_protection(data=data)
 
     # ------------------------------------------------------------------
@@ -578,7 +472,7 @@ class GrubProtectionModule(Module):
             if emit:
                 emit(line)
 
-        say(f"{GRUB_LOCKDOWN_INCLUDE} siliniyor…")
+        say(t("m16.remove.deleting_include", path=GRUB_LOCKDOWN_INCLUDE))
         try:
             GRUB_LOCKDOWN_INCLUDE.unlink(missing_ok=True)
         except OSError as exc:
@@ -586,7 +480,7 @@ class GrubProtectionModule(Module):
 
         # 10_linux yedekten geri yüklenmez: arada GRUB paketi güncellendiyse
         # yedek onu da geri alırdı. Yamalar metin olarak sökülür.
-        say("10_linux'teki TiHA yamaları sökülüyor…")
+        say(t("m16.remove.unpatching"))
         try:
             txt = _read_text(GRUB_LINUX_SCRIPT)
             clean = _unpatch_linux(txt)
@@ -598,18 +492,15 @@ class GrubProtectionModule(Module):
         self._restore_recovery(say, defaults_backup=defaults_backup,
                                linux_backup=linux_backup)
 
-        say("update-grub çalıştırılıyor…")
+        say(t("m16.apply.update_grub_running"))
         r = run_cmd(["update-grub"])
         if not r.ok:
             return ApplyResult(
                 False,
-                "update-grub başarısız oldu.",
+                t("m16.apply.update_grub_failed"),
                 details=(r.stderr or r.stdout).strip(),
             )
-        return ApplyResult(
-            True,
-            "GRUB koruması kaldırıldı; menü ve kurtarma girdisi eski hâline döndü.",
-        )
+        return ApplyResult(True, t("m16.remove.done"))
 
     # ------------------------------------------------------------------
     # Kurtarma girdisi ve kayıtlı açılış varsayılanı
@@ -644,7 +535,7 @@ class GrubProtectionModule(Module):
         if backup_reliable and _recovery_disabled(_read_text(defaults_backup)):
             return False  # yöneticinin kendi tercihi
         if emit:
-            emit("Kurtarma girdisi yeniden açılıyor (GRUB_DISABLE_RECOVERY yoruma alınıyor)…")
+            emit(t("m16.recovery_reopen"))
         try:
             GRUB_DEFAULTS.write_text(_enable_recovery(current), encoding="utf-8")
         except OSError as exc:
@@ -668,6 +559,6 @@ class GrubProtectionModule(Module):
                          and "advanced" not in saved):
             return False
         if emit:
-            emit(f"Kayıtlı açılış varsayılanı alt menüyü gösteriyor ({saved}); sıfırlanıyor…")
+            emit(t("m16.saved_reset", saved=saved))
         r = run_cmd(["grub-editenv", str(GRUB_ENV), "unset", "saved_entry"])
         return r.ok

@@ -26,6 +26,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.privilege import invoking_username
@@ -54,8 +55,11 @@ def _render_countdown_script() -> str:
     Çağrı:  tiha-shutdown-countdown.py "<mod açıklaması>" <saniye>
     Exit kodu:  0 = kapatmaya devam et (zaman aşımı veya "Şimdi kapat")
                 1 = ertelendi (kullanıcı "10 dakika ertele" tıkladı)
+
+    Pencerede görünen metinler katalogdan gelir; betik üretilirken
+    ``__T_*__`` işaretlerinin yerine Python metin sabiti olarak yazılır.
     """
-    return '''#!/usr/bin/env python3
+    template = '''#!/usr/bin/env python3
 """TiHA otomatik kapanma geri sayım penceresi."""
 import sys
 
@@ -63,13 +67,13 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
-mode_name = sys.argv[1] if len(sys.argv) > 1 else "Otomatik kapatma"
+mode_name = sys.argv[1] if len(sys.argv) > 1 else __T_DEFAULT_MODE__
 total_seconds = int(sys.argv[2]) if len(sys.argv) > 2 else 120
 
 
 class CountdownWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="Otomatik Kapatma Uyarısı")
+        super().__init__(title=__T_WINDOW_TITLE__)
         self.set_keep_above(True)
         self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
         self.set_default_size(440, 240)
@@ -89,7 +93,8 @@ class CountdownWindow(Gtk.Window):
         self.add(vbox)
 
         title = Gtk.Label()
-        title.set_markup('<span size="15000" weight="bold">Tahta kapatılacak</span>')
+        title.set_markup('<span size="15000" weight="bold">{}</span>'.format(
+            GLib.markup_escape_text(__T_HEADLINE__)))
         vbox.pack_start(title, False, False, 0)
 
         reason = Gtk.Label(label=mode_name)
@@ -104,11 +109,11 @@ class CountdownWindow(Gtk.Window):
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         btn_box.set_halign(Gtk.Align.CENTER)
 
-        postpone_btn = Gtk.Button(label="10 dakika ertele")
+        postpone_btn = Gtk.Button(label=__T_POSTPONE__)
         postpone_btn.connect("clicked", self._on_postpone)
         btn_box.pack_start(postpone_btn, False, False, 0)
 
-        shutdown_btn = Gtk.Button(label="Şimdi kapat")
+        shutdown_btn = Gtk.Button(label=__T_SHUTDOWN_NOW__)
         shutdown_btn.get_style_context().add_class("destructive-action")
         shutdown_btn.connect("clicked", self._on_shutdown_now)
         btn_box.pack_start(shutdown_btn, False, False, 0)
@@ -171,6 +176,16 @@ win.show_all()
 Gtk.main()
 sys.exit(win.exit_code)
 '''
+    texts = {
+        "__T_DEFAULT_MODE__": t("m11.countdown.default_mode"),
+        "__T_WINDOW_TITLE__": t("m11.countdown.window_title"),
+        "__T_HEADLINE__": t("m11.countdown.headline"),
+        "__T_POSTPONE__": t("m11.countdown.postpone"),
+        "__T_SHUTDOWN_NOW__": t("m11.countdown.shutdown_now"),
+    }
+    for token, text in texts.items():
+        template = template.replace(token, repr(text))
+    return template
 
 
 DEFAULT_COUNTDOWN_SECONDS = 120
@@ -512,7 +527,7 @@ def service():
 
         if idle_time > req_idle:
             proceed = wait_or_proceed(
-                "Boşta kalma süresi aşıldı ({} dakika).".format(minute)
+                __T_REASON_IDLE__.format(minutes=minute)
             )
             if not proceed:
                 postpone_until = time.time() + 600
@@ -535,7 +550,8 @@ def service():
     if check_time(auto_hour, auto_minute, COUNTDOWN_SECONDS):
         if not check_time(auto_hour, auto_minute, 0):
             proceed = wait_or_proceed(
-                "Sabit saat kapatma ({:02d}:{:02d}).".format(auto_hour, auto_minute)
+                __T_REASON_FIXED__.format(
+                    time="{:02d}:{:02d}".format(auto_hour, auto_minute))
             )
             if not proceed:
                 postpone_until = time.time() + 600
@@ -544,6 +560,14 @@ def service():
             log("TiHA: Sabit saat kapatma gerçekleştiriliyor")
             os.system("poweroff")
 '''
+    # Geri sayım penceresinde görünen mod açıklamaları. Yer tutucular
+    # betik çalışırken doldurulur; burada olduğu gibi bırakılır.
+    texts = {
+        "__T_REASON_IDLE__": t("m11.countdown.reason_idle", minutes="{minutes}"),
+        "__T_REASON_FIXED__": t("m11.countdown.reason_fixed", time="{time}"),
+    }
+    for token, text in texts.items():
+        template = template.replace(token, repr(text))
     return template.replace(
         f"COUNTDOWN_SECONDS = {DEFAULT_COUNTDOWN_SECONDS}",
         f"COUNTDOWN_SECONDS = {int(countdown_seconds)}",
@@ -570,21 +594,21 @@ def _current_countdown_seconds() -> int:
 
 def _fmt_seconds(sec: int | None) -> str:
     if sec is None:
-        return "okunamadı"
+        return t("m11.fmt.unreadable")
     if sec <= 0:
-        return "kapalı"
+        return t("m11.fmt.off")
     if sec >= 60 and sec % 60 == 0:
-        return f"{sec // 60} dk"
+        return t("m11.fmt.minutes", minutes=sec // 60)
     if sec >= 60:
-        return f"{sec // 60} dk {sec % 60} sn"
-    return f"{sec} sn"
+        return t("m11.fmt.minutes_seconds", minutes=sec // 60, seconds=sec % 60)
+    return t("m11.fmt.seconds", seconds=sec)
 
 
 def _fmt_microseconds(usec: int | None) -> str:
     if usec is None:
-        return "okunamadı"
+        return t("m11.fmt.unreadable")
     if usec <= 0:
-        return "kapalı"
+        return t("m11.fmt.off")
     return _fmt_seconds(usec // 1_000_000)
 
 
@@ -629,16 +653,17 @@ def _read_current_power_settings() -> list[tuple[str, str]]:
                 saver_timeout = int(m.group(1))
             dpms_on = "DPMS is Enabled" in r.stdout
             rows.append((
-                "X11 ekran koruyucu (Screen Saver)",
-                _fmt_seconds(saver_timeout) if saver_timeout is not None else "okunamadı",
+                t("m11.power.x11_saver"),
+                _fmt_seconds(saver_timeout) if saver_timeout is not None
+                else t("m11.fmt.unreadable"),
             ))
             rows.append((
-                "X11 DPMS (Standby / Suspend / Off)",
+                t("m11.power.x11_dpms"),
                 (
                     f"{_fmt_seconds(standby)} / "
                     f"{_fmt_seconds(suspend)} / "
                     f"{_fmt_seconds(off)}"
-                    + ("" if dpms_on else "  [DPMS kapalı]")
+                    + ("" if dpms_on else t("m11.power.dpms_disabled"))
                 ),
             ))
 
@@ -675,7 +700,7 @@ def _read_current_power_settings() -> list[tuple[str, str]]:
 
             if display_ac is not None or display_batt is not None:
                 rows.append((
-                    f"{env_label}: ekran karartma (AC / batarya)",
+                    t("m11.power.display_sleep", desktop=env_label),
                     f"{_fmt_seconds(_sec(display_ac))} / {_fmt_seconds(_sec(display_batt))}",
                 ))
             if inactive_ac is not None or inactive_batt is not None:
@@ -683,7 +708,7 @@ def _read_current_power_settings() -> list[tuple[str, str]]:
                 batt_txt = _fmt_seconds(_sec(inactive_batt))
                 types = f" ({inactive_ac_type or '-'} / {inactive_batt_type or '-'})"
                 rows.append((
-                    f"{env_label}: askıya alma (AC / batarya)",
+                    t("m11.power.inactive_sleep", desktop=env_label),
                     f"{ac_txt} / {batt_txt}{types}",
                 ))
 
@@ -711,41 +736,32 @@ def _read_current_power_settings() -> list[tuple[str, str]]:
             idle_usec = None
         if idle_action:
             rows.append((
-                "logind: boşta iken eylem",
+                t("m11.power.logind_idle"),
                 f"{idle_action}, {_fmt_microseconds(idle_usec)}",
             ))
         lid = props.get("HandleLidSwitch")
         if lid:
-            rows.append(("logind: kapak kapatma", lid))
+            rows.append((t("m11.power.logind_lid"), lid))
         power = props.get("HandlePowerKey")
         if power:
-            rows.append(("logind: güç tuşu", power))
+            rows.append((t("m11.power.logind_power_key"), power))
 
     if not rows:
         rows.append((
-            "Kaynak",
-            "Aktif grafik oturum yok ve logind bilgisi alınamadı — "
-            "güç ayarları okunamıyor.",
+            t("m11.power.source_label"),
+            t("m11.power.unavailable"),
         ))
     return rows
 
 
 class PowerManagementModule(Module):
     id = "m11_power_management"
-    title = "Otomatik kapanma"
-    sidebar_title = "Otomatik kapanma"
-    apply_hint = "ETA-Shutdown tabanlı otomatik kapanma sistemi kurulur."
-    rationale = (
-        "Tahtanın unutulması durumunda otomatik kapatma sistemi kurar. "
-        "Belirlenen saatte veya tahta boşta kaldığında otomatik olarak "
-        "kapatma işlemi yapılır. Her iki modda da bir uyarı diyalogu "
-        "gösterilir (süresi form kutusundan ayarlanır, varsayılan "
-        "2 dakika) ve kapatma 10 dakika ertelenebilir. Hali hazırda "
-        "oturum açmış bir kullanıcı yoksa uyarı giriş ekranında "
-        "gösterilir."
-    )
+    title = t("m11.title")
+    sidebar_title = t("m11.sidebar_title")
+    apply_hint = t("m11.apply_hint")
+    rationale = t("m11.rationale")
     extra_links = [
-        {"label": "ETA Zamanlı Kapatma'yı aç", "action": "launch_eta_shutdown_gui_action"},
+        {"label": t("m11.link_eta_shutdown"), "action": "launch_eta_shutdown_gui_action"},
     ]
 
     def preview(self) -> str:
@@ -764,21 +780,16 @@ class PowerManagementModule(Module):
         power_rows = _read_current_power_settings()
         power_label_width = max((len(label) for label, _ in power_rows), default=0)
         power_block: list[str] = []
-        power_block.append("Şu anki güç ayarları (bilgi amaçlı, TiHA dışı):")
+        power_block.append(t("m11.preview.power_header"))
         for label, value in power_rows:
             power_block.append(f"  {label.ljust(power_label_width)} : {value}")
         power_block.append("")
 
         if not eta_config_exists:
             lines = power_block + [
-                f"Durum                : yapılandırılmamış (kontrol {current_time})",
+                t("m11.preview.status_unconfigured", time=current_time),
                 "",
-                "Bu adım uygulandığında:",
-                "  - eta-shutdown yapılandırma dosyası oluşturulur",
-                "  - Sabit saat ve idle tabanlı kapatma modları sunulur",
-                "  - Kapanmadan 2 dakika önce uyarı penceresi gösterilir",
-                "  - 10 dakikalık erteleme seçeneği eklenir",
-                "  - eta-shutdown.service etkinleştirilir",
+                t("m11.preview.unconfigured_plan"),
             ]
             return "\n".join(lines)
 
@@ -792,21 +803,20 @@ class PowerManagementModule(Module):
             timed_minute = config.get("TIMED_MODE", "minute", fallback="0")
             enhanced = ETA_SHUTDOWN_SERVICE_BACKUP.exists()
         except Exception as exc:
-            return "\n".join(power_block) + (
-                f"Durum                : yapılandırma okunamadı ({exc})\n"
-                "Sayfa yeniden yüklendiğinde tekrar denenecek."
-            )
+            return "\n".join(power_block) + t("m11.preview.config_error", error=exc)
 
         lines: list[str] = list(power_block)
-        lines.append(
-            "Durum                : "
-            f"{'TiHA gelişmiş sürüm aktif' if enhanced else 'orijinal eta-shutdown kullanımda'}"
-            f" (kontrol {current_time})"
-        )
-        lines.append(
-            "Servis               : "
-            + ("çalışıyor" if eta_service_running else "durdurulmuş")
-        )
+        lines.append(t(
+            "m11.preview.status",
+            state=t("m11.preview.state_enhanced") if enhanced
+            else t("m11.preview.state_original"),
+            time=current_time,
+        ))
+        lines.append(t(
+            "m11.preview.service",
+            state=t("m11.preview.service_running") if eta_service_running
+            else t("m11.preview.service_stopped"),
+        ))
 
         # Sabit saat
         if auto_enabled:
@@ -823,50 +833,40 @@ class PowerManagementModule(Module):
                 hours, remainder = divmod(time_diff.seconds, 3600)
                 minutes, _ = divmod(remainder, 60)
                 if time_diff.days == 0:
-                    countdown = f" ({hours}s {minutes}dk kaldı)"
+                    countdown = t("m11.preview.time_left", hours=hours, minutes=minutes)
             except Exception:
                 pass
-            lines.append(
-                "Sabit saat kapatma   : "
-                f"aktif, {auto_hour.zfill(2)}:{auto_minute.zfill(2)}{countdown}"
-            )
+            lines.append(t(
+                "m11.preview.fixed_on",
+                time=f"{auto_hour.zfill(2)}:{auto_minute.zfill(2)}",
+                countdown=countdown,
+            ))
         else:
-            lines.append("Sabit saat kapatma   : kapalı")
+            lines.append(t("m11.preview.fixed_off"))
 
         # Idle tabanlı
         if timed_mode != "none":
-            lines.append(
-                f"Idle tabanlı kapatma : aktif, {timed_minute} dakika"
-            )
+            lines.append(t("m11.preview.idle_on", minutes=timed_minute))
         else:
-            lines.append("Idle tabanlı kapatma : kapalı")
+            lines.append(t("m11.preview.idle_off"))
 
         # Config son değişiklik
         try:
             import os as _os
             mtime = _os.path.getmtime(ETA_SHUTDOWN_CONFIG)
             mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%H:%M")
-            lines.append(f"Config güncelleme    : {mtime_str}")
+            lines.append(t("m11.preview.config_updated", time=mtime_str))
         except OSError:
             pass
 
         current_countdown = _current_countdown_seconds()
         if current_countdown % 60 == 0:
-            countdown_label = f"{current_countdown // 60} dakika"
+            countdown_label = t("m11.preview.duration_minutes", minutes=current_countdown // 60)
         else:
-            countdown_label = f"{current_countdown} saniye"
-        lines.append(f"Geri sayım süresi    : {countdown_label}")
+            countdown_label = t("m11.preview.duration_seconds", seconds=current_countdown)
+        lines.append(t("m11.preview.countdown", duration=countdown_label))
         lines.append("")
-        lines.append("Kapanmadan önce:")
-        lines.append(
-            f"  - {countdown_label} uyarı penceresi gösterilir "
-            "(form kutusundan değiştirilebilir)"
-        )
-        lines.append("  - Kullanıcı 10 dakika erteleyebilir")
-        lines.append(
-            "  - Pencerenin sağ üst X'ine basılırsa idle sayacı "
-            "sıfırlanır ve pencere kapanır"
-        )
+        lines.append(t("m11.preview.before_shutdown", duration=countdown_label))
         return "\n".join(lines)
 
     def suggested_countdown_seconds(self) -> int:
@@ -924,22 +924,18 @@ class PowerManagementModule(Module):
             if blank_sec is not None:
                 max_idle_min = max(0, (blank_sec - _BLANK_SAFETY_SEC) // 60)
                 if idle_minute > max_idle_min:
-                    blank_warning = (
-                        f"⚠️ UYARI: Sistemde ekran enerjisi yaklaşık "
-                        f"{blank_sec // 60} dk idle sonra kesiliyor; "
-                        f"seçtiğiniz idle kapatma süresi ({idle_minute} dk) "
-                        f"bundan uzun olduğu için 2 dk'lık geri sayım/erteleme "
-                        f"diyalogu kararmış ekranda görünmeyebilir. "
-                        f"Önerilen üst sınır: {max_idle_min} dk. Daha uzun bir "
-                        "süre istiyorsanız ekran-blank süresini Sistem "
-                        "Ayarları → Güç'ten yükseltin."
+                    blank_warning = t(
+                        "m11.apply.blank_warning",
+                        blank_minutes=blank_sec // 60,
+                        idle_minutes=idle_minute,
+                        max_idle_minutes=max_idle_min,
                     )
                     log.warning(blank_warning)
                     if progress:
                         progress(blank_warning)
 
         if progress:
-            progress("Mevcut eta-shutdown konfigürasyonu yedekleniyor...")
+            progress(t("m11.apply.progress_backup"))
 
         # Mevcut service dosyasını yedekle (ilk kez ise)
         if not ETA_SHUTDOWN_SERVICE_BACKUP.exists():
@@ -947,10 +943,10 @@ class PowerManagementModule(Module):
                 shutil.copy2(ETA_SHUTDOWN_SERVICE, ETA_SHUTDOWN_SERVICE_BACKUP)
                 log.info("Orijinal eta-shutdown service yedeklendi")
             except OSError as exc:
-                return ApplyResult(False, f"Service yedekleme başarısız: {exc}")
+                return ApplyResult(False, t("m11.apply.error_backup", error=exc))
 
         if progress:
-            progress("Geliştirilmiş eta-shutdown service yazılıyor...")
+            progress(t("m11.apply.progress_service"))
 
         # Geliştirilmiş service dosyasını yaz
         try:
@@ -960,10 +956,10 @@ class PowerManagementModule(Module):
             )
             ETA_SHUTDOWN_SERVICE.chmod(0o755)
         except OSError as exc:
-            return ApplyResult(False, f"Service dosyası yazılamadı: {exc}")
+            return ApplyResult(False, t("m11.apply.error_service", error=exc))
 
         if progress:
-            progress("Geri sayım penceresi (GUI) kuruluyor...")
+            progress(t("m11.apply.progress_countdown"))
 
         # Kullanıcı oturumunda gösterilecek GTK geri sayım penceresini kur
         try:
@@ -971,10 +967,10 @@ class PowerManagementModule(Module):
             COUNTDOWN_SCRIPT.write_text(_render_countdown_script(), encoding="utf-8")
             COUNTDOWN_SCRIPT.chmod(0o755)
         except OSError as exc:
-            return ApplyResult(False, f"Geri sayım scripti yazılamadı: {exc}")
+            return ApplyResult(False, t("m11.apply.error_countdown", error=exc))
 
         if progress:
-            progress("Otomatik kapanma konfigürasyonu yazılıyor...")
+            progress(t("m11.apply.progress_config"))
 
         # Konfigürasyon dosyasını oluştur
         config = configparser.ConfigParser()
@@ -998,15 +994,15 @@ class PowerManagementModule(Module):
                 config.write(f)
             ETA_SHUTDOWN_CONFIG.chmod(0o644)
         except OSError as exc:
-            return ApplyResult(False, f"Konfigürasyon dosyası yazılamadı: {exc}")
+            return ApplyResult(False, t("m11.apply.error_config", error=exc))
 
         if progress:
-            progress("eta-shutdown servisi yeniden başlatılıyor...")
+            progress(t("m11.apply.progress_restart"))
 
         # Servisi yeniden başlat
         restart_result = run_cmd(["systemctl", "restart", "eta-shutdown"])
         if not restart_result.ok:
-            return ApplyResult(False, "eta-shutdown servisi başlatılamadı",
+            return ApplyResult(False, t("m11.apply.error_restart"),
                                details=restart_result.stderr)
 
         # Servisin aktif olduğunu doğrula
@@ -1015,47 +1011,41 @@ class PowerManagementModule(Module):
             log.warning("eta-shutdown servisi etkinleştirilemedi: %s", enable_result.stderr)
 
         if progress:
-            progress("✅ Otomatik kapanma sistemi kuruldu!")
+            progress(t("m11.apply.progress_done"))
 
         # Özet bilgi
         details_lines = [
-            "✓ TiHA geliştirilmiş eta-shutdown sistemi kuruldu",
-            f"✓ Orijinal service yedeklendi: {ETA_SHUTDOWN_SERVICE_BACKUP}",
-            f"✓ Konfigürasyon: {ETA_SHUTDOWN_CONFIG}",
-            f"✓ eta-shutdown.service aktif",
+            t("m11.apply.details_installed", backup=ETA_SHUTDOWN_SERVICE_BACKUP,
+              config=ETA_SHUTDOWN_CONFIG),
             ""
         ]
 
         if auto_enabled:
             details_lines.extend([
-                f"🕐 Sabit saat kapatma: {auto_hour:02d}:{auto_minute:02d}",
-                "   - 2 dakika önceden uyarı diyalogu",
-                "   - 10 dakika erteleme seçeneği"
+                t("m11.apply.details_fixed", hour=auto_hour, minute=auto_minute),
+                t("m11.apply.details_countdown_bullets"),
             ])
 
         if idle_enabled:
             details_lines.extend([
-                f"💤 Idle tabanlı kapatma: {idle_minute} dakika boşta kalınca",
-                "   - 2 dakika önceden uyarı diyalogu",
-                "   - 10 dakika erteleme seçeneği"
+                t("m11.apply.details_idle", minutes=idle_minute),
+                t("m11.apply.details_countdown_bullets"),
             ])
             if blank_warning:
                 details_lines.extend(["", blank_warning])
 
         if not auto_enabled and not idle_enabled:
-            details_lines.append("ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu")
+            details_lines.append(t("m11.apply.details_both_off"))
 
         details_lines.extend([
             "",
-            "📋 Test ve yönetim:",
-            "• Durum kontrolü: systemctl status eta-shutdown",
-            "• Log takibi: journalctl -f -u eta-shutdown",
-            "• Manuel yapılandırma: /usr/bin/eta-shutdown --menu"
+            t("m11.apply.details_management"),
         ])
 
-        summary = "Otomatik kapanma sistemi kuruldu"
         if auto_enabled or idle_enabled:
-            summary += " ve aktifleştirildi"
+            summary = t("m11.apply.summary_active")
+        else:
+            summary = t("m11.apply.summary_installed")
 
         return ApplyResult(
             True,
@@ -1074,7 +1064,7 @@ class PowerManagementModule(Module):
             try:
                 shutil.copy2(ETA_SHUTDOWN_SERVICE_BACKUP, ETA_SHUTDOWN_SERVICE)
                 ETA_SHUTDOWN_SERVICE_BACKUP.unlink()
-                removed_items.append("Orijinal eta-shutdown service geri yüklendi")
+                removed_items.append(t("m11.undo.service_restored"))
             except OSError as exc:
                 log.warning("Service geri yükleme başarısız: %s", exc)
 
@@ -1082,7 +1072,7 @@ class PowerManagementModule(Module):
         if COUNTDOWN_SCRIPT.exists():
             try:
                 COUNTDOWN_SCRIPT.unlink()
-                removed_items.append("Geri sayım penceresi scripti kaldırıldı")
+                removed_items.append(t("m11.undo.countdown_removed"))
             except OSError as exc:
                 log.warning("Geri sayım scripti silinemedi: %s", exc)
 
@@ -1101,15 +1091,18 @@ class PowerManagementModule(Module):
             }
             with open(ETA_SHUTDOWN_CONFIG, "w", encoding="utf-8") as f:
                 config.write(f)
-            removed_items.append("eta-shutdown konfigürasyonu sıfırlandı")
+            removed_items.append(t("m11.undo.config_reset"))
         except OSError as exc:
             log.warning("Konfigürasyon sıfırlama başarısız: %s", exc)
 
         # Servisi yeniden başlat
         run_cmd(["systemctl", "restart", "eta-shutdown"])
 
-        summary = "Otomatik kapanma sistemi kaldırıldı, orijinal eta-shutdown geri yüklendi"
-        details = "\n".join(f"• {item}" for item in removed_items) if removed_items else "Kaldırılacak öğe bulunamadı"
+        summary = t("m11.undo.summary")
+        details = (
+            "\n".join(f"• {item}" for item in removed_items) if removed_items
+            else t("m11.undo.nothing_removed")
+        )
 
         return ApplyResult(True, summary, details=details)
 
@@ -1119,8 +1112,8 @@ class PowerManagementModule(Module):
         if not binary.exists():
             return ApplyResult(
                 False,
-                "ETA Zamanlı Kapatma uygulaması bulunamadı.",
-                details=f"{binary} mevcut değil; eta-shutdown paketi kurulu mu?",
+                t("m11.launch.not_found"),
+                details=t("m11.launch.not_found_details", path=binary),
             )
 
         user = invoking_username()
@@ -1137,14 +1130,14 @@ class PowerManagementModule(Module):
         except OSError as exc:
             return ApplyResult(
                 False,
-                "ETA Zamanlı Kapatma başlatılamadı.",
+                t("m11.launch.failed"),
                 details=str(exc),
             )
 
         return ApplyResult(
             True,
-            f"ETA Zamanlı Kapatma '{user}' oturumunda açıldı.",
-            details="Yapılandırmayı kaydedip kapattığınızda 10. adımdaki bilgi yenilenecek.",
+            t("m11.launch.opened", user=user),
+            details=t("m11.launch.opened_details"),
         )
 
     def get_current_config(self) -> dict:

@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import __version__
+from .i18n import t
 from .logger import get_logger
 from .private_files import write_user_file
 from .undo import Journal
@@ -104,12 +105,11 @@ def import_preset(source: Path) -> dict[str, dict]:
     sv = raw.get("schema_version")
     if sv != SCHEMA_VERSION:
         raise ValueError(
-            f"Desteklenmeyen schema_version: {sv} "
-            f"(beklenen {SCHEMA_VERSION})"
+            t("core.preset.unsupported_schema", version=sv, expected=SCHEMA_VERSION)
         )
     mods = raw.get("modules")
     if not isinstance(mods, dict):
-        raise ValueError("'modules' anahtarı eksik veya tip uyumsuz.")
+        raise ValueError(t("core.preset.modules_missing"))
     return {mid: (p or {}) for mid, p in mods.items() if isinstance(p, dict)}
 
 

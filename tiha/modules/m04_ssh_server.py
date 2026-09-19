@@ -25,6 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.async_state import AsyncValue
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd, run_cmd_stream
@@ -56,26 +57,12 @@ _ssh_installed = AsyncValue(
 
 class SSHServerModule(Module):
     id = "m04_ssh_server"
-    title = "SSH sunucusu (root girişi)"
-    sidebar_title = "SSH Sunucusu"
+    title = t("m04.title")
+    sidebar_title = t("m04.sidebar_title")
     rationale_inline = True
-    apply_hint = (
-        "openssh-server kurulur, uzak root girişi açılır."
-    )
+    apply_hint = t("m04.apply_hint")
     streams_output = True
-    rationale = (
-        "Tahtaları sınıflara dağıttıktan sonra uzaktan bakım yapabilmek "
-        "için SSH sunucusunu kurar ve root kullanıcısının uzak oturum "
-        "açmasına izin verir; sorun giderme, ayar değişikliği ve günlük "
-        "inceleme için kullanılır.\n\n"
-        "Uzaktan bağlanmak için tahtayla aynı ağda olmalısınız. "
-        "Okulda tahtalar ve kablosuz erişim noktaları (AP) genellikle "
-        "`10.x.x.x` aralığındadır — bu ağdaki bir bilgisayardan "
-        "`ssh root@<tahta-ip>` komutunu kullanırsınız. Farklı bir ağdan "
-        "(örn. öğrenci/misafir ağları) ulaşılamaz; bu bilinçli bir "
-        "güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile erişimi "
-        "yalnızca yönetim istasyonlarıyla sınırlamanız tavsiye edilir."
-    )
+    rationale = t("m04.rationale")
 
     def preview(self) -> str:
         # AsyncValue cache'inden okuruz; cache yoksa "kontrol ediliyor"
@@ -84,11 +71,11 @@ class SSHServerModule(Module):
         # çağrı güvenlik kemeri (cache yine yoksa worker başlasın).
         installed = _ssh_installed.get_async()
         if installed is None:
-            return "openssh-server kurulum durumu kontrol ediliyor..."
+            return t("m04.preview.checking")
         return (
-            "openssh-server zaten kurulu - yalnızca yapılandırma eklenecek."
+            t("m04.preview.installed")
             if installed
-            else "openssh-server kurulacak ve yapılandırma ek bir yapılandırma dosyası yazılacak."
+            else t("m04.preview.not_installed")
         )
 
     def prefetch_preview_state(self, on_ready=None) -> None:
@@ -100,8 +87,8 @@ class SSHServerModule(Module):
         conf_existed_before = SSH_CONF.exists()
 
         if progress:
-            progress(f"Başlangıç: openssh-server {'kurulu' if was_installed_before else 'kurulu değil'}")
-            progress(f"Başlangıç: ek yapılandırma dosyası {'var' if conf_existed_before else 'yok'}")
+            progress(t("m04.apply.start_pkg", state=t("m04.apply.state_installed") if was_installed_before else t("m04.apply.state_not_installed")))
+            progress(t("m04.apply.start_conf", state=t("m04.apply.state_exists") if conf_existed_before else t("m04.apply.state_missing")))
 
         # Kurulum
         if not was_installed_before:
@@ -110,7 +97,7 @@ class SSHServerModule(Module):
             upd = run_cmd_stream(["apt-get", "update"], progress=progress,
                                  env={"DEBIAN_FRONTEND": "noninteractive"}, timeout=300)
             if not upd.ok:
-                return ApplyResult(False, "apt-get update başarısız.",
+                return ApplyResult(False, t("m04.apply.apt_update_failed"),
                                    data={"was_installed_before": was_installed_before})
             if progress:
                 progress("\n==== apt-get install openssh-server ====")
@@ -121,7 +108,7 @@ class SSHServerModule(Module):
                 timeout=600,
             )
             if not inst.ok:
-                return ApplyResult(False, "openssh-server kurulamadı.",
+                return ApplyResult(False, t("m04.apply.install_failed"),
                                    data={"was_installed_before": was_installed_before})
 
         # Ek yapılandırma dosyası yaz
@@ -131,24 +118,27 @@ class SSHServerModule(Module):
             SSH_CONF.chmod(0o644)
         except OSError as exc:
             return ApplyResult(
-                False, f"SSH ek yapılandırma dosyası yazılamadı: {exc}",
+                False, t("m04.apply.conf_write_failed", error=exc),
                 data={"was_installed_before": was_installed_before,
                       "conf_existed_before": conf_existed_before},
             )
         if progress:
-            progress(f"Ek yapılandırma dosyası yazıldı: {SSH_CONF}")
+            progress(t("m04.apply.conf_written", path=SSH_CONF))
 
         # Servis
         en = run_cmd(["systemctl", "enable", "--now", "ssh"])
         rel = run_cmd(["systemctl", "reload", "ssh"])
         if progress:
-            progress(f"ssh enable/reload: {'tamam' if en.ok else 'hata'} / {'tamam' if rel.ok else 'hata'}")
+            ok_w, err_w = t("m04.apply.ok_word"), t("m04.apply.err_word")
+            progress(t("m04.apply.service_status",
+                       enable=ok_w if en.ok else err_w,
+                       reload=ok_w if rel.ok else err_w))
 
         _ssh_installed.invalidate()
         return ApplyResult(
             True,
-            "SSH sunucusu kuruldu, root girişine izin verildi.",
-            details=f"Yapılandırma: {SSH_CONF}\nServis: ssh (etkin)",
+            t("m04.apply.summary"),
+            details=t("m04.apply.details", path=SSH_CONF),
             data={
                 "was_installed_before": was_installed_before,
                 "conf_existed_before": conf_existed_before,
@@ -180,9 +170,9 @@ class SSHServerModule(Module):
                     env={"DEBIAN_FRONTEND": "noninteractive"})
             _ssh_installed.invalidate()
             if not purge.ok:
-                return ApplyResult(False, "openssh-server kaldırılamadı.",
+                return ApplyResult(False, t("m04.undo.purge_failed"),
                                    details=purge.stderr)
-            return ApplyResult(True, "SSH yapılandırması ve openssh-server paketi kaldırıldı.")
+            return ApplyResult(True, t("m04.undo.removed"))
 
         _ssh_installed.invalidate()
-        return ApplyResult(True, "SSH root izni kaldırıldı (paket zaten başlangıçta kuruluydu, korundu).")
+        return ApplyResult(True, t("m04.undo.kept_pkg"))

@@ -10,6 +10,7 @@ import sys
 
 from . import __version__
 from .core import console
+from .core.i18n import t
 from .core.logger import get_logger, log_startup_info, log_shutdown_info
 from .core.paths import LOG_ROOT, ensure_runtime_dirs
 from .core.image_info import protect_image_info
@@ -98,12 +99,12 @@ def main() -> int:
     if is_cli_invocation(cli_argv):
         ok, reason = require_root_and_admin()
         if not ok:
-            print(f"HATA: {reason}", file=sys.stderr)
+            print(t("app.error_line", reason=reason), file=sys.stderr)
             return 2
         try:
             ensure_runtime_dirs()
         except OSError as exc:
-            print(f"HATA: çalışma dizini oluşturulamadı: {exc}", file=sys.stderr)
+            print(t("app.error_runtime_dir_cli", error=exc), file=sys.stderr)
             return 3
         # İmaj damgası yalnız root'a açık olmalı (eski sürümler 0644 yazıyordu).
         protect_image_info()
@@ -116,14 +117,14 @@ def main() -> int:
     if not ok:
         _emergency_dialog(reason)
         # Terminale de sade bir hata bas (debug değil)
-        print(f"\n  HATA: {reason}\n", file=sys.stderr)
+        print(t("app.error_banner", reason=reason), file=sys.stderr)
         return 2
 
     try:
         ensure_runtime_dirs()
     except OSError as exc:
-        _emergency_dialog(f"Çalışma dizini oluşturulamadı: {exc}")
-        print(f"\n  HATA: {exc}\n", file=sys.stderr)
+        _emergency_dialog(t("app.error_runtime_dir", error=exc))
+        print(t("app.error_banner", reason=exc), file=sys.stderr)
         return 3
     # İmaj damgası yalnız root'a açık olmalı (eski sürümler 0644 yazıyordu).
     protect_image_info()
@@ -131,9 +132,9 @@ def main() -> int:
     # Detaylı loglama başlat
     log_startup_info()
 
-    console.banner_open("TiHA — Tahta İmaj Hazırlık Aracı", f"v{__version__}")
-    console.info("Sihirbaz penceresi açılıyor…")
-    console.info("Detaylı loglar: /var/log/tiha/tiha-debug.log (yalnız etapadmin okuyabilir)")
+    console.banner_open(t("app.banner_title"), f"v{__version__}")
+    console.info(t("app.opening_window"))
+    console.info(t("app.debug_log_hint"))
 
     # Terminali kirletecek GTK/GLib/dconf uyarılarını dosyaya yönlendir.
     # (Bundan önce tüm kullanıcıya-görür mesajlar çıktı.)
@@ -154,7 +155,7 @@ def main() -> int:
 
     # Program kapanış bilgilerini logla
     log_shutdown_info()
-    console.banner_close("Sihirbaz kapatıldı.")
+    console.banner_close(t("app.window_closed"))
     return 0
 
 
@@ -171,13 +172,13 @@ def _emergency_dialog(message: str) -> None:
             destroy_with_parent=True,
             message_type=Gtk.MessageType.ERROR,
             buttons=Gtk.ButtonsType.OK,
-            text="TiHA başlatılamadı",
+            text=t("app.start_failed"),
         )
         dlg.format_secondary_text(message)
         dlg.run()
         dlg.destroy()
     except Exception:
-        print(f"TiHA başlatılamadı: {message}", file=sys.stderr)
+        print(t("app.start_failed_line", message=message), file=sys.stderr)
 
 
 if __name__ == "__main__":

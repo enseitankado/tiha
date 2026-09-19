@@ -52,6 +52,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.paths import RSYSLOG_CONF
@@ -81,7 +82,7 @@ QUEUE_MEMORY_SIZE = "100000"
 # çevrilir. Ayrıntı: iletilecek olayların facility/severity kümesi.
 LOG_PROFILES = {
     "bakim": {
-        "label": "Bakım (önerilen)",
+        "label": t("m06.params.log_profile.opt_bakim"),
         "selectors": [
             "auth,authpriv.*",
             "kern.warning",
@@ -91,11 +92,11 @@ LOG_PROFILES = {
         ],
     },
     "kapsamli": {
-        "label": "Kapsamlı",
+        "label": t("m06.params.log_profile.opt_kapsamli"),
         "selectors": ["*.*"],
     },
     "guvenlik": {
-        "label": "Yalnız güvenlik",
+        "label": t("m06.params.log_profile.opt_guvenlik"),
         "selectors": [
             "auth,authpriv.*",
             "kern.err",
@@ -117,6 +118,10 @@ def _profile_key(label_or_key: str | None) -> str:
     s = label_or_key.strip().lower()
     if s in LOG_PROFILES:
         return s
+    # Formdan gelen, katalogdaki (herhangi bir dildeki) etiket.
+    for key, prof in LOG_PROFILES.items():
+        if s == prof["label"].strip().lower():
+            return key
     if s.startswith("kapsam") or "her mesaj" in s:
         return "kapsamli"
     if s.startswith("yalnız") or s.startswith("yalniz") or "güvenlik" in s or "guvenlik" in s:
@@ -239,38 +244,10 @@ ruleset(name="tiha_remote"
 
 class RemoteSyslogModule(Module):
     id = "m06_remote_syslog"
-    title = "Dayanıklı merkezi log iletimi"
-    sidebar_title = "Merkezi log sunucusu"
-    apply_hint = (
-        "Hiç log kaybı olmayan dayanıklı merkezi log iletimi kurulur."
-    )
-    rationale = (
-        "Tahtanın tüm sistem günlüklerini (oturum açma denemeleri, servis "
-        "hataları, cron, ağ olayları) ağdaki merkezi bir rsyslog "
-        "sunucusuna DAYANIKLI BİÇİMDE gönderir. 50 tahtalı bir okulun "
-        "loglarını tek bir arayüzden izleyebilir, olay/arıza taramasını "
-        "saniyeler içinde yapabilirsiniz.\n\n"
-        "Bu adımı uyguluyorsanız “Benzersiz hostname” adımını da mutlaka "
-        "uygulayın. Aksi hâlde imajdan klonlanan tüm tahtalar aynı hostname "
-        "ile log gönderir; merkezi sunucudaki kayıtları tahta tahta ayırt "
-        "edemezsiniz. Hostname adımı her klona kendi MAC adresinden türeyen "
-        "benzersiz bir ad verir.\n\n"
-        "KRİTİK AVANTAJ: Bu modül HİÇ LOG KAYBI OLMAYAN gelişmiş "
-        "yapılandırma kullanır. Uzak log sunucusu haftalarca hatta aylarca "
-        "erişilemez durumda olsa bile (elektrik kesintisi, ağ bakımı, "
-        "sunucu arızası), tahta loglarını yerel diskte biriktirir — "
-        "yerel tavan 2 GB olduğundan en kötü profilde bile 3 aydan uzun "
-        "yerel kayıt tutulur. Sunucu geri geldiğinde birikmiş tüm loglar "
-        "otomatik olarak gönderilir.\n\n"
-        "Bunun için /etc/rsyslog.d/ altına disk-assisted queue (disk destekli "
-        "kuyruk) kullanan gelişmiş bir yapılandırma dosyası yazılır. Paket "
-        "güncellemesi gelirse yapılandırmanız korunur, geri almak da o tek "
-        "dosyayı silmek kadar kolaydır.\n\n"
-        "Log sunucusu tahtalarla aynı ağda olmalı. Okulda tahtalar ve "
-        "kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır; "
-        "log sunucusunu bu ağa konumlandırmalısınız. İdari ağdan log "
-        "sunucusuna erişim olmaz — bu bilinçli bir güvenlik kısıtıdır."
-    )
+    title = t("m06.title")
+    sidebar_title = t("m06.sidebar_title")
+    apply_hint = t("m06.apply_hint")
+    rationale = t("m06.rationale")
 
     def preview(self) -> str:
         # m08 stiliyle: hizalı key-value başlık + girintili dash liste.
@@ -294,52 +271,33 @@ class RemoteSyslogModule(Module):
 
         lines: list[str] = []
         lines.append(
-            "Yapılandırma dosyası : "
-            + (f"var ({RSYSLOG_CONF})" if config_exists else "yok")
+            t("m06.preview.config_present", path=RSYSLOG_CONF)
+            if config_exists else t("m06.preview.config_missing")
         )
         if parsed:
-            lines.append(
-                f"Log sunucusu         : {parsed['host']}:{parsed['port']} ({parsed['proto']})"
-            )
+            lines.append(t(
+                "m06.preview.server",
+                host=parsed['host'], port=parsed['port'], proto=parsed['proto'],
+            ))
             prof = LOG_PROFILES.get(parsed.get("profile", "bakim"))
             if prof:
-                lines.append(f"Log profili          : {prof['label']}")
-        lines.append(f"Kuyruk dizini        : {RSYSLOG_QUEUE_DIR}")
+                lines.append(t("m06.preview.profile", profile=prof['label']))
+        lines.append(t("m06.preview.queue_dir", path=RSYSLOG_QUEUE_DIR))
         if queue_files:
-            lines.append(
-                f"Bekleyen log kuyruğu : {len(queue_files)} dosya, {total_size:,} bayt"
-            )
+            lines.append(t(
+                "m06.preview.queue_pending", count=len(queue_files), size=total_size,
+            ))
             if total_size > 0:
-                lines.append(
-                    "                       (uzak sunucu erişilemez durumda olabilir)"
-                )
+                lines.append(t("m06.preview.queue_pending_hint"))
         else:
-            lines.append(
-                "Bekleyen log kuyruğu : yok (log iletimi doğrudan çalışıyor)"
-            )
+            lines.append(t("m06.preview.queue_none"))
         lines.append("")
 
         if not hostname_setup_done:
-            lines.append(
-                "Hatırlatma: \"Benzersiz hostname\" adımı henüz "
-                "uygulanmamış. Bu adımı uygulayacaksanız mutlaka onu da "
-                "uygulayın; aksi hâlde merkezi sunucudaki loglarda "
-                "tahtalar aynı isimle görünür ve birbirinden ayırt "
-                "edilemez."
-            )
+            lines.append(t("m06.preview.hostname_reminder"))
             lines.append("")
 
-        lines.append("Bu adım uygulandığında:")
-        lines.append(
-            f"  - {RSYSLOG_CONF} yazılır (disk destekli kuyruk yapılandırması)"
-        )
-        lines.append(
-            "  - Uzak sunucu erişilemezse loglar yerel diskte biriktirilir"
-        )
-        lines.append(
-            "  - Sunucu geri geldiğinde birikmiş loglar otomatik gönderilir"
-        )
-        lines.append("  - rsyslog servisi yeniden başlatılır")
+        lines.append(t("m06.preview.will_do", path=RSYSLOG_CONF))
         return "\n".join(lines)
 
     def apply(self, params=None, progress=None) -> ApplyResult:
@@ -358,7 +316,7 @@ class RemoteSyslogModule(Module):
             params.get("node_exporter_listen") or ":9100"
         ).strip()
         if not host:
-            return ApplyResult(False, "Merkezi log sunucusu adresi (IP/isim) boş.")
+            return ApplyResult(False, t("m06.apply.no_host"))
 
         # rsyslog kurulu olduğundan emin ol
         install = run_cmd(
@@ -375,13 +333,10 @@ class RemoteSyslogModule(Module):
             log.warning("rsyslog kuyruk dizini oluşturulamadı: %s", exc)
 
         # Disk sağlığı + sıcaklık izleme paketleri
-        smart_state = "atlandı"
+        smart_state = t("m06.apply.state_skipped")
         if install_smart:
             if progress:
-                progress(
-                    "Disk sağlığı ve sıcaklık izleme paketleri kuruluyor "
-                    "(smartmontools, lm-sensors)..."
-                )
+                progress(t("m06.apply.smart_installing"))
             pkg = run_cmd(
                 ["apt-get", "install", "-y", "smartmontools", "lm-sensors"],
                 env={"DEBIAN_FRONTEND": "noninteractive"},
@@ -398,27 +353,19 @@ class RemoteSyslogModule(Module):
                 run_cmd(
                     ["systemctl", "enable", "--now", "smartd"], check=False,
                 )
-                smart_state = (
-                    "kuruldu (smartd çalışıyor; sensors-detect otomatik "
-                    "modülleri yükledi)"
-                )
+                smart_state = t("m06.apply.smart_installed_state")
                 if progress:
-                    progress(
-                        "smartd etkinleştirildi, sıcaklık modülleri "
-                        "yüklendi."
-                    )
+                    progress(t("m06.apply.smart_installed"))
             else:
-                smart_state = "kurulum başarısız (paket yöneticisi hatası)"
+                smart_state = t("m06.apply.smart_failed_state")
                 if progress:
-                    progress(
-                        "smartmontools/lm-sensors kurulamadı — adım devam ediyor."
-                    )
+                    progress(t("m06.apply.smart_failed"))
 
         # Metrik izleme — Prometheus node_exporter
-        node_exporter_state = "atlandı"
+        node_exporter_state = t("m06.apply.state_skipped")
         if install_node_exporter:
             if progress:
-                progress("Metrik izleme paketi (prometheus-node-exporter) indiriliyor...")
+                progress(t("m06.apply.node_downloading"))
             pkg_ne = run_cmd(
                 ["apt-get", "install", "-y", "prometheus-node-exporter"],
                 env={"DEBIAN_FRONTEND": "noninteractive"},
@@ -426,7 +373,7 @@ class RemoteSyslogModule(Module):
             )
             if pkg_ne.ok:
                 if progress:
-                    progress("Paket kuruldu; dinleme adresi yazılıyor...")
+                    progress(t("m06.apply.node_installed_writing"))
                 # /etc/default/prometheus-node-exporter'ın ARGS satırını
                 # yaz — dinleme adresini bu dosyadan alır.
                 defaults_file = Path(
@@ -455,20 +402,17 @@ class RemoteSyslogModule(Module):
                         "\n".join(new_lines) + "\n", encoding="utf-8",
                     )
                     if progress:
-                        progress(
-                            f"Dinleme adresi ayarlandı: {node_exporter_listen}"
-                        )
+                        progress(t(
+                            "m06.apply.node_listen_set", listen=node_exporter_listen,
+                        ))
                 except OSError as exc:
                     log.warning(
                         "node_exporter defaults dosyası yazılamadı: %s", exc,
                     )
                     if progress:
-                        progress(
-                            "Uyarı: dinleme adresi dosyası yazılamadı; "
-                            "servis varsayılan port ile açılacak."
-                        )
+                        progress(t("m06.apply.node_listen_write_failed"))
                 if progress:
-                    progress("Servis etkinleştiriliyor ve başlatılıyor...")
+                    progress(t("m06.apply.node_starting"))
                 run_cmd(
                     ["systemctl", "restart", "prometheus-node-exporter"],
                     check=False,
@@ -477,24 +421,15 @@ class RemoteSyslogModule(Module):
                     ["systemctl", "enable", "prometheus-node-exporter"],
                     check=False,
                 )
-                node_exporter_state = (
-                    f"kuruldu (dinleme adresi {node_exporter_listen}; "
-                    "Prometheus sunucusu buradan scrape yapabilir)"
+                node_exporter_state = t(
+                    "m06.apply.node_installed_state", listen=node_exporter_listen,
                 )
                 if progress:
-                    progress(
-                        f"Metrik izleme aktif — {node_exporter_listen} adresinde dinliyor."
-                    )
+                    progress(t("m06.apply.node_active", listen=node_exporter_listen))
             else:
-                node_exporter_state = (
-                    "kurulum başarısız (prometheus-node-exporter paketi "
-                    "yüklenemedi)"
-                )
+                node_exporter_state = t("m06.apply.node_failed_state")
                 if progress:
-                    progress(
-                        "Metrik izleme kurulumu başarısız (paket yöneticisi hatası); "
-                        "log iletim akışı devam ediyor."
-                    )
+                    progress(t("m06.apply.node_failed"))
 
         # rsyslog yapılandırmasını yaz
         try:
@@ -505,44 +440,42 @@ class RemoteSyslogModule(Module):
         except OSError as exc:
             return ApplyResult(
                 False,
-                f"rsyslog ek yapılandırma dosyası yazılamadı: {exc}",
+                t("m06.apply.write_failed", error=exc),
             )
 
         # rsyslog'u yeniden başlat
         restart = run_cmd(["systemctl", "restart", "rsyslog"])
         if not restart.ok:
             return ApplyResult(
-                False, "rsyslog yeniden başlatılamadı.",
+                False, t("m06.apply.restart_failed"),
                 details=restart.stderr,
             )
 
         status = run_cmd(["systemctl", "is-active", "rsyslog"])
         if not status.ok:
             return ApplyResult(
-                False, "rsyslog servisi çalıştırılamadı.",
-                details="systemctl status rsyslog komutuyla kontrol edin.",
+                False, t("m06.apply.not_running"),
+                details=t("m06.apply.not_running_details"),
             )
 
         prof = LOG_PROFILES[profile]
         return ApplyResult(
             True,
-            f"Dayanıklı log iletimi {host}:{port}/{proto.upper()} için kuruldu "
-            f"({prof['label']}).",
-            details=(
-                f"Yapılandırma dosyası : {RSYSLOG_CONF}\n"
-                f"Kuyruk dizini        : {RSYSLOG_QUEUE_DIR}\n"
-                f"Hedef                : {host}:{port} ({proto.upper()})\n"
-                f"Log profili          : {prof['label']}\n"
-                f"Disk/sıcaklık izleme : {smart_state}\n"
-                f"Metrik izleme (node) : {node_exporter_state}\n\n"
-                "Kuyruk özellikleri:\n"
-                "  - Uzak sunucu offline: loglar yerel diskte birikir\n"
-                "  - Sunucu geri gelince: birikmiş loglar otomatik gönderilir\n"
-                f"  - Yerel disk tavanı: {QUEUE_MAX_DISK_SPACE.upper()} "
-                "(en kötü profilde bile 3+ ay yerel kayıt)\n"
-                "  - Yeniden deneme aralığı: 30-600 saniye\n\n"
-                f"Test: sunucu tarafında 'tcpdump -n -i any port {port}' ile "
-                "gelen kayıtları görebilirsiniz."
+            t(
+                "m06.apply.done",
+                host=host, port=port, proto=proto.upper(), profile=prof['label'],
+            ),
+            details=t(
+                "m06.apply.done_details",
+                conf=RSYSLOG_CONF,
+                queue_dir=RSYSLOG_QUEUE_DIR,
+                host=host,
+                port=port,
+                proto=proto.upper(),
+                profile=prof['label'],
+                smart=smart_state,
+                node=node_exporter_state,
+                disk_max=QUEUE_MAX_DISK_SPACE.upper(),
             ),
             data={
                 "install_smart_monitoring": install_smart,
@@ -563,14 +496,11 @@ class RemoteSyslogModule(Module):
         from datetime import datetime as _dt
 
         if progress:
-            progress("Mevcut rsyslog yapılandırması okunuyor...")
+            progress(t("m06.test.reading"))
 
         cfg = _parse_config()
         if cfg is None:
-            msg = (
-                f"Yapılandırma dosyası yok ya da geçersiz: {RSYSLOG_CONF}.\n"
-                "Önce bu adımı bir kez uygulayın (Uygula düğmesi)."
-            )
+            msg = t("m06.test.no_config", path=RSYSLOG_CONF)
             if progress:
                 progress(msg)
             return ApplyResult(False, msg)
@@ -579,66 +509,60 @@ class RemoteSyslogModule(Module):
         port = cfg["port"]
         proto = cfg["proto"].lower()
         if progress:
-            progress(f"Hedef: {host}:{port} ({proto.upper()})")
-            progress(f"DNS çözülmesi deneniyor: {host}…")
+            progress(t("m06.test.target", host=host, port=port, proto=proto.upper()))
+            progress(t("m06.test.resolving", host=host))
 
         try:
             addrinfo = _socket.getaddrinfo(host, port,
                                            type=_socket.SOCK_STREAM)
         except _socket.gaierror as exc:
-            msg = f"DNS çözümleme başarısız ({host}): {exc}"
+            msg = t("m06.test.dns_failed", host=host, error=exc)
             if progress:
                 progress(f"{msg}")
             return ApplyResult(False, msg)
 
         resolved = addrinfo[0][4][0] if addrinfo else host
         if progress:
-            progress(f"   → çözümlendi: {resolved}")
+            progress(t("m06.test.resolved", address=resolved))
 
         # Asıl test
         if proto == "tcp":
             if progress:
-                progress(f"TCP el sıkışması deneniyor: {resolved}:{port}…")
+                progress(t("m06.test.tcp_trying", address=resolved, port=port))
             try:
                 with _socket.create_connection((host, port), timeout=5):
                     pass
             except (OSError, _socket.timeout) as exc:
-                msg = (
-                    f"TCP bağlantısı kurulamadı ({host}:{port}): {exc}. "
-                    "Sunucu kapalı veya ağ engelliyor olabilir."
-                )
+                msg = t("m06.test.tcp_failed", host=host, port=port, error=exc)
                 if progress:
                     progress(f"{msg}")
                 return ApplyResult(False, msg)
-            ok_msg = f"✓ TCP bağlantı kuruldu ({host}:{port})."
+            ok_msg = t("m06.test.tcp_ok", host=host, port=port)
             if progress:
                 progress(ok_msg)
-                progress("Sunucu bu portu dinliyor; rsyslog logları "
-                         "kayıpsız iletebilecek durumda.")
+                progress(t("m06.test.tcp_ok_hint"))
             return ApplyResult(True, ok_msg)
 
         # UDP — best-effort: paket gönderebildiysek başarı say.
         if progress:
-            progress(f"UDP örnek mesaj gönderiliyor: {resolved}:{port}…")
+            progress(t("m06.test.udp_sending", address=resolved, port=port))
         sample = (
             f"<13>{_dt.now().strftime('%b %d %H:%M:%S')} "
-            f"tiha-test: TiHA log sunucusu erişim testi"
+            + t("m06.test.udp_sample")
         ).encode("utf-8")
         try:
             with _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM) as s:
                 s.settimeout(5)
                 s.sendto(sample, (host, port))
         except (OSError, _socket.timeout) as exc:
-            msg = f"UDP mesajı gönderilemedi ({host}:{port}): {exc}"
+            msg = t("m06.test.udp_failed", host=host, port=port, error=exc)
             if progress:
                 progress(f"{msg}")
             return ApplyResult(False, msg)
-        ok_msg = f"✓ UDP mesajı gönderildi ({host}:{port})."
+        ok_msg = t("m06.test.udp_ok", host=host, port=port)
         if progress:
             progress(ok_msg)
-            progress("UDP'de ack yoktur — sunucu tarafında "
-                     "`journalctl -u rsyslog` veya `tcpdump -n -i any "
-                     f"port {port}` ile gerçekten alındığını teyit edin.")
+            progress(t("m06.test.udp_ok_hint", port=port))
         return ApplyResult(True, ok_msg)
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
@@ -672,16 +596,16 @@ class RemoteSyslogModule(Module):
         # Sonuç raporu
         summary_parts = []
         if removed_files > 0:
-            summary_parts.append(f"Yapılandırma dosyası kaldırıldı")
+            summary_parts.append(t("m06.undo.part_config_removed"))
         if cleaned_queue:
-            summary_parts.append("bekleyen log kuyruğu temizlendi")
+            summary_parts.append(t("m06.undo.part_queue_cleaned"))
         if restart_ok:
-            summary_parts.append("rsyslog yeniden başlatıldı")
+            summary_parts.append(t("m06.undo.part_restarted"))
 
-        summary = "Dayanıklı log iletimi kaldırıldı: " + ", ".join(summary_parts) + "."
+        summary = t("m06.undo.summary", parts=", ".join(summary_parts))
 
-        details = f"Kaldırılan dosya sayısı: {removed_files}"
+        details = t("m06.undo.removed_count", count=removed_files)
         if not restart_ok:
-            details += f"\n⚠ rsyslog yeniden başlatma hatası: {restart.stderr.strip()}"
+            details += t("m06.undo.restart_error", error=restart.stderr.strip())
 
         return ApplyResult(True, summary, details=details if not restart_ok else None)
