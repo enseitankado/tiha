@@ -78,7 +78,6 @@ row.tiha-step-failed {
     background-color: #f2f2f2;
     color: #111;
 }
-.tiha-help-btn:checked,
 .tiha-help-btn:active {
     background-color: #e6e6e6;
     color: #111;
@@ -339,6 +338,13 @@ entry.tiha-readonly {
     font-weight: 700;
     font-size: 11pt;
     margin-top: 10px;
+}
+
+/* "?" düğmesinin açtığı açıklama penceresi: okumak için açıldığından
+   sayfa içindeki soluk 9pt yerine daha belirgin. */
+.tiha-rationale-dialog label.tiha-rationale {
+    font-size: 10pt;
+    opacity: 0.9;
 }
 
 /* Açıklama etiketlerinde satır arası boşluk */

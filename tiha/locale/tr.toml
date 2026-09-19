@@ -325,7 +325,7 @@ m16 = "Açılış menüsünün düzenlenmesini parolaya bağlar."
 m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya hazırlar."
 
 [ui.pages]
-rationale_toggle_tip = "Bu adımın açıklamasını göster / gizle"
+rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\
 Deneysel: Bu adım gerçek tahta donanımında henüz doğrulanmadı. Önce tek bir \
 tahtada deneyin; sorun görürseniz \"Bu adımı geri al\" ile eski duruma \

@@ -306,8 +306,8 @@ class ModulePage(Gtk.Box):
 
     def _build(self) -> None:
         # Rationale 3 cümleden uzunsa: başlığın sağına yuvarlak "?" düğmesi;
-        # tıklanınca (Revealer içindeki) rationale açılır. 3 ve altı ise
-        # rationale hemen görünür — düğme yok.
+        # tıklanınca rationale ayrı bir pencerede açılır, sayfa kaymaz. 3 ve
+        # altı ise rationale sayfada hemen görünür — düğme yok.
         rationale_text = (self.module.rationale or "").strip()
         sentence_count = _count_sentences(rationale_text)
         is_long_rationale = sentence_count > 3 and not getattr(
@@ -318,10 +318,11 @@ class ModulePage(Gtk.Box):
         if is_long_rationale:
             heading_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             heading_row.pack_start(heading_lbl, False, False, 0)
-            help_btn = Gtk.ToggleButton(label="?")
+            help_btn = Gtk.Button(label="?")
             help_btn.get_style_context().add_class("tiha-help-btn")
             help_btn.set_tooltip_text(t("ui.pages.rationale_toggle_tip"))
             help_btn.set_valign(Gtk.Align.CENTER)
+            help_btn.connect("clicked", lambda *_: self._show_rationale_dialog())
             heading_row.pack_start(help_btn, False, False, 0)
             self.pack_start(heading_row, False, False, 0)
         else:
@@ -340,38 +341,8 @@ class ModulePage(Gtk.Box):
         self.pack_start(self._notice_holder, False, False, 0)
         self._refresh_notice()
 
-        rationale_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        rationale_lbl = _wrapping_label(rationale_text, klass="tiha-rationale")
-        rationale_container.pack_start(rationale_lbl, False, False, 0)
-
-        # İsteğe bağlı: adıma ait teknik belge / algoritma şeması linki.
-        # Emoji kullanılmıyor — sadece linkin kendisi.
-        if self.module.doc_url:
-            label = self.module.doc_label or t("ui.pages.doc_link_default")
-            doc_lbl = Gtk.Label(xalign=0)
-            doc_lbl.set_markup(
-                f'<a href="{GLib.markup_escape_text(self.module.doc_url)}">'
-                f'{GLib.markup_escape_text(label)}</a>'
-            )
-            doc_lbl.set_use_markup(True)
-            doc_lbl.set_selectable(False)
-            doc_lbl.set_track_visited_links(False)
-            doc_lbl.get_style_context().add_class("tiha-rationale")
-            rationale_container.pack_start(doc_lbl, False, False, 0)
-
-        if is_long_rationale:
-            revealer = Gtk.Revealer()
-            revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
-            revealer.set_transition_duration(180)
-            revealer.set_reveal_child(False)
-            revealer.add(rationale_container)
-            self.pack_start(revealer, False, False, 0)
-            help_btn.connect(
-                "toggled",
-                lambda b, r=revealer: r.set_reveal_child(b.get_active()),
-            )
-        else:
-            self.pack_start(rationale_container, False, False, 0)
+        if not is_long_rationale:
+            self.pack_start(self._rationale_box(), False, False, 0)
 
         preview_text = ""
         try:
@@ -677,6 +648,63 @@ class ModulePage(Gtk.Box):
         self._refresh_preview()
         self._refresh_conditional_fields()
         self._refresh_button_labels()
+
+    def _rationale_box(self) -> Gtk.Box:
+        """Adım açıklaması + (varsa) teknik belge bağlantısı. Kısa
+        açıklamalarda sayfaya, uzunlarda "?" penceresine konur."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        text = (self.module.rationale or "").strip()
+        box.pack_start(_wrapping_label(text, klass="tiha-rationale"), False, False, 0)
+
+        # İsteğe bağlı: adıma ait teknik belge / algoritma şeması linki.
+        # Emoji kullanılmıyor — sadece linkin kendisi.
+        if self.module.doc_url:
+            label = self.module.doc_label or t("ui.pages.doc_link_default")
+            doc_lbl = Gtk.Label(xalign=0)
+            doc_lbl.set_markup(
+                f'<a href="{GLib.markup_escape_text(self.module.doc_url)}">'
+                f'{GLib.markup_escape_text(label)}</a>'
+            )
+            doc_lbl.set_use_markup(True)
+            doc_lbl.set_selectable(False)
+            doc_lbl.set_track_visited_links(False)
+            doc_lbl.get_style_context().add_class("tiha-rationale")
+            box.pack_start(doc_lbl, False, False, 0)
+        return box
+
+    def _show_rationale_dialog(self) -> None:
+        """Uzun adım açıklamasını ayrı, kaydırılabilir bir pencerede gösterir."""
+        dlg = Gtk.Dialog(
+            title=self.module.title,
+            transient_for=self.get_toplevel(),
+            modal=True,
+            destroy_with_parent=True,
+        )
+        dlg.add_button(t("ui.main.close"), Gtk.ResponseType.CLOSE)
+        dlg.set_default_size(680, 520)
+
+        content = dlg.get_content_area()
+        heading = _wrapping_label(self.module.title, klass="tiha-heading")
+        heading.set_margin_top(14)
+        heading.set_margin_start(18)
+        heading.set_margin_end(18)
+        content.pack_start(heading, False, False, 0)
+
+        body = self._rationale_box()
+        body.get_style_context().add_class("tiha-rationale-dialog")
+        body.set_margin_top(8)
+        body.set_margin_bottom(14)
+        body.set_margin_start(18)
+        body.set_margin_end(18)
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_vexpand(True)
+        scrolled.add(body)
+        content.pack_start(scrolled, True, True, 0)
+
+        dlg.show_all()
+        dlg.run()
+        dlg.destroy()
 
     def _refresh_notice(self) -> None:
         for child in self._notice_holder.get_children():
