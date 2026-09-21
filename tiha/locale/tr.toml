@@ -2486,7 +2486,7 @@ tahtalar aynı adla görünebilir.\
 [m11]
 title = "Otomatik kapanma"
 sidebar_title = "Otomatik kapanma"
-apply_hint = "ETA-Shutdown tabanlı otomatik kapanma sistemi kurulur."
+apply_hint = "Seçilen kapanma ayarı kurulur; iki kutu da boşsa otomatik kapanma kapatılır."
 rationale = """\
 Tahtanın unutulması durumunda otomatik kapatma sistemi kurar. Belirlenen \
 saatte veya tahta boşta kaldığında otomatik olarak kapatma işlemi yapılır. \
@@ -2596,7 +2596,6 @@ details_countdown_bullets = """\
 \u0020\u0020\u0020- {countdown} önceden uyarı penceresi\n\
 \u0020\u0020\u0020- 10 dakika erteleme seçeneği\
 """
-details_both_off = "ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu"
 details_exempt = "🚫 Otomatik kapanmanın uygulanmayacağı tahtalar ({count}):"
 details_exempt_this_board = """\
 \u0020\u0020\u0020⚠️ Bu tahtanın MAC adresi listede. İmajın hazırlandığı bu \
@@ -2614,7 +2613,17 @@ Ayarları sonradan değiştirmek için bu adımı yeniden uygulayabilir ya \
 da bu sayfanın altındaki \"ETA Zamanlı Kapatma'yı aç\" bağlantısıyla \
 Pardus'un kendi ayar penceresini kullanabilirsiniz.\
 """
-summary_installed = "Otomatik kapanma sistemi kuruldu"
+summary_off = "Otomatik kapanma kapatıldı"
+progress_off = "Otomatik kapanma kapatılıyor (sabit saat ve kullanılmadığında kapatma kapalı)..."
+progress_off_done = "✅ Otomatik kapanma kapatıldı"
+details_off = """\
+✓ Sabit saat kapatma: kapalı\n\
+✓ Kullanılmadığında kapatma: kapalı\n\
+✓ Yapılandırma güncellendi: {config}\n\
+\n\
+Bu tahta ve bu imajdan çıkan tahtalar kendiliğinden kapanmaz. Kapanma \
+servisini de kaldırmak isterseniz Özet'teki \"Geri al\"ı kullanın.\
+"""
 summary_active = "Otomatik kapanma sistemi kuruldu ve aktifleştirildi"
 
 [m11.undo]
@@ -2662,7 +2671,7 @@ verebilsin), üst sınır 600 saniye (10 dakika).\
 """
 
 [m11.params.exempt_macs]
-label = "Otomatik kapanmadan muaf tahtalar (MAC adresleri)"
+label = "Otomatik kapanmadan muaf\ntahtalar (MAC adresleri)"
 placeholder = "ör. 00:1a:2b:3c:4d:5e"
 help = """\
 Bu ayar imajla bütün klonlara gider. Burada MAC adresi verilen tahtalarda \
@@ -2691,8 +2700,8 @@ Tahtanın {idle} dakika kullanılmadığında kapanmasını ayarladınız (sabit
 saatte kapanma kapalı). {warn}\
 """
 none = """\
-Otomatik kapanma altyapısını kurdunuz ama iki kapanma modunu da kapalı \
-bıraktınız; bu imajdan çıkan tahtalar kendiliğinden kapanmayacak.\
+Otomatik kapanmayı kapattınız (sabit saat ve kullanılmadığında kapatma \
+kapalı); bu imajdan çıkan tahtalar kendiliğinden kapanmayacak.\
 """
 test_idle = """\
 Klonda oturum açıp dokunmadan bırakın; yaklaşık {minutes} dakika sonra uyarı \

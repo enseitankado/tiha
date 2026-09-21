@@ -1129,6 +1129,10 @@ class PowerManagementModule(Module):
                     if progress:
                         progress(blank_warning)
 
+        # İki mod da kapalı: kurulacak bir şey yok, yalnız kapanma kapatılır.
+        if not auto_enabled and not idle_enabled:
+            return self._apply_off(auto_hour, auto_minute, idle_minute, progress)
+
         if progress:
             progress(t("m11.apply.progress_backup"))
 
@@ -1246,9 +1250,6 @@ class PowerManagementModule(Module):
             if blank_warning:
                 details_lines.extend(["", blank_warning])
 
-        if not auto_enabled and not idle_enabled:
-            details_lines.append(t("m11.apply.details_both_off"))
-
         if exempt_macs:
             details_lines.extend([
                 "",
@@ -1263,16 +1264,52 @@ class PowerManagementModule(Module):
             t("m11.apply.details_management"),
         ])
 
-        if auto_enabled or idle_enabled:
-            summary = t("m11.apply.summary_active")
-        else:
-            summary = t("m11.apply.summary_installed")
-
         return ApplyResult(
             True,
-            summary,
+            t("m11.apply.summary_active"),
             details="\n".join(details_lines),
             data={"exempt_macs": exempt_macs},
+        )
+
+    def _apply_off(self, auto_hour: int, auto_minute: int, idle_minute: int,
+                   progress=None) -> ApplyResult:
+        """Sabit saat ve kullanılmadığında kapatma kapalıyken uygulama.
+
+        Servis dosyalarına dokunulmaz (daha önce kurulduysa kapalı ayarla
+        boşta bekler; kaldırmak "Geri al"ın işi). Yalnız yapılandırma iki
+        mod kapalı olacak biçimde yazılır; saat/süre tercihleri dosyada
+        kalır ki ETA Zamanlı Kapatma açıldığında aynı değerler görünsün.
+        """
+        if progress:
+            progress(t("m11.apply.progress_off"))
+        config = configparser.ConfigParser()
+        config["AUTO_SHUTDOWN"] = {
+            "enabled": "False",
+            "hour": str(auto_hour),
+            "minute": str(auto_minute),
+        }
+        config["TIMED_MODE"] = {"mode": "none", "hour": "0", "minute": str(idle_minute)}
+        try:
+            ETA_SHUTDOWN_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+            with open(ETA_SHUTDOWN_CONFIG, "w", encoding="utf-8") as f:
+                config.write(f)
+            ETA_SHUTDOWN_CONFIG.chmod(0o644)
+        except OSError as exc:
+            return ApplyResult(False, t("m11.apply.error_config", error=exc))
+        try:
+            EXEMPT_MARKER.unlink()
+        except OSError:
+            pass
+        # Servis çalışıyorsa yeni (kapalı) ayarı hemen okusun.
+        if run_cmd(["systemctl", "is-active", "eta-shutdown"]).ok:
+            run_cmd(["systemctl", "restart", "eta-shutdown"])
+        if progress:
+            progress(t("m11.apply.progress_off_done"))
+        return ApplyResult(
+            True,
+            t("m11.apply.summary_off"),
+            details=t("m11.apply.details_off", config=ETA_SHUTDOWN_CONFIG),
+            data={"exempt_macs": []},
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:

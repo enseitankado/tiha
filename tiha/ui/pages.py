@@ -480,7 +480,6 @@ class ModulePage(Gtk.Box):
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
         if not hasattr(self, "_auto_values"):
             self._auto_values: dict[str, str] = {}
-        self._toggle_rows: dict[str, list[Gtk.Widget]] = {}
         grid = Gtk.Grid(column_spacing=10, row_spacing=4)
         grid.get_style_context().add_class("tiha-form")
         row_idx = 0
@@ -556,12 +555,6 @@ class ModulePage(Gtk.Box):
                 row_idx += 1
                 row_widgets.append(more)
 
-            if field.get("visible_when_any"):
-                # Görünürlüğü onay kutularına bağlı satır; ilk durum aşağıdaki
-                # _update_conditional_fields turunda ayarlanır.
-                self._toggle_rows[field["key"]] = row_widgets
-                for w in row_widgets:
-                    w.set_no_show_all(True)
             if gate:
                 self._conditional_field_widgets[field["key"]] = row_widgets
                 if not initial_visible:
@@ -712,23 +705,6 @@ class ModulePage(Gtk.Box):
                 for k in sources
             )
             widget.set_sensitive(any_on)
-
-        # ``visible_when_any: [kutu, kutu, …]``: listedeki kutulardan biri
-        # işaretliyken satır görünür (ör. m11 muaf tahtalar listesi).
-        for f in schema:
-            sources = f.get("visible_when_any") or []
-            if checkbox_key not in sources:
-                continue
-            any_on = any(
-                getattr(self._fields.get(k), "get_active", lambda: False)()
-                for k in sources
-            )
-            for w in getattr(self, "_toggle_rows", {}).get(f["key"], ()):
-                w.set_no_show_all(not any_on)
-                if any_on:
-                    w.show_all()
-                else:
-                    w.set_visible(False)
 
     def _refresh_preview(self) -> None:
         """Önizleme metnini yeniden üretip aynı widget'a yazar."""

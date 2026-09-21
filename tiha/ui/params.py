@@ -366,8 +366,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # Yeniden girişte kurulu servisteki liste gelsin.
             "default_from": "current_exempt_macs",
             "placeholder": t("m11.params.exempt_macs.placeholder"),
-            # Kapanma modu seçilmemişse muaf tutulacak bir şey yok: satır gizli.
-            "visible_when_any": ["auto_enabled", "idle_enabled"],
+            # Kapanma modu seçilmemişse muaf tutulacak bir şey yok: kutu pasif.
+            "enable_when_any": ["auto_enabled", "idle_enabled"],
             "help": t("m11.params.exempt_macs.help"),
         },
     ],
