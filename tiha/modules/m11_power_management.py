@@ -1014,6 +1014,10 @@ class PowerManagementModule(Module):
             progress(t("m11.apply.progress_done"))
 
         # Özet bilgi
+        if countdown_seconds % 60 == 0:
+            countdown_label = t("m11.preview.duration_minutes", minutes=countdown_seconds // 60)
+        else:
+            countdown_label = t("m11.preview.duration_seconds", seconds=countdown_seconds)
         details_lines = [
             t("m11.apply.details_installed", backup=ETA_SHUTDOWN_SERVICE_BACKUP,
               config=ETA_SHUTDOWN_CONFIG),
@@ -1023,13 +1027,13 @@ class PowerManagementModule(Module):
         if auto_enabled:
             details_lines.extend([
                 t("m11.apply.details_fixed", hour=auto_hour, minute=auto_minute),
-                t("m11.apply.details_countdown_bullets"),
+                t("m11.apply.details_countdown_bullets", countdown=countdown_label),
             ])
 
         if idle_enabled:
             details_lines.extend([
                 t("m11.apply.details_idle", minutes=idle_minute),
-                t("m11.apply.details_countdown_bullets"),
+                t("m11.apply.details_countdown_bullets", countdown=countdown_label),
             ])
             if blank_warning:
                 details_lines.extend(["", blank_warning])
@@ -1161,7 +1165,8 @@ class PowerManagementModule(Module):
                 "auto_hour": str(auto_hour),
                 "auto_minute": str(auto_minute),
                 "idle_enabled": str(timed_mode != "none"),
-                "idle_minute": str(timed_minute)
+                "idle_minute": str(timed_minute),
+                "countdown_seconds": str(_current_countdown_seconds()),
             }
         except Exception as exc:
             log.warning("Config okuma hatası: %s", exc)

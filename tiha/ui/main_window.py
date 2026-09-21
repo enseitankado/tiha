@@ -9,6 +9,7 @@ altında sabit kalır.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import gi
@@ -759,7 +760,31 @@ class TiHAWindow(Gtk.Window):
         # zorlamasın diye açıkça etkinleştiriyoruz.
         self.content_scroll.set_overlay_scrolling(True)
         self.content_scroll.add(self.stack)
-        right.pack_start(self.content_scroll, True, True, 0)
+
+        # Sayfa hazırlanırken görünen "Yükleniyor…" katmanı. Kaydırılabilir
+        # alanın DIŞINDA durur: sayfalar ortak bir Stack'te olduğu için orada
+        # en uzun sayfanın yüksekliğine göre ortalanır, görünmezdi.
+        loading = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        loading.set_halign(Gtk.Align.CENTER)
+        loading.set_valign(Gtk.Align.CENTER)
+        self.loading_spinner = Gtk.Spinner()
+        self.loading_spinner.set_size_request(32, 32)
+        loading.pack_start(self.loading_spinner, False, False, 0)
+        loading_lbl = Gtk.Label(label=t("ui.main.loading"))
+        loading_lbl.get_style_context().add_class("tiha-rationale")
+        loading.pack_start(loading_lbl, False, False, 0)
+
+        self.content_stack = Gtk.Stack()
+        self.content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.content_stack.set_transition_duration(120)
+        self.content_stack.add_named(self.content_scroll, "content")
+        self.content_stack.add_named(loading, "loading")
+        self.content_stack.set_visible_child_name("content")
+        right.pack_start(self.content_stack, True, True, 0)
+        # Gezinme belirteci: üst üste tıklamalarda yalnız son sayfanın
+        # hazırlanan durumu uygulanır.
+        self._nav_token = 0
+        self._loading_timer = 0
 
         # Aksiyon çubuğu
         self.action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -916,40 +941,82 @@ class TiHAWindow(Gtk.Window):
         # çağrılırsa no-op olur, ekstra etkisi yok.
         self._show_page_index(row.get_index())
 
+    # Sayfa durumu bu süreden uzun sürerse "Yükleniyor…" gösterilir; hızlı
+    # sayfalarda gösterge yanıp sönmesin.
+    LOADING_DELAY_MS = 120
+
     def _show_page_index(self, index: int) -> None:
+        """Sayfaya geçer.
+
+        Tıklanan satır ve alt çubuk HEMEN güncellenir. Sayfanın durumu
+        (önizleme, şartlı alanlar, Özet raporu…) arka plan iş parçacığında
+        hesaplanır; kısa sürede bitmezse içerik alanında ortalanmış
+        "Yükleniyor…" görünür, hazır olunca içerik basılır. Eskiden bütün
+        bu iş ana iş parçacığında yapılıyor, arayüz 1-2 sn donuyordu ve
+        tıklama hiç algılanmamış gibi görünüyordu.
+        """
         index = max(0, min(index, len(self.pages) - 1))
         self.current_index = index
         page = self.pages[index]
-        self.stack.set_visible_child(page)
+        self._nav_token += 1
+        token = self._nav_token
 
+        # 1) Anında geri bildirim: seçili satır + aksiyon çubuğu
+        self._mark_sidebar_row(index)
+        self._update_action_bar(page, index)
+
+        # 2) Ağır durum hesabı arka planda
+        self._cancel_loading_timer()
+        collect = getattr(page, "collect_view_state", None)
+        if not callable(collect):
+            self._present_page(page, token, None)
+            return
+        self._loading_timer = GLib.timeout_add(
+            self.LOADING_DELAY_MS, self._show_loading, token,
+        )
+
+        def worker() -> None:
+            try:
+                state = collect()
+            except Exception as exc:  # hesap hatası sayfayı düşürmesin
+                log.warning("Sayfa durumu hazırlanamadı: %s", exc)
+                state = None
+            GLib.idle_add(self._present_page, page, token, state)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_loading(self, token: int) -> bool:
+        self._loading_timer = 0
+        if token == self._nav_token:
+            self.loading_spinner.start()
+            self.content_stack.set_visible_child_name("loading")
+        return False
+
+    def _cancel_loading_timer(self) -> None:
+        if self._loading_timer:
+            GLib.source_remove(self._loading_timer)
+            self._loading_timer = 0
+
+    def _present_page(self, page, token: int, state) -> bool:
+        """Hazırlanan durumu sayfaya yazar ve sayfayı gösterir."""
+        if token != self._nav_token:
+            return False  # kullanıcı bu arada başka adıma geçti
+        self._cancel_loading_timer()
+        apply_state = getattr(page, "apply_view_state", None)
+        if callable(apply_state) and state is not None:
+            try:
+                apply_state(state)
+            except Exception as exc:
+                log.warning("Sayfa durumu uygulanamadı: %s", exc)
+        self.stack.set_visible_child(page)
         # İçerik scroll'u en başa çek
         adj = self.content_scroll.get_vadjustment()
         if adj:
             adj.set_value(0)
+        self.content_stack.set_visible_child_name("content")
+        self.loading_spinner.stop()
 
-        # Özet sayfası her açılışta güncellensin
-        if isinstance(page, SummaryPage):
-            page.refresh()
-
-        # OTP modülü sayfası her açılışta canlı veri ile güncellensin
-        if hasattr(page, 'module') and page.module.id == "m03_otp_secrets":
-            page._refresh_preview()
-
-        # Güç yönetimi modülü her açılışta güncel eta-shutdown config'ini okuysun
-        if hasattr(page, 'module') and page.module.id == "m11_power_management":
-            page._refresh_preview()
-            # Form alanlarını da güncel config'e göre doldur
-            if hasattr(page.module, 'get_current_config'):
-                current_config = page.module.get_current_config()
-                if current_config:
-                    page._update_form_fields(current_config)
-
-        # Modül sayfaları açıldığında önizleme/şartlı alanları sistemin
-        # güncel durumuna göre tazele. (Sayfalar uygulama başlangıcında
-        # bir kez kuruluyor; bu olmadan rapor kutusu o anki anlık değil
-        # uygulama açılış anının görüntüsü olarak kalırdı.)
         if isinstance(page, ModulePage):
-            page._refresh_after_action()
             # Yavaş senkron işleri (apt sorgusu, dpkg-query, ağ
             # indirme...) UI thread'ini bloke etmeden arka planda
             # başlat. Sonuç gelince main_window önizlemeyi + gate'i
@@ -961,9 +1028,17 @@ class TiHAWindow(Gtk.Window):
             except Exception as exc:
                 log.debug("prefetch_preview_state hatası (%s): %s",
                           page.module.id, exc)
+            # Auto-apply modüllerini (salt-okunur) bir kez kendi tetikle
+            if page.module.auto_apply and not page._auto_applied:
+                page._auto_applied = True
+                GLib.idle_add(page.run_apply)
 
-        # Aktif satır görsel vurgusu — her giriş yolunda (sidebar
-        # tıklaması, İleri/Geri, programatik) tutarlı kalsın.
+        self._update_navigation_gate()
+        return False
+
+    def _mark_sidebar_row(self, index: int) -> None:
+        """Aktif satır görsel vurgusu — her giriş yolunda (sidebar
+        tıklaması, İleri/Geri, programatik) tutarlı kalsın."""
         for i in range(len(self.pages)):
             old_row = self.sidebar_list.get_row_at_index(i)
             if old_row:
@@ -973,6 +1048,7 @@ class TiHAWindow(Gtk.Window):
             self.sidebar_list.select_row(row)
             row.get_style_context().add_class("tiha-step-active")
 
+    def _update_action_bar(self, page, index: int) -> None:
         # Aksiyon çubuğu görünürlüğü (Apply ve ipucu yalnızca manuel modüllerde)
         is_module = isinstance(page, ModulePage)
         show_apply = is_module and not page.module.auto_apply
@@ -980,17 +1056,9 @@ class TiHAWindow(Gtk.Window):
         hint = page.module.apply_hint if is_module else ""
         self.lbl_apply_hint.set_text(t("ui.main.apply_hint", hint=hint) if (show_apply and hint) else "")
         self.lbl_apply_hint.set_visible(bool(show_apply and hint))
-
-        # Auto-apply modüllerini (salt-okunur) bir kez kendi tetikle
-        if is_module and page.module.auto_apply and not page._auto_applied:
-            page._auto_applied = True
-            GLib.idle_add(page.run_apply)
-
         # Özet sayfasında "Bitir" gösterelim
         is_last = index >= len(self.pages) - 1
         self.btn_next.set_label(t("ui.main.btn_finish") if is_last else t("ui.main.btn_next"))
-
-        self._update_navigation_gate()
 
     def _update_navigation_gate(self) -> None:
         """Mevcut sayfadaki kurallara göre İleri düğmesini etkin/pasif tutar.

@@ -331,6 +331,15 @@ def _mb(n_bytes: int) -> str:
 
 # --- logind yardımcıları -----------------------------------------------------
 
+def _unlink_ok(path: Path, errors: list[str]) -> bool:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        errors.append(f"{path}: {exc}")
+        return False
+    return True
+
+
 def _runtime_kill_user_processes() -> bool | None:
     """logind'in **şu an çalışan** KillUserProcesses değeri (dosya değil)."""
     r = run_cmd(
@@ -634,6 +643,11 @@ class PerformanceModule(Module):
     # Formun sistemden dolan alanları (params.py "default_from")
     # ------------------------------------------------------------------
 
+    def session_cleanup_active(self) -> bool:
+        """Oturum kalıntısı temizliği (TiHA'nın logind ayarı) kurulu mu?
+        Ayar açılışta etkin olur; kutu kurulu olup olmadığını gösterir."""
+        return self._dropin_is_ours()
+
     def light_mode_active(self) -> bool:
         """Hafif mod şu an tüm kullanıcılara uygulanıyor mu?"""
         return _read_light_settings() is not None and LIGHT_AUTOSTART.exists()
@@ -782,8 +796,10 @@ class PerformanceModule(Module):
         # Kutu sisteme bakarak dolduğu için (params.py "default_from"),
         # işaretinin kaldırılıp uygulanması bilinçli bir "kaldır" isteğidir.
         light_remove = not light_mode and self.light_mode_active()
+        # Oturum kalıntıları kutusu da sisteme bakarak doluyor; aynı kural.
+        session_remove = not kill_processes and self.session_cleanup_active()
 
-        if not (kill_processes or light_mode or light_remove
+        if not (kill_processes or session_remove or light_mode or light_remove
                 or cursor_xorg_on or cursor_service):
             return ApplyResult(False, t("m17.apply.nothing_selected"))
 
@@ -811,6 +827,17 @@ class PerformanceModule(Module):
                 data["session_cleanup"] = True
             else:
                 failures.append(text)
+
+        if session_remove:
+            removed = (
+                self._restore_or_remove("logind_dropin", original, failures)
+                if original["touched"].get("logind")
+                else _unlink_ok(LOGIND_DROPIN, failures)
+            )
+            if removed:
+                original["touched"]["logind"] = False
+                summary.append(t("m17.apply.logind_removed"))
+                data["session_cleanup_removed"] = True
 
         if light_mode:
             keys = [

@@ -361,6 +361,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         {"label": t("m17.params.heading_session"), "type": "heading"},
         {
             "key": "kill_user_processes",
+            # Kutu sistemin durumunu gösterir; işareti kaldırıp uygulamak
+            # ayarı kaldırır (m17 apply).
+            "default_from": "session_cleanup_active",
             "label": t("m17.params.kill_user_processes.label"),
             "type": "bool",
             "default": "True",
@@ -495,6 +498,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m15_wake_on_lan": [
         {
             "key": "enable_wol_listen",
+            # Kutu servisin kurulu olup olmadığını gösterir; işareti
+            # kaldırıp uygulamak servisi kaldırır (m15 apply).
+            "default_from": "wol_active",
             "label": t("m15.params.enable_wol_listen.label"),
             "type": "bool",
             "required": False,

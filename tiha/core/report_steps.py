@@ -505,6 +505,9 @@ _WOL_SERVICE = "/etc/systemd/system/tiha-wake-on-lan.service"
 
 
 def narrate_m15(ctx: StepContext, rep: StepReport) -> None:
+    if ctx.data.get("wol_removed"):
+        rep.done.append(t("m15.report.removed"))
+        return
     rep.done.append(t("m15.report.done"))
     if ctx.data.get("was_ethtool_installed") is False:
         rep.done.append(t("m15.report.ethtool"))
@@ -685,6 +688,8 @@ _LIGHT_LABELS = {
 
 def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
+    if d.get("session_cleanup_removed"):
+        rep.done.append(t("m17.report.session_removed"))
     if d.get("session_cleanup"):
         rep.done.append(t("m17.report.session_done"))
         rep.tests.append(t("m17.report.test_session"))

@@ -101,6 +101,28 @@ WantedBy=multi-user.target
 """
 
 
+def _account_report() -> str:
+    """Sonuç penceresi için: açılış betiğinin kuralına göre (UID
+    1000–59999, etapadmin hariç) hangi hesapların parolası sıfırlanacak,
+    hangilerine dokunulmayacak."""
+    otp_users = _otp_registered_users()
+    wiped = sorted(u for u in _human_users() if u not in PROTECTED_USERS)
+    lines = [t("m02.apply.wiped_header", count=len(wiped))]
+    if not wiped:
+        lines.append(t("m02.apply.wiped_none"))
+    for user in wiped:
+        # Ortak ogretmen/ogrenci hesaplarına EBA QR ile de girilir; PIN
+        # uyarısı yalnız kişisel hesaplar için anlamlı.
+        if user not in STANDARD_USERS and user not in otp_users:
+            lines.append(t("m02.apply.wiped_user_no_pin", user=user))
+        else:
+            lines.append(f"  - {user}")
+    lines += ["", t("m02.apply.kept_header")]
+    lines += [f"  - {user}" for user in ("root", "etapadmin")]
+    lines += ["", t("m02.apply.footer")]
+    return "\n".join(lines)
+
+
 def _human_users() -> list[str]:
     return [p.pw_name for p in pwd.getpwall() if 1000 <= p.pw_uid < 60000]
 
@@ -188,14 +210,7 @@ class BootPasswordWipeModule(Module):
         if not enable.ok:
             return ApplyResult(False, t("m02.apply.enable_failed"), details=enable.stderr)
 
-        return ApplyResult(
-            True,
-            t("m02.apply.done"),
-            details=t(
-                "m02.apply.done_details",
-                script=BOOT_WIPE_SCRIPT, service=BOOT_WIPE_SERVICE,
-            ),
-        )
+        return ApplyResult(True, t("m02.apply.done"), details=_account_report())
 
     def pre_undo_prompt(self, data: dict) -> dict | None:
         """Eğer sistemde standart dışı kullanıcı varsa UI'dan onay iste."""

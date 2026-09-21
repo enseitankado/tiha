@@ -665,6 +665,11 @@ class ModulePage(Gtk.Box):
         except Exception as exc:
             log.warning("preview tazelenemedi %s: %s", self.module.id, exc)
             return
+        self._set_preview_text(new_text)
+
+    def _set_preview_text(self, new_text: str) -> None:
+        if self._preview_widget is None:
+            return
         if isinstance(self._preview_widget, Gtk.ScrolledWindow):
             tv = getattr(self._preview_widget, "_textview", None)
             if tv is not None:
@@ -697,10 +702,79 @@ class ModulePage(Gtk.Box):
     def _refresh_after_action(self) -> None:
         """Apply / buton işlemi sonrası önizleme + şartlı alan + dinamik
         button etiketi tazeleme."""
-        self._refresh_notice()
-        self._refresh_preview()
-        self._refresh_conditional_fields()
-        self._refresh_button_labels()
+        self.apply_view_state(self.collect_view_state())
+
+    # --- Sayfa açılışı: ağır hesap arka planda, yazma ana iş parçacığında ---
+    # Sayfa geçişinde modül önizlemesi, şartlı alan denetimleri ve düğme
+    # etiketleri alt süreç çalıştırabiliyor (dconf, apt, dpkg…). Bunlar ana
+    # iş parçacığında yapılınca arayüz 1-2 sn donuyordu. collect_view_state
+    # GTK'ya dokunmadan hesaplar (arka planda çağrılabilir);
+    # apply_view_state sonucu widget'lara yazar (ana iş parçacığında).
+
+    def collect_view_state(self) -> dict:
+        state: dict = {}
+
+        def safe(label, fn):
+            try:
+                return fn()
+            except Exception as exc:
+                log.warning("%s başarısız %s: %s", label, self.module.id, exc)
+                return None
+
+        state["notice"] = safe("notice", self.module.notice)
+        if self._preview_widget is not None:
+            state["preview"] = safe("preview", self.module.preview)
+        schema = params_schema.get(self.module.id) or []
+        gates: dict[str, bool] = {}
+        labels: dict[str, str] = {}
+        for field in schema:
+            gate = field.get("visible_when")
+            if gate:
+                fn = getattr(self.module, gate, None)
+                gates[field["key"]] = bool(callable(fn) and safe(gate, fn))
+            source = field.get("label_from")
+            if source:
+                fn = getattr(self.module, source, None)
+                if callable(fn):
+                    value = safe(source, fn)
+                    if isinstance(value, str) and value:
+                        labels[field["key"]] = value
+        state["gates"] = gates
+        state["labels"] = labels
+        # Otomatik kapanma: form her açılışta güncel eta-shutdown ayarını
+        # göstersin (ETA Zamanlı Kapatma arayüzünden değişmiş olabilir).
+        if self.module.id == "m11_power_management":
+            fn = getattr(self.module, "get_current_config", None)
+            if callable(fn):
+                state["config"] = safe("get_current_config", fn)
+        return state
+
+    def apply_view_state(self, state: dict | None) -> None:
+        state = state or {}
+        # Uyarı şeridi
+        for child in self._notice_holder.get_children():
+            self._notice_holder.remove(child)
+        notice = state.get("notice")
+        if notice:
+            kind, text = notice
+            klass = "tiha-experimental-banner" if kind == "warning" else "tiha-prev-banner"
+            self._notice_holder.pack_start(_wrapping_label(text, klass=klass), False, False, 0)
+            self._notice_holder.show_all()
+        # Önizleme
+        if "preview" in state and state["preview"] is not None:
+            self._set_preview_text(state["preview"] or "")
+        # Şartlı alanlar
+        for key, visible in (state.get("gates") or {}).items():
+            for w in self._conditional_field_widgets.get(key, ()):
+                w.set_no_show_all(not visible)
+                w.set_visible(visible)
+        # Düğme etiketleri
+        for key, label in (state.get("labels") or {}).items():
+            widget = self._fields.get(key)
+            if isinstance(widget, Gtk.Button):
+                widget.set_label(label)
+        if state.get("config"):
+            self._update_form_fields(state["config"])
 
     def _rationale_box(self) -> Gtk.Box:
         """Adım açıklaması + (varsa) teknik belge bağlantısı. Kısa
@@ -2075,13 +2149,23 @@ class SummaryPage(Gtk.Box):
             t("ui.summary.group_title", title=title, detail=detail) if detail else title
         )
 
-    def refresh(self) -> None:
+    def collect_view_state(self):
+        """Raporu arka planda kurar (GTK'ya dokunmaz)."""
+        try:
+            return build_report(list(self.modules.values()), journal=self.journal)
+        except Exception as exc:
+            return exc
+
+    def apply_view_state(self, state) -> None:
+        self.refresh(report=state)
+
+    def refresh(self, report=None) -> None:
         """Tüm geçmiş kayıtlar arasından her modül için en son durumu
         gösterir. Hangi oturumda uygulandığına bakılmaksızın, son durumu
         ``applied`` olan adımlar Geri al düğmesiyle birlikte listelenir;
         ``undone`` net-sıfır etki olduğu için gizlenir; ``failed`` ayırt
         edici renkle (geri al düğmesiz) gösterilir."""
-        self._render_report()
+        self._render_report(report)
         for child in self.entries_box.get_children():
             self.entries_box.remove(child)
 
@@ -2162,12 +2246,16 @@ class SummaryPage(Gtk.Box):
 
     # --- "Bu imajda neler yaptınız" raporu ---------------------------------
 
-    def _render_report(self) -> None:
+    def _render_report(self, report=None) -> None:
         for box in (self.report_box, self.done_box, self.tests_box):
             for child in box.get_children():
                 box.remove(child)
         try:
-            report = build_report(list(self.modules.values()), journal=self.journal)
+            # Rapor arka planda kurulduysa hazır gelir; hata da nesne olarak.
+            if isinstance(report, Exception):
+                raise report
+            if report is None:
+                report = build_report(list(self.modules.values()), journal=self.journal)
         except Exception as exc:  # rapor hatası Özet sayfasını düşürmesin
             log.warning("Özet raporu kurulamadı: %s", exc)
             self.report_box.pack_start(

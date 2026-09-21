@@ -1123,10 +1123,15 @@ etkinken bu hesaplara parola yazarak da PIN ile de giriş yapılamaz. Önce \
 write_failed = "Dosya yazılamadı: {error}"
 enable_failed = "Servis etkinleştirilemedi."
 done = "Açılışta parola temizleme servisi kuruldu ve etkinleştirildi."
-done_details = """\
-Script: {script}\n\
-Servis: {service}\n\
-Servis bir sonraki açılıştan itibaren her boot'ta bir kez çalışır.\
+wiped_header = "Parolası her açılışta sıfırlanacak hesaplar ({count}):"
+wiped_none = "  (şu an bu kapsama giren hesap yok)"
+wiped_user_no_pin = "  - {user}   ← PIN anahtarı yok; bu hesaba yalnız EBA QR ya da USB bellekle girilebilir"
+kept_header = "Parolasına dokunulmayacak hesaplar:"
+footer = """\
+Temizlik bir sonraki açılıştan itibaren her açılışta bir kez yapılır. \
+Sonradan açılan hesaplar da (ör. EBA QR ile ilk girişte oluşan öğretmen \
+hesapları) kendiliğinden bu kapsama girer; bu hesaplara yalnız EBA QR, PIN \
+ya da USB bellekle girilebilir.\
 """
 
 [m02.undo_prompt]
@@ -2567,15 +2572,14 @@ details_installed = """\
 details_fixed = "🕐 Sabit saat kapatma: {hour:02d}:{minute:02d}"
 details_idle = "💤 Idle tabanlı kapatma: {minutes} dakika boşta kalınca"
 details_countdown_bullets = """\
-\u0020\u0020\u0020- 2 dakika önceden uyarı diyalogu\n\
+\u0020\u0020\u0020- {countdown} önceden uyarı penceresi\n\
 \u0020\u0020\u0020- 10 dakika erteleme seçeneği\
 """
 details_both_off = "ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu"
 details_management = """\
-📋 Test ve yönetim:\n\
-• Durum kontrolü: systemctl status eta-shutdown\n\
-• Log takibi: journalctl -f -u eta-shutdown\n\
-• Manuel yapılandırma: /usr/bin/eta-shutdown --menu\
+Ayarları sonradan değiştirmek için bu adımı yeniden uygulayabilir ya \
+da bu sayfanın altındaki \"ETA Zamanlı Kapatma'yı aç\" bağlantısıyla \
+Pardus'un kendi ayar penceresini kullanabilirsiniz.\
 """
 summary_installed = "Otomatik kapanma sistemi kuruldu"
 summary_active = "Otomatik kapanma sistemi kuruldu ve aktifleştirildi"
@@ -2758,6 +2762,7 @@ ayarı genelde açık; ErP/Deep Sleep ise açık gelebilir.\
 """
 
 [m15.apply]
+removed = "Uzaktan uyandırma servisi kaldırıldı; tahta artık ağ üzerinden açılamaz."
 not_selected = "Ağ kartını magic packet dinleme moduna alma seçeneği işaretlenmedi. Adım atlandı."
 ethtool_installing = "ethtool paketi kuruluyor..."
 ethtool_failed = "ethtool paketi kurulamadı."
@@ -2797,11 +2802,13 @@ help = """\
 birincil ağ kartını Wake-on-LAN dinleme moduna alır (ethtool wol g). \
 Bilgisayar kapatıldığında kart magic packet dinlemede kalır; merkez \
 bilgisayardan 'wakeonlan <MAC>' komutuyla tahta uzaktan açılabilir. Ayar \
-kalıcı olmadığı için her boot'ta yeniden yazılır. İşaretli değilse hiçbir \
-servis kurulmaz ve tahta uzaktan uyandırılamaz.\
+kalıcı olmadığı için her boot'ta yeniden yazılır. Kutu tahtadaki mevcut \
+durumu gösterir: servis kuruluyken işaretini kaldırıp uygularsanız servis \
+kaldırılır ve tahta uzaktan uyandırılamaz.\
 """
 
 [m15.report]
+removed = "Uzaktan uyandırma servisini kaldırdınız; imajdan çıkan tahtalar ağ üzerinden açılamayacak."
 done = """\
 İmajdan çıkan tahtaların ağ kartını her açılışta uzaktan uyandırma \
 (Wake-on-LAN) paketini dinleyecek moda alan servisi kurdunuz; kapalı \
@@ -2905,7 +2912,9 @@ help = """\
 sonlandırılır. Tahta yeniden başlatılınca etkin olur. Aynı kullanıcının SSH \
 gibi başka açık oturumlarına dokunulmaz; root hariç tutulur. Bu ayar \
 system-wide logind yapılandırmasıdır; klon tahtaya sonradan eklenen hesaplar \
-dahil, root dışındaki tüm kullanıcılara otomatik uygulanır.\
+dahil, root dışındaki tüm kullanıcılara otomatik uygulanır. Kutu \
+tahtadaki mevcut durumu gösterir; işaretini kaldırıp uygularsanız ayar \
+kaldırılır (bu da yeniden başlatınca etkin olur).\
 """
 
 [m17.params.light_mode_enabled]
@@ -2980,6 +2989,7 @@ not_installed = "kurulu değil"
 
 [m17.apply]
 nothing_selected = "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı."
+logind_removed = "Oturum kalıntısı temizliği kaldırıldı (yeniden başlatınca etkin)."
 cursor_service_removed = "Artık kullanılmayan imleç tazeleme servisi kaldırıldı."
 light_no_subkeys = "ETA Hafif Mod işaretli ama hiçbir alt ayar seçilmedi; hafif mod uygulanmadı."
 details_light = "Hafif mod: {path} → {keys}"
@@ -3088,6 +3098,7 @@ unknown_error = "bilinmeyen hata"
 monitors_failed = "{name}: monitors.xml geri alınamadı ({error})"
 
 [m17.report]
+session_removed = "Oturum kalıntısı temizliğini kaldırdınız; kapatılan oturumların programları yeniden başlatmaya kadar arka planda kalabilir."
 cursor_service_removed = "Artık kullanılmayan imleç tazeleme servisini kaldırdınız."
 session_done = """\
 Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin (kapatılmadan \

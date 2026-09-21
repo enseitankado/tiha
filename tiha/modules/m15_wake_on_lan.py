@@ -233,6 +233,17 @@ class WakeOnLanModule(Module):
             params.get("enable_wol_listen", "False")
         ).lower() in ("true", "1", "yes", "on")
         if not enable:
+            # Kutu sisteme bakarak doluyor (params.py "default_from"); servis
+            # kuruluyken işaretin kaldırılıp uygulanması "kaldır" isteğidir.
+            if self.wol_active():
+                notes: list[str] = []
+                self._remove_service(notes)
+                return ApplyResult(
+                    True,
+                    t("m15.apply.removed"),
+                    details="\n".join(f"- {n}" for n in notes) if notes else "",
+                    data={"wol_removed": True},
+                )
             return ApplyResult(False, t("m15.apply.not_selected"))
 
         was_ethtool_installed = _is_ethtool_installed()
@@ -316,27 +327,30 @@ class WakeOnLanModule(Module):
             data={"was_ethtool_installed": was_ethtool_installed},
         )
 
+    def wol_active(self) -> bool:
+        """Uzaktan uyandırma servisi kurulu mu? (Formdaki kutu bunu gösterir.)"""
+        return WOL_SERVICE.exists() and WOL_SCRIPT.exists()
+
+    @staticmethod
+    def _remove_service(notes: list[str]) -> None:
+        run_cmd(
+            ["systemctl", "disable", "--now", WOL_SERVICE_NAME], check=False,
+        )
+        for path in (WOL_SERVICE, WOL_SCRIPT):
+            if path.exists():
+                try:
+                    path.unlink()
+                    notes.append(t("m15.undo.deleted", path=path))
+                except OSError as exc:
+                    log.warning("%s silinemedi: %s", path, exc)
+        run_cmd(["systemctl", "daemon-reload"], check=False)
+
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
         was_ethtool_installed = bool(data.get("was_ethtool_installed", True))
         notes: list[str] = []
 
-        run_cmd(
-            ["systemctl", "disable", "--now", WOL_SERVICE_NAME], check=False,
-        )
-        if WOL_SERVICE.exists():
-            try:
-                WOL_SERVICE.unlink()
-                notes.append(t("m15.undo.deleted", path=WOL_SERVICE))
-            except OSError as exc:
-                log.warning("%s silinemedi: %s", WOL_SERVICE, exc)
-        if WOL_SCRIPT.exists():
-            try:
-                WOL_SCRIPT.unlink()
-                notes.append(t("m15.undo.deleted", path=WOL_SCRIPT))
-            except OSError as exc:
-                log.warning("%s silinemedi: %s", WOL_SCRIPT, exc)
-        run_cmd(["systemctl", "daemon-reload"], check=False)
+        self._remove_service(notes)
 
         # ethtool paketini TiHA kurduysa geri al
         if not was_ethtool_installed and _is_ethtool_installed():
