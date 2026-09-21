@@ -3985,6 +3985,7 @@ yoktur.\
 
 [m16.params.grub_password]
 label = "GRUB yönetici parolası"
+placeholder = "A-Z, a-z (i hariç), 0-9"
 hint = """\
 Açılış ekranında klavye İngilizce düzende çalışır. Bu yüzden parolada \
 yalnız iki klavyede de aynı tuşta olan karakterler kullanılabilir: büyük \

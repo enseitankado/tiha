@@ -555,6 +555,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "required": False,
             "default": "",
             "enable_when_field": "enable_grub_lock",
+            "placeholder": t("m16.params.grub_password.placeholder"),
             "hint": t("m16.params.grub_password.hint"),
             "help": t("m16.params.grub_password.help"),
         },

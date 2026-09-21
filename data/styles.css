@@ -263,14 +263,6 @@ textview.tiha-placeholder text selection {
     font-size: 9pt;
     margin-bottom: 2px;
 }
-/* Kutunun altındaki kısa ipucu (ör. yazılabilecek karakterler). */
-.tiha-form label.tiha-hint {
-    font-size: 9pt;
-    font-style: italic;
-}
-.tiha-form box.tiha-hint {
-    margin-bottom: 2px;
-}
 /* Textarea (öğretmen listesi vb.) — kutu yüksekliği makul kalsın,
    font gövde metniyle uyumlu. */
 .tiha-form textview {

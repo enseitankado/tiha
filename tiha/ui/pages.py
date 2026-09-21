@@ -527,22 +527,6 @@ class ModulePage(Gtk.Box):
                 self._auto_values[field["key"]] = _widget_text(widget)
             row_idx += 1
             row_widgets: list[Gtk.Widget] = [label, widget]
-            if field.get("hint"):
-                # Kutuya ne yazılabileceğini anlatan kısa ipucu: yardım
-                # paragrafından ayrı, kutunun hemen altında, simgeli.
-                hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-                hint_icon = Gtk.Image.new_from_icon_name(
-                    "dialog-information-symbolic", Gtk.IconSize.MENU
-                )
-                hint_icon.set_valign(Gtk.Align.START)
-                hint_box.pack_start(hint_icon, False, False, 0)
-                hint_lbl = _wrapping_label(field["hint"], klass="tiha-hint")
-                hint_lbl.set_hexpand(True)
-                hint_box.pack_start(hint_lbl, True, True, 0)
-                hint_box.get_style_context().add_class("tiha-hint")
-                grid.attach(hint_box, 1, row_idx, 1, 1)
-                row_idx += 1
-                row_widgets.append(hint_box)
             if field.get("help"):
                 help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
                 # Kutular daraldı; sütunu sayfa genişliğine yardım metni yayar.
@@ -1303,6 +1287,12 @@ class ModulePage(Gtk.Box):
             handler_id[0] = entry.connect("insert-text", _filter_insert)
         if field.get("allowed_chars"):
             self._attach_char_filter(entry, field["allowed_chars"])
+        if field.get("placeholder"):
+            entry.set_placeholder_text(field["placeholder"])
+        if field.get("hint"):
+            # Kutunun içinde kısa ipucu (placeholder), üzerine gelince tam
+            # açıklama (tooltip).
+            entry.set_tooltip_text(field["hint"])
         if kind == "password":
             # Parolalar varsayılan olarak görünür: tahtada dokunmatik ekran
             # klavyesiyle yazarken yanlış girilen karakter ancak böyle fark
