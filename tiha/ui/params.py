@@ -63,12 +63,40 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m01.params.reserve_count.help"),
         },
         {
+            "key": "branch_accounts",
+            "label": t("m01.params.branch_accounts.label"),
+            "type": "branch_accounts",
+            "required": False,
+            # Daha önce açılmış branş hesapları ve okul türü işaretli gelsin.
+            "default_from": "current_branch_accounts",
+            "help": t("m01.params.branch_accounts.help"),
+        },
+        {
             "key": "remove_student",
             "label": t("m01.params.remove_student.label"),
             "type": "button",
             "action": "remove_student_user_action",
             "style": "destructive",
             "help": t("m01.params.remove_student.help"),
+        },
+        {
+            # Toplu PIN adımındaki "Fazladan Hesapları Sil" düğmesinin
+            # buradaki aynası. Aynı m03 aksiyonuna delege eder — hem
+            # varsayılan dışı hesapları hem karşılığı kalmamış PIN
+            # kayıtlarını temizler. Yerel hesaplar akışında da işleve
+            # ihtiyaç duyulduğu için burada da erişilebilir olmalı.
+            "key": "remove_extra_users",
+            "label": t("m03.params.remove_extra_users.label"),
+            "label_from": "label_remove_extra_users",
+            "type": "button",
+            "action": "remove_extra_users_action",
+            "style": "destructive",
+            "visible_when": "can_remove_extra_users",
+            "confirm": {
+                "title": t("m03.params.remove_extra_users.confirm_title"),
+                "message": t("m03.params.remove_extra_users.confirm_message"),
+            },
+            "help": t("m03.params.remove_extra_users.help"),
         },
     ],
     "m03_otp_secrets": [

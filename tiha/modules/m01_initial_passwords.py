@@ -237,6 +237,80 @@ def get_removable_user_status() -> dict[str, bool]:
     return {user: user_exists(user) for user in REMOVABLE_USERS}
 
 
+
+# --- Branş hesapları -------------------------------------------------------
+# Seçici değeri JSON: {"school_type", "branches": [seçili etiketler],
+# "unselected": [listede görünüp işareti kaldırılmış etiketler]}. İşareti
+# kaldırılan ve sistemde hesabı olan branş, uygulamada silinir.
+
+
+def parse_branch_selection(raw: str | None) -> dict:
+    """Seçici değerini çözer; bozuk/boş değerde boş sözlük."""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def branch_accounts_to_delete(raw: str | None) -> list[str]:
+    """İşareti kaldırılmış ve sistemde hesabı olan branşların hesap adları."""
+    from ..core.meb_data import branch_to_username
+
+    data = parse_branch_selection(raw)
+    names: list[str] = []
+    for label in data.get("unselected") or []:
+        uname = branch_to_username(label)
+        if uname and uname not in names and user_exists(uname):
+            names.append(uname)
+    return names
+
+
+def _ensure_home(username: str) -> bool:
+    """Hesabın ev dizini yoksa /etc/skel'den oluşturur (0700, sahibi hesap)."""
+    try:
+        home = Path(pwd.getpwnam(username).pw_dir)
+    except KeyError:
+        return False
+    if home.is_dir():
+        return True
+    r = run_cmd(["mkhomedir_helper", username], check=False)
+    if not r.ok or not home.is_dir():
+        log.warning("Ev dizini oluşturulamadı '%s': %s", username, r.stderr.strip())
+        return False
+    return True
+
+
+def _in_group(username: str, group: str) -> bool:
+    import grp as _grp
+    try:
+        return username in _grp.getgrnam(group).gr_mem
+    except KeyError:
+        return False
+
+
+def _remove_otp_secrets(names: list[str]) -> list[str]:
+    """Silinen hesapların PIN anahtarlarını otp-secrets.json'dan çıkarır."""
+    from .m03_otp_secrets import (
+        OTP_SECRETS_FILE, OTPSecretsModule, harden_secret_store,
+        load_secrets, save_secrets,
+    )
+
+    secrets = load_secrets()
+    gone = [n for n in names if n in secrets]
+    if not gone:
+        return []
+    state = OTPSecretsModule().ensure_state_dir()
+    harden_secret_store(state)
+    backup_file(OTP_SECRETS_FILE, state)
+    for n in gone:
+        del secrets[n]
+    save_secrets(secrets)
+    harden_secret_store(state)
+    return gone
+
 class InitialPasswordsModule(Module):
     id = "m01_initial_passwords"
     title = t("m01.title")
@@ -246,6 +320,109 @@ class InitialPasswordsModule(Module):
     extra_links = [
         {"label": t("m01.extra_links.users_admin"), "action": "launch_users_admin_gui_action"},
     ]
+
+    # ------------------------------------------------------------------
+    # "Fazladan Hesapları Sil" — m03'ün aynı özelliğinin buradaki aynası.
+    # Aynı sisteme dokunuyoruz: aksiyonu tek yerde tutmak için m03'ün
+    # uygulamasına delege ediyoruz. Böylece iki adımdaki düğme davranışı
+    # ayrışmıyor; label da aynı "X hesap, Y anahtar" formatını gösterir.
+    # ------------------------------------------------------------------
+
+    def _otp_delegate(self):
+        """Lazy singleton — m03 metotları için gerçek OTP modülü örneği."""
+        inst = getattr(self, "_otp_delegate_inst", None)
+        if inst is None:
+            from .m03_otp_secrets import OTPSecretsModule
+            inst = OTPSecretsModule()
+            self._otp_delegate_inst = inst
+        return inst
+
+    def label_remove_extra_users(self) -> str:
+        return self._otp_delegate().label_remove_extra_users()
+
+    def can_remove_extra_users(self) -> bool:
+        return self._otp_delegate().can_remove_extra_users()
+
+    def remove_extra_users_action(
+        self, params: dict | None = None, progress=None,
+    ) -> ApplyResult:
+        return self._otp_delegate().remove_extra_users_action(
+            params=params, progress=progress,
+        )
+
+    def pre_apply_check(self, params: dict) -> list[dict]:
+        """Apply öncesi kullanıcı onayı gereken senaryoları döner.
+
+        Şu an: yedek hesap sayısı 0 ayarlanmışken sistemde ogretmenN
+        biçiminde mevcut hesap varsa, hepsinin (ev dizinleri ile
+        birlikte) silinmesi için tek bir onay ister. Kullanıcı Evet
+        derse params'a ``delete_all_reserve=True`` eklenir; apply
+        bunu görünce silme akışını çalıştırır.
+        """
+        confirmations: list[dict] = []
+
+        # İşareti kaldırılan branşların hesapları ev dizini ve PIN
+        # anahtarıyla silinecek: geri alınamaz, önce sor.
+        doomed = branch_accounts_to_delete(params.get("branch_accounts"))
+        if doomed:
+            confirmations.append({
+                "title": t("m01.pre_apply.branch_delete_title", count=len(doomed)),
+                "message": t(
+                    "m01.pre_apply.branch_delete_message",
+                    count=len(doomed), users=", ".join(doomed),
+                ),
+                "params": {},
+            })
+
+        try:
+            reserve = int(params.get("reserve_count", 0) or 0)
+        except (TypeError, ValueError):
+            reserve = 0
+        if reserve != 0:
+            return confirmations
+        from .m03_otp_secrets import list_reserve_accounts
+        existing = list_reserve_accounts()
+        if not existing:
+            return confirmations
+        preview = ", ".join(existing[:6])
+        if len(existing) > 6:
+            preview += f", … (+{len(existing) - 6})"
+        confirmations.append({
+            "title": t(
+                "m01.pre_apply.reserve_purge_title", count=len(existing),
+            ),
+            "message": t(
+                "m01.pre_apply.reserve_purge_message",
+                count=len(existing), users=preview,
+            ),
+            "params": {"delete_all_reserve": "True"},
+        })
+        return confirmations
+
+    def current_branch_accounts(self) -> str:
+        """Branş seçicinin açılış değeri: sistemde zaten açılmış branş
+        hesapları ve ait oldukları okul türü (JSON). Okul türü birden çok
+        türe uyuyorsa son uygulamadaki seçim tercih edilir."""
+        import json as _json
+        from ..core.meb_data import detect_existing_selection
+
+        preferred = ""
+        try:
+            from ..core.report_log import REPORT_PARAMS_KEY
+            from ..core.undo import Journal
+
+            last = Journal().last_applied(self.id)
+            raw = ((last.data if last else {}) or {}).get(
+                REPORT_PARAMS_KEY, {},
+            ).get("branch_accounts") or ""
+            if raw:
+                preferred = _json.loads(raw).get("school_type") or ""
+        except Exception as exc:  # defter yok/bozuk: yalnız hesaplara bak
+            log.debug("Önceki branş seçimi okunamadı: %s", exc)
+        selection = detect_existing_selection(preferred)
+        if not selection:
+            return ""
+        return _json.dumps(selection, ensure_ascii=False)
 
     def suggested_reserve_count(self) -> int:
         """"Yedek hesap sayısı" kutusunun açılışta görüneceği değer.
@@ -311,14 +488,22 @@ class InitialPasswordsModule(Module):
         admin_pw = params.get("admin_password", "").strip()
         teacher_pw = params.get("teacher_password", "").strip()
 
-        # En az bir aksiyon: parola belirtilsin ya da yedek hesap sayısı
-        # sıfırdan büyük olsun. (Ortak hesap silme akışı ayrıca button
-        # aksiyonuyla da yürütülebilir.)
+        # En az bir aksiyon: parola belirtilsin, yedek hesap sayısı
+        # sıfırdan büyük olsun, en az bir branş seçili olsun ya da
+        # "tüm yedek hesapları sil" onayı verilsin (pre_apply_check).
         try:
             _reserve_hint = int(params.get("reserve_count", 0) or 0)
         except (TypeError, ValueError):
             _reserve_hint = 0
-        if not root_pw and not admin_pw and not teacher_pw and _reserve_hint <= 0:
+        _branch_sel = parse_branch_selection(params.get("branch_accounts"))
+        _branch_delete = branch_accounts_to_delete(params.get("branch_accounts"))
+        _branch_hint = len(_branch_sel.get("branches") or []) + len(_branch_delete)
+        _delete_all_reserve = str(
+            params.get("delete_all_reserve", "False"),
+        ).lower() in ("true", "1", "yes", "on")
+        if (not root_pw and not admin_pw and not teacher_pw
+                and _reserve_hint <= 0 and _branch_hint <= 0
+                and not _delete_all_reserve):
             return ApplyResult(
                 success=False,
                 summary=t("m01.apply.need_action"),
@@ -396,6 +581,36 @@ class InitialPasswordsModule(Module):
             if moved:
                 keyrings_moved[username] = moved
 
+        # ---- Yedek hesap toplu silme ------------------------------------
+        # Kullanıcı sayıyı 0'a çektiyse ve sistemde ogretmenN varsa
+        # pre_apply_check bir onay diyaloğu göstermiş ve params'a
+        # ``delete_all_reserve=True`` eklemiştir. Bu bloğa geldiğimizde
+        # onay verilmiş demektir; hesapları ev dizinleriyle beraber sileriz.
+        purged_reserve: list[str] = []
+        if _delete_all_reserve:
+            from .m03_otp_secrets import list_reserve_accounts
+            existing_reserve = list_reserve_accounts()
+            if existing_reserve and progress:
+                progress(t(
+                    "m01.apply.reserve_purge_start",
+                    count=len(existing_reserve),
+                ))
+            for username in existing_reserve:
+                r = run_cmd(["deluser", "--remove-home", username])
+                if r.ok:
+                    purged_reserve.append(username)
+                    if progress:
+                        progress(f"  ✗ {username}")
+                else:
+                    log.warning(
+                        "Yedek hesap silinemedi '%s': %s",
+                        username, r.stderr.strip(),
+                    )
+                    if progress:
+                        progress(t(
+                            "m01.apply.reserve_purge_failed", user=username,
+                        ))
+
         # ---- Yedek hesaplar ----------------------------------------------
         # Adım eskiden "Öğretmen PIN anahtarları" (m03) altındaydı.
         # Buraya taşındı ki hesap yaratma ile PIN üretme akışları
@@ -449,6 +664,89 @@ class InitialPasswordsModule(Module):
                     if progress:
                         progress(t("m01.apply.reserve_create_failed", user=username))
 
+        # ---- Branş hesapları ---------------------------------------------
+        # Kullanıcı UI'dan bir okul türü ve o okulda ders okutan
+        # branşların bir alt kümesini seçtiyse, her branş için ayrı
+        # bir yerel hesap açılır. Kullanıcı adı MEB verisinden türetilir
+        # (Türkçe → ASCII, boşluk → _). Görünen ad (GECOS) branşın
+        # orijinal etiketidir — greeter ekranında böyle listelenir.
+        # Seçili her hesabın ev dizini olur ve ogretmenler grubuna girer
+        # (grup PIN'i ve öğretmen ayrıcalıkları). Listede görünüp işareti
+        # kaldırılan branşın hesabı varsa ev dizini ve PIN anahtarıyla
+        # silinir (pre_apply_check onay alır).
+        created_branches: list[str] = []
+        skipped_branches: list[str] = []
+        grouped_branches: list[str] = []
+        deleted_branches: list[str] = []
+        failed_branch_deletes: list[str] = []
+        bdata = _branch_sel
+        if bdata.get("branches"):
+            from .m03_otp_secrets import create_user, ensure_ogretmenler_group, OGRETMENLER_GROUP
+            from ..core.meb_data import branch_to_username, school_label
+            school_key = bdata.get("school_type") or ""
+            branches = bdata.get("branches") or []
+            if progress:
+                progress(t(
+                    "m01.apply.branches_preparing",
+                    count=len(branches),
+                    school=school_label(school_key),
+                ))
+            group_ok = ensure_ogretmenler_group()
+            for label in branches:
+                uname = branch_to_username(label)
+                if not uname:
+                    continue
+                if user_exists(uname):
+                    skipped_branches.append(uname)
+                    if progress:
+                        progress(f"  ≈ {uname}")
+                elif create_user(uname, full_name=label):
+                    created_branches.append(uname)
+                    if progress:
+                        progress(f"  + {uname}")
+                else:
+                    if progress:
+                        progress(t(
+                            "m01.apply.branch_create_failed", user=uname,
+                        ))
+                    continue
+                _ensure_home(uname)
+                if group_ok and not _in_group(uname, OGRETMENLER_GROUP):
+                    r = run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, uname])
+                    if r.ok:
+                        grouped_branches.append(uname)
+                    else:
+                        log.warning("'%s' ogretmenler grubuna eklenemedi: %s",
+                                    uname, r.stderr.strip())
+
+        if _branch_delete:
+            from .m03_otp_secrets import kill_user_processes
+            if progress:
+                progress(t("m01.apply.branches_deleting", count=len(_branch_delete)))
+            for uname in _branch_delete:
+                kill_user_processes(uname)
+                r = run_cmd(["deluser", "--remove-home", uname])
+                if r.ok:
+                    deleted_branches.append(uname)
+                    if progress:
+                        progress(f"  ✗ {uname}")
+                else:
+                    failed_branch_deletes.append(uname)
+                    log.warning("Branş hesabı silinemedi '%s': %s",
+                                uname, r.stderr.strip())
+                    if progress:
+                        progress(t("m01.apply.branch_delete_failed", user=uname))
+        deleted_branch_secrets = _remove_otp_secrets(deleted_branches) if deleted_branches else []
+
+        if created_branches or deleted_branches:
+            # Giriş ekranındaki kullanıcı listesi yeni hesap kümesini görsün.
+            try:
+                from .m03_otp_secrets import GREETER_SCRIPT_PATH, run_greeter_script_once
+                if GREETER_SCRIPT_PATH.exists():
+                    run_greeter_script_once()
+            except Exception as exc:
+                log.debug("Greeter tazelenemedi: %s", exc)
+
         details_lines = []
         if removed_users:
             details_lines.append(t("m01.apply.removed_common", users=", ".join(removed_users)))
@@ -488,11 +786,67 @@ class InitialPasswordsModule(Module):
                                        users=", ".join(skipped_reserve)))
             details_lines.append(t("m01.apply.reserve_pin_note"))
 
+        if purged_reserve:
+            details_lines.append("")
+            details_lines.append(t(
+                "m01.apply.reserve_purge_title", count=len(purged_reserve),
+            ))
+            details_lines.append(t(
+                "m01.apply.reserve_purge_users",
+                users=", ".join(purged_reserve),
+            ))
+
+        if created_branches or skipped_branches:
+            details_lines.append("")
+            details_lines.append(t("m01.apply.branches_title"))
+            if created_branches:
+                details_lines.append(t(
+                    "m01.apply.branches_created",
+                    count=len(created_branches),
+                    users=", ".join(created_branches),
+                ))
+            if skipped_branches:
+                details_lines.append(t(
+                    "m01.apply.branches_skipped",
+                    count=len(skipped_branches),
+                    users=", ".join(skipped_branches),
+                ))
+            if grouped_branches:
+                details_lines.append(t(
+                    "m01.apply.branches_grouped",
+                    count=len(grouped_branches),
+                    users=", ".join(grouped_branches),
+                ))
+            details_lines.append(t("m01.apply.branches_pin_note"))
+
+        if deleted_branches or failed_branch_deletes:
+            details_lines.append("")
+            if deleted_branches:
+                details_lines.append(t(
+                    "m01.apply.branches_deleted",
+                    count=len(deleted_branches),
+                    users=", ".join(deleted_branches),
+                ))
+            if deleted_branch_secrets:
+                details_lines.append(t(
+                    "m01.apply.branches_secrets_removed",
+                    count=len(deleted_branch_secrets),
+                ))
+            if failed_branch_deletes:
+                details_lines.append(t(
+                    "m01.apply.branches_delete_failed",
+                    users=", ".join(failed_branch_deletes),
+                ))
+
         overall = (
             (all(results.values()) if results else False)
             or bool(removed_users)
             or bool(created_reserve)
             or bool(skipped_reserve)
+            or bool(created_branches)
+            or bool(skipped_branches)
+            or bool(deleted_branches)
+            or bool(purged_reserve)
         )
 
         summary_parts = []
@@ -508,6 +862,22 @@ class InitialPasswordsModule(Module):
 
         if created_reserve:
             summary_parts.append(t("m01.apply.summary_reserve", count=len(created_reserve)))
+
+        if created_branches:
+            summary_parts.append(t(
+                "m01.apply.summary_branches", count=len(created_branches),
+            ))
+
+        if deleted_branches:
+            summary_parts.append(t(
+                "m01.apply.summary_deleted_branches", count=len(deleted_branches),
+            ))
+
+        if purged_reserve:
+            summary_parts.append(t(
+                "m01.apply.summary_purged_reserve",
+                count=len(purged_reserve),
+            ))
 
         keyring_count = sum(len(names) for names in keyrings_moved.values())
         if keyring_count:
@@ -529,7 +899,12 @@ class InitialPasswordsModule(Module):
                 "passwords_set": [u for u, ok in results.items() if ok],
                 "passwords_failed": [u for u, ok in results.items() if not ok],
                 "skipped_reserve": skipped_reserve,
+                "purged_reserve": purged_reserve,
                 "reserve_requested": reserve,
+                "created_branches": created_branches,
+                "skipped_branches": skipped_branches,
+                "grouped_branches": grouped_branches,
+                "deleted_branches": deleted_branches,
                 "teacher_skipped_no_account": bool(teacher_pw) and "ogretmen" not in results,
             },
         )
@@ -556,6 +931,21 @@ class InitialPasswordsModule(Module):
                 else:
                     log.warning(
                         "Yedek hesap silinemedi '%s': %s",
+                        username, r.stderr.strip(),
+                    )
+
+        # Bu apply'da yeni açılan branş hesaplarını da geri al. Skipped
+        # (zaten mevcut) hesaplara dokunulmaz — belki eskiden buradaymış
+        # ya da başka bir yolla açılmış.
+        deleted_branches: list[str] = []
+        for username in data.get("created_branches") or []:
+            if user_exists(username):
+                r = run_cmd(["deluser", "--remove-home", username])
+                if r.ok:
+                    deleted_branches.append(username)
+                else:
+                    log.warning(
+                        "Branş hesabı silinemedi '%s': %s",
                         username, r.stderr.strip(),
                     )
 
@@ -586,6 +976,10 @@ class InitialPasswordsModule(Module):
             summary_parts.append(t("m01.undo.reserve_deleted",
                                    count=len(deleted_reserve),
                                    users=", ".join(deleted_reserve)))
+        if deleted_branches:
+            summary_parts.append(t("m01.undo.branches_deleted",
+                                   count=len(deleted_branches),
+                                   users=", ".join(deleted_branches)))
         if restored_users:
             summary_parts.append(t("m01.undo.users_restored",
                                    count=len(restored_users),

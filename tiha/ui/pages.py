@@ -121,6 +121,9 @@ def _widget_text(widget: Gtk.Widget | None) -> str:
         return str(int(round(widget.get_value())))
     if isinstance(widget, Gtk.Entry):
         return widget.get_text()
+    branch_value = getattr(widget, "_branch_value", None)
+    if callable(branch_value):
+        return branch_value()
     tv = getattr(widget, "_textview", None)
     if isinstance(tv, Gtk.TextView):
         if tv.get_style_context().has_class("tiha-placeholder"):
@@ -628,6 +631,8 @@ class ModulePage(Gtk.Box):
             widget.set_text("" if value is None else str(value))
         elif isinstance(getattr(widget, "_textview", None), Gtk.TextView):
             _set_textarea_text(widget, "" if value is None else str(value))
+        elif callable(getattr(widget, "_set_branch_selection", None)):
+            widget._set_branch_selection("" if value is None else str(value))
         else:
             return
         self._auto_values[key] = _widget_text(widget)
@@ -1069,6 +1074,169 @@ class ModulePage(Gtk.Box):
             combo.set_active(idx)
             return combo
 
+        if kind == "branch_accounts":
+            # Okul türü + branş seçici composite widget.
+            # Üstte açılır liste (okul türleri), altında iki sütuna
+            # yayılan CheckButton'lar. Okul türü değiştiğinde branş
+            # listesi yeniden kurulur; yalnız sistemde hesabı olan
+            # branşlar işaretli başlar. İşareti kaldırılan mevcut hesap
+            # uygulamada silinir (m01 onay sorar).
+            # Başlangıçta (okul türü seçilmediyse) alt panel gizlidir —
+            # form dikeyde şişmez.
+            import pwd as _pwd
+            from ..core.meb_data import (
+                branch_to_username, branches_for, load_school_types,
+            )
+
+            container = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL, spacing=4,
+            )
+            container.get_style_context().add_class("tiha-branch-accounts")
+            container.set_hexpand(True)
+            container.set_halign(Gtk.Align.FILL)
+            # Sütunun tepesinden başlasın: dikeyde ortalanınca
+            # combobox aşağı iter, üstünde yapay boşluk oluşur.
+            container.set_valign(Gtk.Align.START)
+
+            schools = load_school_types()
+            keys = list(schools.keys())
+
+            combo = Gtk.ComboBoxText()
+            combo.append_text("— seçiniz —")
+            for key in keys:
+                combo.append_text(schools[key]["label"])
+            combo.set_active(0)
+            combo.set_halign(Gtk.Align.FILL)
+            combo.set_hexpand(True)
+            container.pack_start(combo, False, False, 0)
+
+            # Branşlar iki sütunda: FlowBox min_children=2 max_children=2
+            # ile satır başına iki hücre. Homojen genişlik.
+            flow = Gtk.FlowBox()
+            flow.set_selection_mode(Gtk.SelectionMode.NONE)
+            flow.set_min_children_per_line(2)
+            flow.set_max_children_per_line(2)
+            flow.set_homogeneous(True)
+            flow.set_row_spacing(2)
+            flow.set_column_spacing(12)
+            flow.set_halign(Gtk.Align.FILL)
+            flow.set_hexpand(True)
+            # FlowBoxChild varsayılan padding'i içeriği sağa kaydırıyor.
+            # Container'ın sol kenarına yaslı görünmesi için margin'i sıfırla.
+            flow.set_margin_start(0)
+            flow.set_margin_end(0)
+            flow.set_margin_top(0)
+
+            scroller = Gtk.ScrolledWindow()
+            scroller.set_policy(
+                Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC,
+            )
+            scroller.set_min_content_height(0)
+            scroller.set_max_content_height(320)
+            scroller.set_propagate_natural_height(True)
+            scroller.add(flow)
+            # Revealer: seçim öncesi altındaki panelin dikey yer
+            # kaplamaması için. show_all() sonra combo değişince açılır.
+            revealer = Gtk.Revealer()
+            revealer.set_transition_type(
+                Gtk.RevealerTransitionType.SLIDE_DOWN,
+            )
+            revealer.set_transition_duration(150)
+            revealer.set_reveal_child(False)
+            revealer.add(scroller)
+            container.pack_start(revealer, False, False, 0)
+
+            container._school_keys = keys  # type: ignore[attr-defined]
+            container._combo = combo  # type: ignore[attr-defined]
+            container._flow = flow  # type: ignore[attr-defined]
+            container._revealer = revealer  # type: ignore[attr-defined]
+            container._checks: list[Gtk.CheckButton] = []  # type: ignore[attr-defined]
+
+            def _rebuild_branches(school_key: str) -> None:
+                for child in flow.get_children():
+                    flow.remove(child)
+                container._checks = []  # type: ignore[attr-defined]
+                if not school_key:
+                    revealer.set_reveal_child(False)
+                    return
+                try:
+                    existing = {e.pw_name for e in _pwd.getpwall()}
+                except OSError:
+                    existing = set()
+                for label in branches_for(school_key):
+                    cb = Gtk.CheckButton(label=label)
+                    has_account = branch_to_username(label) in existing
+                    cb.set_active(has_account)
+                    if has_account:
+                        cb.set_tooltip_text(t("ui.pages.branch_existing_tip"))
+                    cb._branch_label = label  # type: ignore[attr-defined]
+                    flow.add(cb)
+                    container._checks.append(cb)  # type: ignore[attr-defined]
+                flow.show_all()
+                revealer.set_reveal_child(True)
+
+            def on_school_changed(cb):
+                idx = cb.get_active()
+                if idx <= 0:
+                    _rebuild_branches("")
+                    return
+                _rebuild_branches(keys[idx - 1])
+
+            combo.connect("changed", on_school_changed)
+
+            def _branch_value() -> str:
+                import json as _json
+                idx = combo.get_active()
+                if idx <= 0:
+                    return ""
+                return _json.dumps(
+                    {
+                        "school_type": keys[idx - 1],
+                        "branches": [
+                            c._branch_label  # type: ignore[attr-defined]
+                            for c in container._checks  # type: ignore[attr-defined]
+                            if c.get_active()
+                        ],
+                        # Listede görünüp işaretsiz olanlar: hesabı varsa
+                        # uygulamada silinir.
+                        "unselected": [
+                            c._branch_label  # type: ignore[attr-defined]
+                            for c in container._checks  # type: ignore[attr-defined]
+                            if not c.get_active()
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+
+            def _set_branch_selection(value: str) -> None:
+                # Önceki seçimi geri yükler: okul türü seçilir, yalnız
+                # sistemde hesabı olan branşlar işaretli kalır. Değer düz
+                # okul türü anahtarı da olabilir (tümü işaretli).
+                import json as _json
+                school_key, chosen = value, None
+                if value.startswith("{"):
+                    try:
+                        data = _json.loads(value)
+                    except ValueError:
+                        data = {}
+                    school_key = data.get("school_type") or ""
+                    chosen = set(data.get("branches") or [])
+                if school_key not in keys:
+                    combo.set_active(0)
+                    return
+                combo.set_active(keys.index(school_key) + 1)
+                if chosen is not None:
+                    for c in container._checks:  # type: ignore[attr-defined]
+                        c.set_active(c._branch_label in chosen)  # type: ignore[attr-defined]
+
+            container._branch_value = _branch_value  # type: ignore[attr-defined]
+            container._set_branch_selection = _set_branch_selection  # type: ignore[attr-defined]
+
+            if default:
+                _set_branch_selection(default)
+
+            return container
+
         if kind == "button":
             initial_label = field.get("label", "Button")
             # Etiket dinamikse (label_from), initial label'ı da o metottan al.
@@ -1399,6 +1567,11 @@ class ModulePage(Gtk.Box):
             return str(int(widget.get_value()))
         if kind == "select":
             return widget.get_active_text() or ""
+        if kind == "branch_accounts":
+            # Composite widget: seçili okul türü anahtarı + işaretli
+            # branş etiketlerinin JSON serialization'ı. Boş seçimde
+            # "" döner; m01 apply "" gördüğünde hiçbir şey yapmaz.
+            return widget._branch_value()  # type: ignore[attr-defined]
         if kind == "button":
             return ""  # Buttons don't have values
         if kind == "bool":
@@ -1573,6 +1746,26 @@ class ModulePage(Gtk.Box):
         if missing:
             self._show_result(ApplyResult(False, t("ui.pages.missing_fields", fields=", ".join(missing))))
             return
+
+        # Modül isteğe bağlı olarak apply öncesi kullanıcıdan ek onay
+        # isteyebilir (örn. m01: yedek hesap sayısı 0 + mevcut ogretmenX
+        # hesapları => "hepsini sileyim mi?"). pre_apply_check bir liste
+        # döner: her öğe ``{"title","message","params":{...}}``. Her onay
+        # sorusu tek tek soruluyor; kullanıcı "Hayır" derse akış iptal
+        # olur, "Evet" derse döndürülen params sözlüğü apply parametrelerine
+        # eklenir. Modül override etmezse hiçbir şey yapmaz.
+        pre_check = getattr(self.module, "pre_apply_check", None)
+        if callable(pre_check):
+            try:
+                confirmations = pre_check(params) or []
+            except Exception as exc:
+                log.warning("pre_apply_check hata: %s", exc)
+                confirmations = []
+            for entry in confirmations:
+                if not self._confirm_action(entry):
+                    return
+                extra = entry.get("params") or {}
+                params.update(extra)
 
         self._applying = True
         # Terminale profesyonel satır (son kullanıcı içindir)

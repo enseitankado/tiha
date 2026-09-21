@@ -720,6 +720,30 @@ def remove_greeter_setup() -> bool:
 RESERVE_USER_RE = re.compile(r"^ogretmen\.?(\d+)$")
 
 
+def list_reserve_accounts() -> list[str]:
+    """Sistemde ogretmenN / ogretmen.N biçiminde tüm hesap adları.
+
+    Indeks sırasına göre döner (ogretmen1, ogretmen2, ...). ``count_reserve_accounts``
+    en büyük indeksi verirken bu fonksiyon fiili hesap adlarının listesini
+    döner — silme işi bunlara doğrudan ``deluser --remove-home`` çekilir.
+    """
+    import pwd as _pwd
+
+    found: list[tuple[int, str]] = []
+    try:
+        entries = _pwd.getpwall()
+    except OSError as exc:
+        log.warning("Kullanıcı listesi okunamadı: %s", exc)
+        return []
+    for entry in entries:
+        if not 1000 <= entry.pw_uid < 60000:
+            continue
+        match = RESERVE_USER_RE.match(entry.pw_name)
+        if match:
+            found.append((int(match.group(1)), entry.pw_name))
+    return [name for _, name in sorted(found)]
+
+
 def count_reserve_accounts() -> int:
     """Sistemde hazır duran yedek hesapların "kaçıncıya kadar" gittiği.
 
