@@ -134,7 +134,13 @@ def main() -> int:
 
     console.banner_open(t("app.banner_title"), f"v{__version__}")
     console.info(t("app.opening_window"))
-    console.info(t("app.debug_log_hint"))
+    console.info(t("app.logs_hint", dir=LOG_ROOT))
+    for name, what in (
+        ("tiha.log", t("app.log_main")),
+        ("tiha-debug.log", t("app.log_debug")),
+        ("tiha-stderr.log", t("app.log_stderr")),
+    ):
+        console.note(f"{name:<16} {what}")
 
     # Terminali kirletecek GTK/GLib/dconf uyarılarını dosyaya yönlendir.
     # (Bundan önce tüm kullanıcıya-görür mesajlar çıktı.)
