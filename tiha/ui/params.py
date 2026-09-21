@@ -394,6 +394,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "lm_effects", "lm_compositor", "lm_thumbnails",
                 "lm_directory_counts", "lm_app_monitoring",
                 "lm_low_resolution", "lm_low_refresh_rate",
+                # İmleç düzeltmesi hafif modla gelir, onunla gider.
+                "cursor_xorg_fix",
             ],
             "help": t("m17.params.light_mode_enabled.help"),
         },
@@ -455,7 +457,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         {
             "key": "cursor_xorg_fix",
             "label": t("m17.params.cursor_xorg_fix.label"),
-            # Sabit: kullanıcı değiştiremez; adım her uygulandığında kurulur.
+            # Sabit: kullanıcı değiştiremez; hafif modla birlikte kurulur,
+            # hafif mod seçili değilse kaldırılır.
             "type": "readonly",
             "required": False,
             "default": t("m17.params.cursor_xorg_fix.opt_swcursor"),

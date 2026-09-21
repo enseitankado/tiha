@@ -783,12 +783,14 @@ class PerformanceModule(Module):
         p = dict(params or {})
         kill_processes = _as_bool(p.get("kill_user_processes"))
         light_mode = _as_bool(p.get("light_mode_enabled"))
-        # İmleç düzeltmesi seçenek değil: gerçek tahtada ekran modu değişiminde
-        # imleç kaybolmasını yalnız modesetting + yazılımsal imleç giderdi.
+        # İmleç düzeltmesi hafif modun ayrılmaz parçası: imleç, hafif modun
+        # çözünürlük/tazeleme değişiminde kayboluyor ve gerçek tahtada bunu
+        # yalnız modesetting + yazılımsal imleç giderdi. Hafif modla birlikte
+        # kurulur; hafif mod seçili değilse (daha önce yazılmışsa) kaldırılır.
         # Form alanı salt okunur; CLI/preset'ten başka bir değer gelse de
-        # her uygulamada bu kurulur.
+        # yalnız bu seçenek kurulur.
         cursor_xorg = CURSOR_XORG_SWCURSOR
-        cursor_xorg_on = True
+        cursor_remove = not light_mode and CURSOR_XORG_CONF.exists()
         # "Mod değişiminde imleci tazele" servisi kaldırıldı; önceki bir
         # uygulamanın kurduğu servis varsa bu uygulamada sökülür.
         cursor_service = False
@@ -799,7 +801,7 @@ class PerformanceModule(Module):
         session_remove = not kill_processes and self.session_cleanup_active()
 
         if not (kill_processes or session_remove or light_mode or light_remove
-                or cursor_xorg_on or cursor_service):
+                or cursor_remove or cursor_service):
             return ApplyResult(False, t("m17.apply.nothing_selected"))
 
         def say(line: str) -> None:
@@ -838,6 +840,7 @@ class PerformanceModule(Module):
                 summary.append(t("m17.apply.logind_removed"))
                 data["session_cleanup_removed"] = True
 
+        light_applied = False
         if light_mode:
             keys = [
                 key
@@ -850,6 +853,7 @@ class PerformanceModule(Module):
             else:
                 ok, text = self._apply_light_mode(original, keys, say, warnings)
                 if ok:
+                    light_applied = True
                     summary.append(text)
                     details.append(t(
                         "m17.apply.details_light", path=LIGHT_SETTINGS, keys=", ".join(keys),
@@ -867,7 +871,7 @@ class PerformanceModule(Module):
             else:
                 failures.append(text)
 
-        if cursor_xorg_on:
+        if light_applied:
             ok, text = self._apply_cursor_xorg(original, cursor_xorg, say)
             if ok:
                 summary.append(text)
@@ -877,6 +881,19 @@ class PerformanceModule(Module):
                 data["cursor_xorg_fix"] = cursor_xorg
             else:
                 failures.append(text)
+
+        if cursor_remove:
+            say(t("m17.cursor.xorg_header"))
+            removed = (
+                self._restore_or_remove("cursor_xorg", original, failures)
+                if original["touched"].get("cursor_xorg")
+                else _unlink_ok(CURSOR_XORG_CONF, failures)
+            )
+            if removed:
+                original["touched"]["cursor_xorg"] = False
+                say(t("m17.cursor.xorg_removed_say", path=CURSOR_XORG_CONF))
+                summary.append(t("m17.apply.cursor_xorg_removed"))
+                data["cursor_xorg_removed"] = True
 
         if original["touched"].get("cursor_service"):
             removed_ok = all([
