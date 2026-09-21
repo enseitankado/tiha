@@ -114,6 +114,15 @@ def _report_meta() -> list[tuple[str, str]]:
     ]
 
 
+def _widget_text(widget: Gtk.Widget | None) -> str:
+    """Sayı/metin alanının karşılaştırılabilir değeri."""
+    if isinstance(widget, Gtk.SpinButton):
+        return str(int(round(widget.get_value())))
+    if isinstance(widget, Gtk.Entry):
+        return widget.get_text()
+    return ""
+
+
 def _no_focus_labels(widget: Gtk.Widget) -> None:
     """Kapsayıcıdaki bütün etiketlerin klavye odağı almasını kapatır."""
     if isinstance(widget, Gtk.Label):
@@ -438,6 +447,8 @@ class ModulePage(Gtk.Box):
         self.result_holder.pack_start(banner, False, False, 0)
 
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
+        if not hasattr(self, "_auto_values"):
+            self._auto_values: dict[str, str] = {}
         grid = Gtk.Grid(column_spacing=10, row_spacing=4)
         grid.get_style_context().add_class("tiha-form")
         row_idx = 0
@@ -478,6 +489,10 @@ class ModulePage(Gtk.Box):
                 widget.set_hexpand(True)
             grid.attach(widget, 1, row_idx, 1, 1)
             self._fields[field["key"]] = widget
+            if field.get("default_from") and field.get("type") != "bool":
+                # Sistemden okunarak doldurulan değer; kullanıcı bunu
+                # değiştirirse tazeleme onun değerine dokunmaz.
+                self._auto_values[field["key"]] = _widget_text(widget)
             row_idx += 1
             row_widgets: list[Gtk.Widget] = [label, widget]
             if field.get("help"):
@@ -549,10 +564,23 @@ class ModulePage(Gtk.Box):
             if is_bool:
                 if widget is not None and hasattr(widget, "set_active"):
                     widget.set_active(_as_checked(value))
-            elif isinstance(widget, Gtk.SpinButton):
+                continue
+            # Sayı/metin alanı kullanıcı tarafından değiştirildiyse ona
+            # dokunulmaz: ör. "yedek hesap sayısı" 20 yapılıp alakasız bir
+            # düğmeye (öğrenci hesabını sil) basılınca eski değere dönüyordu.
+            key = field["key"]
+            if not hasattr(self, "_auto_values"):
+                self._auto_values = {}
+            auto = self._auto_values.get(key)
+            if auto is not None and _widget_text(widget) != auto:
+                continue
+            if isinstance(widget, Gtk.SpinButton):
                 widget.set_value(float(value or 0))
             elif isinstance(widget, Gtk.Entry):
                 widget.set_text("" if value is None else str(value))
+            else:
+                continue
+            self._auto_values[key] = _widget_text(widget)
 
     def _refresh_state_checkboxes(self) -> None:
         """Uygula/geri al sonrası "durum" kutularını sistemden tazeler.
@@ -1090,13 +1118,16 @@ class ModulePage(Gtk.Box):
             handler_id = [0]
             handler_id[0] = entry.connect("insert-text", _filter_insert)
         if kind == "password":
-            entry.set_visibility(False)
+            # Parolalar varsayılan olarak görünür: tahtada dokunmatik ekran
+            # klavyesiyle yazarken yanlış girilen karakter ancak böyle fark
+            # edilir. Göz düğmesi gizlemek için hâlâ duruyor.
+            entry.set_visibility(True)
             entry.set_input_purpose(Gtk.InputPurpose.PASSWORD)
             if field.get("show_toggle", True):
                 # Entry sağına göz düğmesi: tıklanınca parolayı göster/gizle.
                 entry.set_icon_from_icon_name(
                     Gtk.EntryIconPosition.SECONDARY,
-                    "view-reveal-symbolic",
+                    "view-conceal-symbolic",
                 )
                 entry.set_icon_tooltip_text(
                     Gtk.EntryIconPosition.SECONDARY,
