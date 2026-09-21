@@ -286,6 +286,7 @@ btn_finish = "Bitir"
 sidebar_welcome = "Hoş geldiniz"
 sidebar_summary = "Özet"
 status_applied = "Uygulandı: {summary}"
+status_off = "Kapalı olarak uygulandı: {summary}"
 status_failed = "Hata: {summary}"
 status_skipped = "Bu tahtada uygulanamaz: {summary}"
 page_failed = """\
@@ -2827,7 +2828,7 @@ ayarı genelde açık; ErP/Deep Sleep ise açık gelebilir.\
 
 [m15.apply]
 removed = "Uzaktan uyandırma servisi kaldırıldı; tahta artık ağ üzerinden açılamaz."
-not_selected = "Ağ kartını magic packet dinleme moduna alma seçeneği işaretlenmedi. Adım atlandı."
+not_selected = "Uzaktan uyandırma zaten kapalı; değişiklik yapılmadı."
 ethtool_installing = "ethtool paketi kuruluyor..."
 ethtool_failed = "ethtool paketi kurulamadı."
 ethtool_installed = "ethtool kuruldu."
@@ -2873,6 +2874,7 @@ kaldırılır ve tahta uzaktan uyandırılamaz.\
 
 [m15.report]
 removed = "Uzaktan uyandırma servisini kaldırdınız; imajdan çıkan tahtalar ağ üzerinden açılamayacak."
+off = "Uzaktan uyandırmayı kapalı bıraktınız; imajdan çıkan tahtalar ağ üzerinden açılamayacak."
 done = """\
 İmajdan çıkan tahtaların ağ kartını her açılışta uzaktan uyandırma \
 (Wake-on-LAN) paketini dinleyecek moda alan servisi kurdunuz; kapalı \

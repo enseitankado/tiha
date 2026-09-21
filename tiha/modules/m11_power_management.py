@@ -1309,8 +1309,19 @@ class PowerManagementModule(Module):
             True,
             t("m11.apply.summary_off"),
             details=t("m11.apply.details_off", config=ETA_SHUTDOWN_CONFIG),
-            data={"exempt_macs": []},
+            data={"exempt_macs": [], self.FEATURE_OFF_KEY: True},
         )
+
+    def result_is_off(self, data: dict | None) -> bool:
+        if super().result_is_off(data):
+            return True
+        # Bu anahtar eklenmeden önceki kayıtlar: kayıtlı seçeneklerde iki
+        # mod da kapalıysa sonuç "kapalı"dır.
+        params = (data or {}).get("_rapor_params") or {}
+        if "auto_enabled" not in params and "idle_enabled" not in params:
+            return False
+        on = lambda k: str(params.get(k, "")).lower() in ("true", "1", "yes", "on")
+        return not on("auto_enabled") and not on("idle_enabled")
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         removed_items = []

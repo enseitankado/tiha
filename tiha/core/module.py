@@ -121,6 +121,19 @@ class Module:
 
     # --- Arayüz -----------------------------------------------------------
 
+    # Uygula sonucunda özelliğin kapalı kaldığını bildiren data anahtarı.
+    # Kutuları boş bırakıp uygulamak bir "kapat/kaldır" isteğidir; günlükte
+    # "uygulandı" olarak durur ama sol menüde onay işareti göstermez.
+    FEATURE_OFF_KEY = "feature_off"
+
+    def result_is_off(self, data: dict | None) -> bool:
+        """Bu günlük kaydının sonucu özelliği kapalı mı bıraktı?
+
+        Yeni kayıtlarda modül ``data[FEATURE_OFF_KEY]`` yazar; eski kayıtları
+        tanımak için modüller bu yöntemi genişletebilir.
+        """
+        return bool((data or {}).get(self.FEATURE_OFF_KEY))
+
     def preview(self) -> str:
         """Uygulamadan önce durumu özetleyen kısa metin."""
         return ""

@@ -2319,6 +2319,14 @@ class SummaryPage(Gtk.Box):
 
         for entry in entries:
             sym, css = status_map.get(entry.status, ("?", ""))
+            module = self.modules.get(entry.module_id)
+            if entry.status == "applied" and module is not None:
+                try:
+                    if module.result_is_off(entry.data):
+                        # Kapatarak uygulandı: onay değil, nötr işaret.
+                        sym, css = "–", "tiha-summary-undone"
+                except Exception:
+                    pass
 
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             card.get_style_context().add_class("tiha-summary-card")

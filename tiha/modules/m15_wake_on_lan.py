@@ -223,6 +223,10 @@ class WakeOnLanModule(Module):
         lines.append(t("m15.preview.bios"))
         return "\n".join(lines)
 
+    def result_is_off(self, data: dict | None) -> bool:
+        # Eski kayıtlar yalnız wol_removed taşır.
+        return super().result_is_off(data) or bool((data or {}).get("wol_removed"))
+
     def apply(
         self,
         params: dict | None = None,
@@ -242,9 +246,11 @@ class WakeOnLanModule(Module):
                     True,
                     t("m15.apply.removed"),
                     details="\n".join(f"- {n}" for n in notes) if notes else "",
-                    data={"wol_removed": True},
+                    data={"wol_removed": True, self.FEATURE_OFF_KEY: True},
                 )
-            return ApplyResult(False, t("m15.apply.not_selected"))
+            # Zaten kapalı: hata değil, yapılacak iş yok.
+            return ApplyResult(True, t("m15.apply.not_selected"),
+                               data={self.FEATURE_OFF_KEY: True})
 
         was_ethtool_installed = _is_ethtool_installed()
 

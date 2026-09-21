@@ -275,6 +275,13 @@ class GrubProtectionModule(Module):
         lines.append(t("m16.preview.footer", user=SUPERUSER))
         return "\n".join(lines)
 
+    def result_is_off(self, data: dict | None) -> bool:
+        if super().result_is_off(data) or (data or {}).get("removed"):
+            return True
+        # Eski "koruma yok, değişiklik yapılmadı" kayıtları: kutu boştu.
+        params = (data or {}).get("_rapor_params") or {}
+        return str(params.get("enable_grub_lock", "")).lower() in ("false", "0", "no", "off")
+
     def apply(
         self,
         params: dict | None = None,
@@ -293,11 +300,12 @@ class GrubProtectionModule(Module):
         # varsa kaldırılır, yoksa yapacak iş yoktur.
         if not enabled:
             if not self.lockdown_active():
-                return ApplyResult(True, t("m16.apply.skip_no_lock"))
+                return ApplyResult(True, t("m16.apply.skip_no_lock"),
+                                   data={self.FEATURE_OFF_KEY: True})
             emit(t("m16.apply.removing"))
             result = self._remove_protection(emit)
             if result.success:
-                result.data = {"removed": True}
+                result.data = {"removed": True, self.FEATURE_OFF_KEY: True}
             return result
 
         password = (params.get("grub_password") or "").strip()

@@ -252,6 +252,16 @@ _CREDITS_SECTIONS: tuple[dict, ...] = (
 )
 
 
+def _result_is_off(module, entry) -> bool:
+    """Günlük kaydı "uygulandı" ama özelliği kapalı mı bıraktı?"""
+    if module is None:
+        return False
+    try:
+        return bool(module.result_is_off(entry.data))
+    except Exception:
+        return False
+
+
 class TiHAWindow(Gtk.Window):
     """Ana pencere — eta stilinde kompakt ve dokunmatik-uyumlu."""
 
@@ -899,6 +909,7 @@ class TiHAWindow(Gtk.Window):
         """Journal'a bakarak her sidebar satırının durum ikonunu günceller.
         Welcome / Özet sayfaları için module_id None — boş kalır."""
         latest = self.journal.latest_per_module()
+        by_id = {m.id: m for m in self.modules}
         for module_id, status_lbl in getattr(self, "_status_labels", []):
             if module_id is None:
                 continue
@@ -911,6 +922,10 @@ class TiHAWindow(Gtk.Window):
             if entry is None:
                 status_lbl.set_text("")
                 status_lbl.set_tooltip_text("")
+            elif entry.status == "applied" and _result_is_off(by_id.get(module_id), entry):
+                # Kutular boş bırakılıp uygulandı: özellik kapalı, işaret yok.
+                status_lbl.set_text("")
+                status_lbl.set_tooltip_text(t("ui.main.status_off", summary=entry.summary))
             elif entry.status == "applied":
                 status_lbl.set_text("✓")
                 ctx.add_class("tiha-step-status-ok")

@@ -513,6 +513,9 @@ def narrate_m15(ctx: StepContext, rep: StepReport) -> None:
     if ctx.data.get("wol_removed"):
         rep.done.append(t("m15.report.removed"))
         return
+    if ctx.data.get("feature_off"):
+        rep.done.append(t("m15.report.off"))
+        return
     rep.done.append(t("m15.report.done"))
     if ctx.data.get("was_ethtool_installed") is False:
         rep.done.append(t("m15.report.ethtool"))
