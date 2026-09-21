@@ -137,13 +137,15 @@ def main() -> int:
     console.info(t("app.opening_window"))
     if not is_supported():
         console.info(t("core.os_release.unsupported", name=pretty_name()))
-    console.info(t("app.logs_hint", dir=LOG_ROOT))
-    for name, what in (
-        ("tiha.log", t("app.log_main")),
-        ("tiha-debug.log", t("app.log_debug")),
-        ("tiha-stderr.log", t("app.log_stderr")),
-    ):
-        console.note(f"{name:<16} {what}")
+    console.info(t("app.logs_hint"))
+    log_files = [
+        (str(LOG_ROOT / "tiha.log"), t("app.log_main")),
+        (str(LOG_ROOT / "tiha-debug.log"), t("app.log_debug")),
+        (str(LOG_ROOT / "tiha-stderr.log"), t("app.log_stderr")),
+    ]
+    width = max(len(path) for path, _ in log_files)
+    for path, what in log_files:
+        console.note(f"{path:<{width}}  {what}")
 
     # Terminali kirletecek GTK/GLib/dconf uyarılarını dosyaya yönlendir.
     # (Bundan önce tüm kullanıcıya-görür mesajlar çıktı.)
