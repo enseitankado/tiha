@@ -125,6 +125,14 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m03.params.include_ogretmen.help"),
         },
         {
+            "key": "include_other_teachers",
+            "label": t("m03.params.include_other_teachers.label"),
+            "type": "bool",
+            "required": False,
+            "default": "True",
+            "help": t("m03.params.include_other_teachers.help"),
+        },
+        {
             "key": "add_teachers_to_group",
             "label": t("m03.params.add_teachers_to_group.label"),
             "type": "bool",

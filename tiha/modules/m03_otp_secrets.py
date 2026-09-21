@@ -983,6 +983,12 @@ class OTPSecretsModule(Module):
         make_group_pin: bool = str(
             params.get("make_group_pin", "False")
         ).lower() in ("true", "1", "yes", "on")
+        # Sistemdeki diğer öğretmen hesapları (EBA QR ile açılanlar, branş
+        # hesapları…) için de PIN. Varsayılan açık; eski presetlerde anahtar
+        # yok, onlar eski davranışta (kapalı) kalır.
+        include_other_teachers: bool = str(
+            params.get("include_other_teachers", "False")
+        ).lower() in ("true", "1", "yes", "on")
         # Öğretmen hesaplarını ogretmenler grubuna ekle. Varsayılan açık:
         # grup üyeliği olmadan '@ogretmenler' ortak PIN'i işe yaramaz ve
         # EBA QR ile açılan hesaplar gruba hiç girmez.
@@ -1039,7 +1045,21 @@ class OTPSecretsModule(Module):
         if include_ogretmen:
             teacher_names.append("ogretmen")
 
-        if not teacher_names:
+        # Diğer öğretmen hesapları: varsayılan hesaplar ve yedek hesaplar
+        # dışında, listeye yazılmamış bütün kişisel hesaplar. Bunlar ad
+        # listesinden geçirilmez — ad → kullanıcı adı dönüşümü var olan
+        # hesabın adını (GECOS) ezer, farklı bir ad üretip yeni hesap bile
+        # açabilirdi. Anahtarları aşağıda kullanıcı adıyla doğrudan üretilir.
+        other_teachers: list[str] = []
+        if include_other_teachers:
+            listed = {normalize_username(n) for n in teacher_names}
+            listed |= {_eta_otp_cli_normalize(n) for n in teacher_names}
+            other_teachers = [
+                u for u in get_extra_users()
+                if u not in listed and u not in reserve_usernames
+            ]
+
+        if not teacher_names and not other_teachers:
             return ApplyResult(
                 False,
                 t("m03.apply.empty_list"),
@@ -1063,7 +1083,9 @@ class OTPSecretsModule(Module):
         keep_users = set(before_secrets)
 
         cli_script = _eta_otp_cli_bulk_script()
-        if cli_script:
+        if not teacher_names:
+            success = True
+        elif cli_script:
             success = self._apply_with_tool(
                 cli_script, teacher_names, progress, keep_users
             )
@@ -1085,6 +1107,9 @@ class OTPSecretsModule(Module):
         # Her hesap için passwd GECOS (ad/soyad) alanını yaz.
         self._apply_gecos(teacher_names, cli_used=bool(cli_script), progress=progress)
 
+        if other_teachers:
+            self._apply_other_teachers(other_teachers, progress, keep_users)
+
         # Yeni eklenenleri ve anahtarlarını oku
         after_secrets = load_secrets()
         new_users = [u for u in after_secrets if u not in before_secrets]
@@ -1092,6 +1117,7 @@ class OTPSecretsModule(Module):
         # Listede olup anahtarı zaten bulunan hesaplar — dokunulmadı.
         _normalize = _eta_otp_cli_normalize if cli_script else normalize_username
         requested_users = {u for u in (_normalize(n) for n in teacher_names) if u}
+        requested_users |= set(other_teachers)
         preserved_users = sorted(requested_users & keep_users)
 
         # ===== ogretmenler grubu =====================================
@@ -1664,6 +1690,30 @@ class OTPSecretsModule(Module):
                 progress(t("m03.apply.internal_created", user=user, name=name))
         save_secrets(secrets)
         return True
+
+    def _apply_other_teachers(
+        self,
+        users: list[str],
+        progress: ProgressCallback | None,
+        keep_users: set[str],
+    ) -> None:
+        """Sistemde zaten var olan öğretmen hesaplarına anahtar üretir.
+
+        Hesap açmaz, ad/soyad (GECOS) alanına dokunmaz; anahtarı olan
+        hesabın anahtarı korunur (telefondaki kayıt geçerli kalsın).
+        """
+        if progress:
+            progress("\n" + t("m03.apply.other_teachers_start", count=len(users)))
+        secrets = load_secrets()
+        for user in users:
+            if user in keep_users or user in secrets:
+                if progress:
+                    progress(t("m03.apply.other_teacher_kept", user=user))
+                continue
+            secrets[user] = pyotp.random_base32()
+            if progress:
+                progress(t("m03.apply.other_teacher_created", user=user))
+        save_secrets(secrets)
 
     def _apply_gecos(
         self,

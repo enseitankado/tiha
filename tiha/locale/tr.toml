@@ -1356,6 +1356,9 @@ kaldırabilirsiniz; sistemde yalnız etapadmin, ogrenci ve ogretmen kalır.\
 only_defaults = "  Sistemde yalnız varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)."
 
 [m03.apply]
+other_teachers_start = "Sistemdeki diğer öğretmen hesapları ({count}) için PIN anahtarı:"
+other_teacher_created = "  + {user}: anahtar üretildi"
+other_teacher_kept = "  = {user}: anahtarı zaten var, korundu"
 group_forced = """\
 Not: Grup PIN'i seçili — öğretmen hesaplarını '{group}' grubuna ekleme \
 otomatik etkinleştirildi (PAM grup PIN'ini yalnız gruba üye kullanıcıya \
@@ -1574,6 +1577,18 @@ help = """\
 İşaretlenirse ortak ogretmen hesabı için de bir OTP anahtarı üretilir. \
 Sınıfta parola paylaşmadan geçici giriş için kullanışlıdır; hesabın kendi \
 parolası varsa onunla giriş yine mümkündür.\
+"""
+
+[m03.params.include_other_teachers]
+label = "Sistemdeki diğer öğretmen hesapları için de PIN üret"
+help = """\
+İşaretliyse tahtada zaten açılmış diğer kişisel hesaplara da PIN anahtarı \
+üretilir. Bunlar EBA QR ile açılan hesaplar ve branş hesaplarıdır. \
+Yukarıdaki listeye yazmanız gerekmez. etapadmin, ogretmen ve ogrenci \
+hesaplarına bu kutu dokunmaz, onlar kendi kutularına bağlıdır. Yedek \
+hesaplara zaten her zaman PIN üretilir. Anahtarı olan hesabın anahtarı \
+değişmez, telefondaki kayıt geçerli kalır. Hesabın adı soyadı da \
+değiştirilmez.\
 """
 
 [m03.params.add_teachers_to_group]
