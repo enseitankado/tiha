@@ -977,42 +977,20 @@ class OTPSecretsModule(Module):
         include_etapadmin: bool = str(
             params.get("include_etapadmin", "False")
         ).lower() in ("true", "1", "yes", "on")
-        include_ogretmen: bool = str(
-            params.get("include_ogretmen", "False")
-        ).lower() in ("true", "1", "yes", "on")
         make_group_pin: bool = str(
             params.get("make_group_pin", "False")
         ).lower() in ("true", "1", "yes", "on")
-        # Sistemdeki diğer öğretmen hesapları (EBA QR ile açılanlar, branş
-        # hesapları…) için de PIN. Varsayılan açık; eski presetlerde anahtar
-        # yok, onlar eski davranışta (kapalı) kalır.
+        # Sistemdeki öğretmen hesapları (ortak ogretmen hesabı, EBA QR ile
+        # açılanlar, branş hesapları…) için de PIN. Varsayılan açık; eski
+        # presetlerde anahtar yok, onlar eski davranışta (kapalı) kalır.
         include_other_teachers: bool = str(
             params.get("include_other_teachers", "False")
         ).lower() in ("true", "1", "yes", "on")
-        # Öğretmen hesaplarını ogretmenler grubuna ekle. Varsayılan açık:
-        # grup üyeliği olmadan '@ogretmenler' ortak PIN'i işe yaramaz ve
-        # EBA QR ile açılan hesaplar gruba hiç girmez.
-        # Eski presetlerde bu anahtar "auto_group_new_teachers" adıyla
-        # geçiyordu; okunmaya devam ediyor ki sahadaki preset dosyaları
-        # sessizce başka bir davranışa kaymasın.
-        add_teachers_to_group: bool = str(
-            params.get(
-                "add_teachers_to_group",
-                params.get("auto_group_new_teachers", "True"),
-            )
+        # Eski presetlerdeki "ortak ogretmen hesabı için de PIN" kutusu:
+        # yalnız o hesabı kapsıyordu, anlamı korunur.
+        include_ogretmen_legacy: bool = str(
+            params.get("include_ogretmen", "False")
         ).lower() in ("true", "1", "yes", "on")
-
-        # Grup PIN'i pam_otp tarafından yalnızca kullanıcı '/etc/group'
-        # üyesiyse doğrulanır. Kullanıcı make_group_pin işaretleyip
-        # add_teachers_to_group'u işaretsiz bıraktıysa PIN üretilir ama
-        # kimse gruba girmediği için giriş yapılamaz. Bu bir UX tuzağı;
-        # burada sessizce iki bayrağı birlikte etkinleştiriyoruz —
-        # kullanıcı grup PIN istediyse üyelik zaten kaçınılmaz ön koşul.
-        if make_group_pin and not add_teachers_to_group:
-            add_teachers_to_group = True
-            if progress:
-                progress(t("m03.apply.group_forced", group=OGRETMENLER_GROUP))
-
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
 
         # Yedek hesaplar (ogretmen1 … ogretmenN, eski kurulumlarda
@@ -1041,9 +1019,6 @@ class OTPSecretsModule(Module):
         # vererek geçici yetki devretsin diye.
         if include_etapadmin:
             teacher_names.append("etapadmin")
-        # Opsiyonel: ortak ogretmen hesabı için de PIN üret.
-        if include_ogretmen:
-            teacher_names.append("ogretmen")
 
         # Diğer öğretmen hesapları: varsayılan hesaplar ve yedek hesaplar
         # dışında, listeye yazılmamış bütün kişisel hesaplar. Bunlar ad
@@ -1058,6 +1033,10 @@ class OTPSecretsModule(Module):
                 u for u in get_extra_users()
                 if u not in listed and u not in reserve_usernames
             ]
+        # Ortak ogretmen hesabı da bir öğretmen hesabı; ayrı kutusu kalktı.
+        if ((include_other_teachers or include_ogretmen_legacy)
+                and user_exists("ogretmen") and "ogretmen" not in other_teachers):
+            other_teachers.insert(0, "ogretmen")
 
         if not teacher_names and not other_teachers:
             return ApplyResult(
@@ -1131,41 +1110,47 @@ class OTPSecretsModule(Module):
         ungrouped_users: list[str] = []
         auto_group_service_installed = False
 
-        if add_teachers_to_group:
-            if not ensure_ogretmenler_group():
+        # Öğretmen hesaplarının gruba üyeliği seçenek değil: '@ogretmenler'
+        # ortak PIN'i yalnız gruba üye hesaplarda çalışır ve EBA QR ile
+        # açılan hesaplar gruba kendiliğinden girmez.
+        if not ensure_ogretmenler_group():
+            if progress:
+                progress("\n" + t(
+                    "m03.apply.group_create_failed_membership",
+                    group=OGRETMENLER_GROUP,
+                ))
+        else:
+            # PIN kutusundan bağımsız: tahtadaki bütün kişisel hesaplar
+            # (EBA QR, branş, yedek) öğretmen hesabıdır, gruba girer.
+            targets = sorted(
+                requested_users | set(reserve_usernames) | set(get_extra_users())
+            )
+            if progress:
+                progress("\n" + t("m03.apply.adding_to_group", group=OGRETMENLER_GROUP))
+            for u in targets:
+                # etapadmin bir öğretmen hesabı değil; ortak PIN'in
+                # yönetici hesabına da geçmesi istenmez. Ortak ogretmen
+                # hesabı da gruba girmez: grup PIN'i ortak hesapta
+                # geçmemeli (otomatik grup servisi de onu hariç tutar).
+                if u in GROUP_EXCLUDED_USERS or not user_exists(u):
+                    continue
+                run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
+                grouped_users.append(u)
                 if progress:
-                    progress("\n" + t(
-                        "m03.apply.group_create_failed_membership",
-                        group=OGRETMENLER_GROUP,
-                    ))
-            else:
-                targets = sorted(requested_users | set(reserve_usernames))
+                    progress(f"  + {u}")
+            if not grouped_users and progress:
+                progress(t("m03.apply.no_group_targets"))
+            # Eski sürüm ortak hesabı da gruba ekliyordu; üyeliği kaldır.
+            for u in _excluded_group_members():
+                if run_cmd(["gpasswd", "-d", u, OGRETMENLER_GROUP], check=False).ok:
+                    ungrouped_users.append(u)
+                    if progress:
+                        progress(t("m03.apply.removed_from_group", user=u))
+            # Sonradan EBA QR ile açılacak hesaplar için izleyici servis
+            if install_auto_group_service():
+                auto_group_service_installed = True
                 if progress:
-                    progress("\n" + t("m03.apply.adding_to_group", group=OGRETMENLER_GROUP))
-                for u in targets:
-                    # etapadmin bir öğretmen hesabı değil; ortak PIN'in
-                    # yönetici hesabına da geçmesi istenmez. Ortak ogretmen
-                    # hesabı da gruba girmez: grup PIN'i ortak hesapta
-                    # geçmemeli (otomatik grup servisi de onu hariç tutar).
-                    if u in GROUP_EXCLUDED_USERS or not user_exists(u):
-                        continue
-                    run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
-                    grouped_users.append(u)
-                    if progress:
-                        progress(f"  + {u}")
-                if not grouped_users and progress:
-                    progress(t("m03.apply.no_group_targets"))
-                # Eski sürüm ortak hesabı da gruba ekliyordu; üyeliği kaldır.
-                for u in _excluded_group_members():
-                    if run_cmd(["gpasswd", "-d", u, OGRETMENLER_GROUP], check=False).ok:
-                        ungrouped_users.append(u)
-                        if progress:
-                            progress(t("m03.apply.removed_from_group", user=u))
-                # Sonradan EBA QR ile açılacak hesaplar için izleyici servis
-                if install_auto_group_service():
-                    auto_group_service_installed = True
-                    if progress:
-                        progress("\n" + t("m03.apply.auto_group_installed"))
+                    progress("\n" + t("m03.apply.auto_group_installed"))
 
         if make_group_pin:
             if not ensure_ogretmenler_group():

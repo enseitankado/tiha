@@ -993,6 +993,7 @@ reserve_preparing = """\
 kilitli)…\
 """
 reserve_create_failed = "  ✗ {user} oluşturulamadı"
+reserve_group_failed = "  ✗ {user} ogretmenler grubuna eklenemedi"
 removed_common = "Silinen ortak hesaplar: {users}"
 password_line = "{user} parolası: {state}"
 password_set = "atandı"
@@ -1359,11 +1360,6 @@ only_defaults = "  Sistemde yalnız varsayılan kullanıcılar mevcut (etapadmin
 other_teachers_start = "Sistemdeki diğer öğretmen hesapları ({count}) için PIN anahtarı:"
 other_teacher_created = "  + {user}: anahtar üretildi"
 other_teacher_kept = "  = {user}: anahtarı zaten var, korundu"
-group_forced = """\
-Not: Grup PIN'i seçili — öğretmen hesaplarını '{group}' grubuna ekleme \
-otomatik etkinleştirildi (PAM grup PIN'ini yalnız gruba üye kullanıcıya \
-kabul ediyor).\
-"""
 empty_list = "Liste boş — öğretmen eklemediniz ve sistemde yedek hesap yok."
 empty_list_details = """\
 Lütfen en az bir isim girin ya da 'Kullanıcı parolaları' adımında 'Yedek \
@@ -1571,35 +1567,16 @@ geçici yetki devredilebilir; parola güvende kalır. etapadmin hesabı yine her
 giriş yolu (parola, USB, QR, PIN) için kullanılabilir.\
 """
 
-[m03.params.include_ogretmen]
-label = "Ortak öğretmen hesabı (ogretmen) için de PIN üret"
-help = """\
-İşaretlenirse ortak ogretmen hesabı için de bir OTP anahtarı üretilir. \
-Sınıfta parola paylaşmadan geçici giriş için kullanışlıdır; hesabın kendi \
-parolası varsa onunla giriş yine mümkündür.\
-"""
-
 [m03.params.include_other_teachers]
-label = "Sistemdeki diğer öğretmen hesapları için de PIN üret"
+label = "Öğretmen hesapları için de PIN üret"
 help = """\
-İşaretliyse tahtada zaten açılmış diğer kişisel hesaplara da PIN anahtarı \
-üretilir. Bunlar EBA QR ile açılan hesaplar ve branş hesaplarıdır. \
-Yukarıdaki listeye yazmanız gerekmez. etapadmin, ogretmen ve ogrenci \
-hesaplarına bu kutu dokunmaz, onlar kendi kutularına bağlıdır. Yedek \
-hesaplara zaten her zaman PIN üretilir. Anahtarı olan hesabın anahtarı \
+İşaretliyse tahtada zaten açılmış öğretmen hesaplarına da PIN anahtarı \
+üretilir: ortak ogretmen hesabı, EBA QR ile açılan hesaplar ve branş \
+hesapları. Yukarıdaki listeye yazmanız gerekmez. etapadmin ve ogrenci \
+hesaplarına bu kutu dokunmaz. Yedek hesaplara zaten her zaman PIN \
+üretilir. Anahtarı olan hesabın anahtarı \
 değişmez, telefondaki kayıt geçerli kalır. Hesabın adı soyadı da \
 değiştirilmez.\
-"""
-
-[m03.params.add_teachers_to_group]
-label = "Öğretmen hesaplarını ogretmenler grubuna ekle"
-help = """\
-Bu adımın yönettiği öğretmen hesaplarını (listedekiler ve yedek hesaplar) \
-'ogretmenler' grubuna üye yapar. Ayrıca imaja /etc/passwd'i izleyen küçük \
-bir sistem servisi gömülür: EBA QR ile bir öğretmen tahtaya ilk kez oturum \
-açtığında oluşan yeni yerel hesap da otomatik olarak gruba dahil edilir. \
-Grup üyeliği, aşağıdaki '@ogretmenler' ortak PIN'inin çalışması için ön \
-koşuldur.\
 """
 
 [m03.params.make_group_pin]
@@ -1612,11 +1589,11 @@ kartı olarak çıkar. Zaten bir ortak PIN varsa korunur, yenilenmez. Tek tek \
 öğretmen PIN'lerinden daha zayıf bir izdir (herkes aynı kodu kullanır), bu \
 yüzden varsayılan olarak kapalıdır.\n\
 \n\
-ÖN KOŞUL: PAM grup PIN'ini yalnız 'ogretmenler' grubunun ÜYESİ olan \
-hesaplara kabul eder. Bu kutu işaretlenince 'Öğretmen hesaplarını \
-ogretmenler grubuna ekle' kutusu da otomatik olarak işaretlenir — aksi halde \
-üretilen ortak PIN hiçbir hesapta çalışmayacağı için. Manuel olarak geri \
-kaldırmayın; iki bayrak birlikte çalışır.\
+Ortak PIN yalnız 'ogretmenler' grubunun üyesi olan hesaplarda çalışır. \
+TiHA öğretmen hesaplarını (yedek hesaplar ve branş hesapları dahil) bu \
+gruba her zaman kendisi ekler; EBA QR ile sonradan açılan hesaplar da \
+tahtaya kurulan küçük bir servisle gruba otomatik girer. Ortak ogretmen \
+hesabı ve etapadmin gruba alınmaz.\
 """
 
 [m03.params.purge_all_secrets]

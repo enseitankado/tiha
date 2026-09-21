@@ -663,6 +663,19 @@ class InitialPasswordsModule(Module):
                 else:
                     if progress:
                         progress(t("m01.apply.reserve_create_failed", user=username))
+            # Yedek hesaplar da öğretmen hesabıdır: ogretmenler grubuna
+            # girer ('@ogretmenler' ortak PIN'i yalnız üyelerde çalışır).
+            from .m03_otp_secrets import ensure_ogretmenler_group, OGRETMENLER_GROUP
+            if ensure_ogretmenler_group():
+                for uname in created_reserve + skipped_reserve:
+                    if _in_group(uname, OGRETMENLER_GROUP):
+                        continue
+                    r = run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, uname])
+                    if not r.ok:
+                        log.warning("'%s' ogretmenler grubuna eklenemedi: %s",
+                                    uname, r.stderr.strip())
+                        if progress:
+                            progress(t("m01.apply.reserve_group_failed", user=uname))
 
         # ---- Branş hesapları ---------------------------------------------
         # Kullanıcı UI'dan bir okul türü ve o okulda ders okutan

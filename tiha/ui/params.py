@@ -117,14 +117,6 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m03.params.include_etapadmin.help"),
         },
         {
-            "key": "include_ogretmen",
-            "label": t("m03.params.include_ogretmen.label"),
-            "type": "bool",
-            "required": False,
-            "default": "True",
-            "help": t("m03.params.include_ogretmen.help"),
-        },
-        {
             "key": "include_other_teachers",
             "label": t("m03.params.include_other_teachers.label"),
             "type": "bool",
@@ -133,27 +125,13 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m03.params.include_other_teachers.help"),
         },
         {
-            "key": "add_teachers_to_group",
-            "label": t("m03.params.add_teachers_to_group.label"),
-            "type": "bool",
-            "required": False,
-            "default": "True",
-            "help": t("m03.params.add_teachers_to_group.help"),
-        },
-        {
             "key": "make_group_pin",
             "label": t("m03.params.make_group_pin.label"),
             "type": "bool",
             "required": False,
             "default": "False",
-            # Ortak 'ogretmen' hesabının kendi PIN'i grup PIN'inden
-            # bağımsızdır (ortak hesap ogretmenler grubuna girmez), bu
-            # yüzden grup PIN'i seçilince o kutuya dokunulmaz.
             # PAM grup-PIN'i yalnız gruba üye kullanıcılara kabul ediyor;
-            # bu bayrak işaretlenince "Öğretmen hesaplarını ogretmenler
-            # grubuna ekle" kutusu da otomatik işaretlenir, kullanıcı bağı
-            # UI'dan görür.
-            "selects": ["add_teachers_to_group"],
+            # öğretmen hesapları her uygulamada gruba alınır.
             "help": t("m03.params.make_group_pin.help"),
         },
         {
