@@ -561,6 +561,14 @@ TiHA yalnızca '{admin}' kullanıcısı tarafından kullanılabilir. Şu anda \
 [core.utils]
 stream_timeout = "[ZAMAN AŞIMI]"
 
+[core.os_release]
+unsupported = """\
+⚠ Bu sistem {name}. TiHA Pardus ETAP 23 için hazırlandı; bu sürümde bazı \
+adımlar beklendiği gibi çalışmayabilir. Sistem güncellemesi adımı depo \
+ayarlarına dokunmaz. Adımları uygulamadan önce bir deneme tahtasında \
+sınayın.\
+"""
+
 [core.report]
 closing = "Bu imajı yaymadan önce kapsamlı bir testten geçirmeyi unutmayın."
 join_and = " ve "
@@ -780,6 +788,10 @@ pardus_update = "Pardus Güncelleyici'yi aç"
 [m09.fix]
 deleting_broken = "{count} bozuk repository dosyası siliniyor..."
 adding_main = "Ana Pardus ETAP depoları ekleniyor..."
+unknown_release = """\
+⚠ Bu sistem ({name}) TiHA'nın tanıdığı bir Pardus ETAP sürümü değil; \
+depo ayarlarına dokunulmadı. Güncelleme mevcut depo ayarlarıyla yapılacak.\
+"""
 fixed = "✅ {count} repository sorunu düzeltildi"
 healthy = "✅ Repository yapılandırması sağlıklı"
 error = "❌ Repository düzeltme hatası: {error}"
@@ -788,6 +800,11 @@ error = "❌ Repository düzeltme hatası: {error}"
 main_repos = "Ana Pardus depoları  : {status}"
 main_repos_ok = "mevcut"
 main_repos_bad = "eksik"
+main_repos_unknown = "denetlenmedi (bu sürüm için depo bilgisi yok)"
+release_unknown_note = """\
+Bu sistem ({name}) TiHA'nın tanıdığı bir Pardus ETAP sürümü değil. Depo \
+ayarlarına dokunulmaz; güncelleme tahtadaki mevcut depo ayarlarıyla yapılır.\
+"""
 broken_files = "Bozuk depo dosyaları : {status}"
 broken_files_count = "{count} adet"
 broken_files_none = "yok"
@@ -801,6 +818,10 @@ pending_count = "Bekleyen yükseltme   : {count} paket"
 will_do = """\
 Bu adım uygulandığında:\n\
 \u0020\u0020- Depo yapılandırma sorunları düzeltilir\n\
+\u0020\u0020- apt update > full-upgrade > autoremove > clean çalışır\
+"""
+will_do_no_repo = """\
+Bu adım uygulandığında:\n\
 \u0020\u0020- apt update > full-upgrade > autoremove > clean çalışır\
 """
 long_running = "  - İşlem uzun sürebilir"

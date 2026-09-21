@@ -29,6 +29,7 @@ from ..core.async_state import AsyncValue
 from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
+from ..core.os_release import pretty_name, release_codename
 from ..core.privilege import invoking_username
 from ..core.utils import run_cmd, run_cmd_stream
 
@@ -38,8 +39,8 @@ log = get_logger(__name__)
 # birincil depo ``depo.etap.org.tr`` olarak gelir; eski dağıtımlarda
 # (ve genel Pardus kurulumlarında) ``depo.pardus.org.tr`` kullanılır.
 # Burada modern, ETAP-merkezli URL'ler liste başına alındı —
-# ``fix_repositories`` boş ya da bozuk bir sources.list'i bu kümeyle
-# yeniden yazar.
+# ``fix_repositories`` ana depo satırı bulunmayan bir sources.list'e bu
+# kümeyi ekler (mevcut satırlara dokunmadan).
 PARDUS_ETAP_REPOS = [
     "deb http://depo.etap.org.tr/etap yirmiuc main contrib non-free non-free-firmware",
     "deb http://depo.etap.org.tr/pardus yirmiuc main contrib non-free non-free-firmware",
@@ -49,6 +50,8 @@ PARDUS_ETAP_REPOS = [
 
 # Sağlık kontrolünde ana depo sayılacak host'lar. Hem yeni MEB ETAP
 # domaini hem de eski Pardus genel depo domaini kabul edilir.
+SOURCES_LIST = Path("/etc/apt/sources.list")
+
 _MAIN_REPO_HOSTS = ("depo.etap.org.tr", "depo.pardus.org.tr")
 
 # ETAP 23 için kabul edilebilir suite adları: bazı eski imajlar
@@ -56,8 +59,16 @@ _MAIN_REPO_HOSTS = ("depo.etap.org.tr", "depo.pardus.org.tr")
 # olarak görünür.
 _MAIN_REPO_SUITES = ("yirmiuc", "yirmiuc-deb", "etap-yirmiuc", "etap-yirmiuc-deb")
 
+# Sürüm → (yazılacak ana depo satırları, ana depo sayılan suite adları).
+# Depo onarımı YALNIZ burada tanımlı sürümlerde yapılır. Tanımsız bir
+# sürümde (ör. ETAP 24) sources.list'e dokunulmaz: yoksa yeni sürümün
+# depo satırları silinip yerine eski sürümünkiler yazılırdı.
+_RELEASE_REPOS: dict[str, tuple[list[str], tuple[str, ...]]] = {
+    "yirmiuc": (PARDUS_ETAP_REPOS, _MAIN_REPO_SUITES),
+}
 
-def _line_is_main_repo(line: str) -> bool:
+
+def _line_is_main_repo(line: str, suites: tuple[str, ...] = _MAIN_REPO_SUITES) -> bool:
     """Verilen sources.list satırı ETAP'a ait bir ana depo mu?"""
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
@@ -67,25 +78,30 @@ def _line_is_main_repo(line: str) -> bool:
     # Suite alanı tipik olarak host'tan sonraki ilk kelime; tam kelime
     # eşleşmesi için token bazlı kontrol.
     tokens = stripped.split()
-    return any(suite in tokens for suite in _MAIN_REPO_SUITES)
+    return any(suite in tokens for suite in suites)
 
 
 def check_repository_health() -> dict:
     """Repository sağlığını kontrol eder."""
+    codename = release_codename()
     issues = {
         "missing_main_repos": False,
         "broken_files": [],
         "empty_sources_list": False,
+        # Sürüm tanınmıyorsa ana depo denetimi yapılmaz (neyin "doğru"
+        # olduğunu bilmiyoruz); onarım da yapılmaz.
+        "release_known": codename in _RELEASE_REPOS,
     }
 
     # sources.list dosyasını kontrol et
-    sources_list = Path("/etc/apt/sources.list")
+    sources_list = SOURCES_LIST
     if not sources_list.exists() or sources_list.stat().st_size == 0:
         issues["empty_sources_list"] = True
-        issues["missing_main_repos"] = True
-    else:
+        issues["missing_main_repos"] = issues["release_known"]
+    elif issues["release_known"]:
+        suites = _RELEASE_REPOS[codename][1]
         content = sources_list.read_text()
-        if not any(_line_is_main_repo(line) for line in content.splitlines()):
+        if not any(_line_is_main_repo(line, suites) for line in content.splitlines()):
             issues["missing_main_repos"] = True
 
     # Bozuk repository dosyalarını bul
@@ -114,38 +130,29 @@ def fix_repositories(progress=None) -> bool:
                 except Exception as exc:
                     log.warning("Bozuk dosya silinemedi %s: %s", broken_file, exc)
 
-        # Ana depoları düzelt
-        if issues["missing_main_repos"]:
+        # Tanınmayan sürüm: depo ayarlarına dokunma, yalnız söyle.
+        if not issues["release_known"]:
+            if progress:
+                progress(t("m09.fix.unknown_release", name=pretty_name()))
+            log.warning("Tanınmayan sürüm (%s); depo onarımı atlandı", pretty_name())
+
+        # Ana depoları düzelt: eksik satırlar dosyanın SONUNA eklenir;
+        # mevcut satırlara (başka depolar, yorumlar) dokunulmaz.
+        elif issues["missing_main_repos"]:
             if progress:
                 progress(t("m09.fix.adding_main"))
 
-            sources_list = Path("/etc/apt/sources.list")
-
-            # Mevcut içeriği oku (varsa)
-            existing_content = ""
-            if sources_list.exists():
-                existing_content = sources_list.read_text().strip()
-
-            # Yeni içeriği oluştur
-            new_content = []
-
-            # Ana Pardus depolarını ekle
-            new_content.extend(PARDUS_ETAP_REPOS)
-
-            # Mevcut önemli 3. parti depoları koru (eğer valid ise) —
-            # ana depo host'larını içeren satırlar yeniden eklenmesin,
-            # diğer (chrome/docker/node) depo satırlarını koru.
-            if existing_content:
-                for line in existing_content.splitlines():
-                    line = line.strip()
-                    if (line and not line.startswith("#") and
-                        not any(host in line for host in _MAIN_REPO_HOSTS) and
-                        ("chrome" in line.lower() or "docker" in line.lower() or "node" in line.lower())):
-                        new_content.append(line)
-
-            # Dosyayı yaz
-            sources_list.write_text("\n".join(new_content) + "\n")
-            log.info("Ana Pardus ETAP depoları eklendi")
+            sources_list = SOURCES_LIST
+            existing = sources_list.read_text() if sources_list.exists() else ""
+            repo_lines = _RELEASE_REPOS[release_codename()][0]
+            present = {" ".join(line.split()) for line in existing.splitlines()}
+            missing = [line for line in repo_lines if line not in present]
+            text = existing.rstrip("\n")
+            if text:
+                text += "\n\n"
+            text += "# TiHA: eksik ana depolar eklendi\n" + "\n".join(missing) + "\n"
+            sources_list.write_text(text)
+            log.info("Ana Pardus ETAP depoları eklendi: %s", missing)
             fixed_count += 1
 
         if fixed_count > 0:
@@ -153,7 +160,8 @@ def fix_repositories(progress=None) -> bool:
                 progress(t("m09.fix.fixed", count=fixed_count))
             return True
         else:
-            if progress:
+            # Tanınmayan sürümde denetim yapılmadı; "sağlıklı" demek yanıltır.
+            if progress and issues["release_known"]:
                 progress(t("m09.fix.healthy"))
             return True
 
@@ -225,12 +233,13 @@ class SystemUpdateModule(Module):
         checking = cached is None and _pending_updates.in_progress()
 
         lines: list[str] = []
-        lines.append(t(
-            "m09.preview.main_repos",
-            status=_status(repo_issues["missing_main_repos"],
-                           t("m09.preview.main_repos_ok"),
-                           t("m09.preview.main_repos_bad")),
-        ))
+        if not repo_issues["release_known"]:
+            main_status = t("m09.preview.main_repos_unknown")
+        else:
+            main_status = _status(repo_issues["missing_main_repos"],
+                                  t("m09.preview.main_repos_ok"),
+                                  t("m09.preview.main_repos_bad"))
+        lines.append(t("m09.preview.main_repos", status=main_status))
         lines.append(t(
             "m09.preview.broken_files",
             status=(t("m09.preview.broken_files_count",
@@ -253,7 +262,13 @@ class SystemUpdateModule(Module):
         else:
             lines.append(t("m09.preview.pending_count", count=count))
         lines.append("")
-        lines.append(t("m09.preview.will_do"))
+        if not repo_issues["release_known"]:
+            lines.append(t("m09.preview.release_unknown_note", name=pretty_name()))
+            lines.append("")
+        lines.append(
+            t("m09.preview.will_do") if repo_issues["release_known"]
+            else t("m09.preview.will_do_no_repo")
+        )
         if count > 0 or checking:
             lines.append(t("m09.preview.long_running"))
         return "\n".join(lines)

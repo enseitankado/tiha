@@ -14,6 +14,7 @@ from .core.i18n import t
 from .core.logger import get_logger, log_startup_info, log_shutdown_info
 from .core.paths import LOG_ROOT, ensure_runtime_dirs
 from .core.image_info import protect_image_info
+from .core.os_release import is_supported, pretty_name
 from .core.privilege import require_root_and_admin
 
 log = get_logger(__name__)
@@ -134,6 +135,8 @@ def main() -> int:
 
     console.banner_open(t("app.banner_title"), f"v{__version__}")
     console.info(t("app.opening_window"))
+    if not is_supported():
+        console.info(t("core.os_release.unsupported", name=pretty_name()))
     console.info(t("app.logs_hint", dir=LOG_ROOT))
     for name, what in (
         ("tiha.log", t("app.log_main")),

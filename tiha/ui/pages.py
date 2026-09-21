@@ -228,6 +228,16 @@ class WelcomePage(Gtk.Box):
         heading = _wrapping_label(t("ui.welcome.heading"), klass="tiha-heading")
         self.pack_start(heading, False, False, 0)
 
+        from ..core.os_release import is_supported, pretty_name
+        if not is_supported():
+            self.pack_start(
+                _wrapping_label(
+                    t("core.os_release.unsupported", name=pretty_name()),
+                    klass="tiha-experimental-banner",
+                ),
+                False, False, 0,
+            )
+
         add_paragraph(_WELCOME_INTRO)
 
         title_lbl = _wrapping_label(_WELCOME_FEATURES_TITLE, klass="tiha-form-section")
