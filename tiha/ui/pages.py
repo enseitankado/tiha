@@ -1824,7 +1824,10 @@ class ModulePage(Gtk.Box):
 
     def _open_stream_dialog(self, title: str) -> None:
         """Canlı çıktı modalını açar (varsa yeniden kullanır)."""
+        # Bitişte başlık "<adım> — tamamlandı" olur; özet başlığa girmez.
+        self._stream_title_base = self.module.title
         if self._stream_dialog is not None:
+            self._stream_dialog.set_title(title)
             self._stream_buffer.set_text("")
             self._stream_status.set_text(t("ui.pages.stream_working"))
             self._stream_spinner.start()
@@ -1905,29 +1908,31 @@ class ModulePage(Gtk.Box):
         if self._stream_dialog is None:
             return
         self._stream_spinner.stop()
+        # Sonuç özeti pencerede YALNIZ üstteki durum satırında görünür.
+        # Eskiden başlık, durum satırı, metin alanındaki "Sonuç:" satırı ve
+        # sonradan açılan bilgi penceresi aynı cümleyi dört kez gösteriyordu.
         self._stream_status.set_text(
             t("ui.pages.stream_done", summary=summary) if success
             else t("ui.pages.stream_failed", summary=summary)
         )
+        title = getattr(self, "_stream_title_base", "")
+        if title:
+            self._stream_dialog.set_title(t(
+                "ui.pages.stream_title_done" if success else "ui.pages.stream_title_failed",
+                title=title,
+            ))
 
         if self._stream_buffer is not None:
             end = self._stream_buffer.get_end_iter()
-            start = self._stream_buffer.get_start_iter()
             has_content = self._stream_buffer.get_char_count() > 0
             report = "\n\n".join(
                 part.strip() for part in (details, copyable) if part and part.strip()
             )
-            trailing = t("ui.pages.stream_result_trailing", summary=summary)
             if report:
-                trailing += "\n" + report + "\n"
-            if not has_content:
-                # Akış yayınlanmadıysa baştan yaz — çirkin ayraç olmasın.
-                self._stream_buffer.set_text(
-                    t("ui.pages.stream_result", summary=summary)
-                    + (("\n" + report + "\n") if report else "")
-                )
-            else:
-                self._stream_buffer.insert(end, trailing)
+                if has_content:
+                    self._stream_buffer.insert(end, "\n───\n" + report + "\n")
+                else:
+                    self._stream_buffer.set_text(report + "\n")
             # En alta kaydır
             end = self._stream_buffer.get_end_iter()
             mark = self._stream_buffer.get_insert()
@@ -1993,9 +1998,8 @@ class ModulePage(Gtk.Box):
                 self.post_apply_callback(result)
             except Exception as exc:
                 log.debug("post_apply_callback hatası: %s", exc)
-        # Modül "tamamlandı" sinyalini özellikle popup ile vermek istiyorsa
-        if result.success and getattr(self.module, "popup_on_success", False):
-            self._toast(result.summary)
+        # Ayrı "tamamlandı" bilgi penceresi açılmaz: canlı çıktı penceresi
+        # sonucu zaten gösteriyor (popup_on_success eski davranıştı).
         return False
 
     # ------------------------------------------------------------------
@@ -2040,13 +2044,18 @@ class ModulePage(Gtk.Box):
                     _scrolled_textview(report, monospace=True, height=260),
                     False, False, 0,
                 )
-            elif report.count("\n") > 6 or len(report) > 500:
-                box.pack_start(
-                    _scrolled_textview(report, height=160),
-                    False, False, 0,
-                )
             else:
-                box.pack_start(_wrapping_label(report, selectable=True), False, False, 0)
+                # Ayrıntı canlı çıktı penceresinde zaten gösterildi; sayfada
+                # kapalı bir katlayıcıda durur, özet tek satır kalır.
+                inner: Gtk.Widget = (
+                    _scrolled_textview(report, height=160)
+                    if report.count("\n") > 6 or len(report) > 500
+                    else _wrapping_label(report, selectable=True)
+                )
+                expander = Gtk.Expander(label=t("ui.pages.result_details"))
+                expander.set_expanded(False)
+                expander.add(inner)
+                box.pack_start(expander, False, False, 0)
 
         if result.copyable:
             # Buton satırı: panoya kopyala + dosyaya kaydet

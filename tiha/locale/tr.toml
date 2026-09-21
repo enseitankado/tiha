@@ -378,16 +378,9 @@ unexpected_error = "Beklenmeyen hata: {error}"
 stream_working = "Çalışıyor… lütfen bekleyin."
 stream_done = "Tamamlandı — {summary}"
 stream_failed = "BAŞARISIZ — {summary}"
-stream_result_trailing = """\
-\n\
-───\n\
-Sonuç: {summary}\n\
-\
-"""
-stream_result = """\
-Sonuç: {summary}\n\
-\
-"""
+stream_title_done = "{title} — tamamlandı"
+stream_title_failed = "{title} — başarısız"
+result_details = "Ayrıntılar"
 warning_line = "⚠ {warning}"
 copy_clipboard = "Panoya kopyala"
 save_to_file = "Dosyaya kaydet…"
