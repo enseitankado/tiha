@@ -345,6 +345,7 @@ m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya haz
 [ui.pages]
 char_rejected = "Bu karakter burada kullanılamaz; ayrıntı alanın altındaki açıklamada."
 help_expander = "Açıklama"
+help_more_expander = "Ayrıntılar: neden gerekli, nasıl çalışır?"
 rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\
 Deneysel: Bu adım gerçek tahta donanımında henüz doğrulanmadı. Önce tek bir \
@@ -2525,47 +2526,49 @@ unavailable = "Aktif grafik oturum yok ve logind bilgisi alınamadı — güç a
 
 [m11.preview]
 power_header = "Şu anki güç ayarları (bilgi amaçlı, TiHA dışı):"
-status_unconfigured = "Durum                : yapılandırılmamış (kontrol {time})"
+status_unconfigured = "Durum                     : yapılandırılmamış (kontrol {time})"
 unconfigured_plan = """\
 Bu adım uygulandığında:\n\
 \u0020\u0020- eta-shutdown yapılandırma dosyası oluşturulur\n\
-\u0020\u0020- Sabit saat ve idle tabanlı kapatma modları sunulur\n\
+\u0020\u0020- Sabit saat ve kullanılmadığında kapatma modları sunulur\n\
 \u0020\u0020- Kapanmadan 2 dakika önce uyarı penceresi gösterilir\n\
 \u0020\u0020- 10 dakikalık erteleme seçeneği eklenir\n\
 \u0020\u0020- eta-shutdown.service etkinleştirilir\
 """
 config_error = """\
-Durum                : yapılandırma okunamadı ({error})\n\
+Durum                     : yapılandırma okunamadı ({error})\n\
 Sayfa yeniden yüklendiğinde tekrar denenecek.\
 """
-status = "Durum                : {state} (kontrol {time})"
+status = "Durum                     : {state} (kontrol {time})"
 state_enhanced = "TiHA gelişmiş sürüm aktif"
 state_original = "orijinal eta-shutdown kullanımda"
-service = "Servis               : {state}"
+service = "Servis                    : {state}"
 service_running = "çalışıyor"
 service_stopped = "durdurulmuş"
 time_left = " ({hours}s {minutes}dk kaldı)"
-fixed_on = "Sabit saat kapatma   : aktif, {time}{countdown}"
-fixed_off = "Sabit saat kapatma   : kapalı"
-idle_on = "Idle tabanlı kapatma : aktif, {minutes} dakika"
-idle_off = "Idle tabanlı kapatma : kapalı"
-config_updated = "Config güncelleme    : {time}"
+fixed_on = "Sabit saat kapatma        : aktif, {time}{countdown}"
+fixed_off = "Sabit saat kapatma        : kapalı"
+idle_on = "Kullanılmadığında kapatma : aktif, {minutes} dakika"
+idle_off = "Kullanılmadığında kapatma : kapalı"
+config_updated = "Config güncelleme         : {time}"
 duration_minutes = "{minutes} dakika"
 duration_seconds = "{seconds} saniye"
-countdown = "Geri sayım süresi    : {duration}"
+exempt = "Muaf tahtalar             : {count} MAC adresi (klon bu tahtalardan birinde açılırsa otomatik kapanma uygulanmaz)"
+exempt_this_board = "⚠️ Bu tahtanın MAC adresi muaf listesinde; ayarlar imajın hazırlandığı bu tahtada etkin kalır."
+countdown = "Geri sayım süresi         : {duration}"
 before_shutdown = """\
 Kapanmadan önce:\n\
 \u0020\u0020- {duration} uyarı penceresi gösterilir (form kutusundan \
 değiştirilebilir)\n\
 \u0020\u0020- Kullanıcı 10 dakika erteleyebilir\n\
-\u0020\u0020- Pencerenin sağ üst X'ine basılırsa idle sayacı sıfırlanır ve \
+\u0020\u0020- Pencerenin sağ üst X'ine basılırsa boşta kalma sayacı sıfırlanır ve \
 pencere kapanır\
 """
 
 [m11.apply]
 blank_warning = """\
-⚠️ UYARI: Sistemde ekran enerjisi yaklaşık {blank_minutes} dk idle sonra \
-kesiliyor; seçtiğiniz idle kapatma süresi ({idle_minutes} dk) bundan uzun \
+⚠️ UYARI: Sistemde ekran enerjisi yaklaşık {blank_minutes} dk boşta kaldıktan \
+sonra kesiliyor; seçtiğiniz kullanılmama süresi ({idle_minutes} dk) bundan uzun \
 olduğu için 2 dk'lık geri sayım/erteleme diyalogu kararmış ekranda \
 görünmeyebilir. Önerilen üst sınır: {max_idle_minutes} dk. Daha uzun bir \
 süre istiyorsanız ekran-blank süresini Sistem Ayarları → Güç'ten yükseltin.\
@@ -2588,12 +2591,24 @@ details_installed = """\
 ✓ eta-shutdown.service aktif\
 """
 details_fixed = "🕐 Sabit saat kapatma: {hour:02d}:{minute:02d}"
-details_idle = "💤 Idle tabanlı kapatma: {minutes} dakika boşta kalınca"
+details_idle = "💤 Kullanılmadığında kapatma: {minutes} dakika boşta kalınca"
 details_countdown_bullets = """\
 \u0020\u0020\u0020- {countdown} önceden uyarı penceresi\n\
 \u0020\u0020\u0020- 10 dakika erteleme seçeneği\
 """
 details_both_off = "ℹ️ Her iki mod da devre dışı - sadece altyapı kuruldu"
+details_exempt = "🚫 Otomatik kapanmanın uygulanmayacağı tahtalar ({count}):"
+details_exempt_this_board = """\
+\u0020\u0020\u0020⚠️ Bu tahtanın MAC adresi listede. İmajın hazırlandığı bu \
+tahtada ayarlar etkin bırakıldı; listedeki diğer tahtalarda klon açıldığında \
+otomatik kapanma kapatılır.\
+"""
+error_macs = "MAC adresi listesinde geçersiz giriş var"
+error_macs_details = """\
+Şunlar MAC adresi olarak okunamadı: {items}\n\
+Her adres 12 onaltılık haneden oluşmalı (ör. 00:1a:2b:3c:4d:5e). \
+Adresleri satır satır ya da virgül/boşlukla ayırarak yazın.\
+"""
 details_management = """\
 Ayarları sonradan değiştirmek için bu adımı yeniden uygulayabilir ya \
 da bu sayfanın altındaki \"ETA Zamanlı Kapatma'yı aç\" bağlantısıyla \
@@ -2629,21 +2644,32 @@ label = "Kapatma dakikası"
 help = "Otomatik kapatma yapılacak dakika."
 
 [m11.params.idle_enabled]
-label = "Idle tabanlı kapatma"
-help = "Tahta boşta kalırsa otomatik kapatma yapar."
+label = "Kullanılmadığında kapatma"
+help = "Tahtaya belirli bir süre dokunulmazsa otomatik kapatma yapar."
 
 [m11.params.idle_minute]
-label = "Idle süresi (dakika)"
-help = "Tahta bu süre boşta kalırsa kapatılır. Minimum 1 dakika."
+label = "Kullanılmama süresi (dakika)"
+help = "Tahta bu süre boyunca kullanılmazsa kapatılır. Minimum 1 dakika."
 
 [m11.params.countdown_seconds]
 label = "Geri sayım süresi (saniye)"
 help = """\
-Sabit saat veya idle tabanlı kapatma tetiklendiğinde \"Kapanıyor…\" \
+Sabit saat veya kullanılmadığında kapatma tetiklendiğinde \"Kapanıyor…\" \
 penceresinin ekranda kalma süresi. Bu süre boyunca kullanıcı 10 dakika \
-erteleyebilir ya da pencerenin sağ üst X'ine basıp idle sayacını \
+erteleyebilir ya da pencerenin sağ üst X'ine basıp boşta kalma sayacını \
 sıfırlayabilir. Alt sınır 30 saniye (kullanıcı pencereyi görüp tepki \
 verebilsin), üst sınır 600 saniye (10 dakika).\
+"""
+
+[m11.params.exempt_macs]
+label = "Otomatik kapanmanın uygulanmayacağı tahtalar (MAC adresi)"
+placeholder = "ör. 00:1a:2b:3c:4d:5e"
+help = """\
+Bu ayar imajla bütün klonlara gider. Burada MAC adresi verilen tahtalarda \
+klon açıldığında sabit saat ve kullanılmadığında kapatma uygulanmaz; tahta \
+Pardus'un varsayılan ayarıyla (otomatik kapanma kapalı) çalışır, oradaki \
+kullanıcı dilerse ETA Zamanlı Kapatma ile kendi ayarını yapabilir. Her \
+satıra bir adres yazın ya da adresleri virgül/boşlukla ayırın.\
 """
 
 [m11.report]
@@ -2696,6 +2722,17 @@ Geri sayımı 60 saniyenin altında seçtiniz; sabit saatteki kapanma bazı \
 günler kaçırılabilir.\
 """
 test_service = "Klonda `systemctl is-active eta-shutdown` çıktısının active olduğunu doğrulayın."
+exempt = """\
+{count} tahtayı otomatik kapanmadan muaf tuttunuz ({macs}); klon bu \
+tahtalardan birinde açıldığında kapanma ayarı Pardus'un varsayılanına \
+(kapalı) döner.\
+"""
+test_exempt = """\
+Klonu muaf listesindeki bir tahtada (ör. {mac}) açın; birkaç dakika sonra \
+/etc/pardus/eta-shutdown.conf içinde iki modun da kapalı olduğunu ve \
+kapanma uyarısının çıkmadığını doğrulayın. Listede olmayan bir tahtada \
+kapanmanın çalıştığını da ayrıca görün.\
+"""
 
 # ==========================================================================
 # Adım 12: Uzaktan uyandırma (m15_wake_on_lan)
@@ -3902,27 +3939,26 @@ done = "GRUB koruması kaldırıldı; menü ve kurtarma girdisi eski hâline dö
 [m16.params.enable_grub_lock]
 label = "GRUB koruması etkin"
 help = """\
-Kutucuk, adıma girildiğinde sistemin o anki durumunu gösterir; GRUB zaten \
-korumalıysa işaretli gelir. İŞARETİ KALDIRIP UYGULARSANIZ koruma kaldırılır: \
-01_tiha_grub_password silinir, 10_linux'teki TiHA yamaları sökülür, \
-update-grub çalıştırılır; menü, kurtarma girdisi dahil, parolasız hâline \
-döner. Koruma etkinken parola alanını boş bırakıp uygularsanız mevcut parola \
-korunur.\n\
-\n\
 İşaretlenirse GRUB önyükleme menüsünde 'e' (düzenle) kipine girildiğinde ya \
 da GRUB shell'ine ('c' tuşu) düşüldüğünde GRUB önce KULLANICI ADI sorar — \
 aşağıdaki salt okunur 'GRUB kullanıcı adı' kutusundaki değer — ardından \
 'GRUB yönetici parolası' alanına yazılan parolayı ister. Kurtarma (recovery) \
-girdisi menüde kalır; onu ve 'Gelişmiş seçenekler' alt menüsünü açmak da \
-aynı kullanıcı adı ve parolayı ister (kurtarma kipi parolasız root kabuğu \
-verdiği için). Boot akışının kendisi bu parolayı sormaz; yalnız menüye elle \
-müdahale eden kişi görür.\n\
+girdisi ve 'Gelişmiş seçenekler' alt menüsü de aynı bilgileri ister. Normal \
+açılış parola sormaz; yalnız menüye elle müdahale eden kişi görür.\n\
 \n\
+Kutucuk, adıma girildiğinde sistemin o anki durumunu gösterir; GRUB zaten \
+korumalıysa işaretli gelir. İŞARETİ KALDIRIP UYGULARSANIZ koruma kaldırılır; \
+menü, kurtarma girdisi dahil, parolasız hâline döner. Koruma etkinken parola \
+alanını boş bırakıp uygularsanız mevcut parola korunur.\
+"""
+help_more = """\
 Neden gerekli? GRUB varsayılan olarak fiziksel klavye erişimi olan herkese \
 kernel komut satırını düzenleme hakkı verir. Buraya 'init=/bin/bash' \
 yazılırsa sistem doğrudan root shell açar; oradan da parola değiştirmek, \
 diski okumak, tahtayı kalıcı olarak ele geçirmek mümkündür. Bu kutucuk o \
-vektörü tek bir hash ile tüm klonlarda kapatır.\n\
+vektörü tek bir hash ile tüm klonlarda kapatır. Kurtarma girdisinin de \
+parola istemesinin sebebi, kurtarma kipinin parolasız root kabuğu \
+vermesidir.\n\
 \n\
 Nasıl çalışır? Adım, aşağıya yazdığınız parolanın PBKDF2-SHA512 hash'ini \
 /etc/grub.d/01_tiha_grub_password içine yazar; /etc/grub.d/10_linux'ta menü \
@@ -3930,9 +3966,11 @@ girdilerine --unrestricted bayrağı ekler (menü seçilirken parola sorulmasın
 diye), kurtarma girdilerini bu bayraktan muaf tutar ve alt menü girdilerinin \
 açılış varsayılanı olarak kaydedilmesini engeller (gözetimsiz açılış parola \
 ekranında beklemesin); update-grub çalıştırıp üretilen menüyü denetler. \
-TiHA'nın eski sürümü kurtarma girdisini GRUB_DISABLE_RECOVERY ile \
-kapatıyordu; bu adım onu geri açar. Hash imaja gömüldüğü için aynı parola \
-tüm klonlarda geçerli olur; düz parola sistemde tutulmaz.\
+Korumayı kaldırırken 01_tiha_grub_password silinir, 10_linux'teki TiHA \
+yamaları sökülür ve update-grub yeniden çalıştırılır. TiHA'nın eski sürümü \
+kurtarma girdisini GRUB_DISABLE_RECOVERY ile kapatıyordu; bu adım onu geri \
+açar. Hash imaja gömüldüğü için aynı parola tüm klonlarda geçerli olur; düz \
+parola sistemde tutulmaz.\
 """
 
 [m16.params.grub_username]
@@ -3947,11 +3985,13 @@ yoktur.\
 
 [m16.params.grub_password]
 label = "GRUB yönetici parolası"
-help = """\
+hint = """\
 Açılış ekranında klavye İngilizce düzende çalışır. Bu yüzden parolada \
 yalnız iki klavyede de aynı tuşta olan karakterler kullanılabilir: büyük \
 harfler (A-Z), küçük harfler (küçük i hariç) ve rakamlar. Türkçe \
-karakterler, küçük i ve noktalama işaretleri kutuya yazılmaz. \
+karakterler, küçük i ve noktalama işaretleri kutuya yazılmaz.\
+"""
+help = """\
 GRUB menü kipine ('e' tuşu) ya da GRUB shell'ine ('c' tuşu) girmeye çalışan \
 kullanıcıdan istenecek parola. GRUB ekranında önce 'Enter username:' çıkar; \
 oraya yukarıdaki 'GRUB kullanıcı adı' kutusundaki ad yazılır, sonra bu \

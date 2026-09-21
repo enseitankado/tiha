@@ -520,6 +520,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # göstersin: GRUB zaten korumalıysa işaretli açılır.
             "default_from": "lockdown_active",
             "help": t("m16.params.enable_grub_lock.help"),
+            "help_more": t("m16.params.enable_grub_lock.help_more"),
         },
         {
             "key": "grub_username",
@@ -541,6 +542,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "required": False,
             "default": "",
             "enable_when_field": "enable_grub_lock",
+            "hint": t("m16.params.grub_password.hint"),
             "help": t("m16.params.grub_password.help"),
         },
     ],
