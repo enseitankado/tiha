@@ -689,9 +689,14 @@ qr_no_pin = """\
 kalmaz.\
 """
 reserve_after_pin = """\
-Yedek öğretmen hesaplarını {pin} adımından SONRA açtınız; bu yeni hesapların \
-PIN anahtarı yok. PIN adımını yeniden uygulayın (mevcut anahtarlara \
-dokunulmaz).\
+Yedek ya da branş hesaplarını {pin} adımından SONRA açtınız; bu yeni \
+hesapların PIN anahtarı yok. PIN adımını 'Öğretmen hesapları için de PIN \
+üret' işaretliyken yeniden uygulayın (mevcut anahtarlara dokunulmaz).\
+"""
+branches_no_pin = """\
+Branş hesapları açtınız ama bu hesaplara {pin} adımında PIN anahtarı \
+üretmediniz; {wipe} etkin olduğu için bu hesaplara parolayla da girilemez, \
+yalnız EBA QR ya da USB ile girilir.\
 """
 time_pin = "PIN kodları"
 time_shutdown = "sabit saatte kapanma"
@@ -704,9 +709,9 @@ time_suffix_pin = "; PIN kodları saat 30 saniyeden fazla kayınca reddedilir."
 time_suffix = "."
 wol_idle = """\
 Uzaktan uyandırılan bir tahta, kimse kullanmazsa yaklaşık {idle} dakika + \
-{duration} sonra giriş ekranında kendiliğinden kapanacak (boşta kapanma \
-giriş ekranında da çalışır). Tahtaları dersten çok önce uyandıracaksanız \
-boşta kalma süresini buna göre seçin.\
+{duration} sonra giriş ekranında kendiliğinden kapanacak (kullanılmadığında \
+kapatma giriş ekranında da çalışır). Tahtaları dersten çok önce \
+uyandıracaksanız kullanılmama süresini buna göre seçin.\
 """
 bios_always_wol = """\
 BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan uyandırmayı \
@@ -858,6 +863,15 @@ done = """\
 Sistem güncellemesini çalıştırdınız: depo yapılandırması denetlendi, \
 paketler en güncel sürüme yükseltildi ve gereksiz paketler temizlendi.\
 """
+done_unknown_release = """\
+Sistem güncellemesini çalıştırdınız. Tahtadaki sürüm ({name}) TiHA'nın \
+tanıdığı Pardus ETAP 23 olmadığı için depo ayarlarına dokunulmadı; paketler \
+mevcut depolarla yükseltildi ve gereksiz paketler temizlendi.\
+"""
+repos_added = """\
+/etc/apt/sources.list dosyasında eksik olan ana ETAP depo satırlarını \
+dosyanın sonuna eklediniz; mevcut depo satırlarına dokunulmadı.\
+"""
 test_hardware = """\
 Güncelleme yeni çekirdek ve sürücüler getirmiş olabilir. Klonda ekranın, \
 dokunmatiğin, kalemin, sesin ve ağın (kablolu ve kablosuz) çalıştığını \
@@ -866,9 +880,8 @@ doğrulayın.\
 test_eba = "EBA QR girişini ve sık kullanılan ETAP uygulamalarını klonda açıp deneyin."
 test_apt = """\
 Terminalde `sudo apt-get update` komutunun hatasız bittiğini ve \
-/etc/apt/sources.list dosyasındaki depo satırlarının beklediğiniz gibi \
-olduğunu doğrulayın. Bu adım bozuk depo dosyasını yeniden yazabilir; kurum \
-içi özel depo satırlarınız varsa silinmiş olabilir.\
+okulun eklediği depo satırlarının /etc/apt/sources.list ve \
+/etc/apt/sources.list.d altında yerinde durduğunu doğrulayın.\
 """
 note_irreversible = """\
 Paket yükseltmeleri geri alınamaz: bir güncellemeden kaynaklanan sorun \
@@ -1119,9 +1132,9 @@ keyrings_moved = """\
 aldınız; ilk girişte yeni parolayla yenisi oluşacak.\
 """
 reserve_created = """\
-{count} yedek öğretmen hesabı oluşturdunuz ({span}). Hesaplar parolasız \
-(kilitli) açıldı; bu hesaplara PIN anahtarı adımında üretilen kodlarla \
-girilir.\
+{count} yedek öğretmen hesabı oluşturdunuz ({span}). Hesaplar ev \
+diziniyle, parolasız (kilitli) açıldı ve ogretmenler grubuna eklendi; bu \
+hesaplara PIN anahtarı adımında üretilen kodlarla girilir.\
 """
 reserve_kept = """\
 Yedek hesap sayısını {count} olarak bıraktınız; bu hesaplar zaten vardı, \
@@ -1130,6 +1143,28 @@ yeni hesap açılmadı.\
 removed_one = "{users} ortak hesabını ev dizinleriyle birlikte sildiniz."
 removed_many = "{users} ortak hesaplarını ev dizinleriyle birlikte sildiniz."
 student_removed = "Öğrenci (ogrenci) hesabını ev diziniyle birlikte sildiniz."
+reserve_purged = """\
+Yedek hesap sayısını 0 yaptığınız için {count} yedek öğretmen hesabını \
+({span}) ev dizinleri ve PIN anahtarlarıyla birlikte sildiniz.\
+"""
+branches_created = """\
+{school} için {count} branş hesabı açtınız ({users}). Hesaplar ev diziniyle, \
+parolasız (kilitli) açıldı, ogretmenler grubuna eklendi ve giriş ekranında \
+branş adıyla görünür; bu hesaplara PIN anahtarı adımında üretilen kodlarla \
+girilir.\
+"""
+branches_kept = """\
+{count} branş hesabı zaten vardı ({users}); yeniden açılmadı, ogretmenler \
+grubunda olmaları sağlandı.\
+"""
+branches_deleted = """\
+İşaretini kaldırdığınız {count} branş hesabını ({users}) ev dizinleri ve PIN \
+anahtarlarıyla birlikte sildiniz.\
+"""
+note_deleted_permanent = """\
+Silinen hesaplar ve ev dizinleri Geri al ile geri gelmez; bu hesaplara ait \
+dosyalar kalıcı olarak gitti.\
+"""
 test_etapadmin = """\
 Klonu yeniden başlatıp giriş ekranında etapadmin ile yeni parolayla oturum \
 açın; \"giriş anahtarlığınızın parolası uyuşmuyor\" uyarısı çıkmamalı.\
@@ -1139,9 +1174,15 @@ test_ogretmen = "Ortak öğretmen hesabına (ogretmen) yeni parolayla girin."
 test_reserve = """\
 Giriş ekranında yedek öğretmen hesaplarının göründüğünü doğrulayın. \
 Terminalde `id ogretmen1` çıktısında audio, video, plugdev gibi cihaz \
-gruplarının bulunduğunu kontrol edin.\
+gruplarıyla birlikte ogretmenler grubunun da bulunduğunu kontrol edin.\
 """
 test_student = "Giriş ekranında öğrenci hesabının artık görünmediğini doğrulayın."
+test_reserve_purged = "Giriş ekranında yedek öğretmen hesaplarının (ogretmen1 …) artık görünmediğini doğrulayın."
+test_branches = """\
+Giriş ekranında branş hesaplarının branş adıyla göründüğünü ve terminalde \
+`id {user}` çıktısında ogretmenler grubunun bulunduğunu doğrulayın.\
+"""
+test_branches_deleted = "Giriş ekranında sildiğiniz branş hesaplarının ({users}) artık görünmediğini doğrulayın."
 note_admins_one = """\
 {users} parolası bütün klonlarda aynı olacak ve geri okunamaz. Parolayı \
 güvenli bir yerde saklayın; unutulursa her tahtada ayrı ayrı erişim sorunu \
@@ -1231,7 +1272,7 @@ removed_extras = " Ayrıca şu ek hesaplar ve ev dizinleri silindi: {users}."
 [m02.report]
 done = """\
 Her açılışta etapadmin dışındaki tüm yerel hesapların (ortak \
-öğretmen/öğrenci, yedek ve kişisel öğretmen hesapları) parolasını rastgele \
+öğretmen/öğrenci, yedek, branş ve kişisel öğretmen hesapları) parolasını rastgele \
 bir değere çeviren açılış servisini kurdunuz. Bu hesaplara artık yalnız EBA \
 QR, PIN ya da USB bellek ile girilebilir.\
 """
@@ -1241,7 +1282,7 @@ Klonu yeniden başlatın; etapadmin ile parolayla girebildiğinizi doğrulayın 
 """
 test_ogretmen = "Ortak öğretmen hesabına bilinen parolasıyla girmeyi deneyin; giriş reddedilmeli."
 test_pin = """\
-Bir öğretmen ve bir yedek hesaba PIN ile (ya da USB ile) girin; tahtayı \
+Bir öğretmen, bir yedek ve bir branş hesabına PIN ile (ya da USB ile) girin; tahtayı \
 yeniden başlattıktan sonra da girilebildiğini doğrulayın.\
 """
 test_journal = "Terminalde `journalctl -t tiha-boot-wipe -b` çıktısında HATA satırı olmadığını doğrulayın."
@@ -1669,13 +1710,23 @@ telefonlarındaki kayıtlar geçerli kalıyor.\
 """
 group_new = """\
 ogretmenler grubu için ortak PIN anahtarı oluşturdunuz; bu kod gruba üye \
-kişisel ve yedek öğretmen hesaplarında geçerli.\
+bütün öğretmen hesaplarında (EBA QR ile açılanlar, yedek ve branş hesapları) \
+geçerli, ortak ogretmen ve etapadmin hesaplarında geçmez.\
 """
 group_kept = "ogretmenler grubu için ortak PIN'in açık kalmasını seçtiniz; mevcut ortak anahtar korundu."
-grouped = "{count} hesabı ogretmenler grubuna eklediniz."
+grouped = "{count} öğretmen hesabının (yedek ve branş hesapları dahil) ogretmenler grubunda olmasını sağladınız."
 ungrouped = """\
-Ortak öğretmen hesabını ogretmenler grubundan çıkardınız; grup PIN'i artık \
-ortak hesapta geçmiyor.\
+{users} hesabını ogretmenler grubundan çıkardınız; grup PIN'i artık bu \
+hesaplarda geçmiyor.\
+"""
+other_teachers = """\
+Tahtada zaten açılmış {count} öğretmen hesabını (EBA QR ile açılanlar ve \
+branş hesapları) da PIN listesine aldınız; bunlardan {new} tanesine yeni \
+anahtar üretildi, anahtarı olanlarınki korundu.\
+"""
+note_no_other_teachers = """\
+Tahtadaki diğer öğretmen hesapları (branş, EBA QR) için PIN üretmediniz; bu \
+hesaplara PIN ile girilemez.\
 """
 auto_group = """\
 EBA QR ile sonradan açılacak öğretmen hesaplarını ogretmenler grubuna \
@@ -1703,9 +1754,16 @@ yazan anahtarlar artık tahtada yok; imajı almadan önce PIN adımını yeniden
 uygulayın.\
 """
 extra_removed = """\
-Fazladan hesapları (yedek ve kişisel öğretmen hesapları) ev dizinleriyle \
-birlikte sildiniz.\
+Fazladan {count} hesabı (yedek, branş ve EBA QR ile açılmış öğretmen \
+hesapları) ev dizinleriyle birlikte sildiniz.\
 """
+extra_removed_legacy = """\
+Fazladan hesapları (yedek, branş ve kişisel öğretmen hesapları) ev \
+dizinleriyle birlikte sildiniz.\
+"""
+orphans_removed = "Karşılığı kalmayan {count} PIN anahtarını anahtar dosyasından kaldırdınız."
+orphans_removed_nocount = "Karşılığı kalmayan PIN anahtarlarını anahtar dosyasından kaldırdınız."
+test_extra_removed = "Giriş ekranında yalnız etapadmin, ogretmen ve ogrenci hesaplarının kaldığını doğrulayın."
 test_time = """\
 Klonun tarih, saat ve saat diliminin doğru olduğunu doğrulayın. PIN kodları \
 saate bağlıdır; saat birkaç dakika bile kaymışsa bütün PIN girişleri \
@@ -1721,11 +1779,13 @@ kapatıp aynı hesaba PIN ile girin. Ad soyad MEBBİS'teki yazımdan farklı \
 girildiyse o öğretmenin PIN'i hiçbir tahtada çalışmaz.\
 """
 test_reserve = "Bir yedek hesaba (ör. {user}) PIN ile girin."
+test_other_teachers = "Branş ya da EBA QR ile açılmış bir hesaba (ör. {user}) PIN ile girin."
 test_etapadmin = "etapadmin'e hem PIN ile hem de parolayla girilebildiğini doğrulayın."
 test_ogretmen = "Ortak öğretmen hesabına (ogretmen) PIN ile girin."
 test_group = """\
-Kâğıttaki ORTAK PIN kartını okutup bir yedek ya da kişisel öğretmen hesabına \
-ortak kodla girin.\
+Kâğıttaki ORTAK PIN kartını okutup bir yedek, branş ya da kişisel öğretmen \
+hesabına ortak kodla girin; ortak ogretmen hesabında bu kodun REDDEDİLDİĞİNİ \
+doğrulayın.\
 """
 test_auto_group = """\
 Klonda EBA QR ile yeni bir öğretmen girişi yaptıktan sonra bu hesabın \
@@ -1993,8 +2053,8 @@ kept_pkg = "[{share}] paylaşımı kaldırıldı (Samba paketleri başlangıçta
 [m05.report]
 who_user = "'{user}' kullanıcısı"
 who_generic = "belirlediğiniz kullanıcı"
-lead_installed = "Tahtaya Samba'yı kurdunuz ve"
-lead_existing = "Samba ile"
+lead_installed = "Tahtaya dosya sunucusunu (Samba) kurdunuz ve"
+lead_existing = "Dosya sunucusuyla (Samba)"
 done = """\
 {lead} tahtanın tüm diskini (kök '/') ağda \\\\<tahta-ip>\\root adıyla, \
 {who} ve parolasıyla tam yazma yetkisiyle paylaştınız.\
@@ -2738,18 +2798,22 @@ duration_min = "{count} dakika"
 duration_sec = "{count} saniye"
 no_params_default = "Otomatik kapanma sistemini kurdunuz"
 test_no_params = """\
-Klonda kapanma ayarlarının (saat ve boşta süresi) beklediğiniz gibi \
+Klonda kapanma ayarlarının (saat ve kullanılmama süresi) beklediğiniz gibi \
 çalıştığını doğrulayın; bu adımın seçenekleri kayıtlı değil.\
 """
 warn = """\
 Kapanmadan önce ekranda {duration} süren bir uyarı penceresi çıkacak; \
 kullanıcı kapanmayı 10 dakika erteleyebilecek.\
 """
-both = "Tahtanın her gün {at}'de ve {idle} dakika boşta kaldığında kapanmasını ayarladınız. {warn}"
-auto_only = "Tahtanın her gün {at}'de kapanmasını ayarladınız (boşta kalınca kapanma kapalı). {warn}"
+both = "Tahtanın her gün {at}'de ve {idle} dakika kullanılmadığında kapanmasını ayarladınız. {warn}"
+auto_only = "Tahtanın her gün {at}'de kapanmasını ayarladınız (kullanılmadığında kapatma kapalı). {warn}"
 idle_only = """\
 Tahtanın {idle} dakika kullanılmadığında kapanmasını ayarladınız (sabit \
 saatte kapanma kapalı). {warn}\
+"""
+test_off = """\
+Klonda /etc/pardus/eta-shutdown.conf içinde iki modun da kapalı olduğunu ve \
+hiçbir saatte kapanma uyarısı çıkmadığını doğrulayın.\
 """
 none = """\
 Otomatik kapanmayı kapattınız (sabit saat ve kullanılmadığında kapatma \
@@ -2776,7 +2840,7 @@ sabit saatte kapanmaz.\
 """
 note_postpone = """\
 Sabit saatteki kapanma ertelenirse o günün sabit saat kapanması iptal olur; \
-tahta yalnız boşta kalma ile kapanabilir.\
+tahta yalnız kullanılmadığında kapatma ile kapanabilir.\
 """
 note_short = """\
 Geri sayımı 60 saniyenin altında seçtiniz; sabit saatteki kapanma bazı \
@@ -3266,7 +3330,15 @@ test_light_removed = """\
 Klonda daha önce giriş yapmış bir hesapla oturum açıp yazı boyutunun, \
 simgelerin ve çözünürlüğün normale döndüğünü doğrulayın.\
 """
-xorg_done = "Ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü değiştirdiniz: {choice}."
+xorg_done = """\
+ETA Hafif Mod ile birlikte, ekran modu değişiminde kaybolan fare imleci için \
+ekran sürücüsünü değiştirdiniz: {choice}. Hafif modu kaldırırsanız bu \
+düzeltme de kaldırılır.\
+"""
+test_xorg_removed = """\
+Klonu yeniden başlatın; ekranın, dokunmatiğin ve kalemin eski ekran \
+sürücüsüyle sorunsuz çalıştığını doğrulayın.\
+"""
 test_xorg = """\
 Klonu yeniden başlatın; ekranın açıldığını, dokunmatik ve kalemin \
 çalıştığını doğrulayın. Ardından USB fare takılıyken ekran ayarlarından \
@@ -4125,7 +4197,8 @@ varsayılanı olarak kaydedilmez).\
 """
 test_keyboard = """\
 Parolayı fiziksel bir USB klavyeyle deneyin: GRUB'da dokunmatik ve ekran \
-klavyesi yoktur, klavye düzeni ABD'dir.\
+klavyesi yoktur, klavye düzeni ABD'dir. Parolanın Türkçe Q klavyede de aynı \
+tuşlarla yazıldığını doğrulayın.\
 """
 test_advanced = """\
 \"Gelişmiş seçenekler\" alt menüsünün de parola istediğini doğrulayın; eski \
@@ -4133,8 +4206,19 @@ test_advanced = """\
 """
 note = """\
 GRUB parolası sistemdeki etapadmin parolası değildir ve hiçbir yerden geri \
-okunamaz; bütün klonlarda aynıdır. Türkçe karakter (ç, ğ, ı, ö, ş, ü) içeren \
-bir parola GRUB'ın ABD klavye düzeninde yazılamayabilir.\
+okunamaz; bütün klonlarda aynıdır. Parola yalnız büyük harf, küçük i \
+dışındaki küçük harfler ve rakamlardan oluşur; açılış ekranında Türkçe \
+klavyede de aynı tuşlarla yazılır.\
+"""
+protected_kept = """\
+GRUB korumasını güncellediniz: mevcut GRUB parolası korundu; kurtarma \
+(recovery) girdisi ve 'Gelişmiş seçenekler' alt menüsü de artık aynı \
+kullanıcı adı ve parolayı istiyor. Normal açılış parola sormuyor.\
+"""
+note_kept_password = """\
+Parolayı bu adımda yeniden girmediniz. Eski bir sürümle belirlenmiş parola \
+Türkçe karakter, küçük i ya da noktalama içeriyorsa açılış ekranında \
+yazılamayabilir; öyleyse parolayı bu adımda yeniden belirleyin.\
 """
 
 # ==========================================================================

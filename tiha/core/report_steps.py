@@ -55,7 +55,14 @@ def narrate_failed(ctx: StepContext, rep: StepReport) -> None:
 
 
 def narrate_m09(ctx: StepContext, rep: StepReport) -> None:
-    rep.done.append(t("m09.report.done"))
+    d = ctx.data
+    if d.get("release_known") is False:
+        rep.done.append(t("m09.report.done_unknown_release",
+                          name=d.get("release_name") or "?"))
+    else:
+        rep.done.append(t("m09.report.done"))
+        if d.get("repos_added"):
+            rep.done.append(t("m09.report.repos_added"))
     rep.tests.append(t("m09.report.test_hardware"))
     rep.tests.append(t("m09.report.test_eba"))
     rep.tests.append(t("m09.report.test_apt"))
@@ -83,6 +90,36 @@ def _m01_passwords(ctx: StepContext) -> tuple[list[str], list[str]]:
         if ctx.secret_set(key) and u not in ok
     ]
     return ok, failed
+
+
+def _m01_school(ctx: StepContext) -> str:
+    """Branş hesaplarında seçilen okul türünün adı."""
+    import json as _json
+
+    from .meb_data import school_label
+    try:
+        key = (_json.loads(ctx.text("branch_accounts") or "{}") or {}).get("school_type") or ""
+    except (ValueError, AttributeError):
+        key = ""
+    return school_label(key) if key else "-"
+
+
+def _narrate_extra_removed(ctx: StepContext, rep: StepReport) -> None:
+    """'Fazladan hesapları sil' düğmesinin sonucu (m01 ve m03'te aynı düğme)."""
+    for a in ctx.action("remove_extra_users_action"):
+        removed = list((a.data or {}).get("removed_users") or [])
+        # Adında "secret" geçtiği için eylem kaydında maskelenir ("***"):
+        # sayı okunamıyorsa sayısız cümle kullanılır.
+        purged = (a.data or {}).get("purged_secrets")
+        if removed:
+            rep.done.append(t("m03.report.extra_removed", count=len(removed)))
+            rep.tests.append(t("m03.report.test_extra_removed"))
+        if isinstance(purged, list) and purged:
+            rep.done.append(t("m03.report.orphans_removed", count=len(purged)))
+        elif purged:
+            rep.done.append(t("m03.report.orphans_removed_nocount"))
+        if not removed and not purged:
+            rep.done.append(t("m03.report.extra_removed_legacy"))
 
 
 def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
@@ -121,6 +158,36 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
     if student_removed:
         rep.done.append(t("m01.report.student_removed"))
 
+    purged = list(d.get("purged_reserve") or [])
+    if purged:
+        span = purged[0] + (" – " + purged[-1] if len(purged) > 1 else "")
+        rep.done.append(t("m01.report.reserve_purged", count=len(purged), span=span))
+        rep.tests.append(t("m01.report.test_reserve_purged"))
+
+    # Branş hesapları
+    b_created = list(d.get("created_branches") or [])
+    b_skipped = list(d.get("skipped_branches") or [])
+    b_deleted = list(d.get("deleted_branches") or [])
+    if b_created:
+        rep.done.append(t(
+            "m01.report.branches_created", count=len(b_created),
+            users=_join(b_created), school=_m01_school(ctx),
+        ))
+    if b_skipped:
+        rep.done.append(t(
+            "m01.report.branches_kept", count=len(b_skipped), users=_join(b_skipped),
+        ))
+    if b_deleted:
+        rep.done.append(t(
+            "m01.report.branches_deleted", count=len(b_deleted), users=_join(b_deleted),
+        ))
+
+    if purged or b_deleted:
+        rep.notes.append(t("m01.report.note_deleted_permanent"))
+
+    # "Fazladan hesapları sil" düğmesi (Toplu PIN adımındakinin aynası)
+    _narrate_extra_removed(ctx, rep)
+
     # Klonda deneyin
     if "etapadmin" in ok:
         rep.tests.append(t("m01.report.test_etapadmin"))
@@ -130,6 +197,10 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
         rep.tests.append(t("m01.report.test_ogretmen"))
     if created or skipped:
         rep.tests.append(t("m01.report.test_reserve"))
+    if b_created or b_skipped:
+        rep.tests.append(t("m01.report.test_branches", user=(b_created or b_skipped)[0]))
+    if b_deleted:
+        rep.tests.append(t("m01.report.test_branches_deleted", users=_join(b_deleted)))
     if student_removed or "ogrenci" in removed:
         rep.tests.append(t("m01.report.test_student"))
     if admins:
@@ -162,6 +233,7 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
     d = ctx.data
     passed = [str(n) for n in d.get("passed_names") or []]
     created = [str(n) for n in d.get("created_users") or []]
+    others = [str(n) for n in d.get("other_teachers") or [] if n != "ogretmen"]
     preserved = [str(n) for n in d.get("preserved_users") or []]
     grouped = [str(n) for n in d.get("grouped_users") or []]
     used_tool = d.get("used_tool", True)
@@ -188,6 +260,14 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
             rep.done.append(t("m03.report.key_created", label=label))
         elif user in preserved:
             rep.done.append(t("m03.report.key_preserved", label=label))
+    if others:
+        others_new = [n for n in others if n in created]
+        rep.done.append(t(
+            "m03.report.other_teachers", count=len(others), new=len(others_new),
+        ))
+    elif ctx.has_params and "include_other_teachers" in ctx.params \
+            and not ctx.flag("include_other_teachers"):
+        rep.notes.append(t("m03.report.note_no_other_teachers"))
     if new_keys:
         rep.done.append(t("m03.report.new_keys", count=len(new_keys)))
     if preserved:
@@ -201,7 +281,8 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
     if grouped:
         rep.done.append(t("m03.report.grouped", count=len(grouped)))
     if d.get("ungrouped_users"):
-        rep.done.append(t("m03.report.ungrouped"))
+        rep.done.append(t("m03.report.ungrouped",
+                          users=_join([str(u) for u in d["ungrouped_users"]])))
     if d.get("auto_group_service_installed"):
         rep.done.append(t("m03.report.auto_group"))
     total = d.get("total_users")
@@ -226,8 +307,7 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
         )
         if applied_at and a.timestamp > applied_at:
             rep.notes.append(t("m03.report.note_purged_after"))
-    for a in ctx.action("remove_extra_users_action"):
-        rep.done.append(t("m03.report.extra_removed"))
+    _narrate_extra_removed(ctx, rep)
 
     # Klonda deneyin
     if not ctx.applied:
@@ -238,6 +318,8 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
         rep.tests.append(t("m03.report.test_teacher"))
     if reserves:
         rep.tests.append(t("m03.report.test_reserve", user=reserves[0]))
+    if others:
+        rep.tests.append(t("m03.report.test_other_teachers", user=others[0]))
     if "etapadmin" in created or "etapadmin" in preserved:
         rep.tests.append(t("m03.report.test_etapadmin"))
     if "ogretmen" in created or "ogretmen" in preserved:
@@ -482,6 +564,7 @@ def narrate_m11(ctx: StepContext, rep: StepReport) -> None:
         rep.done.append(t("m11.report.idle_only", idle=idle_min, warn=warn))
     else:
         rep.done.append(t("m11.report.none"))
+        rep.tests.append(t("m11.report.test_off"))
     exempt = ctx.data.get("exempt_macs") or []
     if (auto or idle) and exempt:
         rep.done.append(t("m11.report.exempt", count=len(exempt),
@@ -628,7 +711,12 @@ def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
         rep.tests.append(t("m16.report.test_removed"))
         return
     if "linux_backup" in d:
-        rep.done.append(t("m16.report.protected"))
+        if "grub_password" in ctx.params and not ctx.secret_set("grub_password"):
+            # Parola girilmeden eski kurulumun yaması yükseltildi.
+            rep.done.append(t("m16.report.protected_kept"))
+            rep.notes.append(t("m16.report.note_kept_password"))
+        else:
+            rep.done.append(t("m16.report.protected"))
         if d.get("recovery_restored"):
             rep.done.append(t("m16.report.recovery_restored"))
         if d.get("recovery_protected") and d.get("recovery_entries") == 0:
@@ -637,7 +725,8 @@ def narrate_m16(ctx: StepContext, rep: StepReport) -> None:
             rep.done.append(t("m16.report.saved_entry_reset"))
     elif "zaten etkin" in ctx.summary:
         rep.done.append(t("m16.report.already"))
-    elif "zaten yok" in ctx.summary or (ctx.has_params and not ctx.flag("enable_grub_lock")):
+    elif (d.get("feature_off") or "zaten yok" in ctx.summary
+          or (ctx.has_params and not ctx.flag("enable_grub_lock"))):
         rep.done.append(t("m16.report.not_enabled"))
         rep.notes.append(t("m16.report.note_not_enabled"))
         return
@@ -712,7 +801,10 @@ def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
             rep.tests.append(t("m17.report.test_low_res"))
         if "low-refresh-rate" in keys:
             rep.tests.append(t("m17.report.test_50hz"))
-        if {"low-resolution", "low-refresh-rate"} & set(keys):
+        # İmleç düzeltmesi hafif modla birlikte kurulur; kaydı yoksa
+        # (eski sürüm) imleç denemesi ayrıca istenir.
+        if ({"low-resolution", "low-refresh-rate"} & set(keys)
+                and not d.get("cursor_xorg_fix")):
             rep.tests.append(t("m17.report.test_cursor_mode"))
     if d.get("light_mode_removed"):
         rep.done.append(t("m17.report.light_removed"))
@@ -720,7 +812,7 @@ def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
 
     xorg = d.get("cursor_xorg_fix")
     if xorg:
-        rep.done.append(t("m17.report.xorg_done", choice=str(xorg).lower()))
+        rep.done.append(t("m17.report.xorg_done", choice=str(xorg)))
         rep.tests.append(t("m17.report.test_xorg"))
         rep.notes.append(t("m17.report.note_xorg"))
     if d.get("cursor_refresh_service"):
@@ -728,6 +820,7 @@ def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
         rep.tests.append(t("m17.report.test_cursor_refresh"))
     if d.get("cursor_xorg_removed"):
         rep.done.append(t("m17.report.cursor_xorg_removed"))
+        rep.tests.append(t("m17.report.test_xorg_removed"))
     if d.get("cursor_service_removed"):
         rep.done.append(t("m17.report.cursor_service_removed"))
 
@@ -887,9 +980,16 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
     if "m13_password_dialog" in applied and "m03_otp_secrets" not in applied:
         w.append(t("core.report.warn.qr_no_pin", qr=q("m13_password_dialog")))
     if (m01 is not None and m03 is not None and m01.applied and m03.applied
-            and m01.data.get("created_reserve")
+            and (m01.data.get("created_reserve") or m01.data.get("created_branches"))
             and ts("m01_initial_passwords") > ts("m03_otp_secrets")):
         w.append(t("core.report.warn.reserve_after_pin", pin=q("m03_otp_secrets")))
+    if ("m02_boot_password_wipe" in applied and m01 is not None and m01.applied
+            and m01.data.get("created_branches")
+            and (m03 is None or not m03.applied
+                 or (m03.has_params and "include_other_teachers" in m03.params
+                     and not m03.flag("include_other_teachers")))):
+        w.append(t("core.report.warn.branches_no_pin",
+                   wipe=q("m02_boot_password_wipe"), pin=q("m03_otp_secrets")))
 
     # --- Saat -----------------------------------------------------------------
     need_time = []
@@ -909,11 +1009,12 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
         ))
 
     # --- Uyandırma, kapanma ve BIOS -------------------------------------------
-    if m15 is not None and m15.applied and m11 is not None and m11.applied and m11.flag("idle_enabled"):
+    wol_on = m15 is not None and m15.applied and not m15.data.get("feature_off")
+    if wol_on and m11 is not None and m11.applied and m11.flag("idle_enabled"):
         idle = m11.num("idle_minute", 15) or 15
         cs = m11.num("countdown_seconds", 120) or 120
         w.append(t("core.report.warn.wol_idle", idle=idle, duration=_duration(cs)))
-    if _bios_on(m14) and m15 is not None and m15.applied:
+    if _bios_on(m14) and wol_on:
         if m14.data.get("protection") == "always":
             w.append(t("core.report.warn.bios_always_wol"))
         w.append(t("core.report.warn.bios_wol"))

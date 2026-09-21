@@ -259,6 +259,12 @@ Narrator = Callable[[StepContext, StepReport], None]
 # --- Oluşturucu --------------------------------------------------------------
 
 
+# Sistemi değiştirmeyen düğmeler (pencere açma, bağlantı/sunucu testi,
+# değer okuma): rapora girmez. Yalnız bunlara tıklanmış bir adım "…kurdunuz"
+# diye anlatılıyordu.
+_INFO_ACTION_PREFIXES = ("launch_", "test_", "read_")
+
+
 def _fallback(ctx: StepContext, rep: StepReport) -> None:
     """Anlatıcısı olmayan (ya da parametresi kaydedilmemiş) adımlar için."""
     if ctx.summary:
@@ -292,7 +298,10 @@ def build_report(
         # desteklenmiyor) adım imaja bir şey katmadı; raporda yer almaz.
         if entry is not None and entry.status in ("undone", "skipped"):
             entry = None
-        mod_actions = [a for a in actions.for_module(module.id) if a.success]
+        mod_actions = [
+            a for a in actions.for_module(module.id)
+            if a.success and not a.action.startswith(_INFO_ACTION_PREFIXES)
+        ]
         if entry is None and not mod_actions:
             continue
         data = dict(entry.data) if entry is not None and isinstance(entry.data, dict) else {}

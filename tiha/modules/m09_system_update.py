@@ -282,6 +282,12 @@ class SystemUpdateModule(Module):
             progress(t("m09.apply.checking_repos"))
         log.info("Repository sağlığı kontrol ediliyor...")
 
+        health = check_repository_health()
+        report_data = {
+            "release_known": bool(health["release_known"]),
+            "release_name": pretty_name(),
+            "repos_added": bool(health["release_known"] and health["missing_main_repos"]),
+        }
         if not fix_repositories(progress):
             return ApplyResult(
                 False,
@@ -317,7 +323,7 @@ class SystemUpdateModule(Module):
                 t("m09.apply.some_failed"),
                 details=t("m09.apply.some_failed_details", steps=", ".join(failed)),
             )
-        return ApplyResult(True, t("m09.apply.done"))
+        return ApplyResult(True, t("m09.apply.done"), data=report_data)
 
     def launch_pardus_update_gui_action(self, params: dict | None = None) -> ApplyResult:
         """Pardus Güncelleyici GUI'sini kullanıcının X oturumunda açar."""

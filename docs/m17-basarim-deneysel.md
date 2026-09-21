@@ -1,9 +1,7 @@
-# m17 — Başarım (Deneysel)
+# m17 — Başarım
 
-Bu belge, TiHA'nın `m17_performance` adımı (sihirbazda **"Başarım
-(Deneysel)"**) için mekanizmayı, ölçümleri ve gerçek tahtada deneme
-adımlarını anlatır. Adımdaki iki mekanizma da **gerçek tahta donanımında
-henüz doğrulanmadı**.
+Bu belge, TiHA'nın `m17_performance` adımı (sihirbazda **"Başarım"**) için
+mekanizmayı, ölçümleri ve gerçek tahtada deneme adımlarını anlatır.
 
 ## 1. Eski oturum kalıntılarını temizle
 
