@@ -148,7 +148,18 @@ def main() -> int:
 
     from .ui.main_window import TiHAWindow
 
-    window = TiHAWindow()
+    try:
+        window = TiHAWindow()
+    except Exception as exc:
+        # stderr bu noktada log dosyasına yönlendirilmiş durumda; hata
+        # yalnız oraya düşerse kullanıcı terminale sessizce döner ve neden
+        # açılmadığını göremez. Terminale (stdout) ve bir hata kutusuyla
+        # açıkça söyle.
+        log.exception("Sihirbaz penceresi kurulamadı")
+        reason = f"{type(exc).__name__}: {exc}"
+        print(t("app.window_failed", reason=reason), flush=True)
+        _emergency_dialog(t("app.window_failed", reason=reason))
+        return 1
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
     Gtk.main()

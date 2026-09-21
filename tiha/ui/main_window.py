@@ -801,16 +801,43 @@ class TiHAWindow(Gtk.Window):
     def _build_module_pages(self) -> None:
         # Karşılama bir adım değildir; modüller 1'den başlayarak numaralandırılır.
         for idx, module in enumerate(self.modules, start=1):
-            page = ModulePage(module, self.journal)
-            # Apply tamamlandığında ileri/geri kapısını + sidebar ikonlarını tazele.
-            def _after_apply(*_a, _mid=module.id, **_kw):
-                self._update_navigation_gate()
-                self._refresh_sidebar_status()
-            page.post_apply_callback = _after_apply
+            try:
+                page = ModulePage(module, self.journal)
+            except Exception as exc:
+                # Bir adımın sayfasındaki hata bütün sihirbazı düşürmesin:
+                # o adımın yerine hatayı anlatan bir sayfa konur, diğer
+                # adımlar kullanılmaya devam eder.
+                log.exception("Adım sayfası kurulamadı: %s", module.id)
+                page = self._broken_page(module, exc)
+            else:
+                # Apply tamamlandığında ileri/geri kapısını + sidebar ikonlarını tazele.
+                def _after_apply(*_a, _mid=module.id, **_kw):
+                    self._update_navigation_gate()
+                    self._refresh_sidebar_status()
+                page.post_apply_callback = _after_apply
             self.pages.append(page)
             self.stack.add_named(page, module.id)
             sidebar_label = module.sidebar_title or module.title
             self._add_sidebar_entry(f"{idx}. {sidebar_label}", module_id=module.id)
+
+    @staticmethod
+    def _broken_page(module, exc: Exception) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(18)
+        box.set_margin_start(22)
+        box.set_margin_end(22)
+        heading = Gtk.Label(label=module.title, xalign=0)
+        heading.get_style_context().add_class("tiha-heading")
+        box.pack_start(heading, False, False, 0)
+        msg = Gtk.Label(
+            label=t("ui.main.page_failed", error=f"{type(exc).__name__}: {exc}"),
+            xalign=0,
+        )
+        msg.set_line_wrap(True)
+        msg.set_selectable(True)
+        msg.get_style_context().add_class("tiha-experimental-banner")
+        box.pack_start(msg, False, False, 0)
+        return box
 
     def _build_summary(self) -> None:
         page = SummaryPage(

@@ -468,6 +468,11 @@ def save_secrets(secrets: dict[str, str]) -> None:
     os.chown(OTP_SECRETS_FILE, 0, 0)
 
 
+# eta-otp-lock grup anahtarlarının ön eki: '@ogretmenler' gibi bir kayıt
+# bir kullanıcıya değil, o gruba üye herkese aittir.
+GROUP_SECRET_PREFIX = "@"
+
+
 def is_group_secret(key: str) -> bool:
     """Kayıt bir grup anahtarı mı (kullanıcı anahtarı değil)?"""
     return key.startswith(GROUP_SECRET_PREFIX)

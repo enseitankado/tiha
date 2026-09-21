@@ -32,6 +32,11 @@ debug_log_hint = "Detaylı loglar: /var/log/tiha/tiha-debug.log (yalnız etapadm
 window_closed = "Sihirbaz kapatıldı."
 start_failed = "TiHA başlatılamadı"
 start_failed_line = "TiHA başlatılamadı: {message}"
+window_failed = """\
+TiHA penceresi açılamadı: {reason}\n\
+Ayrıntılar /var/log/tiha/tiha.log dosyasında. Bu hatayı \
+https://github.com/enseitankado/tiha/issues adresinden bildirirseniz \
+hızlıca düzeltebiliriz."""
 
 # ==========================================================================
 # Komut satırı
@@ -279,6 +284,15 @@ sidebar_summary = "Özet"
 status_applied = "Uygulandı: {summary}"
 status_failed = "Hata: {summary}"
 status_skipped = "Bu tahtada uygulanamaz: {summary}"
+page_failed = """\
+Bu adımın sayfası bir hata yüzünden açılamadı. Diğer adımları \
+kullanmaya devam edebilirsiniz; bu adımı şimdilik atlayın.\n\
+\n\
+Hata: {error}\n\
+\n\
+Ayrıntılar /var/log/tiha/tiha.log dosyasında. Bu hatayı \
+https://github.com/enseitankado/tiha/issues adresinden bildirirseniz \
+hızlıca düzeltebiliriz."""
 apply_hint = "Uygulandığında: {hint}"
 
 [ui.welcome]
