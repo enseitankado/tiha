@@ -611,6 +611,10 @@ class InitialPasswordsModule(Module):
                             "m01.apply.reserve_purge_failed", user=username,
                         ))
 
+        # Silinen yedek hesapların PIN anahtarları imaja ölü sır olarak
+        # gitmesin (branş silmedeki gibi).
+        purged_reserve_secrets = _remove_otp_secrets(purged_reserve) if purged_reserve else []
+
         # ---- Yedek hesaplar ----------------------------------------------
         # Adım eskiden "Öğretmen PIN anahtarları" (m03) altındaydı.
         # Buraya taşındı ki hesap yaratma ile PIN üretme akışları
@@ -808,6 +812,11 @@ class InitialPasswordsModule(Module):
                 "m01.apply.reserve_purge_users",
                 users=", ".join(purged_reserve),
             ))
+            if purged_reserve_secrets:
+                details_lines.append(t(
+                    "m01.apply.branches_secrets_removed",
+                    count=len(purged_reserve_secrets),
+                ))
 
         if created_branches or skipped_branches:
             details_lines.append("")

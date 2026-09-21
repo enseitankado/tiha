@@ -719,6 +719,18 @@ def remove_greeter_setup() -> bool:
 # üretiyor: eta-otp-cli "ogretmen01", dahili yol "ogretmen.01".
 RESERVE_USER_RE = re.compile(r"^ogretmen\.?(\d+)$")
 
+# Geri alma hiçbir koşulda silmez.
+PROTECTED_ACCOUNTS = frozenset({"root", "etapadmin", "ogretmen", "ogrenci"})
+
+
+def _account_names() -> set[str]:
+    """Sistemdeki bütün hesap adları."""
+    import pwd as _pwd
+    try:
+        return {e.pw_name for e in _pwd.getpwall()}
+    except OSError:
+        return set()
+
 
 def list_reserve_accounts() -> list[str]:
     """Sistemde ogretmenN / ogretmen.N biçiminde tüm hesap adları.
@@ -1055,6 +1067,11 @@ class OTPSecretsModule(Module):
         # hangi hesabın anahtarının değiştiğini karşılaştırabilmek için.
         before_map = load_secrets()
         before_secrets = set(before_map)
+        # Uygulamadan önce var olan hesaplar: geri alma yalnız bu adımın
+        # gerçekten açtığı hesapları silmeli. "Yeni anahtar alanlar"
+        # (created_users) ortak ogretmen, etapadmin, branş ve EBA QR
+        # hesaplarını da içerir; onları silmek veri kaybıdır.
+        before_accounts = _account_names()
 
         # Hâlihazırda anahtarı olan hesaplara dokunulmaz: öğretmenin
         # telefonundaki anahtar geçerli kalsın. Adım aynı listeyle
@@ -1092,6 +1109,7 @@ class OTPSecretsModule(Module):
         # Yeni eklenenleri ve anahtarlarını oku
         after_secrets = load_secrets()
         new_users = [u for u in after_secrets if u not in before_secrets]
+        created_accounts = sorted(_account_names() - before_accounts)
 
         # Listede olup anahtarı zaten bulunan hesaplar — dokunulmadı.
         _normalize = _eta_otp_cli_normalize if cli_script else normalize_username
@@ -1362,6 +1380,10 @@ class OTPSecretsModule(Module):
             data={
                 "passed_names": teacher_names,
                 "created_users": sorted(new_users),
+                # Bu uygulamada açılan Linux hesapları (geri alma bunları siler).
+                "created_accounts": created_accounts,
+                # "Öğretmen hesapları için de PIN üret" kapsamındaki hesaplar.
+                "other_teachers": sorted(other_teachers),
                 "preserved_users": preserved_users,
                 "changed_users": changed_users,
                 "grouped_users": grouped_users,
@@ -1734,39 +1756,26 @@ class OTPSecretsModule(Module):
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         data = data or {}
-        created = data.get("created_users", []) or []
-        passed = data.get("passed_names", []) or []
-        cli_script = _eta_otp_cli_bulk_script()
+        # Eski kayıtlarda yalnız "yeni anahtar alan" hesaplar (created_users)
+        # tutuluyordu; içinde yedek, branş ve EBA QR hesapları da olabildiği
+        # ve hangisinin bu adımda açıldığı bilinemediği için hesap silinmez.
+        legacy = "created_accounts" not in data
+        created = [] if legacy else list(data.get("created_accounts") or [])
 
         # Auto-group izleme servisi kurulduysa kaldır (idempotent).
         uninstall_auto_group_service()
 
+        # Yalnız bu uygulamada açılan hesaplar silinir. Eskiden isim listesi
+        # (passed_names) eta-otp-cli --kullanicilari-sil'e veriliyordu; o
+        # listede yedek hesaplar ve etapadmin de bulunduğu için geri alma
+        # onları da silebiliyordu. Anahtar dosyası aşağıda yedekten döner.
         removed: list[str] = []
-        if created:
-            if cli_script and passed:
-                # Aynı isim dosyası ile --kullanicilari-sil
-                with tempfile.NamedTemporaryFile(
-                    "w", suffix="-tiha-isimler.txt", delete=False, encoding="utf-8",
-                ) as f:
-                    f.write("\n".join(passed) + "\n")
-                    names_file = f.name
-                try:
-                    run_cmd_stream(
-                        ["python3", str(cli_script), names_file, "--kullanicilari-sil"],
-                        timeout=600,
-                    )
-                finally:
-                    try:
-                        os.unlink(names_file)
-                    except OSError:
-                        pass
-                removed = [u for u in created if not user_exists(u)]
-            else:
-                # Elle deluser
-                for user in created:
-                    if user_exists(user):
-                        if run_cmd(["deluser", "--remove-home", user]).ok:
-                            removed.append(user)
+        for user in created:
+            if user in PROTECTED_ACCOUNTS or not user_exists(user):
+                continue
+            kill_user_processes(user)
+            if run_cmd(["deluser", "--remove-home", user]).ok:
+                removed.append(user)
 
         # /etc/otp-secrets.json yedekten geri yükle
         backup = self.state_dir / OTP_SECRETS_FILE.name
@@ -1798,7 +1807,8 @@ class OTPSecretsModule(Module):
             summary_parts.append(t("m03.undo.greeter_removed"))
 
         summary = "; ".join(summary_parts) + "."
-        return ApplyResult(True, summary)
+        details = t("m03.undo.legacy_no_delete") if legacy else ""
+        return ApplyResult(True, summary, details=details)
 
     # -----------------------------------------------------------------
     # Ek Kullanıcı Yönetimi Fonksiyonları

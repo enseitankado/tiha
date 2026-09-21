@@ -1494,6 +1494,11 @@ exit_code = "deluser çıkış kodu {code}"
 removed = "{count} kullanıcı silindi"
 restored = "önceki PIN anahtar dosyası geri yüklendi"
 greeter_removed = "greeter cache kurulumu kaldırıldı"
+legacy_no_delete = """\
+Bu kayıt TiHA'nın eski bir sürümüyle yapıldığı için adımda hangi hesapların \
+açıldığı bilinmiyor; hiçbir hesap silinmedi. Gereksiz hesapları 'Fazladan \
+hesapları sil' düğmesiyle kaldırabilirsiniz.\
+"""
 
 [m03.buttons]
 purge_all = "Tüm PIN Anahtarlarını Sil ({count} anahtar)"
