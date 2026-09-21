@@ -369,7 +369,7 @@ class InitialPasswordsModule(Module):
                 "title": t("m01.pre_apply.branch_delete_title", count=len(doomed)),
                 "message": t(
                     "m01.pre_apply.branch_delete_message",
-                    count=len(doomed), users=", ".join(doomed),
+                    users=", ".join(doomed),
                 ),
                 "params": {},
             })

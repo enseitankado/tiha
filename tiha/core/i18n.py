@@ -70,7 +70,7 @@ def _load() -> dict[str, str]:
     return _catalog
 
 
-def t(key: str, **values: object) -> str:
+def t(key: str, /, **values: object) -> str:
     """``key`` anahtarının metnini döndürür; ``values`` verilmişse
     yer tutucuları doldurur."""
     text = _load().get(key)
