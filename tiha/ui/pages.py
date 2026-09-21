@@ -560,27 +560,32 @@ class ModulePage(Gtk.Box):
             except Exception as exc:
                 log.warning("default_from tazelenemedi (%s): %s", source, exc)
                 continue
-            widget = self._fields.get(field["key"])
-            if is_bool:
-                if widget is not None and hasattr(widget, "set_active"):
-                    widget.set_active(_as_checked(value))
-                continue
-            # Sayı/metin alanı kullanıcı tarafından değiştirildiyse ona
-            # dokunulmaz: ör. "yedek hesap sayısı" 20 yapılıp alakasız bir
-            # düğmeye (öğrenci hesabını sil) basılınca eski değere dönüyordu.
-            key = field["key"]
-            if not hasattr(self, "_auto_values"):
-                self._auto_values = {}
-            auto = self._auto_values.get(key)
-            if auto is not None and _widget_text(widget) != auto:
-                continue
-            if isinstance(widget, Gtk.SpinButton):
-                widget.set_value(float(value or 0))
-            elif isinstance(widget, Gtk.Entry):
-                widget.set_text("" if value is None else str(value))
-            else:
-                continue
-            self._auto_values[key] = _widget_text(widget)
+            self._apply_default_value(field["key"], field.get("type", "text"), value)
+
+    def _apply_default_value(self, key: str, kind: str, value) -> None:
+        """Sistemden okunan değeri alana yazar. Onay kutusu hep güncellenir
+        (sistem durumudur); sayı/metin alanı kullanıcı değiştirdiyse ona
+        dokunulmaz — ör. "yedek hesap sayısı" 20 yapılıp alakasız bir düğmeye
+        basılınca eski değere dönüyordu."""
+        widget = self._fields.get(key)
+        if widget is None:
+            return
+        if kind == "bool":
+            if hasattr(widget, "set_active"):
+                widget.set_active(_as_checked(value))
+            return
+        if not hasattr(self, "_auto_values"):
+            self._auto_values = {}
+        auto = self._auto_values.get(key)
+        if auto is not None and _widget_text(widget) != auto:
+            return
+        if isinstance(widget, Gtk.SpinButton):
+            widget.set_value(float(value or 0))
+        elif isinstance(widget, Gtk.Entry):
+            widget.set_text("" if value is None else str(value))
+        else:
+            return
+        self._auto_values[key] = _widget_text(widget)
 
     def _refresh_state_checkboxes(self) -> None:
         """Uygula/geri al sonrası "durum" kutularını sistemden tazeler.
@@ -741,6 +746,18 @@ class ModulePage(Gtk.Box):
                         labels[field["key"]] = value
         state["gates"] = gates
         state["labels"] = labels
+        # Sistemden dolan alanlar (default_from): sayfaya her geçişte tahtanın
+        # o anki durumunu göstersin (Özet'ten geri alma ya da TiHA dışında
+        # yapılan değişiklik eski durumda kalmasın).
+        defaults: dict[str, tuple[str, object]] = {}
+        for field in schema:
+            source = field.get("default_from")
+            if not source:
+                continue
+            fn = getattr(self.module, source, None)
+            if callable(fn):
+                defaults[field["key"]] = (field.get("type", "text"), safe(source, fn))
+        state["defaults"] = defaults
         # Otomatik kapanma: form her açılışta güncel eta-shutdown ayarını
         # göstersin (ETA Zamanlı Kapatma arayüzünden değişmiş olabilir).
         if self.module.id == "m11_power_management":
@@ -775,6 +792,9 @@ class ModulePage(Gtk.Box):
                 widget.set_label(label)
         if state.get("config"):
             self._update_form_fields(state["config"])
+        for key, (kind, value) in (state.get("defaults") or {}).items():
+            if value is not None:
+                self._apply_default_value(key, kind, value)
 
     def _rationale_box(self) -> Gtk.Box:
         """Adım açıklaması + (varsa) teknik belge bağlantısı. Kısa

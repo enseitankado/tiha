@@ -246,6 +246,7 @@ license = "İletişim"
 desc = "Sorun, öneri ya da geri bildirim için doğrudan yazabilirsiniz."
 
 [ui.main]
+loading = "Yükleniyor…"
 window_title = "TiHA — Tahta İmaj Hazırlık Aracı"
 export_empty_title = "Dışa aktarılacak parametre yok"
 export_empty_body = """\
