@@ -484,9 +484,18 @@ class ModulePage(Gtk.Box):
                 help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
                 # Kutular daraldı; sütunu sayfa genişliğine yardım metni yayar.
                 help_lbl.set_hexpand(True)
-                grid.attach(help_lbl, 1, row_idx, 1, 1)
+                help_widget: Gtk.Widget = help_lbl
+                if field.get("help_folded"):
+                    # Uzun ve nadiren gereken açıklama: kapalı başlayan bir
+                    # katlayıcının içinde durur, form kısa görünür.
+                    expander = Gtk.Expander(label=t("ui.pages.help_expander"))
+                    expander.set_expanded(False)
+                    expander.add(help_lbl)
+                    expander.get_style_context().add_class("tiha-rationale")
+                    help_widget = expander
+                grid.attach(help_widget, 1, row_idx, 1, 1)
                 row_idx += 1
-                row_widgets.append(help_lbl)
+                row_widgets.append(help_widget)
 
             if gate:
                 self._conditional_field_widgets[field["key"]] = row_widgets
@@ -602,6 +611,22 @@ class ModulePage(Gtk.Box):
             widget = self._fields.get(f["key"])
             if widget is not None:
                 widget.set_sensitive(is_active)
+
+        # ``enable_when_any: [kutu, kutu, …]``: listedeki kutulardan en az biri
+        # işaretliyse alan etkin (ör. m11 geri sayım süresi: sabit saat ya da
+        # boşta kapanma açıkken anlamlı).
+        for f in schema:
+            sources = f.get("enable_when_any") or []
+            if checkbox_key not in sources:
+                continue
+            widget = self._fields.get(f["key"])
+            if widget is None:
+                continue
+            any_on = any(
+                getattr(self._fields.get(k), "get_active", lambda: False)()
+                for k in sources
+            )
+            widget.set_sensitive(any_on)
 
     def _refresh_preview(self) -> None:
         """Önizleme metnini yeniden üretip aynı widget'a yazar."""

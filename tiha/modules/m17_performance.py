@@ -752,11 +752,10 @@ class PerformanceModule(Module):
             lines.append(t("m17.preview.xorg_fix_on", mode=mode))
         else:
             lines.append(t("m17.preview.xorg_fix_off"))
-        lines.append(t(
-            "m17.preview.cursor_service",
-            state=t("m17.preview.installed") if CURSOR_AUTOSTART.exists()
-            else t("m17.preview.not_installed"),
-        ))
+        # Tazeleme servisi artık seçenek değil; yalnız eski bir uygulamadan
+        # kalmışsa (bir sonraki uygulamada sökülecek) gösterilir.
+        if CURSOR_AUTOSTART.exists():
+            lines.append(t("m17.preview.cursor_service", state=t("m17.preview.installed")))
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -771,9 +770,15 @@ class PerformanceModule(Module):
         p = dict(params or {})
         kill_processes = _as_bool(p.get("kill_user_processes"))
         light_mode = _as_bool(p.get("light_mode_enabled"))
-        cursor_xorg = (p.get("cursor_xorg_fix") or CURSOR_XORG_OFF).strip()
-        cursor_service = _as_bool(p.get("cursor_refresh_service"))
-        cursor_xorg_on = cursor_xorg != CURSOR_XORG_OFF
+        # İmleç düzeltmesi seçenek değil: gerçek tahtada ekran modu değişiminde
+        # imleç kaybolmasını yalnız modesetting + yazılımsal imleç giderdi.
+        # Form alanı salt okunur; CLI/preset'ten başka bir değer gelse de
+        # her uygulamada bu kurulur.
+        cursor_xorg = CURSOR_XORG_SWCURSOR
+        cursor_xorg_on = True
+        # "Mod değişiminde imleci tazele" servisi kaldırıldı; önceki bir
+        # uygulamanın kurduğu servis varsa bu uygulamada sökülür.
+        cursor_service = False
         # Kutu sisteme bakarak dolduğu için (params.py "default_from"),
         # işaretinin kaldırılıp uygulanması bilinçli bir "kaldır" isteğidir.
         light_remove = not light_mode and self.light_mode_active()
@@ -847,14 +852,15 @@ class PerformanceModule(Module):
             else:
                 failures.append(text)
 
-        if cursor_service:
-            ok, text = self._apply_cursor_service(original, say)
-            if ok:
-                summary.append(text)
-                details.append(t("m17.apply.details_cursor_service", path=CURSOR_SCRIPT))
-                data["cursor_refresh_service"] = True
-            else:
-                failures.append(text)
+        if original["touched"].get("cursor_service"):
+            removed_ok = all([
+                self._restore_or_remove("cursor_script", original, failures),
+                self._restore_or_remove("cursor_autostart", original, failures),
+            ])
+            if removed_ok:
+                original["touched"]["cursor_service"] = False
+                summary.append(t("m17.apply.cursor_service_removed"))
+                data["cursor_service_removed"] = True
 
         self._save_original(original)
         if not summary:

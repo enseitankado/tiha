@@ -325,6 +325,7 @@ m16 = "Açılış menüsünün düzenlenmesini parolaya bağlar."
 m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya hazırlar."
 
 [ui.pages]
+help_expander = "Açıklama"
 rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\
 Deneysel: Bu adım gerçek tahta donanımında henüz doğrulanmadı. Önce tek bir \
@@ -2873,21 +2874,10 @@ opt_modesetting = "modesetting sürücüsüne geç"
 opt_swcursor = "modesetting + yazılımsal imleç (SWcursor)"
 label = "İmleç kaybolmasını önle (Xorg)"
 help = """\
-Tahtada çözünürlük ya da tazeleme frekansı değiştirilip uygulandığında fare \
-imleci görünmez oluyor; tıklama ve odak çalışmaya devam ediyor, fare \
-çıkarılıp takılınca düzeliyor. Nedeni, mod değişiminde donanımsal imleç \
-düzleminin yeniden kurulurken imleç görüntüsünü geri yüklememesi.\n\
-\n\
-'modesetting sürücüsüne geç': /etc/X11/xorg.conf.d/20-tiha-imlec.conf \
-yazılır; ETAP'ta kurulu gelen eski intel sürücüsü yerine çekirdeğin \
-modesetting sürücüsü kullanılır. Başarım bedeli yoktur; önce bunu deneyin.\n\
-\n\
-'+ yazılımsal imleç': aynı dosyaya Option \"SWcursor\" \"on\" eklenir; \
-donanımsal imleç tamamen kapanır, kaybolacak düzlem kalmaz. Kesin çözümdür \
-ama imleci her karede sistem çizer; zayıf tahtalarda hızlı fare hareketinde \
-hafif gecikme görülebilir.\n\
-\n\
-Değişiklik oturum (LightDM) yeniden başlayınca geçerli olur.\
+Çözünürlük ya da tazeleme hızı değiştirilince USB fare imleci görünmez \
+oluyordu. Adım her uygulandığında /etc/X11/xorg.conf.d/20-tiha-imlec.conf \
+yazılır: ekran kartı modesetting sürücüsüne alınır ve imleci sistem çizer \
+(SWcursor). Oturum (LightDM) yeniden başlayınca geçerli olur.\
 """
 
 [m17.params.kill_user_processes]
@@ -2943,16 +2933,6 @@ kullanıcının ilk girişinde ekran kısa süre kararabilir.\
 label = "Yenileme hızını 50 Hz'e düşür"
 help = "Hareketli içerikte yükü ~%17 azaltır; kalem gecikmesi ~3 ms artar."
 
-[m17.params.cursor_refresh_service]
-label = "Mod değişiminde imleci tazele (servis)"
-help = """\
-Yukarıdaki Xorg düzeltmesine alternatif, hafif yol: her kullanıcının \
-oturumunda küçük bir servis çalışır, Muffin'in MonitorsChanged sinyalini \
-dinler ve mod değişiminden ~1 sn sonra cursor-size değerini bir artırıp geri \
-alarak imleci yeniden çizdirir. Donanımsal imleç korunur, başarım bedeli \
-yoktur; imleç yalnız bir an kaybolur. İkisini birlikte de seçebilirsiniz.\
-"""
-
 [m17.preview]
 sessions_header = "Oturum kalıntıları"
 state_active = "etkin (oturum kapanınca süreçler sonlandırılıyor)"
@@ -2983,6 +2963,7 @@ not_installed = "kurulu değil"
 
 [m17.apply]
 nothing_selected = "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı."
+cursor_service_removed = "Artık kullanılmayan imleç tazeleme servisi kaldırıldı."
 light_no_subkeys = "ETA Hafif Mod işaretli ama hiçbir alt ayar seçilmedi; hafif mod uygulanmadı."
 details_light = "Hafif mod: {path} → {keys}"
 details_light_removed = "Hafif mod kaldırıldı (sistem + kullanıcı ayarları)"

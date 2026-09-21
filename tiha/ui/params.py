@@ -348,6 +348,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # kutu o değerle açılsın — kullanıcı farkında olmadan
             # eski süreyi yeniden yazmaz.
             "default_from": "suggested_countdown_seconds",
+            # Uyarı penceresi iki modda da çıkar; ikisi de kapalıyken
+            # süre anlamsız olduğu için kutu pasifleşir.
+            "enable_when_any": ["auto_enabled", "idle_enabled"],
             "min": 30,
             "max": 600,
             "step": 10,
@@ -435,22 +438,12 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         {
             "key": "cursor_xorg_fix",
             "label": t("m17.params.cursor_xorg_fix.label"),
-            "type": "select",
+            # Sabit: kullanıcı değiştiremez; adım her uygulandığında kurulur.
+            "type": "readonly",
             "required": False,
-            "default": t("m17.params.cursor_xorg_fix.opt_off"),
-            "options": [
-                t("m17.params.cursor_xorg_fix.opt_off"),
-                t("m17.params.cursor_xorg_fix.opt_modesetting"),
-                t("m17.params.cursor_xorg_fix.opt_swcursor"),
-            ],
+            "default": t("m17.params.cursor_xorg_fix.opt_swcursor"),
             "help": t("m17.params.cursor_xorg_fix.help"),
-        },
-        {
-            "key": "cursor_refresh_service",
-            "label": t("m17.params.cursor_refresh_service.label"),
-            "type": "bool",
-            "default": "False",
-            "help": t("m17.params.cursor_refresh_service.help"),
+            "help_folded": True,
         },
     ],
     "m14_bios_password": [
