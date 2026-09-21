@@ -296,6 +296,10 @@ class TiHAWindow(Gtk.Window):
 
         # İlk durum ikonlarını çiz (geçmiş oturumlardan kalan applied'ları yansıt)
         self._refresh_sidebar_status()
+        # Geri alma (adım sayfasından ya da Özet'ten) işareti kaldırmıyordu:
+        # tazeleme yalnız uygula sonrasına bağlıydı. Artık kayıttaki her
+        # değişiklik sol menüyü ve ileri/geri kapısını tazeler.
+        self.journal.listeners.append(self._on_journal_changed)
         self._show_page_index(0)
 
         # Sürüm kontrolü — çalışan koddan daha yeni bir release var mı diye
@@ -904,6 +908,14 @@ class TiHAWindow(Gtk.Window):
         if not hasattr(self, "_status_labels"):
             self._status_labels = []
         self._status_labels.append((module_id, status))
+
+    def _on_journal_changed(self) -> None:
+        # Kayıt arka plan iş parçacığından da yazılabilir; GTK işi ana döngüde.
+        def _do() -> bool:
+            self._update_navigation_gate()
+            self._refresh_sidebar_status()
+            return False
+        GLib.idle_add(_do)
 
     def _refresh_sidebar_status(self) -> None:
         """Journal'a bakarak her sidebar satırının durum ikonunu günceller.

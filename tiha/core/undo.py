@@ -59,6 +59,10 @@ class Journal:
         # filtresi için kullanılır. Dosya kalıcıdır, oturum RAM'de tutulur.
         self.session_start = datetime.now(timezone.utc).isoformat()
         self._entries: list[JournalEntry] = []
+        # Kayıt değişince (uygula / geri al) haber verilecekler; ör. sol
+        # menüdeki durum işaretleri. Geri alma birkaç yerden yapılabildiği
+        # için (adım sayfası, Özet) tazeleme tek noktadan buradan tetiklenir.
+        self.listeners: list = []
         self._load()
 
     def _load(self) -> None:
@@ -83,6 +87,11 @@ class Journal:
             )
         except OSError as exc:
             log.error("Günce yazılamadı: %s", exc)
+        for listener in list(self.listeners):
+            try:
+                listener()
+            except Exception as exc:
+                log.debug("Günce dinleyicisi hatası: %s", exc)
 
     # --- API ---------------------------------------------------------------
 
