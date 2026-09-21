@@ -16,6 +16,7 @@ işaretlenir) bayrakları da desteklenir.
 from __future__ import annotations
 
 from ..core.i18n import t
+from ..modules.m16_grub_protection import GRUB_PASSWORD_CHARS
 
 PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m01_initial_passwords": [
@@ -533,6 +534,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "key": "grub_password",
             "label": t("m16.params.grub_password.label"),
             "type": "password",
+            # GRUB ekranı İngilizce klavyeyle çalışır; yalnız Türkçe ve
+            # İngilizce klavyede aynı tuşta olan karakterler yazılabilir.
+            "allowed_chars": GRUB_PASSWORD_CHARS,
             "show_toggle": True,
             "required": False,
             "default": "",

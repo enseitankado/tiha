@@ -343,6 +343,7 @@ m16 = "Açılış menüsünün düzenlenmesini parolaya bağlar."
 m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya hazırlar."
 
 [ui.pages]
+char_rejected = "Bu karakter burada kullanılamaz; ayrıntı alanın altındaki açıklamada."
 help_expander = "Açıklama"
 rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\
@@ -920,14 +921,9 @@ help = "Öğretmen hesabı varsa, bu hesap için parola belirleyebilirsiniz. Bo�
 [m01.params.reserve_count]
 label = "Yedek hesap sayısı"
 help = """\
-Sonradan okula atanacak öğretmenler için ogretmen1, ogretmen2 … biçiminde \
-boş hesaplar hazırlar. Her yedek hesap için ev dizini açılır (useradd), \
-hesap EBA QR / eta-usb-login ile aynı standart cihaz gruplarına (ses, USB, \
-kamera, yazıcı vb.) eklenir ve parola kilitli tutulur. Eski kurulumlardan \
-kalma ogretmen01 / ogretmen.1 biçimindeki hesaplar da mevcut sayılır — \
-üzerine yazılmaz. İmaj alındığında bu hesaplar tüm klon tahtalara birlikte \
-gider. PIN anahtarları için \"Öğretmen PIN anahtarları\" adımı gerekir; o \
-adım bu hesapları da otomatik olarak PIN üretim listesine ekler.\
+Sonradan okula atanacak öğretmenler için ogretmen1, ogretmen2… biçiminde \
+boş hesaplar hazırlar. Eski kurulumlardan kalan hesaplar varsa üzerine \
+yazılmaz.\
 """
 
 [m01.params.remove_student]
@@ -3791,6 +3787,13 @@ Klonlarda:\n\
 """
 
 [m16.apply]
+bad_chars = "GRUB parolasında açılış ekranında yazılamayan karakterler var: {chars}"
+bad_chars_details = """\
+Açılış ekranında (GRUB) klavye İngilizce düzende çalışır; Türkçe klavyede \
+yazdığınız bu karakterler orada aynı tuşla yazılamaz ve parola kabul \
+edilmez. Yalnız büyük harfler (A-Z), küçük harfler (küçük i hariç) ve \
+rakamlar kullanın.\
+"""
 skip_no_lock = "GRUB koruması kutucuğu işaretli değil ve koruma zaten yok — değişiklik yapılmadı."
 removing = "Kutucuk işaretsiz — mevcut GRUB koruması kaldırılıyor…"
 upgrading = """\
@@ -3945,6 +3948,10 @@ yoktur.\
 [m16.params.grub_password]
 label = "GRUB yönetici parolası"
 help = """\
+Açılış ekranında klavye İngilizce düzende çalışır. Bu yüzden parolada \
+yalnız iki klavyede de aynı tuşta olan karakterler kullanılabilir: büyük \
+harfler (A-Z), küçük harfler (küçük i hariç) ve rakamlar. Türkçe \
+karakterler, küçük i ve noktalama işaretleri kutuya yazılmaz. \
 GRUB menü kipine ('e' tuşu) ya da GRUB shell'ine ('c' tuşu) girmeye çalışan \
 kullanıcıdan istenecek parola. GRUB ekranında önce 'Enter username:' çıkar; \
 oraya yukarıdaki 'GRUB kullanıcı adı' kutusundaki ad yazılır, sonra bu \

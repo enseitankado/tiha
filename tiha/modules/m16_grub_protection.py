@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -62,6 +63,15 @@ from ..core.module import ApplyResult, Module, ProgressCallback
 from ..core.utils import run_cmd
 
 log = get_logger(__name__)
+
+# GRUB açılış ekranında klavye her zaman İngilizce (US) düzendedir. Tahtada
+# Türkçe Q klavyeyle yazılan parolanın GRUB'da aynı tuşlarla yazılabilmesi
+# için yalnız iki düzende aynı karakteri üreten tuşlara izin verilir:
+# A-Z, küçük harfler (i hariç: Türkçe klavyede küçük i başka tuşta, o tuş
+# GRUB'da ' olur; ı tuşu ise GRUB'da i olur) ve rakamlar. Form kutusu
+# (params.py "allowed_chars") ve apply denetimi bu tanımı kullanır.
+GRUB_PASSWORD_CHARS = "A-Za-hj-z0-9"
+_GRUB_PASSWORD_BAD = re.compile(f"[^{GRUB_PASSWORD_CHARS}]")
 
 GRUB_LOCKDOWN_INCLUDE = Path("/etc/grub.d/01_tiha_grub_password")
 GRUB_LINUX_SCRIPT = Path("/etc/grub.d/10_linux")
@@ -323,6 +333,13 @@ class GrubProtectionModule(Module):
                 False,
                 t("m16.apply.short_pw"),
                 details=t("m16.apply.short_pw_details"),
+            )
+        bad_chars = sorted(set(_GRUB_PASSWORD_BAD.findall(password)))
+        if not keep_existing and bad_chars:
+            return ApplyResult(
+                False,
+                t("m16.apply.bad_chars", chars=" ".join(bad_chars)),
+                details=t("m16.apply.bad_chars_details"),
             )
 
         state_dir = self.ensure_state_dir()

@@ -8,6 +8,7 @@ yine kendi ``ScrolledWindow``'larında sabit yükseklikte verilir.
 
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 
@@ -1221,6 +1222,8 @@ class ModulePage(Gtk.Box):
 
             handler_id = [0]
             handler_id[0] = entry.connect("insert-text", _filter_insert)
+        if field.get("allowed_chars"):
+            self._attach_char_filter(entry, field["allowed_chars"])
         if kind == "password":
             # Parolalar varsayılan olarak görünür: tahtada dokunmatik ekran
             # klavyesiyle yazarken yanlış girilen karakter ancak böyle fark
@@ -1300,6 +1303,41 @@ class ModulePage(Gtk.Box):
             box._entry = entry  # type: ignore[attr-defined]
             return box
         return entry
+
+    def _attach_char_filter(self, entry: Gtk.Entry, allowed: str) -> None:
+        """Kutuya yalnız ``allowed`` (regex karakter sınıfı içeriği, ör.
+        "A-Za-z0-9") karakterlerinin yazılmasına izin verir. Reddedilen
+        tuşta kutunun solunda birkaç saniye uyarı simgesi belirir; üzerine
+        gelince nedeni okunur (şemadaki yardım metni ayrıntıyı anlatır)."""
+        bad = re.compile(f"[^{allowed}]")
+        handler_id = [0]
+        hide_timer = [0]
+
+        def _hide_warning() -> bool:
+            entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, None)
+            hide_timer[0] = 0
+            return False
+
+        def _filter(e, text, _length, _position):
+            cleaned = bad.sub("", text)
+            if cleaned == text:
+                return
+            e.handler_block(handler_id[0])
+            pos = e.get_position()
+            if cleaned:
+                e.insert_text(cleaned, pos)
+                e.set_position(pos + len(cleaned))
+            e.handler_unblock(handler_id[0])
+            e.stop_emission_by_name("insert-text")
+            e.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, "dialog-warning-symbolic")
+            e.set_icon_tooltip_text(
+                Gtk.EntryIconPosition.PRIMARY, t("ui.pages.char_rejected"),
+            )
+            if hide_timer[0]:
+                GLib.source_remove(hide_timer[0])
+            hide_timer[0] = GLib.timeout_add_seconds(4, _hide_warning)
+
+        handler_id[0] = entry.connect("insert-text", _filter)
 
     def _field_value(self, key: str, field: dict) -> str:
         widget = self._fields[key]
