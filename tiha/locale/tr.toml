@@ -3071,6 +3071,7 @@ unknown_error = "bilinmeyen hata"
 monitors_failed = "{name}: monitors.xml geri alınamadı ({error})"
 
 [m17.report]
+cursor_service_removed = "Artık kullanılmayan imleç tazeleme servisini kaldırdınız."
 session_done = """\
 Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin (kapatılmadan \
 bırakılan Firefox/Chrome ve alt süreçleri dahil) sonlandırılmasını \

@@ -713,6 +713,8 @@ def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
     if d.get("cursor_refresh_service"):
         rep.done.append(t("m17.report.cursor_refresh_done"))
         rep.tests.append(t("m17.report.test_cursor_refresh"))
+    if d.get("cursor_service_removed"):
+        rep.done.append(t("m17.report.cursor_service_removed"))
 
 
 # ---------------------------------------------------------------------------
