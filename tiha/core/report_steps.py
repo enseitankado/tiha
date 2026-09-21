@@ -482,6 +482,11 @@ def narrate_m11(ctx: StepContext, rep: StepReport) -> None:
         rep.done.append(t("m11.report.idle_only", idle=idle_min, warn=warn))
     else:
         rep.done.append(t("m11.report.none"))
+    exempt = ctx.data.get("exempt_macs") or []
+    if (auto or idle) and exempt:
+        rep.done.append(t("m11.report.exempt", count=len(exempt),
+                          macs=", ".join(exempt)))
+        rep.tests.append(t("m11.report.test_exempt", mac=exempt[0]))
     if idle:
         rep.tests.append(t(
             "m11.report.test_idle", minutes=idle_min + 1, duration=_duration(cs),

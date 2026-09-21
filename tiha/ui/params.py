@@ -357,6 +357,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "step": 10,
             "help": t("m11.params.countdown_seconds.help"),
         },
+        {
+            "key": "exempt_macs",
+            "label": t("m11.params.exempt_macs.label"),
+            "type": "textarea",
+            "required": False,
+            "default": "",
+            # Yeniden girişte kurulu servisteki liste gelsin.
+            "default_from": "current_exempt_macs",
+            "placeholder": t("m11.params.exempt_macs.placeholder"),
+            # Kapanma modu seçilmemişse muaf tutulacak bir şey yok: satır gizli.
+            "visible_when_any": ["auto_enabled", "idle_enabled"],
+            "help": t("m11.params.exempt_macs.help"),
+        },
     ],
     "m17_performance": [
         {"label": t("m17.params.heading_session"), "type": "heading"},

@@ -5,7 +5,13 @@ Pardus ETA'nın mevcut eta-shutdown altyapısını kullanarak otomatik kapanma
 sistemi kurar. İki mod destekler:
 
 1. **Sabit saat kapatma**: Belirlenen saatte otomatik kapatma
-2. **Idle tabanlı kapatma**: Belirtilen süre boşta kalınca kapatma
+2. **Kullanılmadığında kapatma**: Belirtilen süre boşta kalınca kapatma
+
+İki moddan biri seçiliyken MAC adresi listesi girilebilir. Klon bu
+tahtalardan birinde açılırsa servis ilk turunda yapılandırmayı bir kez
+paketin varsayılanına (iki mod da kapalı) döndürür; tahta TiHA'nın kapanma
+ayarı hiç yapılmamış gibi davranır, yerel kullanıcı ETA Zamanlı Kapatma ile
+kendi ayarını yapabilir.
 
 **Orijinalden farkı:**
 - Her iki modda da uyarı diyalogu gösterir (varsayılan 2 dakika,
@@ -21,7 +27,9 @@ Orijinal eta-shutdown konfigürasyonu geri yüklenir, değişiklikler kaldırıl
 
 from __future__ import annotations
 
+import ast
 import configparser
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -47,6 +55,63 @@ ETA_SHUTDOWN_SERVICE = Path("/usr/share/eta/eta-shutdown/src/service/service.py"
 ETA_SHUTDOWN_SERVICE_BACKUP = Path("/usr/share/eta/eta-shutdown/src/service/service.py.tiha-backup")
 # TiHA tarafından kurulan, kullanıcı oturumunda görünen GUI geri sayım penceresi
 COUNTDOWN_SCRIPT = Path("/usr/local/sbin/tiha-shutdown-countdown.py")
+# Muaf tahtada yapılandırmanın varsayılana döndürüldüğü MAC adresleri.
+# İçerik makineye özel: imajla gelen dosya başka bir tahtanın adresini
+# taşıdığı için klonda yeniden değerlendirme yapılır.
+EXEMPT_MARKER = Path("/var/lib/tiha/shutdown-exempt.done")
+
+
+# --- Otomatik kapanmanın uygulanmayacağı tahtalar (MAC listesi) ------------
+
+_MAC_SPLIT = re.compile(r"[\s,;]+")
+
+
+def parse_mac_list(text: str | None) -> tuple[list[str], list[str]]:
+    """Serbest metni MAC adreslerine ayırır.
+
+    Ayraç: satır sonu, boşluk, virgül ya da noktalı virgül. Adres
+    ``aa:bb:cc:dd:ee:ff``, ``AA-BB-…``, ``aabb.ccdd.eeff`` ya da ayraçsız
+    12 onaltılık hane olabilir. Dönüş: (geçerli ve tekilleştirilmiş
+    ``aa:bb:…`` listesi, geçersiz parçalar).
+    """
+    valid: list[str] = []
+    invalid: list[str] = []
+    for token in _MAC_SPLIT.split(text or ""):
+        if not token:
+            continue
+        digits = re.sub(r"[:\-.]", "", token).lower()
+        if not re.fullmatch(r"[0-9a-f]{12}", digits):
+            invalid.append(token)
+            continue
+        mac = ":".join(digits[i:i + 2] for i in range(0, 12, 2))
+        if mac not in valid:
+            valid.append(mac)
+    return valid, invalid
+
+
+def _local_macs() -> set[str]:
+    """Bu tahtanın ağ kartlarının MAC adresleri (anlık ve kalıcı)."""
+    macs: set[str] = set()
+    net = Path("/sys/class/net")
+    try:
+        ifaces = [p.name for p in net.iterdir()]
+    except OSError:
+        return macs
+    for iface in ifaces:
+        if iface == "lo":
+            continue
+        try:
+            macs.add((net / iface / "address").read_text().strip().lower())
+        except OSError:
+            pass
+        # Kablosuz kart rastgele MAC kullanıyorsa kalıcı adres ethtool'da.
+        if not shutil.which("ethtool"):
+            continue
+        r = run_cmd(["ethtool", "-P", iface], timeout=5)
+        if r.ok and r.stdout.strip():
+            macs.add(r.stdout.strip().rsplit(" ", 1)[-1].lower())
+    macs.discard("00:00:00:00:00:00")
+    return macs
 
 
 def _render_countdown_script() -> str:
@@ -191,7 +256,10 @@ sys.exit(win.exit_code)
 DEFAULT_COUNTDOWN_SECONDS = 120
 
 
-def _render_enhanced_service(countdown_seconds: int = DEFAULT_COUNTDOWN_SECONDS) -> str:
+def _render_enhanced_service(
+    countdown_seconds: int = DEFAULT_COUNTDOWN_SECONDS,
+    exempt_macs: list[str] | tuple[str, ...] = (),
+) -> str:
     """TiHA tarafından geliştirilmiş eta-shutdown service script'i.
 
     Orijinal eta-shutdown ``service.py`` dosyası bu içerikle değiştirilir.
@@ -203,6 +271,9 @@ def _render_enhanced_service(countdown_seconds: int = DEFAULT_COUNTDOWN_SECONDS)
     süresi (saniye). Adımın form kutusundan gelir. Template metnindeki
     varsayılan ``COUNTDOWN_SECONDS = 120`` satırı bu değere göre
     değiştirilir.
+
+    ``exempt_macs`` — otomatik kapanmanın uygulanmayacağı tahtaların MAC
+    adresleri (``parse_mac_list`` çıktısı); ``EXEMPT_MACS`` satırına yazılır.
     """
     template = '''import os
 import pwd
@@ -221,6 +292,12 @@ from logger import log
 CONFIG_FILE = "/etc/pardus/eta-shutdown.conf"
 COUNTDOWN_SCRIPT = "/usr/local/sbin/tiha-shutdown-countdown.py"
 COUNTDOWN_SECONDS = 120
+# Otomatik kapanmanın uygulanmayacağı tahtalar (TiHA'da girilen MAC
+# adresleri). Klon bunlardan birinde açılırsa yapılandırma bir kez paketin
+# varsayılanına döner; sonra tahtadaki kullanıcı ETA Zamanlı Kapatma ile
+# kendi ayarını yapabilir.
+EXEMPT_MACS = []
+EXEMPT_MARKER = "/var/lib/tiha/shutdown-exempt.done"
 
 config = configparser.ConfigParser()
 config.read(CONFIG_FILE)
@@ -478,14 +555,90 @@ def wait_or_proceed(mode_name):
     return True
 
 
+def local_macs():
+    """Bu tahtanın ağ kartlarının MAC adresleri (anlık ve kalıcı)."""
+    macs = set()
+    try:
+        ifaces = os.listdir("/sys/class/net")
+    except OSError:
+        return macs
+    for iface in ifaces:
+        if iface == "lo":
+            continue
+        try:
+            with open("/sys/class/net/{}/address".format(iface)) as f:
+                macs.add(f.read().strip().lower())
+        except OSError:
+            pass
+        try:
+            out = subprocess.run(
+                ["ethtool", "-P", iface],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+            if out:
+                macs.add(out.rsplit(" ", 1)[-1].lower())
+        except Exception:
+            pass
+    macs.discard("00:00:00:00:00:00")
+    return macs
+
+
+def apply_exemption():
+    """Tahta muaf listesindeyse yapılandırmayı bir kez varsayılana döndürür.
+
+    Dönüş True ise servis bu tahtada kapanma yapmamalı (varsayılana dönüş
+    yazılamadı). İşaret dosyası tahtanın kendi adresini taşır; imajla gelen
+    dosya klonu etkilemez, yerel ayar sonraki açılışlarda korunur.
+    """
+    if not EXEMPT_MACS:
+        return False
+    matched = sorted(local_macs() & set(EXEMPT_MACS))
+    if not matched:
+        return False
+    try:
+        with open(EXEMPT_MARKER) as f:
+            done = f.read().split()
+    except OSError:
+        done = []
+    if any(mac in done for mac in matched):
+        return False
+    defaults = configparser.ConfigParser()
+    defaults["AUTO_SHUTDOWN"] = {"enabled": "False", "hour": "0", "minute": "0"}
+    defaults["TIMED_MODE"] = {"mode": "none", "hour": "0", "minute": "5"}
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            defaults.write(f)
+        os.makedirs(os.path.dirname(EXEMPT_MARKER), exist_ok=True)
+        with open(EXEMPT_MARKER, "w") as f:
+            f.write("\\n".join(matched) + "\\n")
+    except OSError as exc:
+        log("TiHA: muaf tahta yapılandırması yazılamadı: {}".format(exc))
+        return True
+    log("TiHA: bu tahta ({}) otomatik kapanmadan muaf; yapılandırma "
+        "varsayılana döndü".format(", ".join(matched)))
+    return False
+
+
 # State
 init = False
 ignore_auto = False
 postpone_until = 0.0  # bu zamana kadar uyarı suspended
+exempt_checked = False
+exempt_block = False
 
 
 def service():
-    global init, ignore_auto, postpone_until
+    global init, ignore_auto, postpone_until, exempt_checked, exempt_block
+
+    # Muaf tahta denetimi yapılandırma okunmadan önce, servis başına bir kez.
+    if not exempt_checked:
+        exempt_checked = True
+        try:
+            exempt_block = apply_exemption()
+        except Exception as exc:
+            log("TiHA: muaf tahta denetimi başarısız: {}".format(exc))
+    if exempt_block:
+        return
 
     # Config'i her döngüde tazele (ETA Zamanlı Kapatma GUI'sinden gelen
     # değişiklikleri yakalamak için)
@@ -509,7 +662,7 @@ def service():
         log("TiHA: erteleme aktif, {:.0f} sn kaldı".format(postpone_until - time.time()))
         return
 
-    # ---- TIMED MODE — Idle tabanlı kapatma ----
+    # ---- TIMED MODE — Kullanılmadığında kapatma ----
     mode = config["TIMED_MODE"]["mode"]
     if mode != "none":
         idle_time = -1
@@ -531,9 +684,9 @@ def service():
             )
             if not proceed:
                 postpone_until = time.time() + 600
-                log("Idle kapatma 10 dakika ertelendi")
+                log("Kullanılmadığında kapatma 10 dakika ertelendi")
                 return
-            log("TiHA: Idle tabanlı kapatma gerçekleştiriliyor")
+            log("TiHA: Kullanılmadığında kapatma gerçekleştiriliyor")
             if mode == "shutdown":
                 os.system("poweroff")
             elif mode == "suspend":
@@ -568,11 +721,30 @@ def service():
     }
     for token, text in texts.items():
         template = template.replace(token, repr(text))
+    template = template.replace(
+        "EXEMPT_MACS = []", f"EXEMPT_MACS = {list(exempt_macs)!r}", 1,
+    )
     return template.replace(
         f"COUNTDOWN_SECONDS = {DEFAULT_COUNTDOWN_SECONDS}",
         f"COUNTDOWN_SECONDS = {int(countdown_seconds)}",
         1,
     )
+
+
+def _current_exempt_macs() -> list[str]:
+    """Yüklü service.py'deki muaf tahta listesi (TiHA sürümü değilse boş)."""
+    try:
+        txt = ETA_SHUTDOWN_SERVICE.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    m = re.search(r"^EXEMPT_MACS = (\[.*\])$", txt, re.MULTILINE)
+    if not m:
+        return []
+    try:
+        value = ast.literal_eval(m.group(1))
+    except (ValueError, SyntaxError):
+        return []
+    return [str(v) for v in value] if isinstance(value, list) else []
 
 
 def _current_countdown_seconds() -> int:
@@ -844,11 +1016,17 @@ class PowerManagementModule(Module):
         else:
             lines.append(t("m11.preview.fixed_off"))
 
-        # Idle tabanlı
+        # Kullanılmadığında kapatma
         if timed_mode != "none":
             lines.append(t("m11.preview.idle_on", minutes=timed_minute))
         else:
             lines.append(t("m11.preview.idle_off"))
+
+        exempt = _current_exempt_macs()
+        if exempt:
+            lines.append(t("m11.preview.exempt", count=len(exempt)))
+            if set(exempt) & _local_macs():
+                lines.append(t("m11.preview.exempt_this_board"))
 
         # Config son değişiklik
         try:
@@ -868,6 +1046,10 @@ class PowerManagementModule(Module):
         lines.append("")
         lines.append(t("m11.preview.before_shutdown", duration=countdown_label))
         return "\n".join(lines)
+
+    def current_exempt_macs(self) -> str:
+        """"Muaf tahtalar" kutusunun açılışta görüneceği liste."""
+        return "\n".join(_current_exempt_macs())
 
     def suggested_countdown_seconds(self) -> int:
         """"Geri sayım süresi" kutusunun açılışta görüneceği değer.
@@ -915,6 +1097,19 @@ class PowerManagementModule(Module):
         elif countdown_seconds > 600:
             countdown_seconds = 600
 
+        # Muaf tahtalar: iki mod da kapalıyken liste anlamsız (kutu gizli).
+        exempt_macs: list[str] = []
+        if auto_enabled or idle_enabled:
+            exempt_macs, invalid_macs = parse_mac_list(params.get("exempt_macs", ""))
+            if invalid_macs:
+                return ApplyResult(
+                    False,
+                    t("m11.apply.error_macs"),
+                    details=t("m11.apply.error_macs_details",
+                              items=", ".join(invalid_macs)),
+                )
+        this_board_exempt = sorted(set(exempt_macs) & _local_macs())
+
         # Ekran-blank ile idle kapanma süresinin çakışma kontrolü (yumuşak uyarı).
         # Geri sayım diyalogu idle_threshold anında doğar; doğum anında ekran
         # açık olmalı, yoksa kullanıcı 2 dk'lık erteleme penceresini hiç görmez.
@@ -951,7 +1146,7 @@ class PowerManagementModule(Module):
         # Geliştirilmiş service dosyasını yaz
         try:
             ETA_SHUTDOWN_SERVICE.write_text(
-                _render_enhanced_service(countdown_seconds),
+                _render_enhanced_service(countdown_seconds, exempt_macs),
                 encoding="utf-8",
             )
             ETA_SHUTDOWN_SERVICE.chmod(0o755)
@@ -995,6 +1190,19 @@ class PowerManagementModule(Module):
             ETA_SHUTDOWN_CONFIG.chmod(0o644)
         except OSError as exc:
             return ApplyResult(False, t("m11.apply.error_config", error=exc))
+
+        # İmajın hazırlandığı tahta listedeyse burada ayarlar etkin kalsın:
+        # servis bu adresler için "varsayılana döndürüldü" sayar. Klonlar
+        # kendi adresleriyle değerlendirilir.
+        try:
+            if this_board_exempt:
+                EXEMPT_MARKER.parent.mkdir(parents=True, exist_ok=True)
+                EXEMPT_MARKER.write_text("\n".join(this_board_exempt) + "\n",
+                                         encoding="utf-8")
+            elif EXEMPT_MARKER.exists():
+                EXEMPT_MARKER.unlink()
+        except OSError as exc:
+            log.warning("Muaf tahta işareti yazılamadı: %s", exc)
 
         if progress:
             progress(t("m11.apply.progress_restart"))
@@ -1041,6 +1249,15 @@ class PowerManagementModule(Module):
         if not auto_enabled and not idle_enabled:
             details_lines.append(t("m11.apply.details_both_off"))
 
+        if exempt_macs:
+            details_lines.extend([
+                "",
+                t("m11.apply.details_exempt", count=len(exempt_macs)),
+                *(f"   - {mac}" for mac in exempt_macs),
+            ])
+            if this_board_exempt:
+                details_lines.append(t("m11.apply.details_exempt_this_board"))
+
         details_lines.extend([
             "",
             t("m11.apply.details_management"),
@@ -1054,7 +1271,8 @@ class PowerManagementModule(Module):
         return ApplyResult(
             True,
             summary,
-            details="\n".join(details_lines)
+            details="\n".join(details_lines),
+            data={"exempt_macs": exempt_macs},
         )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
@@ -1079,6 +1297,11 @@ class PowerManagementModule(Module):
                 removed_items.append(t("m11.undo.countdown_removed"))
             except OSError as exc:
                 log.warning("Geri sayım scripti silinemedi: %s", exc)
+
+        try:
+            EXEMPT_MARKER.unlink()
+        except OSError:
+            pass
 
         # Konfigürasyonu sıfırla (varsayılan değerler)
         try:

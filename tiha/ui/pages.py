@@ -121,7 +121,27 @@ def _widget_text(widget: Gtk.Widget | None) -> str:
         return str(int(round(widget.get_value())))
     if isinstance(widget, Gtk.Entry):
         return widget.get_text()
+    tv = getattr(widget, "_textview", None)
+    if isinstance(tv, Gtk.TextView):
+        if tv.get_style_context().has_class("tiha-placeholder"):
+            return ""
+        buf = tv.get_buffer()
+        start, end = buf.get_bounds()
+        return buf.get_text(start, end, True)
     return ""
+
+
+def _set_textarea_text(widget: Gtk.Widget, text: str) -> None:
+    """Çok satırlı alana metin yazar; boşsa yer tutucu geri gelir."""
+    tv = widget._textview  # type: ignore[attr-defined]
+    placeholder = getattr(widget, "_placeholder", None)
+    ctx = tv.get_style_context()
+    if not text and placeholder:
+        tv.get_buffer().set_text(placeholder)
+        ctx.add_class("tiha-placeholder")
+    else:
+        tv.get_buffer().set_text(text)
+        ctx.remove_class("tiha-placeholder")
 
 
 def _no_focus_labels(widget: Gtk.Widget) -> None:
@@ -460,6 +480,7 @@ class ModulePage(Gtk.Box):
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
         if not hasattr(self, "_auto_values"):
             self._auto_values: dict[str, str] = {}
+        self._toggle_rows: dict[str, list[Gtk.Widget]] = {}
         grid = Gtk.Grid(column_spacing=10, row_spacing=4)
         grid.get_style_context().add_class("tiha-form")
         row_idx = 0
@@ -551,6 +572,12 @@ class ModulePage(Gtk.Box):
                 row_idx += 1
                 row_widgets.append(more)
 
+            if field.get("visible_when_any"):
+                # Görünürlüğü onay kutularına bağlı satır; ilk durum aşağıdaki
+                # _update_conditional_fields turunda ayarlanır.
+                self._toggle_rows[field["key"]] = row_widgets
+                for w in row_widgets:
+                    w.set_no_show_all(True)
             if gate:
                 self._conditional_field_widgets[field["key"]] = row_widgets
                 if not initial_visible:
@@ -622,6 +649,8 @@ class ModulePage(Gtk.Box):
             widget.set_value(float(value or 0))
         elif isinstance(widget, Gtk.Entry):
             widget.set_text("" if value is None else str(value))
+        elif isinstance(getattr(widget, "_textview", None), Gtk.TextView):
+            _set_textarea_text(widget, "" if value is None else str(value))
         else:
             return
         self._auto_values[key] = _widget_text(widget)
@@ -699,6 +728,23 @@ class ModulePage(Gtk.Box):
                 for k in sources
             )
             widget.set_sensitive(any_on)
+
+        # ``visible_when_any: [kutu, kutu, …]``: listedeki kutulardan biri
+        # işaretliyken satır görünür (ör. m11 muaf tahtalar listesi).
+        for f in schema:
+            sources = f.get("visible_when_any") or []
+            if checkbox_key not in sources:
+                continue
+            any_on = any(
+                getattr(self._fields.get(k), "get_active", lambda: False)()
+                for k in sources
+            )
+            for w in getattr(self, "_toggle_rows", {}).get(f["key"], ()):
+                w.set_no_show_all(not any_on)
+                if any_on:
+                    w.show_all()
+                else:
+                    w.set_visible(False)
 
     def _refresh_preview(self) -> None:
         """Önizleme metnini yeniden üretip aynı widget'a yazar."""
@@ -985,9 +1031,13 @@ class ModulePage(Gtk.Box):
             if placeholder:
                 # Placeholder metnini yerleştir, CSS ile soluk göster.
                 # Odaklanıldığında (ve metin hâlâ placeholder ise) temizle;
-                # boşsa odak kaybında geri koy.
-                buf.set_text(placeholder)
-                tv.get_style_context().add_class("tiha-placeholder")
+                # boşsa odak kaybında geri koy. Sistemden dolu gelen değer
+                # (default_from) varsa yer tutucu yerine o görünür.
+                if default:
+                    buf.set_text(default)
+                else:
+                    buf.set_text(placeholder)
+                    tv.get_style_context().add_class("tiha-placeholder")
 
                 def on_focus_in(_widget, _event, _ph=placeholder):
                     start, end = buf.get_bounds()
@@ -1015,6 +1065,7 @@ class ModulePage(Gtk.Box):
             scroller.set_max_content_height(150)
             scroller.get_style_context().add_class("tiha-textarea")
             scroller._textview = tv  # type: ignore[attr-defined]
+            scroller._placeholder = placeholder  # type: ignore[attr-defined]
             return scroller
 
         if kind == "spin":

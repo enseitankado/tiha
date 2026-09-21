@@ -2662,7 +2662,7 @@ verebilsin), üst sınır 600 saniye (10 dakika).\
 """
 
 [m11.params.exempt_macs]
-label = "Otomatik kapanmanın uygulanmayacağı tahtalar (MAC adresi)"
+label = "Otomatik kapanmadan muaf tahtalar (MAC adresleri)"
 placeholder = "ör. 00:1a:2b:3c:4d:5e"
 help = """\
 Bu ayar imajla bütün klonlara gider. Burada MAC adresi verilen tahtalarda \
