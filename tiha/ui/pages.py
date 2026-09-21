@@ -2333,7 +2333,10 @@ class SummaryPage(Gtk.Box):
             sym_lbl.set_size_request(24, -1)
             head.pack_start(sym_lbl, False, False, 0)
 
-            title_lbl = _wrapping_label(entry.title)
+            # Günlükteki başlık uygulama anındaki addır; adım sonradan
+            # yeniden adlandırıldıysa (ör. "Başarım (Deneysel)") güncel ad.
+            module = self.modules.get(entry.module_id)
+            title_lbl = _wrapping_label(module.title if module else entry.title)
             title_lbl.get_style_context().add_class("tiha-summary-title")
             head.pack_start(title_lbl, True, True, 0)
 

@@ -2905,13 +2905,13 @@ test_skipped_active = "Klonda uzaktan uyandırmanın (Wake-on-LAN) çalıştığ
 skipped = "Uzaktan uyandırmayı açmadınız; tahtalar merkezden uyandırılamayacak."
 
 # ==========================================================================
-# Adım 13: Başarım (Deneysel) (m17_performance)
+# Adım 13: Başarım (m17_performance)
 # ==========================================================================
 
 [m17]
-title = "Başarım (Deneysel)"
-sidebar_title = "Başarım (Deneysel)"
-doc_label = "Başarım (Deneysel) — mekanizma, ölçümler ve tahtada deneme"
+title = "Başarım"
+sidebar_title = "Başarım"
+doc_label = "Başarım — mekanizma, ölçümler ve tahtada deneme"
 apply_hint = """\
 Oturum kapanınca kalan süreçler sonlandırılır (açılıştan sonra); seçilirse \
 ETA Hafif Mod tüm kullanıcılara uygulanır ve imleç düzeltmesi kurulur.\

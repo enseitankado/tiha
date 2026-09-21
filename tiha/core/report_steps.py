@@ -674,7 +674,7 @@ def narrate_m10(ctx: StepContext, rep: StepReport) -> None:
 
 
 # ---------------------------------------------------------------------------
-# m17 — Başarım (Deneysel)
+# m17 — Başarım
 # ---------------------------------------------------------------------------
 
 # eta-light-mode ayar anahtarı → metin (çağrıldığında katalogdan okunur)

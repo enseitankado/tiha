@@ -1,4 +1,4 @@
-"""Modül 17 — Başarım (Deneysel): oturum kalıntıları ve ETA Hafif Mod.
+"""Modül 17 — Başarım: oturum kalıntıları ve ETA Hafif Mod.
 
 Ne yapar?
 1. **Eski oturum kalıntılarını temizle.** Pardus ETAP'ta (Debian 12,
@@ -31,7 +31,7 @@ Ne yapar?
    Cinnamon/Nemo müdahaleleri gerçek donanımda güvenilmez); etki bir
    sonraki oturum açılışında görülür.
 
-Neden deneysel?
+Doğrulama durumu.
 İki mekanizma da gerçek tahta donanımında henüz doğrulanmadı.
 ``eta-light-mode``'un JSON anahtarları paketin resmî bir arayüzü değil;
 sürüm ve anahtar adları her uygulamada denetlenir.
@@ -628,7 +628,6 @@ class PerformanceModule(Module):
     id = "m17_performance"
     title = t("m17.title")
     sidebar_title = t("m17.sidebar_title")
-    experimental = True
     streams_output = True
     popup_on_success = True
     doc_url = (

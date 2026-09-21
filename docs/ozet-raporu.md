@@ -59,7 +59,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Dinamik hostname | şablon ve önek, önceki ad, geçersiz ya da uzun önek |
 | Otomatik kapanma | sabit saat × boşta kapanma (4 birleşim), geri sayım süresi, 60 sn altı geri sayım |
 | Uzaktan uyandırma | kuruldu, ethtool kuruldu, atlandı (kutu işaretsiz) ama önceki servis duruyor / hiç yok |
-| Başarım (Deneysel) | oturum kalıntısı temizliği, hafif mod ayarları tek tek, hafif mod kaldırıldı, imleç Xorg düzeltmesi, imleç tazeleme servisi |
+| Başarım | oturum kalıntısı temizliği, hafif mod ayarları tek tek, hafif mod kaldırıldı, imleç Xorg düzeltmesi, imleç tazeleme servisi |
 | Otomatik Ahenk Kaydı | ahenk kuruldu ya da vardı, imzalanan MAC |
 | BIOS parolası | temizleme, yalnız ayarlara girişte, her açılışta, Faz 1 modeli, model adı, kaynak tahtanın BIOS'unun düğmeyle doğrudan değiştirilmesi |
 | GRUB koruması | kuruldu (kurtarma girdisi menüde ve parolalı), eski sürümün kapattığı kurtarma geri açıldı, kurtarma yöneticinin ayarıyla kapalı, kayıtlı açılış varsayılanı sıfırlandı, kaldırıldı, zaten etkindi (parola korundu), etkinleştirilmedi |
@@ -156,10 +156,9 @@ YAPTIKLARINIZ
   • İmajdan çıkan tahtaların ağ kartını her açılışta uzaktan uyandırma (Wake-on-LAN) paketini dinleyecek moda alan servisi kurdunuz; kapalı tahtalar merkezden `wakeonlan <MAC>` komutuyla açılabilecek.
   • Bunun için gereken ethtool paketini de kurdunuz.
   ! Merkezden uyandırma için bütün klonların MAC adreslerini toplamanız gerekir; TiHA bu listeyi tutmaz.
-■ Başarım (Deneysel)
+■ Başarım
   • Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin (kapatılmadan bırakılan Firefox/Chrome ve alt süreçleri dahil) sonlandırılmasını etkinleştirdiniz. Ayar tahta yeniden başlatılınca devreye girer.
   • Başarımı artırmak için ETA Hafif Mod'u tüm kullanıcılara uyguladınız: pencere ve menü animasyonları kapatıldı, çözünürlük 1600x900'e düşürüldü, yazı boyutu küçültüldü ve dosya ve masaüstü simgeleri küçültüldü. Ayarlar her kullanıcıya oturum açılışında uygulanır; sonradan eklenecek hesaplar dahil.
-  ! Bu adım deneysel olarak işaretli: gerçek tahta donanımında henüz yeterince doğrulanmadı. Klonda özellikle dikkatle deneyin.
 ■ Otomatik Ahenk Kaydı
   • İmajdan çıkan her tahtanın ilk açılışta kendini kopya olarak tanıyıp kaynak tahtanın Lider kimliğini silmesini ve Lider'e kendi kimliğiyle yeniden abone olmasını sağlayan mekanizmayı kurdunuz; kaynak tahtanın MAC adresi (aa:bb:cc:dd:ee:ff) imza olarak kaydedildi.
   • Kaynak tahtanın kendi Ahenk kimliğine dokunulmadı; imaj alınana kadar Lider'e bağlı çalışmaya devam eder.
@@ -246,7 +245,7 @@ KLON TAHTADA DENEYİN
   ☐ Klonun BIOS ayarlarında 'Wake on LAN' ve 'Power On by PCI-E' açık, 'ErP' ve 'Deep Sleep' KAPALI olmalı. BIOS ayarları imajla taşınmaz; her tahtada ayrıca yapılmalı.
   ☐ Klonda `sudo ethtool <arayüz>` çıktısında "Wake-on: g" görün ve klonun MAC adresini not edin (her klonun MAC'i farklıdır).
   ☐ Klonu normal yoldan kapatın; AYNI ağ bölümündeki (VLAN) başka bir bilgisayardan `wakeonlan <klon-MAC>` gönderip tahtanın açıldığını doğrulayın.
-■ Başarım (Deneysel)
+■ Başarım
   ☐ Klonu yeniden başlatın. Bir öğretmen hesabıyla tarayıcıda birkaç sekme açıp tarayıcıyı kapatmadan oturumu kapatın; başka bir hesapla girip Sistem İzleyicisi'nde önceki kullanıcıya ait süreç kalmadığını doğrulayın.
   ☐ Oturum kapatma sonrasında aynı kullanıcının SSH gibi diğer açık oturumlarının kapanmadığını doğrulayın.
   ☐ Klonda öğretmen ve öğrenci hesaplarıyla ayrı ayrı oturum açın; hafif mod ayarlarının ilk girişte uygulandığını doğrulayın.
