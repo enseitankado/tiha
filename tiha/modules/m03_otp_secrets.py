@@ -563,6 +563,38 @@ def harden_secret_store(state_dir: Path) -> int:
     return fixed
 
 
+# PIN kâğıdında en başta durması gereken, sızması en ağır sonuç doğuran
+# anahtarlar: grup ortak PIN'i, sistem yöneticisi, ortak öğretmen hesabı.
+PAPER_PRIORITY = ("@ogretmenler", "etapadmin", "ogretmen")
+
+
+def paper_order(users) -> list[str]:
+    """Kâğıt sırası: grup PIN'i ve etapadmin başta, sonra ortak hesap,
+    kalanlar alfabetik."""
+    present = set(users)
+    head = [u for u in PAPER_PRIORITY if u in present]
+    return head + sorted(present - set(PAPER_PRIORITY))
+
+
+def _branch_usernames() -> set[str]:
+    """MEB branş listesinden türeyen bütün branş hesabı adları."""
+    try:
+        from ..core.meb_data import all_branch_labels, branch_to_username
+        return {branch_to_username(label) for label in all_branch_labels()}
+    except Exception as exc:  # veri dosyası yok/bozuk: tür eki yazılmaz
+        log.debug("Branş listesi okunamadı: %s", exc)
+        return set()
+
+
+def _paper_account_kind(user: str, branches: set[str]) -> str:
+    """Kart başlığındaki hesap türü eki (yoksa boş)."""
+    if user in branches:
+        return t("m03.paper.kind_branch")
+    if RESERVE_USER_RE.match(user):
+        return t("m03.paper.kind_personal")
+    return ""
+
+
 def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
     """PIN kâğıdının başlığında görünecek ad.
 
@@ -1433,9 +1465,18 @@ class OTPSecretsModule(Module):
         )
 
         cards: list[str] = []
-        for user in all_users:
+        branches = _branch_usernames()
+        for user in paper_order(all_users):
             secret = secrets.get(user, "")
             display = _paper_display_name(user, display_of)
+            kind = _paper_account_kind(user, branches)
+            kind_html = f' <span class="kind">({_esc(kind)})</span>' if kind else ""
+            # Sızması bütün tahtaları etkileyen anahtarlar: kısa uyarı.
+            warn_key = {"@ogretmenler": "warn_group", "etapadmin": "warn_admin"}.get(user)
+            warn_html = (
+                f'    <div class="warn">⚠ {t("m03.paper." + warn_key)}</div>\n'
+                if warn_key else ""
+            )
             is_new = user in new_users
             grouped = " ".join(secret[i:i + 4] for i in range(0, len(secret), 4))
             # QR, otpauth:// URL'sini taşır — öğretmen elle anahtar
@@ -1486,9 +1527,10 @@ class OTPSecretsModule(Module):
 <article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}">
   <div class="body">
     <header>
-      <h2>{_esc(display)}{badge}</h2>
+      <h2>{_esc(display)}{kind_html}{badge}</h2>
       {user_line}
     </header>
+{warn_html}
     <section class="secret">
       <div class="label">{t("m03.paper.secret_label")}</div>
       <div class="key">{_esc(grouped)}</div>
@@ -1553,9 +1595,19 @@ class OTPSecretsModule(Module):
   .qr {{ flex: 0 0 auto; text-align: center; }}
   .qr svg {{ display: block; border: 1px solid #ddd; border-radius: 4px; }}
   .qr .qr-label {{ font-size: 8pt; color: #555; margin-top: 4px; }}
+  .card h2 .kind {{ font-size: 10pt; font-weight: normal; color: #555; }}
+  .warn {{
+    font-size: 9.5pt; color: #8a1c1c; background: #fdecea;
+    border: 1px solid #e0a3a3; border-radius: 4px;
+    padding: 6px 10px; margin: 0 0 10px 0;
+  }}
+  .qr svg {{ cursor: pointer; transition: filter 0.15s; }}
+  body.qr-focus .qr svg {{ filter: blur(6px); }}
+  body.qr-focus .qr svg.qr-active {{ filter: none; }}
   @media print {{
     body {{ margin: 8mm; }}
     .card {{ break-inside: avoid; }}
+    body.qr-focus .qr svg {{ filter: none; }}
   }}
 </style>
 </head><body>
@@ -1564,6 +1616,25 @@ class OTPSecretsModule(Module):
   {meta}
 </div>
 {"".join(cards)}
+<script>
+// Bir QR koda tıklanınca diğerleri bulanıklaşır (yanlış kodu taratmayı
+// ve yandakilerin görülmesini önler); aynı koda yeniden tıklayınca düzelir.
+(function () {{
+  var codes = document.querySelectorAll(".qr svg");
+  codes.forEach(function (svg) {{
+    svg.addEventListener("click", function () {{
+      var active = svg.classList.contains("qr-active");
+      codes.forEach(function (o) {{ o.classList.remove("qr-active"); }});
+      if (active) {{
+        document.body.classList.remove("qr-focus");
+      }} else {{
+        svg.classList.add("qr-active");
+        document.body.classList.add("qr-focus");
+      }}
+    }});
+  }});
+}})();
+</script>
 </body></html>
 '''
         try:

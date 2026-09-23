@@ -1530,6 +1530,18 @@ giriş için geçerlidir.\
 """
 group_display = "{group} grubu — ORTAK PIN"
 no_account = "{user} (sistemde hesap yok)"
+kind_branch = "ortak kullanım branş hesabı"
+kind_personal = "kişisel hesap"
+warn_admin = """\
+etapadmin sistem yöneticisidir. Bu anahtar sızarsa tahta ve üzerindeki \
+bütün öğretmen hesapları her türlü erişime açık kalır.\
+"""
+warn_group = """\
+Bu anahtar herhangi bir öğretmen ya da branş hesabı adına oturum açmayı \
+sağlar. Sızarsa bütün hesaplar risk altına girer; bütün klon tahtalara yeni \
+anahtar kaydetmek, tahta sayısına bağlı olarak ciddi bir bilgi işlem yükü \
+getirir.\
+"""
 step_install = "Telefonunuza <strong>Google Authenticator</strong> veya benzeri bir uygulama kurun."
 step_type = "Tür: <em>Zaman tabanlı</em> (varsayılan)."
 group_step_scan = """\
