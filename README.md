@@ -178,6 +178,10 @@ graph TB
 
 Sihirbazda gördüğünüz bütün yazılar tek bir dosyada toplanmıştır: `tiha/locale/tr.toml`. Bir açıklamayı okulunuza göre değiştirmek isterseniz dosyayı açıp yazıyı düzenlemeniz yeterli; dosyanın başında nelere dikkat edileceği yazıyor. Aynı dosyanın çevrilmiş bir kopyasıyla sihirbaz başka bir dilde de çalıştırılabilir.
 
+## Hata raporları
+
+TiHA'da beklenmeyen bir hata oluşursa geliştiriciye kısa, **anonim** bir hata raporu gönderilir (ntfy.sh üzerinden). Raporda yalnız hata türü, TiHA'nın kendi kodundaki hata yeri, hangi adımda olduğu ve TiHA/Pardus sürümü bulunur. Bilgisayar adı, kullanıcı ve öğretmen adları, parolalar, anahtarlar, IP/MAC/e-posta adresleri ve günlük dosyaları **gönderilmez**; hata iletisindeki bu tür bilgiler gönderilmeden önce maskelenir. Aynı hata bir tahtadan günde bir kez gider. Kapatmak için tahtada `sudo touch /etc/tiha/hata-raporu-kapali` komutunu çalıştırın ya da TiHA'yı `TIHA_HATA_RAPORU=0` ortam değişkeniyle başlatın.
+
 ## Katkı ve destek
 
 - Hata bildirimi ve öneri: [GitHub Issues](https://github.com/enseitankado/tiha/issues)

@@ -84,6 +84,16 @@ def _silence_subprocess_warnings() -> None:
     os.environ.pop("QT_FATAL_WARNINGS", None)
 
 
+def _install_crash_reports() -> None:
+    """Anonim hata raporlarını (ntfy.sh) devreye alır; bkz.
+    :mod:`tiha.core.crash_report`. Kurulum hatası açılışı engellemez."""
+    try:
+        from .core import crash_report
+        crash_report.install()
+    except Exception:
+        pass
+
+
 def main() -> int:
     """Süreç giriş noktası. Başarı durumunda ``0``, aksi hâlde >0 döner.
 
@@ -110,6 +120,7 @@ def main() -> int:
         # İmaj damgası yalnız root'a açık olmalı (eski sürümler 0644 yazıyordu).
         protect_image_info()
         log_startup_info()
+        _install_crash_reports()
         rc = cli_run(cli_argv)
         log_shutdown_info()
         return rc
@@ -132,6 +143,7 @@ def main() -> int:
 
     # Detaylı loglama başlat
     log_startup_info()
+    _install_crash_reports()
 
     console.banner_open(t("app.banner_title"), f"v{__version__}")
     console.info(t("app.opening_window"))

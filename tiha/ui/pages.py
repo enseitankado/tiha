@@ -1542,6 +1542,7 @@ class ModulePage(Gtk.Box):
                         result = action_func()
                 GLib.idle_add(self._on_button_action_complete, result)
             except Exception as exc:
+                log.exception("Düğme işlemi başarısız: %s.%s", self.module.id, action)
                 error_result = ApplyResult(False, t("ui.pages.action_error", error=exc))
                 GLib.idle_add(self._on_button_action_complete, error_result)
 
