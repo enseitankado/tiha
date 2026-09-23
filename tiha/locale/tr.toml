@@ -1319,12 +1319,12 @@ kalır.\
 """
 
 # ==========================================================================
-# Adım 4: Toplu pin anahtarı (m03_otp_secrets)
+# Adım 4: PIN anahtarları (m03_otp_secrets)
 # ==========================================================================
 
 [m03]
 title = "Öğretmen PIN anahtarları"
-sidebar_title = "Toplu pin anahtarı"
+sidebar_title = "PIN anahtarları"
 apply_hint = """\
 Listedeki ve yedek hesaplar için PIN anahtarları üretilir. Anahtarı zaten \
 olan hesaplara dokunulmaz; yalnızca eksikler tamamlanır. Çıktı, sistemdeki \
@@ -1411,15 +1411,16 @@ geçerli): {keys}\
 """
 orphans = "Sistemde hesabı kalmayan PIN kayıtları ({count} adet — hesap silinmiş olabilir): {users}"
 orphans_hint = """\
-\u0020\u0020Bu kayıtlar kullanılamaz; imaja gitmemeleri için \"Fazladan \
-Hesapları Sil\" düğmesi onları da temizler.\
+\u0020\u0020Bu kayıtlar kullanılamaz; imaja gitmemeleri için 'Yerel \
+hesaplar' adımındaki \"Fazladan Hesapları Sil\" düğmesi onları da temizler.\
 """
 user_mgmt_header = "Kullanıcı yönetimi"
 extra_count = "  Fazladan kullanıcı hesabı : {count} adet"
 extra_more = "    - ... ve {count} tane daha"
 extra_hint = """\
-\u0020\u0020\"Fazladan Hesapları Sil\" düğmesi ile bunları \
-kaldırabilirsiniz; sistemde yalnız etapadmin, ogrenci ve ogretmen kalır.\
+\u0020\u0020'Yerel hesaplar' adımındaki \"Fazladan Hesapları Sil\" \
+düğmesi ile bunları kaldırabilirsiniz; sistemde yalnız etapadmin, ogrenci \
+ve ogretmen kalır.\
 """
 only_defaults = "  Sistemde yalnız varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)."
 
@@ -1563,8 +1564,8 @@ restored = "önceki PIN anahtar dosyası geri yüklendi"
 greeter_removed = "greeter cache kurulumu kaldırıldı"
 legacy_no_delete = """\
 Bu kayıt TiHA'nın eski bir sürümüyle yapıldığı için adımda hangi hesapların \
-açıldığı bilinmiyor; hiçbir hesap silinmedi. Gereksiz hesapları 'Fazladan \
-hesapları sil' düğmesiyle kaldırabilirsiniz.\
+açıldığı bilinmiyor; hiçbir hesap silinmedi. Gereksiz hesapları 'Yerel \
+hesaplar' adımındaki 'Fazladan hesapları sil' düğmesiyle kaldırabilirsiniz.\
 """
 
 [m03.buttons]
@@ -3057,7 +3058,7 @@ sidebar_title = "Başarım"
 doc_label = "Başarım — mekanizma, ölçümler ve tahtada deneme"
 apply_hint = """\
 Oturum kapanınca kalan süreçler sonlandırılır (açılıştan sonra); seçilirse \
-ETA Hafif Mod tüm kullanıcılara uygulanır ve imleç düzeltmesi kurulur.\
+ETA Hafif Mod tüm kullanıcılara uygulanır ve seçilen imleç ayarları kurulur.\
 """
 rationale = """\
 Bir öğretmen tarayıcısını kapatmadan oturumunu kapattığında Firefox, Chrome \
@@ -3097,7 +3098,7 @@ içeriklerle bir tur çalıştırıp davranışlarını gözle doğrulayın.\
 [m17.params]
 heading_session = "Oturum kalıntıları"
 heading_light_mode = "ETA Hafif Mod (eta-light-mode)"
-heading_cursor = "Fare imleci (ekran modu değişimi)"
+heading_cursor = "Fare imleci (ekran modu değişimi) — Deneysel"
 
 [m17.params.cursor_xorg_fix]
 opt_off = "Kapalı"
@@ -3105,12 +3106,23 @@ opt_modesetting = "modesetting sürücüsüne geç"
 opt_swcursor = "modesetting + yazılımsal imleç (SWcursor)"
 label = "İmleç kaybolmasını önle (Xorg)"
 help = """\
-Hafif modun ayrılmaz parçasıdır. Hafif mod çözünürlüğü ya da tazeleme \
-hızını değiştirince USB fare imleci görünmez oluyordu. ETA Hafif Mod \
-seçiliyken adım her uygulandığında /etc/X11/xorg.conf.d/20-tiha-imlec.conf \
-yazılır: ekran kartı modesetting sürücüsüne alınır ve imleci sistem çizer \
-(SWcursor). Hafif mod seçili değilken uygularsanız bu dosya kaldırılır. \
-Değişiklik oturum (LightDM) yeniden başlayınca geçerli olur.\
+Deneysel. Çözünürlük ya da tazeleme hızı değişince USB fare imleci \
+görünmez olabiliyor. 'modesetting sürücüsüne geç' ekran kartını çekirdeğin \
+modesetting sürücüsüne alır; başarım bedeli yoktur, önce bunu deneyin. \
+'+ yazılımsal imleç' donanımsal imleci tamamen kapatır; zayıf tahtalarda \
+hızlı fare hareketinde hafif gecikme olabilir. Ayar \
+/etc/X11/xorg.conf.d/20-tiha-imlec.conf dosyasına yazılır ve oturum yeniden \
+başlayınca geçerli olur; 'Kapalı' seçip uygularsanız dosya kaldırılır.\
+"""
+
+[m17.params.cursor_refresh_service]
+label = "Mod değişiminde imleci tazele (servis)"
+help = """\
+Deneysel. Yukarıdaki sürücü ayarına alternatif, hafif yol: her kullanıcının \
+oturumunda küçük bir servis ekran modu değişimini dinler ve ~1 sn sonra \
+imleç boyutunu bir artırıp geri alarak imleci yeniden çizdirir. Donanımsal \
+imleç korunur, başarım bedeli yoktur; imleç yalnız bir an kaybolur. İkisini \
+birlikte de seçebilirsiniz. İşaretini kaldırıp uygularsanız servis kaldırılır.\
 """
 
 [m17.params.kill_user_processes]
@@ -3199,8 +3211,8 @@ not_installed = "kurulu değil"
 [m17.apply]
 nothing_selected = "Hiçbir seçenek işaretlenmedi; değişiklik yapılmadı."
 logind_removed = "Oturum kalıntısı temizliği kaldırıldı (yeniden başlatınca etkin)."
-cursor_service_removed = "Artık kullanılmayan imleç tazeleme servisi kaldırıldı."
-cursor_xorg_removed = "Hafif mod seçili olmadığı için imleç düzeltmesi kaldırıldı (oturum yeniden başlayınca geçerli)."
+cursor_service_removed = "İmleç tazeleme servisi kaldırıldı."
+cursor_xorg_removed = "İmleç düzeltmesi (Xorg) kaldırıldı (oturum yeniden başlayınca geçerli)."
 light_no_subkeys = "ETA Hafif Mod işaretli ama hiçbir alt ayar seçilmedi; hafif mod uygulanmadı."
 details_light = "Hafif mod: {path} → {keys}"
 details_light_removed = "Hafif mod kaldırıldı (sistem + kullanıcı ayarları)"
@@ -3310,8 +3322,8 @@ monitors_failed = "{name}: monitors.xml geri alınamadı ({error})"
 
 [m17.report]
 session_removed = "Oturum kalıntısı temizliğini kaldırdınız; kapatılan oturumların programları yeniden başlatmaya kadar arka planda kalabilir."
-cursor_service_removed = "Artık kullanılmayan imleç tazeleme servisini kaldırdınız."
-cursor_xorg_removed = "Hafif mod seçili olmadığı için imleç düzeltmesini (Xorg) kaldırdınız; ekran kartı eski sürücüsüne döner."
+cursor_service_removed = "Ekran modu değişiminde imleci tazeleyen servisi kaldırdınız."
+cursor_xorg_removed = "İmleç düzeltmesini (Xorg) kaldırdınız; ekran kartı eski sürücüsüne döner."
 session_done = """\
 Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin (kapatılmadan \
 bırakılan Firefox/Chrome ve alt süreçleri dahil) sonlandırılmasını \
@@ -3357,9 +3369,8 @@ Klonda daha önce giriş yapmış bir hesapla oturum açıp yazı boyutunun, \
 simgelerin ve çözünürlüğün normale döndüğünü doğrulayın.\
 """
 xorg_done = """\
-ETA Hafif Mod ile birlikte, ekran modu değişiminde kaybolan fare imleci için \
-ekran sürücüsünü değiştirdiniz: {choice}. Hafif modu kaldırırsanız bu \
-düzeltme de kaldırılır.\
+Ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü \
+değiştirdiniz (deneysel): {choice}.\
 """
 test_xorg_removed = """\
 Klonu yeniden başlatın; ekranın, dokunmatiğin ve kalemin eski ekran \
@@ -3375,7 +3386,7 @@ note_xorg = """\
 Ekran sürücüsü değişikliği tahta modeline (Intel/AMD grafik) göre farklı \
 davranabilir. İmajı yayacağınız her tahta modelinde ayrı bir klon deneyin.\
 """
-cursor_refresh_done = "Ekran modu değiştiğinde fare imlecini kendiliğinden tazeleyen servisi kurdunuz."
+cursor_refresh_done = "Ekran modu değiştiğinde fare imlecini kendiliğinden tazeleyen servisi kurdunuz (deneysel)."
 test_cursor_refresh = """\
 Klonda çözünürlüğü değiştirip uygulayın; fare imlecinin bir an sonra yeniden \
 göründüğünü doğrulayın.\

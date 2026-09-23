@@ -148,20 +148,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             },
             "help": t("m03.params.purge_all_secrets.help"),
         },
-        {
-            "key": "remove_extra_users",
-            "label": t("m03.params.remove_extra_users.label"),
-            "label_from": "label_remove_extra_users",
-            "type": "button",
-            "action": "remove_extra_users_action",
-            "style": "destructive",
-            "visible_when": "can_remove_extra_users",
-            "confirm": {
-                "title": t("m03.params.remove_extra_users.confirm_title"),
-                "message": t("m03.params.remove_extra_users.confirm_message"),
-            },
-            "help": t("m03.params.remove_extra_users.help"),
-        },
+        # "Fazladan hesapları sil" yalnız Yerel hesaplar adımında
+        # (hesap işi orada); aksiyon bu modülde kalır, m01 ona delege eder.
     ],
     "m05_samba_share": [
         {
@@ -408,8 +396,6 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "lm_effects", "lm_compositor", "lm_thumbnails",
                 "lm_directory_counts", "lm_app_monitoring",
                 "lm_low_resolution", "lm_low_refresh_rate",
-                # İmleç düzeltmesi hafif modla gelir, onunla gider.
-                "cursor_xorg_fix",
             ],
             "help": t("m17.params.light_mode_enabled.help"),
         },
@@ -471,12 +457,28 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         {
             "key": "cursor_xorg_fix",
             "label": t("m17.params.cursor_xorg_fix.label"),
-            # Sabit: kullanıcı değiştiremez; hafif modla birlikte kurulur,
-            # hafif mod seçili değilse kaldırılır.
-            "type": "readonly",
+            # Deneysel; hafif moddan bağımsız. Tahtada kurulu olan seçili
+            # gelir, "Kapalı" seçilip uygulanırsa kaldırılır.
+            "type": "select",
             "required": False,
-            "default": t("m17.params.cursor_xorg_fix.opt_swcursor"),
+            "default": t("m17.params.cursor_xorg_fix.opt_off"),
+            "default_from": "current_cursor_xorg_choice",
+            "options": [
+                t("m17.params.cursor_xorg_fix.opt_off"),
+                t("m17.params.cursor_xorg_fix.opt_modesetting"),
+                t("m17.params.cursor_xorg_fix.opt_swcursor"),
+            ],
             "help": t("m17.params.cursor_xorg_fix.help"),
+            "help_folded": True,
+        },
+        {
+            "key": "cursor_refresh_service",
+            "label": t("m17.params.cursor_refresh_service.label"),
+            "type": "bool",
+            "default": "False",
+            # Kurulu servis işaretli gelir; işaret kaldırılıp uygulanırsa sökülür.
+            "default_from": "cursor_service_active",
+            "help": t("m17.params.cursor_refresh_service.help"),
             "help_folded": True,
         },
     ],

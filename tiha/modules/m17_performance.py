@@ -189,7 +189,7 @@ def _cursor_xorg_content(swcursor: bool) -> str:
     ve AMD tahtalarda tek dosya yeter."""
     swline = '    Option "SWcursor" "on"\n' if swcursor else ""
     return (
-        "# TiHA — Başarım (Deneysel) adımı tarafından yazılmıştır.\n"
+        "# TiHA — Başarım adımı tarafından yazılmıştır.\n"
         "# Ekran modu (çözünürlük/tazeleme) değiştiğinde fare imlecinin\n"
         "# görünmez olmasını engeller.\n"
         'Section "OutputClass"\n'
@@ -647,6 +647,18 @@ class PerformanceModule(Module):
         Ayar açılışta etkin olur; kutu kurulu olup olmadığını gösterir."""
         return self._dropin_is_ours()
 
+    def current_cursor_xorg_choice(self) -> str:
+        """İmleç düzeltmesi listesinin açılış değeri: tahtada kurulu olan."""
+        if not CURSOR_XORG_CONF.exists():
+            return CURSOR_XORG_OFF
+        if "SWcursor" in _read_file(CURSOR_XORG_CONF):
+            return CURSOR_XORG_SWCURSOR
+        return CURSOR_XORG_MODESETTING
+
+    def cursor_service_active(self) -> bool:
+        """İmleç tazeleme servisi kurulu mu?"""
+        return CURSOR_AUTOSTART.exists()
+
     def light_mode_active(self) -> bool:
         """Hafif mod şu an tüm kullanıcılara uygulanıyor mu?"""
         return _read_light_settings() is not None and LIGHT_AUTOSTART.exists()
@@ -765,10 +777,11 @@ class PerformanceModule(Module):
             lines.append(t("m17.preview.xorg_fix_on", mode=mode))
         else:
             lines.append(t("m17.preview.xorg_fix_off"))
-        # Tazeleme servisi artık seçenek değil; yalnız eski bir uygulamadan
-        # kalmışsa (bir sonraki uygulamada sökülecek) gösterilir.
-        if CURSOR_AUTOSTART.exists():
-            lines.append(t("m17.preview.cursor_service", state=t("m17.preview.installed")))
+        lines.append(t(
+            "m17.preview.cursor_service",
+            state=t("m17.preview.installed") if CURSOR_AUTOSTART.exists()
+            else t("m17.preview.not_installed"),
+        ))
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -783,17 +796,24 @@ class PerformanceModule(Module):
         p = dict(params or {})
         kill_processes = _as_bool(p.get("kill_user_processes"))
         light_mode = _as_bool(p.get("light_mode_enabled"))
-        # İmleç düzeltmesi hafif modun ayrılmaz parçası: imleç, hafif modun
-        # çözünürlük/tazeleme değişiminde kayboluyor ve gerçek tahtada bunu
-        # yalnız modesetting + yazılımsal imleç giderdi. Hafif modla birlikte
-        # kurulur; hafif mod seçili değilse (daha önce yazılmışsa) kaldırılır.
-        # Form alanı salt okunur; CLI/preset'ten başka bir değer gelse de
-        # yalnız bu seçenek kurulur.
-        cursor_xorg = CURSOR_XORG_SWCURSOR
-        cursor_remove = not light_mode and CURSOR_XORG_CONF.exists()
-        # "Mod değişiminde imleci tazele" servisi kaldırıldı; önceki bir
-        # uygulamanın kurduğu servis varsa bu uygulamada sökülür.
-        cursor_service = False
+        # Fare imleci (deneysel): iki bağımsız çare, hafif moddan ayrı.
+        # Sabit "modesetting + SWcursor" her tahtada yetmedi; kullanıcı
+        # seçer. Alanlar sisteme bakarak dolar: "Kapalı" seçilip ya da
+        # servis kutusu boşaltılıp uygulanırsa kurulu olan kaldırılır.
+        # Parametrede hiç yoksa (eski preset/CLI) dokunulmaz.
+        if "cursor_xorg_fix" in p:
+            cursor_xorg = str(p.get("cursor_xorg_fix") or CURSOR_XORG_OFF).strip()
+            if cursor_xorg not in CURSOR_XORG_CHOICES:
+                cursor_xorg = CURSOR_XORG_OFF
+        else:
+            cursor_xorg = None
+        cursor_xorg_on = cursor_xorg not in (None, CURSOR_XORG_OFF)
+        cursor_remove = cursor_xorg == CURSOR_XORG_OFF and CURSOR_XORG_CONF.exists()
+        cursor_service = _as_bool(p.get("cursor_refresh_service"))
+        service_remove = (
+            "cursor_refresh_service" in p and not cursor_service
+            and (CURSOR_AUTOSTART.exists() or CURSOR_SCRIPT.exists())
+        )
         # Kutu sisteme bakarak dolduğu için (params.py "default_from"),
         # işaretinin kaldırılıp uygulanması bilinçli bir "kaldır" isteğidir.
         light_remove = not light_mode and self.light_mode_active()
@@ -801,7 +821,8 @@ class PerformanceModule(Module):
         session_remove = not kill_processes and self.session_cleanup_active()
 
         if not (kill_processes or session_remove or light_mode or light_remove
-                or cursor_remove or cursor_service):
+                or cursor_xorg_on or cursor_remove or cursor_service
+                or service_remove):
             return ApplyResult(False, t("m17.apply.nothing_selected"))
 
         def say(line: str) -> None:
@@ -871,7 +892,7 @@ class PerformanceModule(Module):
             else:
                 failures.append(text)
 
-        if light_applied:
+        if cursor_xorg_on:
             ok, text = self._apply_cursor_xorg(original, cursor_xorg, say)
             if ok:
                 summary.append(text)
@@ -895,11 +916,26 @@ class PerformanceModule(Module):
                 summary.append(t("m17.apply.cursor_xorg_removed"))
                 data["cursor_xorg_removed"] = True
 
-        if original["touched"].get("cursor_service"):
-            removed_ok = all([
-                self._restore_or_remove("cursor_script", original, failures),
-                self._restore_or_remove("cursor_autostart", original, failures),
-            ])
+        if cursor_service:
+            ok, text = self._apply_cursor_service(original, say)
+            if ok:
+                summary.append(text)
+                details.append(t("m17.apply.details_cursor_service", path=CURSOR_AUTOSTART))
+                data["cursor_refresh_service"] = True
+            else:
+                failures.append(text)
+
+        if service_remove:
+            if original["touched"].get("cursor_service"):
+                removed_ok = all([
+                    self._restore_or_remove("cursor_script", original, failures),
+                    self._restore_or_remove("cursor_autostart", original, failures),
+                ])
+            else:
+                removed_ok = all([
+                    _unlink_ok(CURSOR_SCRIPT, failures),
+                    _unlink_ok(CURSOR_AUTOSTART, failures),
+                ])
             if removed_ok:
                 original["touched"]["cursor_service"] = False
                 summary.append(t("m17.apply.cursor_service_removed"))

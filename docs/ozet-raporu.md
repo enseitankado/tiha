@@ -62,7 +62,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Dinamik hostname | şablon ve önek, önceki ad, geçersiz ya da uzun önek |
 | Otomatik kapanma | sabit saat × kullanılmadığında kapatma (4 birleşim; ikisi kapalıyken "kapattınız"), muaf MAC listesi, geri sayım süresi, 60 sn altı geri sayım |
 | Uzaktan uyandırma | kuruldu, ethtool kuruldu, kutu işaretsizken servis kaldırıldı / zaten kapalıydı |
-| Başarım | oturum kalıntısı temizliği, hafif mod ayarları tek tek, hafif mod kaldırıldı, imleç düzeltmesi (yalnız hafif modla kurulur; hafif mod seçili değilse kaldırıldı), eski imleç tazeleme servisinin kaldırılması |
+| Başarım | oturum kalıntısı temizliği, hafif mod ayarları tek tek, hafif mod kaldırıldı, imleç düzeltmesi (deneysel; modesetting ya da + yazılımsal imleç, 'Kapalı' seçilince kaldırıldı), imleç tazeleme servisi (deneysel; kuruldu / kaldırıldı) |
 | Otomatik Ahenk Kaydı | ahenk kuruldu ya da vardı, imzalanan MAC |
 | BIOS parolası | temizleme, yalnız ayarlara girişte, her açılışta, Faz 1 modeli, model adı, kaynak tahtanın BIOS'unun düğmeyle doğrudan değiştirilmesi |
 | GRUB koruması | kuruldu (kurtarma girdisi menüde ve parolalı), eski sürümün kapattığı kurtarma geri açıldı, kurtarma yöneticinin ayarıyla kapalı, kayıtlı açılış varsayılanı sıfırlandı, parola yeniden girilmeden eski kurulum yükseltildi (parola korundu), kaldırıldı, zaten etkindi, etkinleştirilmedi |
@@ -167,7 +167,7 @@ YAPTIKLARINIZ
 ■ Başarım
   • Öğretmen oturumunu kapattığında arkada asılı kalan süreçlerin (kapatılmadan bırakılan Firefox/Chrome ve alt süreçleri dahil) sonlandırılmasını etkinleştirdiniz. Ayar tahta yeniden başlatılınca devreye girer.
   • Başarımı artırmak için ETA Hafif Mod'u tüm kullanıcılara uyguladınız: pencere ve menü animasyonları kapatıldı, çözünürlük 1600x900'e düşürüldü, yazı boyutu küçültüldü ve dosya ve masaüstü simgeleri küçültüldü. Ayarlar her kullanıcıya oturum açılışında uygulanır; sonradan eklenecek hesaplar dahil.
-  • ETA Hafif Mod ile birlikte, ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü değiştirdiniz: modesetting + yazılımsal imleç (swcursor). Hafif modu kaldırırsanız bu düzeltme de kaldırılır.
+  • Ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü değiştirdiniz (deneysel): modesetting + yazılımsal imleç (swcursor).
   ! Ekran sürücüsü değişikliği tahta modeline (Intel/AMD grafik) göre farklı davranabilir. İmajı yayacağınız her tahta modelinde ayrı bir klon deneyin.
 ■ Otomatik Ahenk Kaydı
   • İmajdan çıkan her tahtanın ilk açılışta kendini kopya olarak tanıyıp kaynak tahtanın Lider kimliğini silmesini ve Lider'e kendi kimliğiyle yeniden abone olmasını sağlayan mekanizmayı kurdunuz; kaynak tahtanın MAC adresi (aa:bb:cc:dd:ee:ff) imza olarak kaydedildi.
