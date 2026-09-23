@@ -343,10 +343,40 @@ m14 = "Desteklenen donanımda klonun ilk açılışında BIOS yönetici parolas�
 m16 = "Açılış menüsünün düzenlenmesini parolaya bağlar."
 m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya hazırlar."
 
+[ui.branch_picker]
+open_button = "Okul türü ve branşları seç…"
+no_school = "Okul türü seçilmedi"
+school_line = "<b>{school}</b> · {count} branş"
+empty = "Henüz branş seçilmedi. Düğmeye basıp okul türünü ve branşları seçin."
+chip_tip_existing = "Hesabı var: {user}"
+chip_tip_new = "Uygulayınca açılacak hesap: {user}"
+remove_tip_existing = "Listeden çıkar. Bu branşın hesabı var; uygulayınca ev dizini ve PIN anahtarıyla silinir (önce onay sorulur)."
+remove_tip_new = "Listeden çıkar"
+dialog_title = "Branş hesapları: okul türü ve branşlar"
+intro = """\
+Soldan okulunuzun türünü seçin, sağda o okulda ders okutan branşları \
+işaretleyin. Kalın yazılı branşların hesabı tahtada zaten var. Onayla'ya \
+basınca seçim formdaki listeye gelir; hesaplar adımı uyguladığınızda açılır \
+ya da silinir.\
+"""
+search = "Branş ara…"
+select_all = "Tümünü seç"
+select_none = "Temizle"
+pick_school = "Branşları görmek için soldan bir okul türü seçin."
+legend = """\
+Kalın: hesabı tahtada var. İşaretini kaldırıp uygularsanız hesap ev dizini \
+ve PIN anahtarıyla silinir (uygulamadan önce onay sorulur).\
+"""
+count = "{count} branş seçili"
+other_school_title = "Başka okul türlerinden seçili branşlar"
+check_tip_existing = "Hesabı var: {user}"
+check_tip_new = "Hesap adı: {user}"
+cancel = "Vazgeç"
+confirm = "Onayla"
+
 [ui.pages]
 char_rejected = "Bu karakter burada kullanılamaz; ayrıntı alanın altındaki açıklamada."
 help_expander = "Açıklama"
-branch_existing_tip = "Bu branşın hesabı sistemde var. İşaretini kaldırıp uygularsanız hesap ev dizini ve PIN anahtarıyla silinir."
 help_more_expander = "Ayrıntılar: neden gerekli, nasıl çalışır?"
 rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\
@@ -932,7 +962,9 @@ label = "Yedek hesap sayısı"
 help = """\
 Sonradan okula atanacak öğretmenler için ogretmen1, ogretmen2… biçiminde \
 boş hesaplar hazırlar. Eski kurulumlardan kalan hesaplar varsa üzerine \
-yazılmaz.\
+yazılmaz. Sayıyı azaltırsanız, üstte kalan hesaplar (ör. 5'ten 3'e \
+inince ogretmen4 ve ogretmen5) onayınız alınarak ev dizinleri ve PIN \
+anahtarlarıyla silinir.\
 """
 
 [m01.params.branch_accounts]
@@ -940,13 +972,15 @@ label = "Branş hesapları"
 help = """\
 Okulun her branşı için ayrı ortak hesap açar (ör. matematik, fen_bilimleri, \
 turk_dili_edebiyati). Ortak "ogretmenX" hesabı yerine öğretmenler kendi \
-branşlarının hesabını kullanabilir. Açılır listeden okul türünü seçin; \
-altındaki liste o okulda ders okutan zümreleri gösterir. Yalnız sistemde \
-hesabı olan branşlar işaretli gelir; açmak istediklerinizi işaretleyin. \
+branşlarının hesabını kullanabilir. "Okul türü ve branşları seç…" \
+düğmesiyle açılan pencerede okul türünü seçip o okulda ders okutan \
+branşları işaretleyin; onayladığınızda seçim burada listelenir. Tahtada \
+hesabı olan branşlar zaten listede gelir. Bir branşı buradaki ✕ ile ya da \
+penceredeki işaretini kaldırarak listeden çıkarabilirsiniz. \
 Hesaplar ev dizinleriyle açılır, ogretmenler grubuna eklenir, oturum \
 ekranında branş adıyla listelenir ve parola kilitli olur — "Öğretmen PIN \
 anahtarları" adımıyla giriş kısayolları üretilebilir. Hesabı olan bir \
-branşın işaretini kaldırıp uygularsanız o hesap ev dizini ve PIN \
+branşı listeden çıkarıp uygularsanız o hesap ev dizini ve PIN \
 anahtarıyla silinir (önce onay sorulur).\
 """
 
@@ -967,9 +1001,8 @@ reserve_title = "Yedek hesaplar:"
 reserve_existing = "    - Sistemde ogretmen1 … ogretmen{count} hazır ({count} yedek hesap)."
 reserve_existing_hint = """\
 \u0020\u0020\u0020\u0020\u0020\u0020Kutuya daha büyük bir sayı yazarsanız \
-eksikler tamamlanır. Küçük yazarsanız fazla hesap SİLİNMEZ; silmek için \
-'Öğretmen PIN anahtarları' adımındaki 'Fazladan Hesapları Sil' düğmesi \
-kullanılır.\
+eksikler tamamlanır. Küçük yazarsanız, onayınızla sayının üstündeki \
+hesaplar ev dizinleri ve PIN anahtarlarıyla silinir.\
 """
 reserve_none = "    - Sistemde henüz yedek hesap yok."
 reserve_none_hint = """\
@@ -1069,10 +1102,10 @@ silinir; hesaba ait dosyalar kaybolur. Bu geri alınamaz. Devam edilsin mi?\
 """
 reserve_purge_title = "{count} yedek hesap silinsin mi?"
 reserve_purge_message = """\
-Yedek hesap sayısı 0 olarak ayarlandı. Sistemde {count} adet ogretmenN \
-biçiminde hazır hesap var:\n\n  {users}\n\n\
-Onay verirseniz bu hesapların hepsi EV DİZİNLERİ ile birlikte silinir. \
-Bu geri alınamaz bir işlemdir. Devam edilsin mi?\
+Yedek hesap sayısı {reserve} olarak ayarlandı. Bu sayının üstünde \
+kalan {count} yedek hesap var:\n\n  {users}\n\n\
+Onay verirseniz bu hesaplar EV DİZİNLERİ ve PIN anahtarlarıyla birlikte \
+silinir. Bu geri alınamaz bir işlemdir. Devam edilsin mi?\
 """
 
 [m01.undo]

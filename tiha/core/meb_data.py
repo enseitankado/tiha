@@ -169,7 +169,36 @@ def detect_existing_selection(preferred_school: str = "") -> dict | None:
         # max() eşitlikte ilkini verir: listede önce gelen (daha yaygın)
         # okul türü seçilir.
         best = max(matches, key=lambda k: len(matches[k]))
-    return {"school_type": best, "branches": matches[best]}
+    # Seçilen türün dışında kalan hesaplı branşlar da seçili sayılır:
+    # listede görünmeyen bir hesap "listeden çıkarıldı" sayılıp silinmesin.
+    branches = list(matches[best])
+    seen = {branch_to_username(b) for b in branches}
+    for key in matches:
+        for label in matches[key]:
+            uname = branch_to_username(label)
+            if uname not in seen:
+                seen.add(uname)
+                branches.append(label)
+    return {"school_type": best, "branches": branches}
+
+
+def school_group(school_key: str) -> str:
+    """Okul türünün grubu (ör. "Temel Eğitim"); veride yoksa boş."""
+    entry = load_school_types().get(school_key) or {}
+    return entry.get("grup") or ""
+
+
+def all_branch_labels() -> list[str]:
+    """Bütün okul türlerindeki branş adları (kullanıcı adına göre tekil)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in load_school_types():
+        for label in branches_for(key):
+            uname = branch_to_username(label)
+            if uname and uname not in seen:
+                seen.add(uname)
+                out.append(label)
+    return out
 
 
 def clear_cache() -> None:

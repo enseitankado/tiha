@@ -291,6 +291,17 @@ def _in_group(username: str, group: str) -> bool:
         return False
 
 
+def _reserve_accounts_above(limit: int) -> list[str]:
+    """Numarası ``limit``'ten büyük yedek hesaplar (ogretmen3, ogretmen.04…)."""
+    from .m03_otp_secrets import RESERVE_USER_RE, list_reserve_accounts
+    out = []
+    for name in list_reserve_accounts():
+        match = RESERVE_USER_RE.match(name)
+        if match and int(match.group(1)) > limit:
+            out.append(name)
+    return out
+
+
 def _remove_otp_secrets(names: list[str]) -> list[str]:
     """Silinen hesapların PIN anahtarlarını otp-secrets.json'dan çıkarır."""
     from .m03_otp_secrets import (
@@ -353,11 +364,11 @@ class InitialPasswordsModule(Module):
     def pre_apply_check(self, params: dict) -> list[dict]:
         """Apply öncesi kullanıcı onayı gereken senaryoları döner.
 
-        Şu an: yedek hesap sayısı 0 ayarlanmışken sistemde ogretmenN
-        biçiminde mevcut hesap varsa, hepsinin (ev dizinleri ile
-        birlikte) silinmesi için tek bir onay ister. Kullanıcı Evet
-        derse params'a ``delete_all_reserve=True`` eklenir; apply
-        bunu görünce silme akışını çalıştırır.
+        Yedek hesap sayısı sistemdekinden küçük yazıldıysa, sayının
+        üstünde kalan ogretmenN hesaplarının (ev dizinleri ve PIN
+        anahtarlarıyla) silinmesi için tek bir onay ister. Kullanıcı
+        Evet derse params'a ``delete_reserve_above=<sayı>`` eklenir;
+        apply bunu görünce silme akışını çalıştırır.
         """
         confirmations: list[dict] = []
 
@@ -378,10 +389,7 @@ class InitialPasswordsModule(Module):
             reserve = int(params.get("reserve_count", 0) or 0)
         except (TypeError, ValueError):
             reserve = 0
-        if reserve != 0:
-            return confirmations
-        from .m03_otp_secrets import list_reserve_accounts
-        existing = list_reserve_accounts()
+        existing = _reserve_accounts_above(max(reserve, 0))
         if not existing:
             return confirmations
         preview = ", ".join(existing[:6])
@@ -393,9 +401,9 @@ class InitialPasswordsModule(Module):
             ),
             "message": t(
                 "m01.pre_apply.reserve_purge_message",
-                count=len(existing), users=preview,
+                reserve=max(reserve, 0), count=len(existing), users=preview,
             ),
-            "params": {"delete_all_reserve": "True"},
+            "params": {"delete_reserve_above": str(max(reserve, 0))},
         })
         return confirmations
 
@@ -498,12 +506,19 @@ class InitialPasswordsModule(Module):
         _branch_sel = parse_branch_selection(params.get("branch_accounts"))
         _branch_delete = branch_accounts_to_delete(params.get("branch_accounts"))
         _branch_hint = len(_branch_sel.get("branches") or []) + len(_branch_delete)
-        _delete_all_reserve = str(
-            params.get("delete_all_reserve", "False"),
-        ).lower() in ("true", "1", "yes", "on")
+        # Onaylı yedek hesap silme: bu sayının üstündeki ogretmenN'ler
+        # silinir. Eski sürümün "hepsini sil" bayrağı 0 demektir.
+        _delete_above: int | None = None
+        if str(params.get("delete_all_reserve", "False")).lower() in ("true", "1", "yes", "on"):
+            _delete_above = 0
+        if params.get("delete_reserve_above") not in (None, ""):
+            try:
+                _delete_above = max(int(params["delete_reserve_above"]), 0)
+            except (TypeError, ValueError):
+                pass
         if (not root_pw and not admin_pw and not teacher_pw
                 and _reserve_hint <= 0 and _branch_hint <= 0
-                and not _delete_all_reserve):
+                and _delete_above is None):
             return ApplyResult(
                 success=False,
                 summary=t("m01.apply.need_action"),
@@ -581,15 +596,14 @@ class InitialPasswordsModule(Module):
             if moved:
                 keyrings_moved[username] = moved
 
-        # ---- Yedek hesap toplu silme ------------------------------------
-        # Kullanıcı sayıyı 0'a çektiyse ve sistemde ogretmenN varsa
-        # pre_apply_check bir onay diyaloğu göstermiş ve params'a
-        # ``delete_all_reserve=True`` eklemiştir. Bu bloğa geldiğimizde
-        # onay verilmiş demektir; hesapları ev dizinleriyle beraber sileriz.
+        # ---- Fazla yedek hesapları silme ---------------------------------
+        # Kullanıcı sayıyı sistemdekinden küçük yazdıysa pre_apply_check
+        # bir onay diyaloğu göstermiş ve params'a ``delete_reserve_above``
+        # eklemiştir. Bu bloğa geldiğimizde onay verilmiş demektir; sayının
+        # üstündeki hesapları ev dizinleri ve PIN anahtarlarıyla sileriz.
         purged_reserve: list[str] = []
-        if _delete_all_reserve:
-            from .m03_otp_secrets import list_reserve_accounts
-            existing_reserve = list_reserve_accounts()
+        if _delete_above is not None:
+            existing_reserve = _reserve_accounts_above(_delete_above)
             if existing_reserve and progress:
                 progress(t(
                     "m01.apply.reserve_purge_start",

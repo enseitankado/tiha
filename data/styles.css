@@ -540,15 +540,48 @@ scrolledwindow.tiha-textarea textview {
     color: #1a73e8;
 }
 
-/* --- Branş hesapları kutusu (m01) ------------------------------------- */
-.tiha-branch-accounts flowboxchild {
+/* --- Branş hesapları (m01): form özeti ve seçim penceresi ------------- */
+.tiha-branch-accounts flowboxchild,
+.tiha-branch-dialog flowboxchild {
     padding: 0;
     min-height: 0;
     border: none;
 }
 
 .tiha-branch-accounts flowboxchild:hover,
-.tiha-branch-accounts flowboxchild:selected {
+.tiha-branch-accounts flowboxchild:selected,
+.tiha-branch-dialog flowboxchild:hover,
+.tiha-branch-dialog flowboxchild:selected {
     background: transparent;
     box-shadow: none;
+}
+
+/* Seçilen branş: ✕ ile çıkarılabilen etiket. Hesabı henüz açılmamış
+   olanlar kesikli kenarlı. */
+.tiha-chip {
+    border: 1px solid alpha(currentColor, 0.25);
+    border-radius: 12px;
+    padding: 0 0 0 10px;
+    font-size: 9.5pt;
+}
+.tiha-chip.tiha-chip-new {
+    border-style: dashed;
+}
+.tiha-chip button {
+    padding: 0 4px;
+    min-height: 0;
+    min-width: 0;
+}
+
+.tiha-branch-group {
+    font-weight: bold;
+    font-size: 9pt;
+    opacity: 0.7;
+}
+.tiha-branch-dialog-title {
+    font-weight: bold;
+    font-size: 12pt;
+}
+.tiha-branch-has-account label {
+    font-weight: bold;
 }
