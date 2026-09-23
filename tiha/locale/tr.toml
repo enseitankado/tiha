@@ -1544,15 +1544,23 @@ no_account = "{user} (sistemde hesap yok)"
 kind_branch = "ortak kullanım branş hesabı"
 kind_personal = "kişisel hesap"
 warn_admin = """\
-etapadmin sistem yöneticisidir. Bu anahtar sızarsa tahta ve üzerindeki \
-bütün öğretmen hesapları her türlü erişime açık kalır.\
+etapadmin sistem yöneticisidir ve bu anahtar okuldaki bütün tahtalarda \
+aynıdır. Sızarsa okuldaki bütün tahtalar ve üzerlerindeki bütün öğretmen \
+hesapları her türlü erişime açık kalır.\
 """
 warn_group = """\
-Bu anahtar herhangi bir öğretmen ya da branş hesabı adına oturum açmayı \
-sağlar. Sızarsa bütün hesaplar risk altına girer; bütün klon tahtalara yeni \
-anahtar kaydetmek, tahta sayısına bağlı olarak ciddi bir bilgi işlem yükü \
-getirir.\
+Bu anahtar okuldaki bütün tahtalarda herhangi bir öğretmen ya da branş \
+hesabı adına oturum açmayı sağlar. Sızarsa okuldaki bütün tahtalardaki \
+bütün hesaplar risk altına girer; bütün klon tahtalara yeni anahtar \
+kaydetmek, tahta sayısına bağlı olarak ciddi bir bilgi işlem yükü getirir.\
 """
+save_image = "Resim olarak kaydet"
+save_all_images = "Tüm kartları resim olarak kaydet"
+save_all_note = """\
+Her kart ayrı bir PNG dosyası olarak indirilir; tarayıcı birden çok dosya \
+indirmek için izin isteyebilir.\
+"""
+save_failed = "Resim oluşturulamadı: {error}"
 step_install = "Telefonunuza <strong>Google Authenticator</strong> veya benzeri bir uygulama kurun."
 step_type = "Tür: <em>Zaman tabanlı</em> (varsayılan)."
 group_step_scan = """\
@@ -1679,17 +1687,19 @@ değiştirilmez.\
 label = "Ogretmenler grubu için ortak PIN oluştur"
 help = """\
 İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' PIN anahtarı \
-üretilir (eta-otp-lock @grup mekanizması). Bu ortak PIN, gruba üye tüm \
-hesaplara giriş için kullanılabilir; PIN kâğıdında ayrı bir 'ORTAK PIN' \
-kartı olarak çıkar. Zaten bir ortak PIN varsa korunur, yenilenmez. Tek tek \
-öğretmen PIN'lerinden daha zayıf bir izdir (herkes aynı kodu kullanır), bu \
-yüzden varsayılan olarak kapalıdır.\n\
+üretilir; bu tek PIN gruba üye bütün hesaplarda giriş için geçer ve PIN \
+kâğıdında en başta ayrı bir 'ORTAK PIN' kartı olarak çıkar. Zaten bir ortak \
+PIN varsa korunur, yenilenmez.\n\
 \n\
-Ortak PIN yalnız 'ogretmenler' grubunun üyesi olan hesaplarda çalışır. \
-TiHA öğretmen hesaplarını (yedek hesaplar ve branş hesapları dahil) bu \
-gruba her zaman kendisi ekler; EBA QR ile sonradan açılan hesaplar da \
-tahtaya kurulan küçük bir servisle gruba otomatik girer. Ortak ogretmen \
-hesabı ve etapadmin gruba alınmaz.\
+Gruba dahil olanlar: etapadmin ve ortak ogretmen hesabı hariç bütün \
+öğretmen hesapları ogretmenler grubunun üyesidir — yedek hesaplar \
+(ogretmen1, ogretmen2…), branş hesapları ve EBA QR ile açılan kişisel \
+hesaplar. TiHA bu hesapları gruba her uygulamada kendisi ekler; EBA QR ile \
+sonradan açılan hesaplar da tahtaya kurulan küçük bir servisle gruba \
+otomatik girer.\n\
+\n\
+Herkes aynı kodu kullandığı için tek tek öğretmen PIN'lerinden daha zayıf \
+bir önlemdir; kâğıdı dikkatle saklayın.\
 """
 
 [m03.params.purge_all_secrets]

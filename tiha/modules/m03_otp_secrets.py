@@ -1488,6 +1488,8 @@ class OTPSecretsModule(Module):
                     '  <aside class="qr">\n'
                     f'    {svg}\n'
                     f'    <div class="qr-label">{t("m03.paper.qr_label")}</div>\n'
+                    '    <button type="button" class="save-img no-export">'
+                    f'{t("m03.paper.save_image")}</button>\n'
                     '  </aside>'
                 )
             else:
@@ -1524,7 +1526,7 @@ class OTPSecretsModule(Module):
             )
             badge = badge_html if is_new else ""
             cards.append(f'''
-<article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}">
+<article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}" data-user="{_esc(user.lstrip('@') + ('-grubu' if is_group else ''))}">
   <div class="body">
     <header>
       <h2>{_esc(display)}{kind_html}{badge}</h2>
@@ -1604,16 +1606,29 @@ class OTPSecretsModule(Module):
   .qr svg {{ cursor: pointer; transition: filter 0.15s; }}
   body.qr-focus .qr svg {{ filter: blur(6px); }}
   body.qr-focus .qr svg.qr-active {{ filter: none; }}
+  .save-img, .save-all {{
+    font: inherit; font-size: 9pt; cursor: pointer;
+    border: 1px solid #bbb; border-radius: 4px; background: #fff;
+    padding: 3px 8px; margin-top: 6px;
+  }}
+  .save-img:hover, .save-all:hover {{ background: #eef4ff; }}
+  .toolbar {{ margin: 0 0 16px 0; font-size: 9pt; color: #666; }}
+  .toolbar .save-all {{ font-size: 10pt; margin: 0 8px 0 0; }}
   @media print {{
     body {{ margin: 8mm; }}
     .card {{ break-inside: avoid; }}
     body.qr-focus .qr svg {{ filter: none; }}
+    .no-export {{ display: none !important; }}
   }}
 </style>
 </head><body>
 <h1>{t("m03.paper.heading")}</h1>
 <div class="meta">
   {meta}
+</div>
+<div class="toolbar no-export">
+  <button type="button" class="save-all">{t("m03.paper.save_all_images")}</button>
+  {t("m03.paper.save_all_note")}
 </div>
 {"".join(cards)}
 <script>
@@ -1632,6 +1647,73 @@ class OTPSecretsModule(Module):
         document.body.classList.add("qr-focus");
       }}
     }});
+  }});
+}})();
+
+// Kartı resim (PNG) olarak kaydet. Dış kitaplık yok: kart, sayfanın
+// stilleriyle birlikte bir SVG <foreignObject> içine konup tuvale çizilir.
+// Düğmeler ve QR bulanıklığı resme girmez.
+(function () {{
+  var css = document.querySelector("style").textContent;
+  function cardToPng(card) {{
+    return new Promise(function (resolve, reject) {{
+      var w = card.offsetWidth, h = card.offsetHeight, scale = 2, pad = 12;
+      var clone = card.cloneNode(true);
+      clone.querySelectorAll(".no-export").forEach(function (n) {{ n.remove(); }});
+      clone.querySelectorAll(".qr-active").forEach(function (n) {{ n.classList.remove("qr-active"); }});
+      clone.style.margin = "0";
+      // offsetWidth kenarlık ve iç boşluğu içerir; klon aynı kutuya sığsın.
+      clone.style.boxSizing = "border-box";
+      clone.style.width = w + "px";
+      var xhtml = new XMLSerializer().serializeToString(clone);
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + (w + 2 * pad) +
+        '" height="' + (h + 2 * pad) + '"><foreignObject x="0" y="0" width="100%" height="100%">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="background:#fff;padding:' + pad +
+        'px;font-family:Ubuntu,sans-serif;color:#222"><style>' + css + '</style>' + xhtml +
+        '</div></foreignObject></svg>';
+      var img = new Image();
+      img.onload = function () {{
+        try {{
+          var c = document.createElement("canvas");
+          c.width = (w + 2 * pad) * scale; c.height = (h + 2 * pad) * scale;
+          var ctx = c.getContext("2d");
+          ctx.scale(scale, scale);
+          ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0);
+          resolve(c.toDataURL("image/png"));
+        }} catch (e) {{ reject(e); }}
+      }};
+      img.onerror = function () {{ reject(new Error("SVG")); }};
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }});
+  }}
+  function download(url, name) {{
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }}
+  function fileName(card) {{
+    return "pin-" + (card.getAttribute("data-user") || "kart") + ".png";
+  }}
+  function saveCard(card) {{
+    return cardToPng(card).then(function (url) {{ download(url, fileName(card)); }})
+      .catch(function (e) {{ alert({json.dumps(t("m03.paper.save_failed", error="__E__"))}.replace("__E__", e.message || e)); }});
+  }}
+  window.tihaCardToPng = cardToPng;
+  document.querySelectorAll(".save-img").forEach(function (b) {{
+    b.addEventListener("click", function () {{ saveCard(b.closest(".card")); }});
+  }});
+  var all = document.querySelector(".save-all");
+  if (all) all.addEventListener("click", function () {{
+    var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+    // Sırayla, aralıklı: tarayıcılar art arda anlık indirmeleri yutabiliyor.
+    cards.reduce(function (p, card) {{
+      return p.then(function () {{
+        return saveCard(card).then(function () {{
+          return new Promise(function (r) {{ setTimeout(r, 350); }});
+        }});
+      }});
+    }}, Promise.resolve());
   }});
 }})();
 </script>

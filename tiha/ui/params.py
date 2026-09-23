@@ -131,7 +131,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": t("m03.params.make_group_pin.label"),
             "type": "bool",
             "required": False,
-            "default": "False",
+            "default": "True",
             # PAM grup-PIN'i yalnız gruba üye kullanıcılara kabul ediyor;
             # öğretmen hesapları her uygulamada gruba alınır.
             "help": t("m03.params.make_group_pin.help"),
