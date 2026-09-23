@@ -1545,8 +1545,11 @@ kind_branch = "ortak kullanım branş hesabı"
 kind_personal = "kişisel hesap"
 warn_admin = """\
 etapadmin sistem yöneticisidir ve bu anahtar okuldaki bütün tahtalarda \
-aynıdır. Sızarsa okuldaki bütün tahtalar ve üzerlerindeki bütün öğretmen \
-hesapları her türlü erişime açık kalır.\
+aynıdır. Sızarsa okuldaki bütün tahtalarda herhangi bir öğretmenin \
+hesabına oturum açılabilir; tahtalar her türlü erişime açık kalır. \
+Öğretmenlere bu anahtar yerine branş hesaplarının anahtarlarını ya da \
+kişisel anahtarlarını verin (kişisel anahtar için öğretmenin tahtaya bir \
+kez EBA QR ile oturum açmış olması gerekir).\
 """
 warn_group = """\
 Bu anahtar okuldaki bütün tahtalarda herhangi bir öğretmen ya da branş \
