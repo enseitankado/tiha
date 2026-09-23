@@ -573,10 +573,14 @@ scrolledwindow.tiha-textarea textview {
     min-width: 0;
 }
 
+/* Pencerede ana dallar (Temel Eğitim, Ortaöğretim…) büyük, altlarındaki
+   okul türleri küçük. */
 .tiha-branch-group {
     font-weight: bold;
+    font-size: 11pt;
+}
+.tiha-branch-school-row {
     font-size: 9pt;
-    opacity: 0.7;
 }
 .tiha-branch-dialog-title {
     font-weight: bold;

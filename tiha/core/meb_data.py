@@ -161,8 +161,11 @@ def detect_existing_selection(preferred_school: str = "") -> dict | None:
         ]
         if found:
             matches[key] = found
+    tagged = tagged_branch_labels()
     if not matches:
-        return None
+        if not tagged:
+            return None
+        return {"school_type": "", "branches": tagged}
     if preferred_school in matches:
         best = preferred_school
     else:
@@ -179,7 +182,43 @@ def detect_existing_selection(preferred_school: str = "") -> dict | None:
             if uname not in seen:
                 seen.add(uname)
                 branches.append(label)
+    # Elle eklenmiş (listede olmayan) branş hesapları
+    for label in tagged:
+        uname = branch_to_username(label)
+        if uname not in seen:
+            seen.add(uname)
+            branches.append(label)
     return {"school_type": best, "branches": branches}
+
+
+# Branş hesabının GECOS "diğer" alanına yazılan işaret. Listede olmayan
+# (elle eklenen) branşların hesapları bununla tanınır; giriş ekranı yalnız
+# ilk alanı (görünen adı) gösterir.
+BRANCH_GECOS_TAG = "tiha-brans"
+
+
+def branch_gecos(label: str) -> str:
+    """Branş hesabının GECOS değeri: görünen ad + TiHA işareti."""
+    clean = label.replace(",", " ").replace(":", " ").strip()
+    return f"{clean},,,,{BRANCH_GECOS_TAG}"
+
+
+def tagged_branch_labels() -> list[str]:
+    """TiHA işaretli branş hesaplarının görünen adları (elle eklenenler dahil)."""
+    import pwd
+
+    try:
+        entries = pwd.getpwall()
+    except OSError:
+        return []
+    out = []
+    for e in entries:
+        fields = e.pw_gecos.split(",")
+        if len(fields) >= 5 and fields[4].strip() == BRANCH_GECOS_TAG:
+            label = fields[0].strip()
+            if label and branch_to_username(label) == e.pw_name:
+                out.append(label)
+    return out
 
 
 def school_group(school_key: str) -> str:

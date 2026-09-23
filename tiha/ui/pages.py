@@ -550,7 +550,9 @@ class ModulePage(Gtk.Box):
                 # kapalı başlayan bir katlayıcıda.
                 more_lbl = _wrapping_label(field["help_more"], klass="tiha-rationale")
                 more_lbl.set_hexpand(True)
-                more = Gtk.Expander(label=t("ui.pages.help_more_expander"))
+                more = Gtk.Expander(
+                    label=field.get("help_more_label") or t("ui.pages.help_more_expander")
+                )
                 more.set_expanded(False)
                 more.add(more_lbl)
                 more.get_style_context().add_class("tiha-rationale")
@@ -1648,15 +1650,16 @@ class ModulePage(Gtk.Box):
         # Preset export için son apply parametrelerini sakla.
         self.last_apply_params = dict(params)
 
-        def progress(line: str) -> None:
-            GLib.idle_add(self._append_stream_line, line)
+        # Her adımda ilerleme satırları gelir: dönen göstergenin yanında
+        # o an yapılan iş tek satırda görünür. Akış yayan adımlarda satırlar
+        # ayrıca aşağıdaki metin alanına da yazılır.
+        streams = self.module.streams_output
 
-        progress_cb = progress if self.module.streams_output else None
+        def progress(line: str) -> None:
+            GLib.idle_add(self._on_progress_line, line, streams)
+
         try:
-            if progress_cb is not None:
-                result = self.module.apply_with_logging(params, progress=progress_cb)
-            else:
-                result = self.module.apply_with_logging(params)
+            result = self.module.apply_with_logging(params, progress=progress)
         except Exception as exc:
             log.exception("Modül uygulanamadı: %s", self.module.id)
             result = ApplyResult(False, t("ui.pages.unexpected_error", error=exc))
@@ -1677,6 +1680,8 @@ class ModulePage(Gtk.Box):
             self._stream_dialog.set_title(title)
             self._stream_buffer.set_text("")
             self._stream_status.set_text(t("ui.pages.stream_working"))
+            self._stream_status.set_line_wrap(False)
+            self._stream_status.set_ellipsize(Pango.EllipsizeMode.END)
             self._stream_spinner.start()
             self._stream_close_btn.set_sensitive(False)
             self._stream_dialog.present()
@@ -1703,7 +1708,8 @@ class ModulePage(Gtk.Box):
         status_row.pack_start(self._stream_spinner, False, False, 0)
         self._stream_status = Gtk.Label(label=t("ui.pages.stream_working"))
         self._stream_status.set_xalign(0.0)
-        self._stream_status.set_line_wrap(True)
+        # Çalışırken o anki işi tek satırda gösterir; bitince özet sarılır.
+        self._stream_status.set_ellipsize(Pango.EllipsizeMode.END)
         status_row.pack_start(self._stream_status, True, True, 0)
         content.pack_start(status_row, False, False, 0)
 
@@ -1755,6 +1761,8 @@ class ModulePage(Gtk.Box):
         if self._stream_dialog is None:
             return
         self._stream_spinner.stop()
+        self._stream_status.set_ellipsize(Pango.EllipsizeMode.NONE)
+        self._stream_status.set_line_wrap(True)
         # Sonuç özeti pencerede YALNIZ üstteki durum satırında görünür.
         # Eskiden başlık, durum satırı, metin alanındaki "Sonuç:" satırı ve
         # sonradan açılan bilgi penceresi aynı cümleyi dört kez gösteriyordu.
@@ -1789,6 +1797,16 @@ class ModulePage(Gtk.Box):
 
         self._stream_close_btn.set_sensitive(True)
         self._stream_close_btn.grab_focus()
+
+    def _on_progress_line(self, line: str, streams: bool) -> bool:
+        current = " ".join(
+            part.strip() for part in line.splitlines() if part.strip()
+        ).strip("= ").strip()
+        if current and self._stream_status is not None and self._applying:
+            self._stream_status.set_text(current)
+        if streams:
+            self._append_stream_line(line)
+        return False
 
     def _append_stream_line(self, line: str) -> bool:
         if self._stream_buffer is None:

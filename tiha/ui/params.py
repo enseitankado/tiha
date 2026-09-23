@@ -70,6 +70,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # Daha önce açılmış branş hesapları ve okul türü işaretli gelsin.
             "default_from": "current_branch_accounts",
             "help": t("m01.params.branch_accounts.help"),
+            "help_more": t("m01.params.branch_accounts.help_more"),
+            "help_more_label": t("ui.pages.help_more_details"),
         },
         {
             "key": "remove_student",

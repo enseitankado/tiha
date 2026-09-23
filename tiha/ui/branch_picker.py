@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import pwd
+import re
 
 import gi
 
@@ -27,6 +28,7 @@ from ..core.i18n import t  # noqa: E402
 from ..core.meb_data import (  # noqa: E402
     all_branch_labels,
     branch_to_username,
+    tagged_branch_labels,
     branches_for,
     load_school_types,
     school_group,
@@ -94,7 +96,7 @@ class BranchAccountsField(Gtk.Box):
         existing = _existing_usernames()
         chosen = {branch_to_username(b) for b in self._selected}
         unselected = [
-            label for label in all_branch_labels()
+            label for label in _dedupe(all_branch_labels() + tagged_branch_labels())
             if branch_to_username(label) in existing
             and branch_to_username(label) not in chosen
         ]
@@ -129,14 +131,9 @@ class BranchAccountsField(Gtk.Box):
     # --- form görünümü ----------------------------------------------------
 
     def _refresh(self) -> None:
-        if self._school:
-            self._school_lbl.set_markup(t(
-                "ui.branch_picker.school_line",
-                school=_escape(school_label(self._school)),
-                count=len(self._selected),
-            ))
-        else:
-            self._school_lbl.set_text(t("ui.branch_picker.no_school"))
+        self._school_lbl.set_markup(t(
+            "ui.branch_picker.total_line", count=len(self._selected),
+        ))
         for child in self._chips.get_children():
             self._chips.remove(child)
         existing = _existing_usernames()
@@ -236,7 +233,7 @@ class BranchPickerDialog(Gtk.Dialog):
         for key in self._keys:
             row = Gtk.ListBoxRow()
             row._key = key  # type: ignore[attr-defined]
-            lbl = _label(self._schools[key].get("label") or key, wrap=True)
+            lbl = _label(self._schools[key].get("label") or key, "tiha-branch-school-row", wrap=True)
             lbl.set_margin_top(4)
             lbl.set_margin_bottom(4)
             lbl.set_margin_start(8)
@@ -272,6 +269,20 @@ class BranchPickerDialog(Gtk.Dialog):
             btn.connect("clicked", lambda _b, a=active: self._set_all(a))
             tools.pack_start(btn, False, False, 0)
         right.pack_start(tools, False, False, 0)
+
+        # Listede olmayan branşı elle ekleme
+        custom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self._custom_entry = Gtk.Entry()
+        self._custom_entry.set_placeholder_text(t("ui.branch_picker.custom_placeholder"))
+        self._custom_entry.connect("activate", lambda *_: self._add_custom())
+        self._custom_entry.connect("changed", lambda *_: self._custom_msg.set_text(""))
+        custom.pack_start(self._custom_entry, True, True, 0)
+        add_btn = Gtk.Button(label=t("ui.branch_picker.custom_add"))
+        add_btn.connect("clicked", lambda *_: self._add_custom())
+        custom.pack_start(add_btn, False, False, 0)
+        right.pack_start(custom, False, False, 0)
+        self._custom_msg = _label("", "tiha-rationale", wrap=True)
+        right.pack_start(self._custom_msg, False, False, 0)
 
         # Okul türünün branşları + (varsa) başka türden seçili olanlar
         self._branches = self._make_flow()
@@ -413,6 +424,36 @@ class BranchPickerDialog(Gtk.Dialog):
         label = getattr(cb, "_branch_label", "")
         return query in label.casefold() or query in branch_to_username(label)
 
+    def _add_custom(self) -> None:
+        """Elle yazılan branşı seçime ekler (hesap adı denetlenerek)."""
+        label = " ".join(
+            self._custom_entry.get_text().replace(",", " ").replace(":", " ").split()
+        )
+        if not label:
+            return
+        uname = branch_to_username(label)
+        known = {branch_to_username(b): b for b in all_branch_labels() + tagged_branch_labels()}
+        if not uname:
+            self._custom_msg.set_text(t("ui.branch_picker.custom_invalid"))
+            return
+        if uname in _RESERVED_USERS or _RESERVE_RE.match(uname):
+            self._custom_msg.set_text(t("ui.branch_picker.custom_reserved", user=uname))
+            return
+        if uname in self._existing and uname not in known:
+            # Aynı adlı kişisel bir hesap var (ör. EBA QR ile açılmış);
+            # branş sayılırsa listeden çıkarılınca silinirdi.
+            self._custom_msg.set_text(t("ui.branch_picker.custom_taken", user=uname))
+            return
+        label = known.get(uname, label)
+        # Kutuyu temizlemek mesajı da siler; önce temizle, sonra yaz.
+        self._custom_entry.set_text("")
+        if any(branch_to_username(b) == uname for b in self._working):
+            self._custom_msg.set_text(t("ui.branch_picker.custom_already", label=label))
+        else:
+            self._working.append(label)
+            self._rebuild()
+            self._custom_msg.set_text(t("ui.branch_picker.custom_added", label=label, user=uname))
+
     def _update_count(self) -> None:
         self._count.set_text(t("ui.branch_picker.count", count=len(self._working)))
 
@@ -424,6 +465,11 @@ class BranchPickerDialog(Gtk.Dialog):
         return self._school, _dedupe(ordered)
 
 
+# Branş hesabı olarak kullanılamayacak adlar (varsayılan ve yedek hesaplar).
+_RESERVED_USERS = {"root", "etapadmin", "ogretmen", "ogrenci", "ogretmenler"}
+_RESERVE_RE = re.compile(r"^ogretmen_?\d+$")
+
+
 def _dedupe(labels: list[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
@@ -433,8 +479,3 @@ def _dedupe(labels: list[str]) -> list[str]:
             seen.add(uname)
             out.append(label)
     return out
-
-
-def _escape(text: str) -> str:
-    from gi.repository import GLib
-    return GLib.markup_escape_text(text)

@@ -346,7 +346,7 @@ m10 = "Tekil kimlikleri ve kullanım izlerini siler; tahtayı imaj alınmaya haz
 [ui.branch_picker]
 open_button = "Okul türü ve branşları seç…"
 no_school = "Okul türü seçilmedi"
-school_line = "<b>{school}</b> · {count} branş"
+total_line = "<b>{count} branş</b>"
 empty = "Henüz branş seçilmedi. Düğmeye basıp okul türünü ve branşları seçin."
 chip_tip_existing = "Hesabı var: {user}"
 chip_tip_new = "Uygulayınca açılacak hesap: {user}"
@@ -355,9 +355,9 @@ remove_tip_new = "Listeden çıkar"
 dialog_title = "Branş hesapları: okul türü ve branşlar"
 intro = """\
 Soldan okulunuzun türünü seçin, sağda o okulda ders okutan branşları \
-işaretleyin. Kalın yazılı branşların hesabı tahtada zaten var. Onayla'ya \
-basınca seçim formdaki listeye gelir; hesaplar adımı uyguladığınızda açılır \
-ya da silinir.\
+işaretleyin. Listede olmayan bir branşı alttaki kutuya yazıp ekleyebilirsiniz. \
+Kalın yazılı branşların hesabı tahtada zaten var. Onayla'ya basınca seçim \
+formdaki listeye gelir; hesaplar adımı uyguladığınızda açılır ya da silinir.\
 """
 search = "Branş ara…"
 select_all = "Tümünü seç"
@@ -368,7 +368,14 @@ Kalın: hesabı tahtada var. İşaretini kaldırıp uygularsanız hesap ev dizin
 ve PIN anahtarıyla silinir (uygulamadan önce onay sorulur).\
 """
 count = "{count} branş seçili"
-other_school_title = "Başka okul türlerinden seçili branşlar"
+other_school_title = "Diğer seçili branşlar (başka okul türünden ya da elle eklenen)"
+custom_placeholder = "Listede olmayan branşı yazın (ör. Satranç)…"
+custom_add = "Ekle"
+custom_invalid = "Bu addan bir hesap adı üretilemedi; harf ya da rakam içeren bir ad yazın."
+custom_reserved = "'{user}' TiHA'nın kendi hesaplarından birine ait; başka bir ad yazın."
+custom_taken = "Tahtada '{user}' adlı bir kişisel hesap zaten var. Branş hesabı sayılırsa listeden çıkarınca silinirdi; başka bir ad yazın."
+custom_already = "'{label}' zaten seçili."
+custom_added = "'{label}' eklendi (hesap adı: {user})."
 check_tip_existing = "Hesabı var: {user}"
 check_tip_new = "Hesap adı: {user}"
 cancel = "Vazgeç"
@@ -378,6 +385,7 @@ confirm = "Onayla"
 char_rejected = "Bu karakter burada kullanılamaz; ayrıntı alanın altındaki açıklamada."
 help_expander = "Açıklama"
 help_more_expander = "Ayrıntılar: neden gerekli, nasıl çalışır?"
+help_more_details = "Ayrıntılar"
 rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\
 Deneysel: Bu adım gerçek tahta donanımında henüz doğrulanmadı. Önce tek bir \
@@ -970,20 +978,23 @@ anahtarlarıyla silinir.\
 [m01.params.branch_accounts]
 label = "Branş hesapları"
 help = """\
-Okulun her branşı için ayrı ortak hesap açar (ör. matematik, fen_bilimleri, \
-turk_dili_edebiyati). Ortak "ogretmenX" hesabı yerine öğretmenler kendi \
-branşlarının hesabını kullanabilir. "Okul türü ve branşları seç…" \
-düğmesiyle açılan pencerede okul türünü seçip o okulda ders okutan \
-branşları işaretleyin; onayladığınızda seçim burada listelenir. Tahtada \
-hesabı olan branşlar zaten listede gelir. Bir branşı buradaki ✕ ile ya da \
-penceredeki işaretini kaldırarak listeden çıkarabilirsiniz. \
+Okulun her branşı için ayrı ortak hesap açar (ör. matematik, fen_bilimleri). \
+Öğretmenler ortak "ogretmenX" hesabı yerine kendi branşlarının hesabını \
+kullanabilir.\
+"""
+help_more = """\
+"Okul türü ve branşları seç…" düğmesiyle açılan pencerede okul türünü \
+seçip o okulda ders okutan branşları işaretleyin; listede olmayan bir \
+branşı elle de ekleyebilirsiniz. Onayladığınızda seçim burada listelenir. \
+Tahtada hesabı olan branşlar zaten listede gelir. Bir branşı buradaki ✕ \
+ile ya da penceredeki işaretini kaldırarak listeden çıkarabilirsiniz.\n\
+\n\
 Hesaplar ev dizinleriyle açılır, ogretmenler grubuna eklenir, oturum \
-ekranında branş adıyla listelenir ve parola kilitli olur — "Öğretmen PIN \
+ekranında branş adıyla listelenir ve parola kilitli olur; "PIN \
 anahtarları" adımıyla giriş kısayolları üretilebilir. Hesabı olan bir \
 branşı listeden çıkarıp uygularsanız o hesap ev dizini ve PIN \
 anahtarıyla silinir (önce onay sorulur).\
 """
-
 [m01.params.remove_student]
 label = "Öğrenci Hesabını Sil"
 help = "Öğrenci hesabı güvenlik riski oluşturur. Bu buton ile güvenli şekilde silebilirsiniz."
@@ -1072,7 +1083,7 @@ summary_branches = "{count} branş hesabı açıldı"
 summary_purged_reserve = "{count} yedek hesap ev dizini ile silindi"
 summary_keyrings = "{count} bayat anahtarlık dosyası kenara alındı"
 partial_failure = "Bazı işlemler başarısız oldu, ayrıntılara bakın."
-branches_preparing = "{school} branşları için {count} hesap hazırlanıyor…"
+branches_preparing = "{count} branş hesabı hazırlanıyor…"
 branch_create_failed = "  ✗ {user} eklenemedi"
 branches_title = "Branş hesapları:"
 branches_created = "  Yeni açılan ({count}): {users}"

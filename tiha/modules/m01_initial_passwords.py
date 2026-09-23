@@ -713,14 +713,12 @@ class InitialPasswordsModule(Module):
         bdata = _branch_sel
         if bdata.get("branches"):
             from .m03_otp_secrets import create_user, ensure_ogretmenler_group, OGRETMENLER_GROUP
-            from ..core.meb_data import branch_to_username, school_label
-            school_key = bdata.get("school_type") or ""
+            from ..core.meb_data import branch_gecos, branch_to_username
             branches = bdata.get("branches") or []
             if progress:
                 progress(t(
                     "m01.apply.branches_preparing",
                     count=len(branches),
-                    school=school_label(school_key),
                 ))
             group_ok = ensure_ogretmenler_group()
             for label in branches:
@@ -731,7 +729,7 @@ class InitialPasswordsModule(Module):
                     skipped_branches.append(uname)
                     if progress:
                         progress(f"  ≈ {uname}")
-                elif create_user(uname, full_name=label):
+                elif create_user(uname, full_name=branch_gecos(label)):
                     created_branches.append(uname)
                     if progress:
                         progress(f"  + {uname}")
