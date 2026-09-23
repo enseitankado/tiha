@@ -1072,10 +1072,14 @@ Detaylı hatalar /var/log/tiha/tiha-debug.log dosyasında.\
 reserve_title = "Yedek hesaplar:"
 reserve_created = "  Yeni açılan ({count}): {users}"
 reserve_skipped = "  Zaten var, dokunulmadı ({count}): {users}"
-reserve_pin_note = """\
-\u0020\u0020PIN anahtarları 'Öğretmen PIN anahtarları' adımında üretilir; o \
-adım bu hesapları da otomatik yakalar.\
+pin_title = "PIN anahtarı durumu:"
+pin_have = "  Anahtarı olan ({count}): {users}"
+pin_missing = "  Anahtarı olmayan ({count}): {users}"
+pin_missing_hint = """\
+\u0020\u0020Anahtarı olmayan hesaplar için 'PIN anahtarları' adımını uygulayın; \
+o adım bu hesapları kendiliğinden bulur, var olan anahtarlara dokunmaz.\
 """
+pin_unknown = "  PIN anahtarı durumu okunamadı."
 summary_removed = "{count} ortak hesap silindi"
 summary_passwords = "{users} parolaları atandı"
 summary_reserve = "{count} yedek hesap açıldı"
@@ -1095,10 +1099,6 @@ branches_deleted = "Silinen branş hesapları ({count}, ev dizinleriyle): {users
 branches_secrets_removed = "  {count} PIN anahtarı otp-secrets.json'dan çıkarıldı"
 branches_delete_failed = "Silinemeyen branş hesapları: {users}"
 summary_deleted_branches = "{count} branş hesabı silindi"
-branches_pin_note = """\
-  PIN anahtarları 'Öğretmen PIN anahtarları' adımında üretilir; o \
-adım bu hesapları da otomatik yakalar.\
-"""
 reserve_purge_start = "{count} yedek hesap ev dizinleriyle siliniyor…"
 reserve_purge_failed = "  ✗ {user} silinemedi"
 reserve_purge_title = "Silinen yedek hesaplar ({count}):"

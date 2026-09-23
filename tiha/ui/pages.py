@@ -1714,9 +1714,12 @@ class ModulePage(Gtk.Box):
         content.pack_start(status_row, False, False, 0)
 
         scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        # Uzun satırlar (ör. açılan/silinen hesap listeleri) sarılır; yatay
+        # kaydırma çubuğu çıkmaz.
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
         self.stream_view = Gtk.TextView()
+        self.stream_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.stream_view.set_editable(False)
         self.stream_view.set_cursor_visible(False)
         self.stream_view.set_monospace(True)

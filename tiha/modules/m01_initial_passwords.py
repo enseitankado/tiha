@@ -291,6 +291,25 @@ def _in_group(username: str, group: str) -> bool:
         return False
 
 
+def _pin_status_lines(users: list[str]) -> list[str]:
+    """Hesapları PIN anahtarı olan / olmayan diye ayıran sonuç satırları."""
+    from .m03_otp_secrets import load_secrets
+    try:
+        secrets = load_secrets()
+    except (OSError, ValueError) as exc:
+        log.warning("PIN anahtarları okunamadı: %s", exc)
+        return [t("m01.apply.pin_unknown")]
+    have = [u for u in users if u in secrets]
+    missing = [u for u in users if u not in secrets]
+    lines = [t("m01.apply.pin_title")]
+    if have:
+        lines.append(t("m01.apply.pin_have", count=len(have), users=", ".join(have)))
+    if missing:
+        lines.append(t("m01.apply.pin_missing", count=len(missing), users=", ".join(missing)))
+        lines.append(t("m01.apply.pin_missing_hint"))
+    return lines
+
+
 def _reserve_accounts_above(limit: int) -> list[str]:
     """Numarası ``limit``'ten büyük yedek hesaplar (ogretmen3, ogretmen.04…)."""
     from .m03_otp_secrets import RESERVE_USER_RE, list_reserve_accounts
@@ -813,7 +832,6 @@ class InitialPasswordsModule(Module):
                 details_lines.append(t("m01.apply.reserve_skipped",
                                        count=len(skipped_reserve),
                                        users=", ".join(skipped_reserve)))
-            details_lines.append(t("m01.apply.reserve_pin_note"))
 
         if purged_reserve:
             details_lines.append("")
@@ -851,7 +869,16 @@ class InitialPasswordsModule(Module):
                     count=len(grouped_branches),
                     users=", ".join(grouped_branches),
                 ))
-            details_lines.append(t("m01.apply.branches_pin_note"))
+
+        # Bu adımın yönettiği hesapların PIN durumu: hangisinin anahtarı
+        # var, hangisi için PIN anahtarları adımı henüz uygulanmalı.
+        managed = [
+            u for u in created_reserve + skipped_reserve + created_branches + skipped_branches
+            if user_exists(u)
+        ]
+        if managed:
+            details_lines.append("")
+            details_lines.extend(_pin_status_lines(managed))
 
         if deleted_branches or failed_branch_deletes:
             details_lines.append("")
