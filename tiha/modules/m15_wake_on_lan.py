@@ -31,8 +31,8 @@ Uyandırma sinyali
 Bakımcı, merkez bilgisayarında bir "wakeonlan" veya "etherwake" komutuyla
 tahtanın MAC adresine magic packet gönderir. TiHA merkez betiği yazmaz;
 o bakımcının kendi işidir. Tahtanın MAC'i m12'nin yazdığı
-``imaged-mac`` dosyasından okunabilir veya klon boot ederse Ahenk üzerinden
-Lider'e kayıt olur; oradan da MAC gözükür.
+``imaged-mac-ahenk`` dosyasından okunabilir veya klon boot ederse Ahenk
+üzerinden Lider'e kayıt olur; oradan da MAC gözükür.
 
 Geri al
 =======

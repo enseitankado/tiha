@@ -826,6 +826,11 @@ class TiHAWindow(Gtk.Window):
         self.btn_next.connect("clicked", self._on_next)
         self.action_bar.pack_start(self.btn_next, False, False, 0)
 
+        # Uzun ipucu iki-üç satıra sarınca düğmeler onunla birlikte
+        # dikeyde uzamasın; ortada doğal boylarında dursunlar.
+        for btn in (self.btn_back, self.btn_apply, self.btn_next):
+            btn.set_valign(Gtk.Align.CENTER)
+
         right.pack_start(self.action_bar, False, False, 0)
 
         paned.pack2(right, resize=True, shrink=False)

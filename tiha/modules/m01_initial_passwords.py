@@ -380,6 +380,35 @@ class InitialPasswordsModule(Module):
             params=params, progress=progress,
         )
 
+    # ------------------------------------------------------------------
+    # QR ilk-giriş parola diyalogunu gizle/geri getir — eski m13 adımının
+    # işlevi buraya taşındı. Sınıfta öğrencilerin gözü önünde parola
+    # yazmayı önlemek için varsayılan işaretli. Kutu sistemin gerçek
+    # durumunu yansıtır (paketin autostart Hidden bayrağı).
+    # ------------------------------------------------------------------
+
+    def _password_dialog_delegate(self):
+        inst = getattr(self, "_pw_dialog_delegate_inst", None)
+        if inst is None:
+            from .m13_password_dialog import PasswordDialogModule
+            inst = PasswordDialogModule()
+            self._pw_dialog_delegate_inst = inst
+        return inst
+
+    def qr_password_dialog_disabled(self) -> str:
+        """Hedef .desktop'ta ``Hidden=true`` bayrağı var mı?"""
+        from .m13_password_dialog import AUTOSTART_FILE, _is_hidden
+        if not AUTOSTART_FILE.is_file():
+            # Paket kurulu değilse özellik geçersiz; kutu işaretli açılsın
+            # ki apply de "no-op" olsun.
+            return "True"
+        try:
+            return "True" if _is_hidden(
+                AUTOSTART_FILE.read_text(encoding="utf-8"),
+            ) else "False"
+        except OSError:
+            return "False"
+
     def pre_apply_check(self, params: dict) -> list[dict]:
         """Apply öncesi kullanıcı onayı gereken senaryoları döner.
 
@@ -535,9 +564,17 @@ class InitialPasswordsModule(Module):
                 _delete_above = max(int(params["delete_reserve_above"]), 0)
             except (TypeError, ValueError):
                 pass
+        # QR diyalog kutusunun sistem durumundan sapması da geçerli aksiyon.
+        _qr_desired = str(
+            params.get("disable_qr_password_dialog", "True"),
+        ).lower() in ("true", "1", "yes", "on")
+        _qr_currently_disabled = self.qr_password_dialog_disabled() == "True"
+        _qr_needs_change = _qr_desired != _qr_currently_disabled
+
         if (not root_pw and not admin_pw and not teacher_pw
                 and _reserve_hint <= 0 and _branch_hint <= 0
-                and _delete_above is None):
+                and _delete_above is None
+                and not _qr_needs_change):
             return ApplyResult(
                 success=False,
                 summary=t("m01.apply.need_action"),
@@ -944,6 +981,36 @@ class InitialPasswordsModule(Module):
         if keyring_count:
             summary_parts.append(t("m01.apply.summary_keyrings", count=keyring_count))
 
+        # ---- QR ilk-giriş parola diyaloğu (eski m13) --------------------
+        # Kutunun durumu sistemdekiyle örtüşmüyorsa m13 delege üzerinden
+        # aç/kapa. data'da m13 apply çıktısını saklayarak undo geri
+        # döndürebilsin.
+        qr_dialog_result: dict | None = None
+        qr_dialog_toggled = False
+        if _qr_needs_change:
+            delegate = self._password_dialog_delegate()
+            if _qr_desired:
+                if progress:
+                    progress(t("m01.apply.qr_dialog_hiding"))
+                r = delegate.apply(progress=progress)
+                if r.success:
+                    qr_dialog_toggled = True
+                    qr_dialog_result = {"action": "hide", "data": r.data or {}}
+                    summary_parts.append(t("m01.apply.summary_qr_hidden"))
+                elif progress:
+                    progress(t("m01.apply.qr_dialog_failed", reason=r.summary))
+            else:
+                if progress:
+                    progress(t("m01.apply.qr_dialog_restoring"))
+                r = delegate.undo(data={"was_already_hidden": False})
+                if r.success:
+                    qr_dialog_toggled = True
+                    qr_dialog_result = {"action": "restore"}
+                    summary_parts.append(t("m01.apply.summary_qr_restored"))
+                elif progress:
+                    progress(t("m01.apply.qr_dialog_failed", reason=r.summary))
+        overall = overall or qr_dialog_toggled
+
         return ApplyResult(
             success=overall,
             summary="; ".join(summary_parts) + "." if overall and summary_parts
@@ -967,6 +1034,7 @@ class InitialPasswordsModule(Module):
                 "grouped_branches": grouped_branches,
                 "deleted_branches": deleted_branches,
                 "teacher_skipped_no_account": bool(teacher_pw) and "ogretmen" not in results,
+                "qr_dialog": qr_dialog_result,
             },
         )
 
@@ -1048,6 +1116,19 @@ class InitialPasswordsModule(Module):
         keyring_count = sum(len(names) for names in restored_keyrings.values())
         if keyring_count:
             summary_parts.append(t("m01.undo.keyrings_restored", count=keyring_count))
+
+        # QR diyaloğunu bu apply'da açtı/kapadıysak tersine çevir.
+        qr = data.get("qr_dialog") or {}
+        if qr.get("action") == "hide":
+            r = self._password_dialog_delegate().undo(
+                data=qr.get("data") or {},
+            )
+            if r.success:
+                summary_parts.append(t("m01.undo.qr_restored"))
+        elif qr.get("action") == "restore":
+            r = self._password_dialog_delegate().apply()
+            if r.success:
+                summary_parts.append(t("m01.undo.qr_hidden"))
         return ApplyResult(True, "; ".join(summary_parts) + ".")
 
     # -----------------------------------------------------------------

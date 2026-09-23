@@ -8,9 +8,11 @@ servisi tarafından yapılır.
 **Wizard zamanında yapılanlar (apply):**
 
 1. *MAC imzası* — kaynak tahtanın birincil arayüz MAC adresi
-   ``/var/lib/tiha/state/imaged-mac`` altına yazılır. Bu dosya klon
-   tespitinin temel sentinel'ıdır: imajla açılan bir tahtanın MAC'i
-   bu dosyadakiyle aynıysa "kaynak tahta", farklıysa "klon" demektir.
+   ``/var/lib/tiha/state/imaged-mac-ahenk`` altına yazılır. Bu dosya
+   klon tespitinin temel sentinel'ıdır: imajla açılan bir tahtanın
+   MAC'i bu dosyadakiyle aynıysa "kaynak tahta", farklıysa "klon"
+   demektir. m14 (BIOS parolası) kendi imza dosyasını
+   (``imaged-mac-bios``) yönetir; iki adım birbirini etkilemez.
 
 2. *ahenk kurulumu* — paket yoksa ``apt-get update`` +
    ``apt-get install -y ahenk`` ile kurulur ve ``ahenk.service``
@@ -29,8 +31,8 @@ ahenk'iyle çalışmaya devam eder. Sanitize (m11) bu adımdan sonra
 
 **Boot servisi mantığı (klonda her açılışta):**
 
-  a. ``imaged-mac`` dosyası yoksa → çık (adım hiç uygulanmamış veya
-     dosya elle silinmiş).
+  a. ``imaged-mac-ahenk`` dosyası yoksa → çık (adım hiç uygulanmamış
+     veya dosya elle silinmiş).
   b. Mevcut MAC == kayıtlı MAC → çık ("orijinal tahta — kazara
      reboot", hiçbir şey yapma; ahenk normal başlasın).
   c. Mevcut MAC ≠ kayıtlı MAC → klon tespit edildi.
@@ -44,7 +46,7 @@ ahenk'iyle çalışmaya devam eder. Sanitize (m11) bu adımdan sonra
          ``ahenk.db`` + ``ahenk.log``) sıfırlanır, ahenk yeniden
          enable + start edilir. ahenk daemonu boş kimliği görür,
          yeni UUID üretir, Lider'e kendi MAC'iyle kayıt akışına
-         girer. ``imaged-mac`` mevcut MAC ile imzalanır (sonraki
+         girer. ``imaged-mac-ahenk`` mevcut MAC ile imzalanır (sonraki
          boot'larda tekrar tetiklenmesin), servis kendini disable
          eder.
        - **Kayıtsız** (registered=False) → ``ahenk.service``
@@ -60,8 +62,9 @@ durumda olsa bile credential'ları silmek, ahenk'in eski uid/parola ile
 Pulsar'a bağlanıp Lider'de Exclusive consumer çakışmasına / cross-board
 impersonation'a yol açmasını **kesinlikle engeller**.
 
-**Geri al.** Klon-reclaim servisi (.service + .sh) ve ``imaged-mac``
-dosyası kaldırılır, ``systemctl daemon-reload`` çalıştırılır. ahenk
+**Geri al.** Klon-reclaim servisi (.service + .sh) ve
+``imaged-mac-ahenk`` dosyası kaldırılır, ``systemctl daemon-reload``
+çalıştırılır. ahenk
 paketi TiHA tarafından kurulduysa ``apt-get purge`` ile sökülür ve
 ``autoremove`` çalıştırılır; daha önce zaten kuruluysa korunur.
 Wizard ahenk credential'larına dokunmadığı için geri yüklenecek bir
@@ -87,7 +90,13 @@ log = get_logger(__name__)
 
 # Kaynak tahta imzası: imajın alındığı anda birincil arayüzün MAC'i.
 # Boot servisi bu dosya yoksa hemen çıkar (klon değil veya adım uygulanmamış).
-IMAGED_MAC_FILE = STATE_DIR / "imaged-mac"
+# Ahenk klon-reclaim adımına ÖZGÜ dosya; m14 (BIOS parolası) kendi
+# ``imaged-mac-bios`` dosyasını yönetir. Ayrı tutmamızın sebebi: bu
+# script başarılı bir yeniden kayıttan sonra imzayı klonun yeni
+# MAC'iyle üzerine yazıyor. Paylaşımlı bir dosya olsaydı bu, m14'ün
+# BIOS parolasını sonraki boot'larda "kaynak tahta" sanıp atlamasına
+# yol açardı.
+IMAGED_MAC_FILE = STATE_DIR / "imaged-mac-ahenk"
 
 # Klon-reclaim çalıştırılabilir betiği ve systemd unit'i.
 RECLAIM_SCRIPT = Path("/usr/local/sbin/tiha-clone-reclaim.py")

@@ -477,6 +477,8 @@ class ModulePage(Gtk.Box):
             undo_btn = Gtk.Button(label=t("ui.pages.undo_step"))
             undo_btn.get_style_context().add_class("destructive-action")
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
+            # Kutunun tamamına yayılıp kırmızı bir şerit gibi durmasın.
+            undo_btn.set_halign(Gtk.Align.START)
             banner.pack_start(undo_btn, False, False, 0)
         self.result_holder.pack_start(banner, False, False, 0)
 
@@ -993,6 +995,10 @@ class ModulePage(Gtk.Box):
         if kind == "textarea":
             tv = Gtk.TextView()
             tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+            # MAC listesi gibi sabit-genişlik gösterim isteyen alanlar
+            # için şema "monospace": True taşır. Font stili CSS'te.
+            if field.get("monospace"):
+                tv.get_style_context().add_class("tiha-monospace")
             buf = tv.get_buffer()
             placeholder = field.get("placeholder")
             if placeholder:
@@ -1967,6 +1973,8 @@ class ModulePage(Gtk.Box):
             undo_btn = Gtk.Button(label=t("ui.pages.undo_step"))
             undo_btn.get_style_context().add_class("destructive-action")
             undo_btn.connect("clicked", lambda *_: self._undo_clicked())
+            # Kutunun tamamına yayılıp kırmızı bir şerit gibi durmasın.
+            undo_btn.set_halign(Gtk.Align.START)
             box.pack_start(undo_btn, False, False, 0)
 
         if not result.success and not result.not_applicable:

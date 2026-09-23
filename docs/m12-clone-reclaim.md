@@ -60,7 +60,7 @@ flowchart LR
 flowchart TD
     Start(["m12.apply çağrılır"]):::startNode
     Mac["Birincil arayüz tespit edilir<br/>(default route → fallback ilk fiziksel)"]
-    Sig[("/var/lib/tiha/state/imaged-mac<br/>← &lt;kaynak MAC&gt;")]:::file
+    Sig[("/var/lib/tiha/state/imaged-mac-ahenk<br/>← &lt;kaynak MAC&gt;")]:::file
     Q1{"ahenk paketi<br/>kurulu mu?"}:::decision
     Inst["apt-get update<br/>apt-get install -y ahenk<br/>systemctl enable ahenk.service"]:::action
     Skip["(kurulum atlanır)"]:::action
@@ -90,7 +90,7 @@ flowchart TD
 flowchart TD
     Boot(["tiha-clone-reclaim.service<br/>(ahenk.service'ten ÖNCE)"]):::startNode
 
-    Q1{"imaged-mac<br/>dosyası var mı?"}:::decision
+    Q1{"imaged-mac-ahenk<br/>dosyası var mı?"}:::decision
     ExitNoFile(["⛔ Çık<br/>klon değil veya<br/>adım uygulanmamış"]):::neutral
 
     ReadMac["Birincil arayüz MAC'ini oku"]:::action
@@ -105,7 +105,7 @@ flowchart TD
     StopOk["systemctl stop ahenk.service"]:::action
     WipeOk["Credential temizle:<br/>• ahenk.conf: uid / password / host<br/>• messaging.conf: pulsar_host / pulsar_port<br/>&nbsp;&nbsp;/ tls_trust_certs_file_path<br/>• ahenk.db silindi<br/>• ahenk.log boşaltıldı"]:::action
     StartOk["systemctl enable ahenk.service<br/>systemctl start --no-block ahenk.service"]:::action
-    Sign["imaged-mac ← mevcut MAC<br/>(bir daha tetiklenmesin)"]:::file
+    Sign["imaged-mac-ahenk ← mevcut MAC<br/>(bir daha tetiklenmesin)"]:::file
     DisOk["systemctl disable<br/>tiha-clone-reclaim.service"]:::action
     OkEnd(["✅ Ahenk Lider'e<br/>YENİ MAC ile kayıt olur"]):::endNode
 
@@ -142,7 +142,7 @@ flowchart TD
 
 | Bileşen | Konum |
 |---|---|
-| **MAC imzası** | `/var/lib/tiha/state/imaged-mac` (kaynak tahtanın birincil arayüz MAC'i) |
+| **MAC imzası** | `/var/lib/tiha/state/imaged-mac-ahenk` (kaynak tahtanın birincil arayüz MAC'i) |
 | **Boot betiği** | `/usr/local/sbin/tiha-clone-reclaim.py` (Python 3) |
 | **systemd unit** | `/etc/systemd/system/tiha-clone-reclaim.service` (Type=oneshot, Before=ahenk.service) |
 | **ahenk paketi** | TiHA yüklü değilse `apt-get install -y ahenk` ile kurar; `ahenk.service` enable edilir |
@@ -156,10 +156,10 @@ flowchart TD
 
 `tiha-clone-reclaim.service`'in tetiklediği `tiha-clone-reclaim.py`:
 
-1. `imaged-mac` dosyası yoksa → çık.
+1. `imaged-mac-ahenk` dosyası yoksa → çık.
 2. Birincil arayüzün MAC'ini al (default route → fallback ilk fiziksel
    arayüz).
-3. Mevcut MAC == imaged-mac → çık (kaynak tahtanın kazara reboot'u).
+3. Mevcut MAC == imaged-mac-ahenk → çık (kaynak tahtanın kazara reboot'u).
 4. MAC değişti → klon!
    - `GET /api/board/check?mac=<mevcut>` (ETAP backend; eta-register
      ile aynı endpoint + header).
@@ -174,7 +174,7 @@ flowchart TD
        - `ahenk.log` boşaltılır
      - `systemctl enable ahenk.service`
      - `systemctl start --no-block ahenk.service` (cycle deadlock'ı önler — aşağıya bkz)
-     - `imaged-mac` ← mevcut MAC (sonraki boot'larda tetiklenmesin)
+     - `imaged-mac-ahenk` ← mevcut MAC (sonraki boot'larda tetiklenmesin)
      - Boot servisi kendini disable eder
    - **Kayıtsız**:
      - `systemctl stop ahenk.service`
@@ -282,7 +282,7 @@ Klon-yeniden-talep mekanizması imaja gömüldüğünde:
 2. `/usr/local/sbin/tiha-clone-reclaim.py` silinir
 3. `/etc/systemd/system/tiha-clone-reclaim.service` silinir
 4. `systemctl daemon-reload`
-5. `/var/lib/tiha/state/imaged-mac` silinir
+5. `/var/lib/tiha/state/imaged-mac-ahenk` silinir
 6. ahenk paketi TiHA tarafından kurulmuşsa
    (`was_installed_before == False`): `apt-get purge -y ahenk` +
    `apt-get autoremove -y`; daha önce zaten kuruluysa korunur.

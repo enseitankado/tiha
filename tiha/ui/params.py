@@ -74,6 +74,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help_more_label": t("ui.pages.help_more_details"),
         },
         {
+            # EBA QR ilk-giriş parola diyaloğunu kapatır (eski m13 adımının
+            # işlevi). Varsayılan işaretli — sınıf ortamında parola ifşasını
+            # önlemek için. Kutu sistemin GERÇEK durumunu yansıtır: diyalog
+            # zaten gizliyse işaretli açılır.
+            "key": "disable_qr_password_dialog",
+            "label": t("m01.params.disable_qr_password_dialog.label"),
+            "type": "bool",
+            "required": False,
+            "default": "True",
+            "default_from": "qr_password_dialog_disabled",
+            "help": t("m01.params.disable_qr_password_dialog.help"),
+        },
+        {
             "key": "remove_student",
             "label": t("m01.params.remove_student.label"),
             "type": "button",
@@ -210,6 +223,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "True",
+            # Sistem durumunu yansıt: paketler + smartd aktifse işaretli aç.
+            "default_from": "smart_monitoring_active",
             "help": t("m06.params.install_smart_monitoring.help"),
         },
         {
@@ -218,6 +233,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "bool",
             "required": False,
             "default": "False",
+            # Yeniden açıldığında paket + servis çalışıyorsa işaretli aç.
+            "default_from": "node_exporter_active",
             "help": t("m06.params.install_node_exporter.help"),
         },
         {
@@ -226,6 +243,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "type": "text",
             "required": False,
             "default": ":9100",
+            # /etc/default/prometheus-node-exporter'dan mevcut adresi doldur.
+            "default_from": "node_exporter_current_listen",
             "enable_when_field": "install_node_exporter",
             "help": t("m06.params.node_exporter_listen.help"),
         },
@@ -372,6 +391,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "placeholder": t("m11.params.exempt_macs.placeholder"),
             # Kapanma modu seçilmemişse muaf tutulacak bir şey yok: kutu pasif.
             "enable_when_any": ["auto_enabled", "idle_enabled"],
+            # MAC adresleri sabit karakter genişliğinde okunsun (aa:bb:cc:…).
+            "monospace": True,
             "help": t("m11.params.exempt_macs.help"),
         },
     ],

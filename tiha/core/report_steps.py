@@ -188,6 +188,15 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
     # "Fazladan hesapları sil" düğmesi (Toplu PIN adımındakinin aynası)
     _narrate_extra_removed(ctx, rep)
 
+    # QR ilk-giriş parola diyaloğu (eski m13; artık m01'in bir kutusu)
+    qr = d.get("qr_dialog") or {}
+    if qr.get("action") == "hide":
+        rep.done.append(t("m13.report.hidden"))
+        rep.tests.append(t("m13.report.test_first_login"))
+        rep.notes.append(t("m13.report.note"))
+    elif qr.get("action") == "restore":
+        rep.done.append(t("m01.report.qr_restored"))
+
     # Klonda deneyin
     if "etapadmin" in ok:
         rep.tests.append(t("m01.report.test_etapadmin"))
@@ -977,8 +986,14 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
                 "core.report.warn.wipe_no_pin",
                 wipe=q("m02_boot_password_wipe"), pin=q("m03_otp_secrets"),
             ))
-    if "m13_password_dialog" in applied and "m03_otp_secrets" not in applied:
-        w.append(t("core.report.warn.qr_no_pin", qr=q("m13_password_dialog")))
+    # m01 içinde QR diyaloğunu gizlediyseniz ama PIN adımı uygulanmadıysa,
+    # klon öğretmeni ne parola tanımlayabilecek ne PIN'le girebilecek.
+    _qr_hid = (
+        m01 is not None and m01.applied
+        and (m01.data.get("qr_dialog") or {}).get("action") == "hide"
+    )
+    if _qr_hid and "m03_otp_secrets" not in applied:
+        w.append(t("core.report.warn.qr_no_pin", qr=q("m01_initial_passwords")))
     if (m01 is not None and m03 is not None and m01.applied and m03.applied
             and (m01.data.get("created_reserve") or m01.data.get("created_branches"))
             and ts("m01_initial_passwords") > ts("m03_otp_secrets")):
@@ -1010,19 +1025,10 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
 
     # --- Uyandırma, kapanma ve BIOS -------------------------------------------
     wol_on = m15 is not None and m15.applied and not m15.data.get("feature_off")
-    if wol_on and m11 is not None and m11.applied and m11.flag("idle_enabled"):
-        idle = m11.num("idle_minute", 15) or 15
-        cs = m11.num("countdown_seconds", 120) or 120
-        w.append(t("core.report.warn.wol_idle", idle=idle, duration=_duration(cs)))
     if _bios_on(m14) and wol_on:
         if m14.data.get("protection") == "always":
             w.append(t("core.report.warn.bios_always_wol"))
         w.append(t("core.report.warn.bios_wol"))
-    if _bios_on(m14) and "m12_ahenk_reset" in applied:
-        w.append(t(
-            "core.report.warn.bios_ahenk",
-            bios=q("m14_bios_password"), ahenk=q("m12_ahenk_reset"),
-        ))
 
     # --- Açılış güvenliği bütünlüğü --------------------------------------------
     if _grub_on(m16) and not _bios_on(m14):

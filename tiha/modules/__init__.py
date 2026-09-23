@@ -18,7 +18,11 @@ from .m09_system_update import SystemUpdateModule
 from .m10_image_sanitize import ImageSanitizeModule
 from .m11_power_management import PowerManagementModule
 from .m12_ahenk_reset import AhenkResetModule
-from .m13_password_dialog import PasswordDialogModule
+# m13 (PasswordDialogModule) artık ayrı bir sihirbaz adımı değil;
+# m01 (Yerel hesaplar) altındaki "QR ilk-giriş parola diyaloğunu kapat"
+# kutusuna delege ediliyor. Sınıf modülün dosyası duruyor, m01 ondan
+# çağırıyor.
+from .m13_password_dialog import PasswordDialogModule  # noqa: F401
 from .m14_bios_password import BiosPasswordModule
 from .m15_wake_on_lan import WakeOnLanModule
 from .m16_grub_protection import GrubProtectionModule
@@ -42,7 +46,6 @@ def all_modules() -> list[Module]:
         InitialPasswordsModule(),
         BootPasswordWipeModule(),
         OTPSecretsModule(),
-        PasswordDialogModule(),
         SSHServerModule(),
         SambaShareModule(),
         RemoteSyslogModule(),

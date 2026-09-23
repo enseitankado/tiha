@@ -73,8 +73,8 @@ REGEN_SSH_SENTINEL = Path("/var/lib/tiha/first-boot-sshkeys.done")
 
 # TiHA'nın kendi kayıt dizini (/var/lib/tiha) imajla bütün klonlara gider.
 # Klonların ihtiyaç duymadığı ama gizli bilgi taşıyan yedekler sanitize'da
-# silinir. Klonların ihtiyaç duyduğu dosyalara (imaged-mac, günce, diğer
-# adımların yedekleri) dokunulmaz.
+# silinir. Klonların ihtiyaç duyduğu dosyalara (imaged-mac-ahenk,
+# imaged-mac-bios, günce, diğer adımların yedekleri) dokunulmaz.
 #   - Kullanıcı parolaları: parola değişikliğinden önceki /etc/shadow
 #     yedeği (eski parola özetleri) ve kenara alınmış anahtarlıklar
 #   - PIN anahtarları: bütün anahtarları QR kodlarıyla içeren kâğıtlar ve

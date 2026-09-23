@@ -589,3 +589,27 @@ scrolledwindow.tiha-textarea textview {
 .tiha-branch-has-account label {
     font-weight: bold;
 }
+
+/* --- Düğme boyu --------------------------------------------------------
+   eta teması metinli düğmeleri kalın ve iri çiziyor; formdaki 10pt
+   yazıların ve 24-26 px kutucukların yanında fazla baskın duruyorlardı.
+   Yalnız metinli düğmeler (text-button) hedeflenir: simgeli düğmeler
+   (çip kapatma, spin +/-), combobox ve "?" yardım düğmesi kendi
+   kurallarını korur. */
+.tiha button.text-button:not(.tiha-help-btn),
+.tiha-branch-dialog button.text-button {
+    font-size: 10pt;
+    font-weight: normal;
+    min-height: 24px;
+    padding: 3px 12px;
+}
+/* Ana eylem (Uygula, Tamam) vurgusunu kalın yazıyla korur. */
+.tiha button.text-button.suggested-action,
+.tiha-branch-dialog button.text-button.suggested-action {
+    font-weight: 600;
+}
+
+/* --- Sabit genişlik textview (m11 MAC istisna listesi) ---------------- */
+textview.tiha-monospace text {
+    font-family: "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", monospace;
+}

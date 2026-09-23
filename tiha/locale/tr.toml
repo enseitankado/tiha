@@ -738,12 +738,6 @@ saatinin okul ağında doğru eşitlendiğinden emin olun{suffix}\
 """
 time_suffix_pin = "; PIN kodları saat 30 saniyeden fazla kayınca reddedilir."
 time_suffix = "."
-wol_idle = """\
-Uzaktan uyandırılan bir tahta, kimse kullanmazsa yaklaşık {idle} dakika + \
-{duration} sonra giriş ekranında kendiliğinden kapanacak (kullanılmadığında \
-kapatma giriş ekranında da çalışır). Tahtaları dersten çok önce \
-uyandıracaksanız kullanılmama süresini buna göre seçin.\
-"""
 bios_always_wol = """\
 BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan uyandırmayı \
 açtınız: uzaktan uyandırılan tahtalar BIOS parola ekranında bekleyip işletim \
@@ -754,12 +748,6 @@ Uzaktan uyandırma her tahtada BIOS ayarı (Wake on LAN açık, ErP ve Deep \
 Sleep kapalı) ister ve BIOS'a yönetici parolası koyduğunuz için bu ayarları \
 yapmak her tahtada o parolayı gerektirecek. BIOS ayarlarını mümkünse parola \
 ayarlanmadan önce yapın.\
-"""
-bios_ahenk = """\
-{bios} ve {ahenk} aynı MAC imzasını kullanıyor. BIOS parolası klonun ilk \
-açılışında ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki \
-açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan sonra \
-BIOS'a girerek mutlaka doğrulayın.\
 """
 grub_no_bios = """\
 GRUB menüsünü korudunuz ama BIOS parolası ayarlamadınız: tahtaya erişen biri \
@@ -995,6 +983,17 @@ anahtarları" adımıyla giriş kısayolları üretilebilir. Hesabı olan bir \
 branşı listeden çıkarıp uygularsanız o hesap ev dizini ve PIN \
 anahtarıyla silinir (önce onay sorulur).\
 """
+[m01.params.disable_qr_password_dialog]
+label = "EBA QR ilk girişte 'parola tanımla' penceresini kapat"
+help = """\
+EBA QR kodu ile ilk kez giriş yapan öğretmene Pardus ETAP otomatik bir \
+'parola belirleyin' penceresi açar. Sınıfta öğrencilerin gözü önünde \
+parola yazmak zorunda kalmasın diye TiHA bu diyalogu varsayılan olarak \
+kapatır (paket kaldırılmaz — yalnız otomatik açılış devre dışıdır; \
+öğretmen isterse Sistem Ayarları'ndan parolasını yine belirleyebilir). \
+İşareti kaldırıp uygularsanız pencere geri gelir.\
+"""
+
 [m01.params.remove_student]
 label = "Öğrenci Hesabını Sil"
 help = "Öğrenci hesabı güvenlik riski oluşturur. Bu buton ile güvenli şekilde silebilirsiniz."
@@ -1103,6 +1102,11 @@ reserve_purge_start = "{count} yedek hesap ev dizinleriyle siliniyor…"
 reserve_purge_failed = "  ✗ {user} silinemedi"
 reserve_purge_title = "Silinen yedek hesaplar ({count}):"
 reserve_purge_users = "  {users}"
+qr_dialog_hiding = "EBA QR parola diyaloğu kapatılıyor..."
+qr_dialog_restoring = "EBA QR parola diyaloğu geri getiriliyor..."
+qr_dialog_failed = "QR parola diyaloğu işlemi başarısız: {reason}"
+summary_qr_hidden = "QR parola diyaloğu kapatıldı"
+summary_qr_restored = "QR parola diyaloğu geri getirildi"
 
 [m01.pre_apply]
 branch_delete_title = "{count} branş hesabı silinsin mi?"
@@ -1127,6 +1131,8 @@ reserve_deleted = "{count} yedek hesap silindi: {users}"
 branches_deleted = "{count} branş hesabı silindi: {users}"
 users_restored = "{count} kullanıcı geri yüklendi: {users}"
 keyrings_restored = "{count} anahtarlık dosyası yerine konuldu"
+qr_restored = "QR parola diyaloğu geri getirildi"
+qr_hidden = "QR parola diyaloğu tekrar kapatıldı"
 
 [m01.action]
 no_system_users = "Silinecek sistem kullanıcısı bulunamadı."
@@ -1153,6 +1159,7 @@ users_admin_opened = "Kullanıcılar ve Gruplar '{user}' oturumunda açıldı."
 users_admin_opened_details = "Pencereyi kapattığınızda bu adımdaki hesap durumu önizlemesi yenilenir."
 
 [m01.report]
+qr_restored = "EBA QR ilk-giriş parola diyaloğunu tekrar açık hâle getirdiniz."
 admins_set_one = "{users} parolasını ayarladınız."
 admins_set_many = "{users} parolalarını ayarladınız."
 ogretmen_set = "Ortak öğretmen hesabının (ogretmen) parolasını ayarlayıp hesabın kilidini açtınız."
@@ -3818,10 +3825,8 @@ Klona gömülecek komut: bios set --yonetici <{length} kr> (Faz 1: yalnız \
 yönetici → BIOS setup'a girilirken sorulur)\
 """
 no_mac = "Birincil ağ arayüzünün MAC adresi tespit edilemedi; klon tespiti için imza yazılamaz."
-mac_dir_failed = "İmza dizini oluşturulamadı: {error}"
 mac_written = "MAC imzası yazıldı: {path} = {mac}"
 mac_write_failed = "İmza dosyası yazılamadı: {error}"
-mac_exists = "MAC imzası zaten mevcut: {path} (paylaşımlı)"
 copy_failed = "eta-112 sisteme kopyalanamadı: {error}"
 copied = "eta-112 kopyalandı: {path}"
 files_failed = "Boot servis dosyaları yazılamadı: {error}"

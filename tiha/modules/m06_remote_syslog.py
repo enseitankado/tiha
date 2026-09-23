@@ -50,6 +50,7 @@ rsyslog yeniden başlatılır.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from ..core.i18n import t
@@ -242,12 +243,65 @@ ruleset(name="tiha_remote"
 """
 
 
+def _pkg_installed(pkg: str) -> bool:
+    """dpkg-query ile paketin kurulu olup olmadığını döndürür."""
+    r = run_cmd(["dpkg-query", "-W", "-f=${Status}", pkg], check=False)
+    return r.ok and "install ok installed" in r.stdout
+
+
+def _svc_active(unit: str) -> bool:
+    """systemctl is-active ile servisin çalışır durumda olduğunu döndürür."""
+    r = run_cmd(["systemctl", "is-active", "--quiet", unit], check=False)
+    return r.returncode == 0
+
+
+def _read_node_exporter_listen() -> str:
+    """/etc/default/prometheus-node-exporter içindeki ARGS'tan
+    --web.listen-address değerini çek. Yoksa boş döner."""
+    p = Path("/etc/default/prometheus-node-exporter")
+    if not p.is_file():
+        return ""
+    try:
+        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if line.startswith("ARGS=") and "--web.listen-address=" in line:
+                m = re.search(r"--web.listen-address=([^\s\"]+)", line)
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    return ""
+
+
 class RemoteSyslogModule(Module):
     id = "m06_remote_syslog"
     title = t("m06.title")
     sidebar_title = t("m06.sidebar_title")
     apply_hint = t("m06.apply_hint")
     rationale = t("m06.rationale")
+
+    # ------------------------------------------------------------------
+    # Form varsayılanları — kutuların, sistemin GERÇEK durumunu
+    # yansıtarak açılmasını sağlar. TiHA'yı yeniden çalıştırdığınızda
+    # önce uygulanmış ayarlar "işaretsiz" gelmesin diye gereklidir.
+    # ------------------------------------------------------------------
+
+    def node_exporter_active(self) -> str:
+        """Metrik izleme (prometheus-node-exporter) etkin mi?"""
+        return "True" if (
+            _pkg_installed("prometheus-node-exporter")
+            and _svc_active("prometheus-node-exporter")
+        ) else "False"
+
+    def node_exporter_current_listen(self) -> str:
+        """Kurulu servis hangi adresi dinliyor? Boşsa ":9100" varsayılanı."""
+        return _read_node_exporter_listen() or ":9100"
+
+    def smart_monitoring_active(self) -> str:
+        """Disk sağlığı + sıcaklık izleme etkin mi?"""
+        return "True" if (
+            _pkg_installed("smartmontools") and _svc_active("smartd")
+        ) else "False"
 
     def preview(self) -> str:
         # m08 stiliyle: hizalı key-value başlık + girintili dash liste.

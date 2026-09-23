@@ -2,12 +2,18 @@
 
 Bu adım klon makinelerin **ilk açılışında** BIOS yönetici parolasını
 istenen değere ayarlayan tek-seferlik bir boot servisi imaja gömer.
-Kaynak tahtada (imajı aldığınız tahta) parola DEĞİŞMEZ; m12'deki
-MAC imzası mekanizması burada da yeniden kullanılır:
+Kaynak tahtada (imajı aldığınız tahta) parola DEĞİŞMEZ. MAC imzası
+mekanizması m12'nin yaklaşımına benzer ama BIOS adımına özel bir
+DOSYA kullanır (``imaged-mac-bios``); m12'nin ``imaged-mac-ahenk``
+dosyasıyla karıştırılmaz. Böylece BIOS'un ilk boot denemesi transient
+bir hatayla başarısız olsa da sonraki boot'ta imza yeni MAC'e
+güncellenmemiş olur ve klon-tespiti tekrar çalışır:
 
   * MAC eşit → kaynak tahta → işlem yok
   * MAC farklı → klon → eta-112 ile parola ayarla, sentinel yaz,
     servis kendini disable et, parolayı içeren scripti sil.
+  * MAC farklı ama eta-112 başarısız → sentinel YAZILMAZ; sonraki
+    boot'ta tekrar denenir (imza yerinde durduğu için).
 
 Donanım desteği: eta-112 yalnızca önceden kalibre edilmiş AMI Aptio
 BIOS sürümlerinde çalışır (örn. Faz 2 Vestel Gri — VESTEL 14MB37C1 /
@@ -196,9 +202,16 @@ def read_current_supervisor() -> str:
 
 # --- Sistem yerleşimi -------------------------------------------------------
 
-# m12 ile paylaşılan kaynak tahta imzası. Hangi modül önce uygularsa
-# yazar; sonraki modül varsa dokunmaz.
-IMAGED_MAC_FILE = STATE_DIR / "imaged-mac"
+# BIOS adımının KENDİ kaynak-tahta imzası. m12 (Ahenk klon-reclaim) ile
+# ORTAK dosya kullanmıyoruz. Sebep: m12'nin boot betiği başarılı bir
+# yeniden kayıt sonrası imzayı klonun yeni MAC'iyle üzerine yazıyor.
+# Paylaşımlı bir dosya olsaydı ve BIOS'un ilk boot denemesi başarısız
+# olsaydı (transient hata, güç durumu, timeout vb.), sonraki boot'ta
+# imza artık klonun MAC'iyle eşleşiyor olacak ve m14 kendini "kaynak
+# tahta" sanıp sessizce atlayacaktı — BIOS koruması hiç kurulmamış
+# olarak kalırdı. Her modül kendi imzasını yönetince m14, ilk denemesi
+# başarısız olsa da her boot'ta tekrar deneyip başarabilir.
+IMAGED_MAC_FILE = STATE_DIR / "imaged-mac-bios"
 
 # Klona kopyalanacak eta-112 aracı (parola ayarlanması burada koşacak).
 BUNDLED_ETA_112 = Path("/usr/local/sbin/tiha-eta-112.py")
@@ -720,26 +733,21 @@ class BiosPasswordModule(Module):
                 else:
                     progress(t("m14.apply.cmd_faz1_setup", length=len(pw)))
 
-        # 4) MAC imzası — m12 paylaşımlı (idempotent)
+        # 4) MAC imzası — m14'ün kendi dosyası (imaged-mac-bios).
+        # Adımın kendine ait olduğu için idempotent üzerine yazıyoruz:
+        # yeniden apply çalıştırmak imzayı güncelleyip klon boot'unda
+        # doğru "source" karşılaştırmasını korur.
         mac = _primary_mac()
         if not mac:
             return ApplyResult(False, t("m14.apply.no_mac"))
         try:
             IMAGED_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
+            IMAGED_MAC_FILE.write_text(mac + "\n", encoding="utf-8")
         except OSError as exc:
-            return ApplyResult(False, t("m14.apply.mac_dir_failed", error=exc))
-        wrote_mac = False
-        if not IMAGED_MAC_FILE.exists():
-            try:
-                IMAGED_MAC_FILE.write_text(mac + "\n", encoding="utf-8")
-                wrote_mac = True
-                if progress:
-                    progress(t("m14.apply.mac_written", path=IMAGED_MAC_FILE, mac=mac))
-            except OSError as exc:
-                return ApplyResult(False, t("m14.apply.mac_write_failed", error=exc))
-        else:
-            if progress:
-                progress(t("m14.apply.mac_exists", path=IMAGED_MAC_FILE))
+            return ApplyResult(False, t("m14.apply.mac_write_failed", error=exc))
+        wrote_mac = True
+        if progress:
+            progress(t("m14.apply.mac_written", path=IMAGED_MAC_FILE, mac=mac))
 
         # 5) eta-112'yi sisteme kopyala
         try:
@@ -1046,8 +1054,9 @@ class BiosPasswordModule(Module):
             notes.append(t("m14.undo.deleted", path=FIRST_BOOT_SENTINEL))
         run_cmd(["systemctl", "daemon-reload"], check=False)
 
-        # MAC imzasını YALNIZCA biz yazdıysak sil — m12 de paylaşıyor.
-        if data.get("wrote_mac") and _rm(IMAGED_MAC_FILE):
+        # MAC imzası artık BIOS adımına özgü (imaged-mac-bios). Undo,
+        # dosyayı serbestçe siler; m12 kendi ayrı imzasını yönetir.
+        if _rm(IMAGED_MAC_FILE):
             notes.append(t("m14.undo.mac_deleted", path=IMAGED_MAC_FILE))
 
         return ApplyResult(
