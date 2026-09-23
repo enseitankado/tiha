@@ -1613,6 +1613,29 @@ class OTPSecretsModule(Module):
   }}
   .save-img:hover, .save-all:hover {{ background: #eef4ff; }}
   .toolbar {{ margin: 0 0 16px 0; font-size: 9pt; color: #666; }}
+  /* Resim çıktısı telefonda açılır: dikey düzen. Yalnız dışa aktarılan
+     kopyaya uygulanır; sayfadaki görünüm değişmez. Sıra: başlık, uyarı,
+     büyük QR, anahtar, adımlar. */
+  .card.phone {{
+    flex-direction: column; align-items: stretch; gap: 12px;
+    width: 400px; box-sizing: border-box; margin: 0; padding: 18px;
+    border-style: solid; background: #fff;
+  }}
+  .card.phone > .body {{ display: contents; }}
+  .card.phone header {{ order: 1; }}
+  .card.phone .warn {{ order: 2; margin: 0; font-size: 10pt; }}
+  .card.phone .qr {{ order: 3; align-self: center; }}
+  .card.phone .qr svg {{ width: 280px; height: 280px; }}
+  .card.phone .qr .qr-label {{ font-size: 9pt; }}
+  .card.phone .secret {{ order: 4; text-align: center; }}
+  .card.phone .secret .key {{
+    font-size: 16pt; margin: 4px 0 0 0;
+    width: 22ch; white-space: normal; text-align: center;
+  }}
+  .card.phone .instructions {{ order: 5; }}
+  .card.phone .instructions ol {{ font-size: 10.5pt; }}
+  .card.phone h2 {{ font-size: 15pt; }}
+  .card.phone h2 .kind {{ display: block; margin-top: 2px; }}
   .toolbar .save-all {{ font-size: 10pt; margin: 0 8px 0 0; }}
   @media print {{
     body {{ margin: 8mm; }}
@@ -1657,15 +1680,19 @@ class OTPSecretsModule(Module):
   var css = document.querySelector("style").textContent;
   function cardToPng(card) {{
     return new Promise(function (resolve, reject) {{
-      var w = card.offsetWidth, h = card.offsetHeight, scale = 2, pad = 12;
+      var scale = 3, pad = 12;
       var clone = card.cloneNode(true);
       clone.querySelectorAll(".no-export").forEach(function (n) {{ n.remove(); }});
       clone.querySelectorAll(".qr-active").forEach(function (n) {{ n.classList.remove("qr-active"); }});
-      clone.style.margin = "0";
-      // offsetWidth kenarlık ve iç boşluğu içerir; klon aynı kutuya sığsın.
-      clone.style.boxSizing = "border-box";
-      clone.style.width = w + "px";
+      // Telefon düzeni: kopya sayfa dışında dizilip ölçülür.
+      clone.classList.add("phone");
+      var holder = document.createElement("div");
+      holder.style.cssText = "position:absolute;left:-10000px;top:0;";
+      holder.appendChild(clone);
+      document.body.appendChild(holder);
+      var w = clone.offsetWidth, h = clone.offsetHeight;
       var xhtml = new XMLSerializer().serializeToString(clone);
+      holder.remove();
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + (w + 2 * pad) +
         '" height="' + (h + 2 * pad) + '"><foreignObject x="0" y="0" width="100%" height="100%">' +
         '<div xmlns="http://www.w3.org/1999/xhtml" style="background:#fff;padding:' + pad +

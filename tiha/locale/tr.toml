@@ -1565,7 +1565,7 @@ step_install = "Telefonunuza <strong>Google Authenticator</strong> veya benzeri 
 step_type = "Tür: <em>Zaman tabanlı</em> (varsayılan)."
 group_step_scan = """\
 Uygulamada <em>\"+ Anahtar ekle\"</em> &gt; <em>\"QR kodu tara\"</em>'yı \
-seçip yandaki kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
+seçip bu karttaki QR kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
 ile yukarıdaki anahtarı yazın.\
 """
 group_step_label = "Hesap adı olarak <em>istediğiniz</em> bir etiket yazın (örn. <code>Sınıf-PIN</code>)."
@@ -1575,7 +1575,7 @@ hesabın giriş ekranında kullanılabilir.\
 """
 user_step_scan = """\
 Uygulamada <em>\"+ Anahtar ekle\"</em> &gt; <em>\"QR kodu tara\"</em>'yı \
-seçip yandaki kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
+seçip bu karttaki QR kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
 ile yukarıdaki anahtarı ve hesap adı olarak <code>{user}</code> yazın.\
 """
 user_step_save = """\
