@@ -230,6 +230,8 @@ class BranchPickerDialog(Gtk.Dialog):
         self._school_list = Gtk.ListBox()
         self._school_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._school_list.set_header_func(self._school_header)
+        # Açık sarı arka plan (styles.css .tiha-branch-school-list).
+        self._school_list.get_style_context().add_class("tiha-branch-school-list")
         for key in self._keys:
             row = Gtk.ListBoxRow()
             row._key = key  # type: ignore[attr-defined]

@@ -228,11 +228,79 @@ _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
     (t("m10.title"), t("ui.welcome.features.m10")),
 )
 
-_WELCOME_FLOW = t("ui.welcome.flow")
 
-# Proje deposu (Hoşgeldiniz sayfasında tıklanabilir satır olarak gösterilir).
-_WELCOME_REPO_URL = "https://github.com/enseitankado/tiha"
-_WELCOME_REPO_LABEL = t("ui.welcome.repo_label")
+
+def _build_welcome_host_table() -> Gtk.Widget:
+    """Karşılama sayfasında hoşgeldiniz metninden sonra çıkan
+    "bu tahta" özeti — donanım ve sistem iki sütun hâlinde.
+
+    Layout: 4 kolonlu Gtk.Grid (label1, value1 | label2, value2). Sol
+    grup donanım (Model/BIOS/CPU/RAM/Disk/Ekran), sağ grup sistem
+    (Hostname/MAC/OS/Kernel/Masaüstü). Değerler ``host_info.collect()``
+    ile bir kez toplanır. Grid dikey kaydırma çıkarmayacak yüksekliktedir.
+    """
+    from ..core.host_info import collect
+
+    try:
+        info = collect()
+    except Exception as exc:  # noqa: BLE001 — asla sayfayı düşürme
+        log.warning("Host info toplanamadı: %s", exc)
+        return _wrapping_label(t("ui.welcome.host.loading"))
+
+    unknown = t("ui.welcome.host.label_unknown")
+
+    def cell(text: str) -> str:
+        return (text or "").strip() or unknown
+
+    hw_rows: list[tuple[str, str]] = [
+        (t("ui.welcome.host.label_model"), cell(info.model_summary)),
+        (t("ui.welcome.host.label_bios"), cell(info.bios_summary)),
+        (t("ui.welcome.host.label_cpu"), cell(info.cpu_summary)),
+        (t("ui.welcome.host.label_memory"), cell(info.memory_human)),
+        (t("ui.welcome.host.label_disk"), cell(info.disk_human)),
+        (t("ui.welcome.host.label_display"), cell(info.display)),
+    ]
+    sys_rows: list[tuple[str, str]] = [
+        (t("ui.welcome.host.label_hostname"), cell(info.hostname)),
+        (t("ui.welcome.host.label_mac"), cell(info.net_summary)),
+        (t("ui.welcome.host.label_os"), cell(info.os_name)),
+        (t("ui.welcome.host.label_kernel"), cell(info.kernel)),
+        (t("ui.welcome.host.label_desktop"), cell(info.desktop)),
+    ]
+
+    outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    outer.set_margin_top(8)
+    outer.get_style_context().add_class("tiha-host-table")
+
+    title = _wrapping_label(
+        t("ui.welcome.host.title"), klass="tiha-form-section",
+    )
+    outer.pack_start(title, False, False, 0)
+
+    grid = Gtk.Grid(column_spacing=14, row_spacing=1)
+    grid.set_margin_start(8)
+    grid.set_column_homogeneous(False)
+
+    def _make_row(row_idx: int, col_offset: int, label: str, value: str) -> None:
+        key_lbl = Gtk.Label(xalign=0)
+        key_lbl.set_markup(f"<b>{GLib.markup_escape_text(label)}</b>")
+        val_lbl = Gtk.Label(label=value, xalign=0)
+        val_lbl.set_selectable(True)
+        val_lbl.set_line_wrap(True)
+        val_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        val_lbl.set_max_width_chars(48)
+        val_lbl.set_hexpand(True)
+        grid.attach(key_lbl, col_offset + 0, row_idx, 1, 1)
+        grid.attach(val_lbl, col_offset + 1, row_idx, 1, 1)
+
+    total_rows = max(len(hw_rows), len(sys_rows))
+    for i in range(total_rows):
+        if i < len(hw_rows):
+            _make_row(i, 0, hw_rows[i][0], hw_rows[i][1])
+        if i < len(sys_rows):
+            _make_row(i, 2, sys_rows[i][0], sys_rows[i][1])
+    outer.pack_start(grid, False, False, 0)
+    return outer
 
 
 class WelcomePage(Gtk.Box):
@@ -264,6 +332,10 @@ class WelcomePage(Gtk.Box):
 
         add_paragraph(_WELCOME_INTRO)
 
+        # Bu tahtanın donanım + işletim sistemi özeti (iki sütun).
+        # Hoşgeldiniz metninden hemen sonra, adımlar listesinden önce.
+        self.pack_start(_build_welcome_host_table(), False, False, 0)
+
         title_lbl = _wrapping_label(_WELCOME_FEATURES_TITLE, klass="tiha-form-section")
         title_lbl.set_max_width_chars(110)
         title_lbl.set_margin_top(4)
@@ -287,23 +359,6 @@ class WelcomePage(Gtk.Box):
             features_grid.attach(title_lbl, 1, row_idx, 1, 1)
             features_grid.attach(desc_lbl,  2, row_idx, 1, 1)
         self.pack_start(features_grid, False, False, 0)
-
-        flow_lbl = _wrapping_label(_WELCOME_FLOW)
-        flow_lbl.set_max_width_chars(110)
-        flow_lbl.set_margin_top(8)
-        self.pack_start(flow_lbl, False, False, 0)
-
-        # GitHub depo bağlantısı — tıklanabilir.
-        repo_lbl = Gtk.Label(xalign=0)
-        repo_lbl.set_markup(
-            f'<a href="{GLib.markup_escape_text(_WELCOME_REPO_URL)}">'
-            f'{GLib.markup_escape_text(_WELCOME_REPO_LABEL)}</a>'
-        )
-        repo_lbl.set_use_markup(True)
-        repo_lbl.set_track_visited_links(False)
-        repo_lbl.set_margin_top(12)
-        repo_lbl.set_max_width_chars(110)
-        self.pack_start(repo_lbl, False, False, 0)
 
 
 # =========================================================================
@@ -996,8 +1051,12 @@ class ModulePage(Gtk.Box):
             tv = Gtk.TextView()
             tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
             # MAC listesi gibi sabit-genişlik gösterim isteyen alanlar
-            # için şema "monospace": True taşır. Font stili CSS'te.
+            # için şema "monospace": True taşır. GTK3'ün yerleşik
+            # ``TextView.set_monospace()`` teması güvenilir biçimde
+            # monospace fontuna geçirir; CSS class ayrıca boy/renk
+            # ince ayarı için kalır.
             if field.get("monospace"):
+                tv.set_monospace(True)
                 tv.get_style_context().add_class("tiha-monospace")
             buf = tv.get_buffer()
             placeholder = field.get("placeholder")

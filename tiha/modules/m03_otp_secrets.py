@@ -617,6 +617,57 @@ def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
     return gecos or user
 
 
+def _paper_filename_slug(
+    user: str, is_group: bool, display: str, branches: set[str],
+) -> str:
+    """PIN anahtarı kağıdı PNG dosyasının adı.
+
+    - Grup: ``pin-anahtari-<grup>-ortak.png`` (ör. ogretmenler → ortak).
+    - Branş: ``pin-anahtari-brans-<ingilizce>.png`` (MEB tablosundan
+      İngilizce karşılık; yoksa Türkçe transliterasyon).
+    - Kişisel/yedek: ``pin-anahtari-<ad-soyad>.png`` (GECOS adından
+      slugify; yoksa kullanıcı adının kendisi).
+    """
+    import re as _re
+    from ..core.meb_data import (
+        _TR_ASCII, branch_english_slug, branch_to_username,
+    )
+
+    def _slug(text: str) -> str:
+        t = text.translate(_TR_ASCII).lower()
+        t = _re.sub(r"[\s_/]+", "-", t)
+        t = _re.sub(r"[^a-z0-9-]", "", t)
+        t = _re.sub(r"-+", "-", t).strip("-")
+        return t
+
+    if is_group:
+        name = user.lstrip("@") or "grup"
+        return f"pin-anahtari-{_slug(name)}-ortak"
+
+    # Branş hesabı: display genellikle Türkçe branş adı; branches setine
+    # bu kullanıcı adının denk düşen etiketini bulup İngilizce slug
+    # üretiyoruz.
+    if user in branches:
+        # Kullanıcı adına eş bir Türkçe branş adı bulmak için branş
+        # listesinin tümüne bakıyoruz (küçük veri, arama pahalı değil).
+        try:
+            from ..core.meb_data import all_branch_labels
+            for label in all_branch_labels():
+                if branch_to_username(label) == user:
+                    return f"pin-anahtari-brans-{branch_english_slug(label)}"
+        except Exception:  # noqa: BLE001
+            pass
+        return f"pin-anahtari-brans-{_slug(user)}"
+
+    # Kişisel/yedek: GECOS'tan ad-soyad. display "Ayşe Yılmaz" gibi
+    # olur; slugify: "ayse-yilmaz".
+    name = display or user
+    slug = _slug(name)
+    if not slug:
+        slug = _slug(user) or "kart"
+    return f"pin-anahtari-{slug}"
+
+
 def otpauth_url(username: str, secret: str) -> str:
     """Google Authenticator/Authy vb.'in kabul ettiği otpauth:// URL'si."""
     issuer_enc = quote(OTP_ISSUER)
@@ -1525,8 +1576,9 @@ class OTPSecretsModule(Module):
                 + "    </ol>"
             )
             badge = badge_html if is_new else ""
+            file_slug = _paper_filename_slug(user, is_group, display, branches)
             cards.append(f'''
-<article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}" data-user="{_esc(user.lstrip('@') + ('-grubu' if is_group else ''))}">
+<article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}" data-user="{_esc(user.lstrip('@') + ('-grubu' if is_group else ''))}" data-filename="{_esc(file_slug)}">
   <div class="body">
     <header>
       <h2>{_esc(display)}{kind_html}{badge}</h2>
@@ -1720,7 +1772,9 @@ class OTPSecretsModule(Module):
     document.body.appendChild(a); a.click(); a.remove();
   }}
   function fileName(card) {{
-    return "pin-" + (card.getAttribute("data-user") || "kart") + ".png";
+    var slug = card.getAttribute("data-filename")
+      || ("pin-anahtari-" + (card.getAttribute("data-user") || "kart"));
+    return slug + ".png";
   }}
   function saveCard(card) {{
     return cardToPng(card).then(function (url) {{ download(url, fileName(card)); }})

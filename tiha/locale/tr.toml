@@ -309,14 +309,22 @@ onlarca tahtaya dağıtırsınız. Her klon aynı ayarlarla, ama kendi kimliğiy
 açılır.\
 """
 features_title = "Adımlar"
-flow = """\
-Adımlar sırayla ilerler. Her adım ne yapacağını ve neden gerektiğini \
-açıklar, uygulamadan önce onayınızı alır, sonucu gösterir; gerekirse geri \
-alınabilir. İstemediğiniz adımları atlayabilirsiniz. İmaj öncesi temizliği \
-en sona, imajı almadan hemen öncesine bırakın. Başlamak için soldaki \
-listeden bir adım seçin ya da “İleri” düğmesine basın.\
-"""
-repo_label = "Proje deposu: kaynak kod, sürüm geçmişi ve hata bildirimi"
+
+[ui.welcome.host]
+title = "Bu tahta"
+loading = "Bilgiler alınıyor…"
+label_model = "Model"
+label_bios = "BIOS"
+label_cpu = "İşlemci"
+label_memory = "Bellek"
+label_disk = "Disk"
+label_display = "Ekran"
+label_hostname = "Ana bilgisayar adı"
+label_mac = "MAC"
+label_os = "İşletim sistemi"
+label_kernel = "Çekirdek"
+label_desktop = "Masaüstü"
+label_unknown = "?"
 
 [ui.welcome.features]
 m09 = "Paketleri imaj alınmadan önce günceller."
@@ -662,7 +670,7 @@ tests_hint = "İmajı en az bir tahtaya yazın ve her maddeyi o klon tahtada den
 shadow = "parola değişikliği öncesi /etc/shadow yedeği"
 keyrings = "kenara alınmış anahtarlıklar"
 otp_backup = "PIN anahtarlarının yedeği"
-pin_papers = "PIN kâğıtları (bütün anahtarlar QR'lı)"
+pin_papers = "PIN anahtarı kağıtları (bütün anahtarlar QR'lı)"
 
 [core.report.warn]
 failed = """\
@@ -760,7 +768,7 @@ BIOS parolası ayarladınız ama GRUB menüsünü korumadınız: açılış men�
 sensitive = """\
 TiHA'nın kayıt dizininde (/var/lib/tiha) imajla bütün klonlara gidecek \
 hassas yedekler var: {items}. {step} adımı bunları siler; imajı almadan önce \
-o adımı {again}çalıştırın. PIN kâğıdını daha önce yazdırın ya da kaydedin.\
+o adımı {again}çalıştırın. PIN anahtarı kağıdını daha önce yazdırın ya da kaydedin.\
 """
 again = "yeniden "
 
@@ -1478,8 +1486,8 @@ greeter_updated = "✓ Greeter cache güncellendi"
 greeter_not_needed = "{count} kullanıcı var — greeter cache gerekli değil (limit: {limit})"
 display_admin = "Sistem Yöneticisi (etapadmin)"
 display_group = "Ogretmenler grubu — ORTAK PIN"
-paper_written = "🖨️ Yazdırılabilir kâğıt ({count} anahtar): {path}"
-paper_header = "🖨️ Yazdırılabilir öğretmen kâğıdı — sistemdeki {count} anahtarın tamamı:"
+paper_written = "🖨️ Yazdırılabilir PIN anahtarı kağıdı ({count} anahtar): {path}"
+paper_header = "🖨️ Yazdırılabilir öğretmen PIN anahtarı kağıdı — sistemdeki {count} anahtarın tamamı:"
 paper_print_hint = "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin."
 paper_autoopen = "  (Etapadmin oturumunda otomatik açılmayı denedik.)"
 paper_save_hint = "  'Dosyaya kaydet…' bu kâğıdı HTML olarak kaydeder."
@@ -1495,7 +1503,7 @@ Bu adımda {count} hesabın PIN anahtarı DEĞİŞTİ:\n\
 \n\
 {users}\n\
 \n\
-Bu hesapların telefonlarındaki eski kayıt artık çalışmaz. Yeni PIN kâğıdını \
+Bu hesapların telefonlarındaki eski kayıt artık çalışmaz. Yeni PIN anahtarı kağıdını \
 bu öğretmenlere mutlaka yeniden teslim edin.\
 """
 tool_running = "enseitankado/eta-otp-cli aracı çalıştırılıyor (sadece OTP anahtarları)…"
@@ -1530,8 +1538,8 @@ teslim edin.\
 
 [m03.paper]
 html_lang = "tr"
-title = "Öğretmen PIN kâğıtları — {ts}"
-heading = "Öğretmen PIN Kâğıtları"
+title = "Öğretmen PIN anahtarı kağıtları — {ts}"
+heading = "Öğretmen PIN Anahtarı Kağıtları"
 meta = """\
 Oluşturulma: {created} ·\n\
 \u0020\u0020Toplam: {total} kâğıt ({new} tanesi bu turda üretildi,\n\
@@ -1543,8 +1551,8 @@ qr_label = "Uygulamayla taratın"
 secret_label = "PIN anahtarı (QR okunmazsa elle girin):"
 user_line = "Kullanıcı adı: <code>{user}</code>"
 group_line = """\
-Grup: <code>{group}</code> — bu PIN, gruba üye tüm öğretmen hesaplarına \
-giriş için geçerlidir.\
+Grup: <code>{group}</code> — bu PIN anahtarı, gruba üye tüm öğretmen \
+hesaplarına giriş için geçerlidir.\
 """
 group_display = "{group} grubu — ORTAK PIN"
 no_account = "{user} (sistemde hesap yok)"
@@ -1580,8 +1588,9 @@ ile yukarıdaki anahtarı yazın.\
 """
 group_step_label = "Hesap adı olarak <em>istediğiniz</em> bir etiket yazın (örn. <code>Sınıf-PIN</code>)."
 group_step_save = """\
-Kaydedin. Bu PIN, tahtada <strong>{group}</strong> grubuna üye herhangi bir \
-hesabın giriş ekranında kullanılabilir.\
+Kaydedin. Bu PIN anahtarından üretilen 6 haneli PIN, tahtada \
+<strong>{group}</strong> grubuna üye herhangi bir hesabın giriş ekranında \
+kullanılabilir.\
 """
 user_step_scan = """\
 Uygulamada <em>\"+ Anahtar ekle\"</em> &gt; <em>\"QR kodu tara\"</em>'yı \
@@ -1721,13 +1730,14 @@ anahtarları imaja taşımamak) tüm PIN anahtarlarını siler. Onay ister; silm
 """
 confirm_title = "Tüm PIN anahtarları silinsin mi?"
 confirm_message = """\
-/etc/otp-secrets.json içindeki BÜTÜN PIN anahtarları silinecek ve bu \
-anahtarları taşıyan yazdırılabilir kâğıtlar da kaldırılacak.\n\
+PIN anahtarları sürekliliği olan değerlerdir; anahtarlar değişirse \
+kullanıcılara anahtarları yeniden dağıtmak zorunda kalırsınız. Bunu \
+kabul ediyor musunuz?\n\
 \n\
-Dağıtılmış anahtarlar geçersiz olur: telefonlardaki kayıtlarla artık tahtaya \
-giriş yapılamaz.\n\
-\n\
-Silme öncesi bir yedek alınır. Devam edilsin mi?\
+/etc/otp-secrets.json içindeki BÜTÜN PIN anahtarları silinir; bu \
+anahtarları taşıyan yazdırılabilir kağıtlar da kaldırılır. Dağıtılmış \
+anahtarlar geçersiz olur; telefonlardaki kayıtlarla artık tahtaya giriş \
+yapılamaz. Silme öncesi bir yedek alınır.\
 """
 
 [m03.params.remove_extra_users]
@@ -1809,11 +1819,11 @@ hesaplar giriş ekranında görünmeyebilir.\
 """
 note_changed = """\
 {count} hesabın PIN anahtarı DEĞİŞTİ ({users}). Bu öğretmenlerin \
-telefonundaki eski kayıt artık çalışmaz; yeni PIN kâğıdını onlara yeniden \
+telefonundaki eski kayıt artık çalışmaz; yeni PIN anahtarı kağıdını onlara yeniden \
 teslim edin.\
 """
 paper = """\
-Tüm anahtarları QR kodlarıyla içeren yazdırılabilir PIN kâğıdı üretildi; \
+Tüm anahtarları QR kodlarıyla içeren yazdırılabilir PIN anahtarı kağıdı üretildi; \
 öğretmenlere yalnızca özelden teslim edin.\
 """
 purged = "Tüm PIN anahtarlarını sildiniz."
@@ -1840,7 +1850,7 @@ saate bağlıdır; saat birkaç dakika bile kaymışsa bütün PIN girişleri \
 reddedilir.\
 """
 test_qr = """\
-PIN kâğıdındaki bir QR kodu telefondaki doğrulayıcı uygulamaya okutun; klonu \
+PIN anahtarı kağıdındaki bir QR kodu telefondaki doğrulayıcı uygulamaya okutun; klonu \
 yeniden başlatıp o hesaba telefonun gösterdiği 6 haneli kodla girin.\
 """
 test_teacher = """\
@@ -3141,7 +3151,6 @@ içeriklerle bir tur çalıştırıp davranışlarını gözle doğrulayın.\
 [m17.params]
 heading_session = "Oturum kalıntıları"
 heading_light_mode = "ETA Hafif Mod (eta-light-mode)"
-heading_cursor = "Fare imleci (ekran modu değişimi) — Deneysel"
 
 [m17.params.cursor_xorg_fix]
 opt_off = "Kapalı"
@@ -4344,7 +4353,7 @@ Tekil kimlikler (her kopya kendi kimliğini üretir):\n\
 TiHA'nın hassas yedekleri (/var/lib/tiha, imaja gider):\n\
 \u0020\u0020- Parola değişikliğinden önceki /etc/shadow yedeği ve\n\
 \u0020\u0020\u0020\u0020kenara alınmış anahtarlıklar\n\
-\u0020\u0020- PIN kâğıtları (bütün anahtarlar QR kodlarıyla) ve anahtar\n\
+\u0020\u0020- PIN anahtarı kağıtları (bütün anahtarlar QR kodlarıyla) ve anahtar\n\
 \u0020\u0020\u0020\u0020yedeği. Kâğıdı bu adımdan önce yazdırın ya da \
 kaydedin;\n\
 \u0020\u0020\u0020\u0020gerekirse PIN adımı yeniden uygulanarak yeniden \
@@ -4481,7 +4490,7 @@ imajın sürümü ve uygulanan adımlar görülebilir (yalnız root okuyabilir).
 """
 done_sensitive = """\
 TiHA'nın imajla klonlara gidecek hassas yedeklerini (parola değişikliği \
-öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, PIN kâğıtları ve \
+öncesi /etc/shadow yedeği, kenara alınmış anahtarlıklar, PIN anahtarı kağıtları ve \
 anahtar yedeği) sildiniz; bu yüzden Kullanıcı parolaları ve PIN adımları \
 artık geri alınamaz.\
 """

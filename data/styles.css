@@ -590,6 +590,27 @@ scrolledwindow.tiha-textarea textview {
     font-weight: bold;
 }
 
+/* Sol okul türü ağacı: açık sarı arka plan (tema-nötr). ListBox'ın
+   satırlarına ve içeren scrolledwindow'un viewport'una uygulanır ki
+   kaydırıldıkça görünen alanlar da sarı kalsın. */
+.tiha-branch-dialog list.tiha-branch-school-list,
+.tiha-branch-dialog list.tiha-branch-school-list row,
+.tiha-branch-dialog scrolledwindow:first-child,
+.tiha-branch-dialog scrolledwindow:first-child > viewport {
+    background: #fff8c8;
+}
+.tiha-branch-dialog list.tiha-branch-school-list row:selected {
+    background: #ffe98a;
+    color: #222;
+}
+
+/* Sağ paneldeki branş isimleri, sol paneldeki okul türü etiketiyle
+   aynı boyutta (9pt) olsun. FlowBox içindeki CheckButton label'ı. */
+.tiha-branch-dialog flowbox checkbutton,
+.tiha-branch-dialog flowbox checkbutton label {
+    font-size: 9pt;
+}
+
 /* --- Düğme boyu --------------------------------------------------------
    eta teması metinli düğmeleri kalın ve iri çiziyor; formdaki 10pt
    yazıların ve 24-26 px kutucukların yanında fazla baskın duruyorlardı.
@@ -609,7 +630,15 @@ scrolledwindow.tiha-textarea textview {
     font-weight: 600;
 }
 
-/* --- Sabit genişlik textview (m11 MAC istisna listesi) ---------------- */
-textview.tiha-monospace text {
+/* --- Sabit genişlik textview (m11 MAC istisna listesi) ----------------
+   GTK3'te TextView'a set_monospace(True) çağrısı ``.monospace`` class'ı
+   ekler; çoğu tema o class'ta monospace font tanımlıdır. Bazı tema
+   yamalarında çalışmadığı için hem widget'a hem iç ``text`` düğümüne
+   font-family kuralı düşüyoruz. */
+textview.tiha-monospace,
+textview.tiha-monospace text,
+.tiha-form textview.tiha-monospace,
+.tiha-form textview.tiha-monospace text {
     font-family: "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", monospace;
+    font-feature-settings: "tnum";
 }

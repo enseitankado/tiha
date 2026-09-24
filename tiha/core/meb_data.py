@@ -240,6 +240,157 @@ def all_branch_labels() -> list[str]:
     return out
 
 
+# Branş adlarının İngilizce karşılıkları (yalnız dosya adı üretmek için).
+# Eksik olanlar transliterasyona düşer. Tekrarları tekil kullanıcı adına
+# göre eşleyip yönetiyoruz; hem "Matematik" hem "İlköğretim Matematik"
+# tek girdi.
+BRANCH_EN: dict[str, str] = {
+    "Matematik": "mathematics",
+    "Türkçe": "turkish",
+    "Fen Bilimleri": "science",
+    "Sosyal Bilgiler": "social-studies",
+    "İngilizce": "english",
+    "Almanca": "german",
+    "Fransızca": "french",
+    "Arapça": "arabic",
+    "Rusça": "russian",
+    "İspanyolca": "spanish",
+    "İtalyanca": "italian",
+    "Çince": "chinese",
+    "Japonca": "japanese",
+    "Korece": "korean",
+    "Farsça": "persian",
+    "Yaşayan Diller ve Lehçeler": "living-languages",
+    "Din Kültürü ve Ahlak Bilgisi": "religious-culture",
+    "İmam-Hatip Lisesi Meslek Dersleri": "imam-hatip-vocational",
+    "Türk Dili ve Edebiyatı": "turkish-literature",
+    "Fizik": "physics",
+    "Kimya": "chemistry",
+    "Biyoloji": "biology",
+    "Tarih": "history",
+    "Coğrafya": "geography",
+    "Felsefe": "philosophy",
+    "Psikoloji": "psychology",
+    "Sağlık Bilgisi": "health-education",
+    "Beden Eğitimi": "physical-education",
+    "Beden Eğitimi ve Spor": "physical-education",
+    "Görsel Sanatlar": "visual-arts",
+    "Müzik": "music",
+    "Teknoloji ve Tasarım": "technology-design",
+    "Bilişim Teknolojileri": "informatics",
+    "Bilgisayar ve Öğretim Teknolojileri": "computer-instruction-tech",
+    "Sınıf Öğretmenliği": "primary-classroom",
+    "Okul Öncesi": "preschool",
+    "Çocuk Gelişimi ve Eğitimi": "child-development",
+    "Özel Eğitim": "special-education",
+    "Rehberlik": "guidance-counseling",
+    "Zihinsel Engelliler Sınıf Öğretmenliği": "special-ed-intellectual",
+    "İşitme Engelliler Sınıf Öğretmenliği": "special-ed-hearing",
+    "Görme Engelliler Sınıf Öğretmenliği": "special-ed-visual",
+    "Ortopedik Engelliler Sınıf Öğretmenliği": "special-ed-orthopedic",
+    "Muhasebe ve Finansman": "accounting-finance",
+    "Büro Yönetimi": "office-management",
+    "Pazarlama ve Perakende": "marketing-retail",
+    "Halkla İlişkiler ve Organizasyon Hizmetleri": "public-relations",
+    "Adalet": "justice",
+    "Grafik ve Fotoğraf": "graphic-photo",
+    "Radyo Televizyon": "radio-tv",
+    "El Sanatları Teknolojisi": "handicrafts",
+    "Tekstil Teknolojisi": "textile",
+    "Giyim Üretim Teknolojisi": "clothing-production",
+    "Yiyecek İçecek Hizmetleri": "food-beverage",
+    "Konaklama ve Seyahat Hizmetleri": "hospitality-travel",
+    "Elektrik-Elektronik Teknolojisi": "electrical-electronics",
+    "Endüstriyel Otomasyon Teknolojileri": "industrial-automation",
+    "Makine Teknolojisi": "mechanical",
+    "Metal Teknolojisi": "metalworking",
+    "Motorlu Araçlar Teknolojisi": "motor-vehicles",
+    "Mobilya ve İç Mekan Tasarımı": "furniture-interior",
+    "İnşaat Teknolojisi": "construction",
+    "Tesisat Teknolojisi ve İklimlendirme": "hvac-plumbing",
+    "Gıda Teknolojisi": "food-technology",
+    "Kimya Teknolojisi": "chemistry-technology",
+    "Ayakkabı ve Saraciye Teknolojisi": "footwear-leather",
+    "Denizcilik": "maritime",
+    "Havacılık": "aviation",
+    "Raylı Sistemler Teknolojisi": "rail-systems",
+    "Ulaştırma Hizmetleri": "transportation",
+    "Sağlık Hizmetleri": "health-services",
+    "Anestezi ve Reanimasyon": "anesthesia",
+    "Radyoloji": "radiology",
+    "Tıbbi Laboratuvar": "medical-laboratory",
+    "Tıbbi Sekreterlik": "medical-secretary",
+    "Hemşire Yardımcılığı": "nursing-assistant",
+    "Ebe Yardımcılığı": "midwifery-assistant",
+    "Sağlık Bakım Teknisyenliği": "healthcare-technician",
+    "Acil Sağlık Hizmetleri": "emergency-medical",
+    "Optisyenlik": "optician",
+    "Diş Protez Teknisyenliği": "dental-prosthesis",
+    "Ortopedik Protez ve Ortez": "orthopedic-prosthesis",
+    "Anatomi ve Fizyoloji": "anatomy-physiology",
+    "Osmanlı Türkçesi": "ottoman-turkish",
+    "İkinci Yabancı Dil": "second-foreign-language",
+    "Türkiye Cumhuriyeti İnkılap Tarihi": "turkish-revolution-history",
+    "Sosyoloji": "sociology",
+    "Mantık": "logic",
+    "Astronomi ve Uzay Bilimleri": "astronomy",
+    "Sağlık Bilgisi ve Trafik Kültürü": "health-traffic",
+    "Kur'an-ı Kerim": "quran",
+    "Tefsir": "tafsir",
+    "Hadis": "hadith",
+    "Fıkıh": "fiqh",
+    "Akaid ve Kelam": "aqidah-kalam",
+    "Siyer": "siyer",
+    "Hitabet ve Mesleki Uygulama": "rhetoric-practice",
+    "Resim": "painting",
+    "Heykel": "sculpture",
+    "Grafik Tasarım": "graphic-design",
+    "Fotoğraf": "photography",
+    "Seramik": "ceramics",
+    "Sanat Tarihi": "art-history",
+    "Piyano": "piano",
+    "Yaylı Çalgılar": "strings",
+    "Nefesli Çalgılar": "winds",
+    "Vurmalı Çalgılar": "percussion",
+    "Ses Eğitimi": "voice",
+    "Türk Halk Müziği": "turkish-folk-music",
+    "Türk Sanat Müziği": "turkish-classical-music",
+    "Spor Anatomisi ve Fizyolojisi": "sports-anatomy",
+    "Atletizm": "athletics",
+    "Basketbol": "basketball",
+    "Voleybol": "volleyball",
+    "Futbol": "football",
+    "Yüzme": "swimming",
+    "Cimnastik": "gymnastics",
+    "Takım Sporları": "team-sports",
+    "Bireysel Sporlar": "individual-sports",
+    "Sağlıklı Yaşam ve Beslenme": "healthy-nutrition",
+    "Eğlence Hizmetleri": "entertainment",
+    "Aile ve Tüketici Hizmetleri": "family-consumer",
+    "Hayvan Yetiştiriciliği ve Sağlığı": "animal-husbandry",
+    "Laboratuvar Hizmetleri": "laboratory-services",
+    "Tarım": "agriculture",
+    "Matbaa Teknolojisi": "printing",
+    "Plastik Teknolojisi": "plastics",
+}
+
+
+def branch_english_slug(label: str) -> str:
+    """Branş adının dosya adında kullanılacak İngilizce (a-z0-9-) sürümü.
+
+    Eşleme tablosunda yoksa Türkçe → ASCII transliterasyon + '-' ayracı.
+    Kimliğin dosya adı olarak taşınması amaçlıdır, çeviri değil.
+    """
+    if not label:
+        return "brans"
+    en = BRANCH_EN.get(label.strip())
+    if en:
+        return en
+    # Fallback: transliterasyon, alt çizgi yerine tire.
+    slug = branch_to_username(label).replace("_", "-")
+    return slug or "brans"
+
+
 def clear_cache() -> None:
     """Test amaçlı: yüklenmiş veriyi unut."""
     _load.cache_clear()

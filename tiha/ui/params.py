@@ -419,6 +419,10 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
                 "lm_effects", "lm_compositor", "lm_thumbnails",
                 "lm_directory_counts", "lm_app_monitoring",
                 "lm_low_resolution", "lm_low_refresh_rate",
+                # Fare imleci düzeltmeleri hafif moddaki ekran modu
+                # değişimlerine karşı çalıştığı için ancak hafif mod
+                # etkinken anlamlı.
+                "cursor_xorg_fix", "cursor_refresh_service",
             ],
             "help": t("m17.params.light_mode_enabled.help"),
         },
@@ -476,12 +480,12 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "default_from": "lm_low_refresh_rate_active",
             "help": t("m17.params.lm_low_refresh_rate.help"),
         },
-        {"label": t("m17.params.heading_cursor"), "type": "heading"},
         {
             "key": "cursor_xorg_fix",
             "label": t("m17.params.cursor_xorg_fix.label"),
-            # Deneysel; hafif moddan bağımsız. Tahtada kurulu olan seçili
-            # gelir, "Kapalı" seçilip uygulanırsa kaldırılır.
+            # Hafif mod açıksa etkin (ekran modu değişimi orada olur).
+            # Tahtada kurulu olan seçili gelir, "Kapalı" seçilip
+            # uygulanırsa kaldırılır.
             "type": "select",
             "required": False,
             "default": t("m17.params.cursor_xorg_fix.opt_off"),
