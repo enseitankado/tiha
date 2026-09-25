@@ -7,10 +7,15 @@ from ..core.module import Module
 # Aşağıdaki sıralama doğrudan sihirbaz akışını belirler.
 # Yeni modül eklerken buraya da tanıtın.
 from .m01_initial_passwords import InitialPasswordsModule
-from .m02_boot_password_wipe import BootPasswordWipeModule
+# m02 (BootPasswordWipeModule) artık ayrı bir sihirbaz adımı değil;
+# m01 içindeki "Her açılışta parola temizliği" kutusuna delege ediliyor.
+from .m02_boot_password_wipe import BootPasswordWipeModule  # noqa: F401
 from .m03_otp_secrets import OTPSecretsModule
-from .m04_ssh_server import SSHServerModule
-from .m05_samba_share import SambaShareModule
+# m04 (SSHServerModule) ve m05 (SambaShareModule) artık ayrı adımlar
+# değil; ikisi de SSHAndSambaModule'e delege eden yardımcı sınıflar.
+from .m04_ssh_server import SSHServerModule  # noqa: F401
+from .m05_samba_share import SambaShareModule  # noqa: F401
+from .m04_ssh_and_samba import SSHAndSambaModule
 from .m06_remote_syslog import RemoteSyslogModule
 from .m07_time_sync import TimeSyncModule
 from .m08_hostname import HostnameModule
@@ -44,10 +49,8 @@ def all_modules() -> list[Module]:
     return [
         SystemUpdateModule(),
         InitialPasswordsModule(),
-        BootPasswordWipeModule(),
         OTPSecretsModule(),
-        SSHServerModule(),
-        SambaShareModule(),
+        SSHAndSambaModule(),
         RemoteSyslogModule(),
         TimeSyncModule(),
         HostnameModule(),

@@ -71,12 +71,22 @@ def parse_mac_list(text: str | None) -> tuple[list[str], list[str]]:
 
     Ayraç: satır sonu, boşluk, virgül ya da noktalı virgül. Adres
     ``aa:bb:cc:dd:ee:ff``, ``AA-BB-…``, ``aabb.ccdd.eeff`` ya da ayraçsız
-    12 onaltılık hane olabilir. Dönüş: (geçerli ve tekilleştirilmiş
-    ``aa:bb:…`` listesi, geçersiz parçalar).
+    12 onaltılık hane olabilir. Her satırda ``#`` sonrası açıklama
+    sayılır ve yok sayılır — bakımcı MAC adresinin yanına hangi tahta
+    olduğuna dair kısa bir not düşebilir. Dönüş: (geçerli ve
+    tekilleştirilmiş ``aa:bb:…`` listesi, geçersiz parçalar).
     """
     valid: list[str] = []
     invalid: list[str] = []
-    for token in _MAC_SPLIT.split(text or ""):
+    # Satır satır işleyip '#' sonrasını at; ardından boşluk/virgül ile ayır.
+    stripped_lines: list[str] = []
+    for line in (text or "").splitlines():
+        hash_at = line.find("#")
+        if hash_at >= 0:
+            line = line[:hash_at]
+        stripped_lines.append(line)
+    payload = "\n".join(stripped_lines)
+    for token in _MAC_SPLIT.split(payload):
         if not token:
             continue
         digits = re.sub(r"[:\-.]", "", token).lower()

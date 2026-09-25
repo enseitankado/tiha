@@ -347,6 +347,12 @@ class InitialPasswordsModule(Module):
     sidebar_title = t("m01.sidebar_title")
     apply_hint = t("m01.apply_hint")
     rationale = t("m01.rationale")
+    # Yerel hesaplar adımı geri alınamaz: parola değişiklikleri
+    # anahtarlıkları tetikler, hesap silmeler ev dizinlerini kaldırır,
+    # QR diyaloğu ve okul branş hesapları farklı sistem parçalarına
+    # dokunur. Kısmi/tutarsız bir "geri alma" güvenli değil; kullanıcı
+    # değiştirmek istediğinde adımı yeniden uyguluyor.
+    undo_supported = False
     extra_links = [
         {"label": t("m01.extra_links.users_admin"), "action": "launch_users_admin_gui_action"},
     ]
@@ -394,6 +400,25 @@ class InitialPasswordsModule(Module):
             inst = PasswordDialogModule()
             self._pw_dialog_delegate_inst = inst
         return inst
+
+    # ------------------------------------------------------------------
+    # Her açılışta parola temizliği — eski m02 adımının işlevi.
+    # m01 içine bool bir kutuyla taşındı; kutu sistemin gerçek durumunu
+    # yansıtır: servis varsa işaretli açılır.
+    # ------------------------------------------------------------------
+
+    def _boot_wipe_delegate(self):
+        inst = getattr(self, "_boot_wipe_delegate_inst", None)
+        if inst is None:
+            from .m02_boot_password_wipe import BootPasswordWipeModule
+            inst = BootPasswordWipeModule()
+            self._boot_wipe_delegate_inst = inst
+        return inst
+
+    def boot_wipe_active(self) -> str:
+        """Her açılışta parola temizliği servisi kurulu mu?"""
+        from ..core.paths import BOOT_WIPE_SERVICE
+        return "True" if BOOT_WIPE_SERVICE.exists() else "False"
 
     def qr_password_dialog_disabled(self) -> str:
         """Hedef .desktop'ta ``Hidden=true`` bayrağı var mı?"""
@@ -571,10 +596,19 @@ class InitialPasswordsModule(Module):
         _qr_currently_disabled = self.qr_password_dialog_disabled() == "True"
         _qr_needs_change = _qr_desired != _qr_currently_disabled
 
+        # "Her açılışta parola temizliği" (eski m02): kutu → servis
+        # kur/kaldır. Yalnız durum değişirse aksiyon sayılır.
+        _bw_desired = str(
+            params.get("enable_boot_wipe", "False"),
+        ).lower() in ("true", "1", "yes", "on")
+        _bw_currently_on = self.boot_wipe_active() == "True"
+        _bw_needs_change = _bw_desired != _bw_currently_on
+
         if (not root_pw and not admin_pw and not teacher_pw
                 and _reserve_hint <= 0 and _branch_hint <= 0
                 and _delete_above is None
-                and not _qr_needs_change):
+                and not _qr_needs_change
+                and not _bw_needs_change):
             return ApplyResult(
                 success=False,
                 summary=t("m01.apply.need_action"),
@@ -1011,6 +1045,40 @@ class InitialPasswordsModule(Module):
                     progress(t("m01.apply.qr_dialog_failed", reason=r.summary))
         overall = overall or qr_dialog_toggled
 
+        # ---- Her açılışta parola temizliği (eski m02) --------------------
+        boot_wipe_toggled = False
+        if _bw_needs_change:
+            bw = self._boot_wipe_delegate()
+            if _bw_desired:
+                if progress:
+                    progress(t("m01.apply.boot_wipe_installing"))
+                r = bw.apply(progress=progress)
+                if r.success:
+                    boot_wipe_toggled = True
+                    summary_parts.append(t("m01.apply.summary_boot_wipe_on"))
+                    if r.details:
+                        details_lines.append("")
+                        details_lines.append(r.details)
+                elif progress:
+                    progress(t(
+                        "m01.apply.boot_wipe_failed", reason=r.summary,
+                    ))
+            else:
+                if progress:
+                    progress(t("m01.apply.boot_wipe_removing"))
+                # Temizlik: extra kullanıcı silme akışı m01'in kendi
+                # "Fazladan Hesapları Sil" düğmesinde; burada yalnız
+                # servisi kaldırıyoruz.
+                r = bw.undo(data={}, params={"remove_extras": False})
+                if r.success:
+                    boot_wipe_toggled = True
+                    summary_parts.append(t("m01.apply.summary_boot_wipe_off"))
+                elif progress:
+                    progress(t(
+                        "m01.apply.boot_wipe_failed", reason=r.summary,
+                    ))
+        overall = overall or boot_wipe_toggled
+
         return ApplyResult(
             success=overall,
             summary="; ".join(summary_parts) + "." if overall and summary_parts
@@ -1035,6 +1103,8 @@ class InitialPasswordsModule(Module):
                 "deleted_branches": deleted_branches,
                 "teacher_skipped_no_account": bool(teacher_pw) and "ogretmen" not in results,
                 "qr_dialog": qr_dialog_result,
+                "boot_wipe_on": _bw_desired,
+                "boot_wipe_toggled": boot_wipe_toggled,
             },
         )
 

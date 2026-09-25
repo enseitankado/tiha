@@ -328,18 +328,19 @@ label_unknown = "?"
 
 [ui.welcome.features]
 m09 = "Paketleri imaj alınmadan önce günceller."
-m01 = "root, etapadmin ve ortak öğretmen parolalarını belirler; yedek öğretmen hesapları açar."
-m02 = """\
-Her açılışta etapadmin dışındaki hesapların yerel parolalarını geçersiz \
-kılar (isteğe bağlı).\
+m01 = """\
+root, etapadmin ve ortak öğretmen parolalarını belirler; yedek ve okul \
+branş hesaplarını açar; EBA QR ilk-giriş parola diyaloğunu kapatır; \
+isterseniz her açılışta parola temizliğini aktive eder.\
 """
 m03 = """\
 Öğretmen PIN anahtarlarını merkezde üretip imaja gömer; ortak grup PIN'i de \
 tanımlanabilir.\
 """
-m13 = "EBA QR ile ilk girişte çıkan parola sorusunu kapatır."
-m04 = "Tahtaya uzaktan komut ve dosya erişimi sağlar."
-m05 = "Ağ üzerinden dosya alıp vermeyi sağlar."
+m04 = """\
+SSH ile uzaktan terminal, Samba ile dosya erişimi tek adımda açılır \
+veya kapatılır.\
+"""
 m06 = "Tahta kayıtlarını merkeze kayıpsız iletir; disk sağlığı ve metrik izleme eklenebilir."
 m07 = "Tahta saatinin kaymasını önler."
 m08 = "Her klon kendine özgü bir ad alır."
@@ -805,7 +806,7 @@ sorunu klonlarda tek tek düzeltmeye çalışmayın.\
 # ==========================================================================
 
 [m09]
-title = "Sistem güncellemesi (apt)"
+title = "Sistem güncellemesi"
 sidebar_title = "Sistem güncellemesi"
 apply_hint = "Repository sağlığı düzeltilir, apt update + full-upgrade + temizlik çalışır (uzun sürer)."
 rationale = """\
@@ -919,7 +920,7 @@ imajla birlikte bütün klonlara gider.\
 # ==========================================================================
 
 [m01]
-title = "Kullanıcı parolaları"
+title = "Yerel hesaplar"
 sidebar_title = "Yerel hesaplar"
 apply_hint = """\
 Parolalar SHA-512 hash olarak doğrudan /etc/shadow'a yazılır. Doldurduğunuz \
@@ -999,6 +1000,25 @@ anahtarları" adımıyla giriş kısayolları üretilebilir. Hesabı olan bir \
 branşı listeden çıkarıp uygularsanız o hesap ev dizini ve PIN \
 anahtarıyla silinir (önce onay sorulur).\
 """
+[m01.params.enable_boot_wipe]
+label = "Her açılışta parola temizliği (etapadmin ve ogretmen dışı hesaplar)"
+help = """\
+Tahta her açıldığında etapadmin ve ortak ogretmen dışındaki yerel \
+kullanıcıların (ogrenci, yedek ve branş hesapları, EBA QR ile açılmış \
+kişisel hesaplar) parolasını rastgele bir değere çevirir. Yani bu hesaplara \
+parolayla giriş kalıcı olarak kapatılır; yalnız EBA QR, PIN ya da USB \
+bellek ile giriş yapılır.\n\
+\n\
+etapadmin (sistem yöneticisi) ve ortak ogretmen hesabı bu işlemin \
+dışındadır. Ortak ogretmen hesabının parolası, yukarıdaki "Öğretmen \
+parolası" alanında belirlediğiniz parola olarak kalır: tahtanın pili bitip \
+saati kayarsa PIN kodları çalışmaz, internet yoksa EBA QR da çalışmaz; o \
+durumda etapadmin dışında parolayla girilebilecek tek hesap budur.\n\
+\n\
+İşareti kaldırıp uygularsanız servis kaldırılır ve diğer hesaplara \
+parolayla giriş yeniden mümkün olur.\
+"""
+
 [m01.params.disable_qr_password_dialog]
 label = "EBA QR ilk girişte 'parola tanımla' penceresini kapat"
 help = """\
@@ -1118,6 +1138,11 @@ reserve_purge_start = "{count} yedek hesap ev dizinleriyle siliniyor…"
 reserve_purge_failed = "  ✗ {user} silinemedi"
 reserve_purge_title = "Silinen yedek hesaplar ({count}):"
 reserve_purge_users = "  {users}"
+boot_wipe_installing = "Her açılışta parola temizliği servisi kuruluyor..."
+boot_wipe_removing = "Her açılışta parola temizliği servisi kaldırılıyor..."
+boot_wipe_failed = "Parola temizliği servisi ayarlanamadı: {reason}"
+summary_boot_wipe_on = "Her açılışta parola temizliği açıldı"
+summary_boot_wipe_off = "Her açılışta parola temizliği kapatıldı"
 qr_dialog_hiding = "EBA QR parola diyaloğu kapatılıyor..."
 qr_dialog_restoring = "EBA QR parola diyaloğu geri getiriliyor..."
 qr_dialog_failed = "QR parola diyaloğu işlemi başarısız: {reason}"
@@ -1369,7 +1394,7 @@ etapadmin ve ortak ogretmen hesabı kalır.\
 # ==========================================================================
 
 [m03]
-title = "Öğretmen PIN anahtarları"
+title = "PIN anahtarları"
 sidebar_title = "PIN anahtarları"
 apply_hint = """\
 Listedeki ve yedek hesaplar için PIN anahtarları üretilir. Anahtarı zaten \
@@ -2000,20 +2025,43 @@ note = "Bu hesaplarda parola olmayacak; QR çalışmadığında giriş için PIN
 # ==========================================================================
 
 [m04]
-title = "SSH sunucusu (root girişi)"
-sidebar_title = "SSH Sunucusu"
-apply_hint = "openssh-server kurulur, uzak root girişi açılır."
+title = "SSH & Samba"
+sidebar_title = "SSH & Samba"
+apply_hint = "SSH sunucusu ve dosya paylaşımı birlikte açılıp kapatılır."
 rationale = """\
-Tahtaları sınıflara dağıttıktan sonra uzaktan bakım yapabilmek için SSH \
-sunucusunu kurar ve root kullanıcısının uzak oturum açmasına izin verir; \
-sorun giderme, ayar değişikliği ve günlük inceleme için kullanılır.\n\
+Uzaktan bakım için iki kanal: SSH terminalle bağlanmayı, Samba tahtanın \
+diskine dosya gezgininden erişmeyi sağlar. Kutuları işaretleyip \
+uygulayınca ilgili servisler kurulur; işaretini kaldırıp uygularsanız \
+kaldırılır. Böylece iki kanal tek bir adımdan açılıp kapatılabilir.\n\
 \n\
 Uzaktan bağlanmak için tahtayla aynı ağda olmalısınız. Okulda tahtalar ve \
 kablosuz erişim noktaları (AP) genellikle `10.x.x.x` aralığındadır — bu \
-ağdaki bir bilgisayardan `ssh root@<tahta-ip>` komutunu kullanırsınız. \
-Farklı bir ağdan (örn. öğrenci/misafir ağları) ulaşılamaz; bu bilinçli bir \
-güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile erişimi yalnızca \
+ağdaki bir bilgisayardan `ssh root@<tahta-ip>` komutuyla SSH'a, \
+`smb://<tahta-ip>/root` adresiyle Samba paylaşımına erişirsiniz. Farklı \
+bir ağdan (örn. öğrenci/misafir ağları) ulaşılamaz; bu bilinçli bir \
+güvenlik kısıtıdır. Okul içinde güvenlik duvarı/VLAN ile erişimi yalnız \
 yönetim istasyonlarıyla sınırlamanız tavsiye edilir.\
+"""
+
+[m04.params.enable_ssh]
+label = "SSH sunucusu — uzak root girişi"
+help = """\
+Kutu işaretlenip uygulanırsa openssh-server kurulur ve root için uzak \
+oturum açılır. İşareti kaldırıp uygulanırsa yapılandırma silinir; paket \
+TiHA tarafından kurulmuşsa geri sökülür. Uzak SSH girişi için \"Yerel \
+hesaplar\" adımında root parolası tanımlanmış olmalı — parolasız hesaba \
+kimse ağdan giremez.\
+"""
+
+[m04.params.enable_samba]
+label = "Samba paylaşımı — tam sistem erişimi"
+help = """\
+Kutu işaretlenip uygulanırsa samba kurulur ve tahtanın kök dizini (/) \
+yazma yetkili olarak paylaşıma açılır. Bakımcı Windows/Linux dosya \
+gezgininden `smb://<tahta-ip>/root` adresine bağlanır. İşareti kaldırıp \
+uygulanırsa paylaşım kaldırılır; paket TiHA tarafından kurulmuşsa geri \
+sökülür. Tüm klonlarda aynı Samba parolası olacağı için güçlü seçin ve \
+erişimi yönetim istasyonlarıyla sınırlayın.\
 """
 
 [m04.notice]
@@ -2031,9 +2079,20 @@ parolası kullanılır. Bu parola imajdan çoğaltılan bütün tahtalarda aynı
 olacak; güçlü bir parola seçtiğinizden emin olun."""
 
 [m04.preview]
-checking = "openssh-server kurulum durumu kontrol ediliyor..."
-installed = "openssh-server zaten kurulu - yalnızca yapılandırma eklenecek."
-not_installed = "openssh-server kurulacak ve yapılandırma ek bir yapılandırma dosyası yazılacak."
+checking = "SSH ve Samba durumu kontrol ediliyor..."
+state_on = "AÇIK"
+state_off = "kapalı"
+ssh_line = "SSH sunucusu (openssh-server) : {state}"
+samba_line = "Samba paylaşımı (/ dizini)   : {state}"
+# Eski m04 delege sınıfının preview'ında hâlâ kullanılıyor (adım olarak
+# görünmüyor ama import edilen yerler kullanabiliyor).
+installed = "openssh-server zaten kurulu."
+not_installed = "openssh-server kurulacak."
+body = """\
+Kutuları işaretleyip Uygula düğmesine basınca gerekli paketler kurulur \
+ve servis çalışır duruma gelir. Kutunun işaretini kaldırıp uygulamak \
+servisi tamamen kaldırır (paket TiHA tarafından kurulmuşsa geri sökülür).\
+"""
 
 [m04.apply]
 start_pkg = "Başlangıç: openssh-server {state}"
@@ -2054,11 +2113,21 @@ details = """\
 Yapılandırma: {path}\n\
 Servis: ssh (etkin)\
 """
+no_change = "SSH ve Samba kutuları sistemin mevcut durumuyla eşleşiyor; değişiklik yapılmadı."
+ssh_installing = "SSH sunucusu kuruluyor..."
+ssh_removing = "SSH sunucusu kaldırılıyor..."
+ssh_added = "SSH sunucusu açıldı"
+ssh_removed = "SSH sunucusu kapatıldı"
+samba_installing = "Samba paylaşımı kuruluyor..."
+samba_removing = "Samba paylaşımı kaldırılıyor..."
+samba_added = "Samba paylaşımı açıldı ({user})"
+samba_removed = "Samba paylaşımı kapatıldı"
 
 [m04.undo]
 purge_failed = "openssh-server kaldırılamadı."
 removed = "SSH yapılandırması ve openssh-server paketi kaldırıldı."
 kept_pkg = "SSH root izni kaldırıldı (paket zaten başlangıçta kuruluydu, korundu)."
+nothing = "Bu apply'da kurulan servis yok; geri alınacak bir şey yok."
 
 [m04.report]
 done_installed = """\
@@ -2077,8 +2146,7 @@ beklediğiniz root parolasının geçtiğini doğrulayın.\
 test_active = """\
 Klonda `systemctl is-active ssh` çıktısının active olduğunu ve `sudo sshd -T \
 | grep -Ei 'permitrootlogin|passwordauthentication'` çıktısında ikisinin de \
-yes olduğunu doğrulayın (adım, servisin gerçekten ayağa kalktığını \
-denetlemiyor).\
+yes olduğunu doğrulayın.\
 """
 test_fingerprint = """\
 İki farklı klonda `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` parmak \
@@ -2175,8 +2243,7 @@ Bir Windows bilgisayarda Dosya Gezgini'ne \\\\<klon-ip>\\root yazıp \
 yazma yetkisini doğrulayın.\
 """
 test_active = """\
-Klonda `systemctl is-active smbd` çıktısının active olduğunu doğrulayın \
-(adım servisin ayağa kalktığını denetlemiyor).\
+Klonda `systemctl is-active smbd` çıktısının active olduğunu doğrulayın.\
 """
 test_names = """\
 Birkaç klon aynı anda ağdayken Windows'un Ağ görünümünde her tahtanın kendi \
@@ -2193,7 +2260,7 @@ erişimi yönetim ağıyla sınırlayın.\
 # ==========================================================================
 
 [m06]
-title = "Dayanıklı merkezi log iletimi"
+title = "Merkezi log sunucusu"
 sidebar_title = "Merkezi log sunucusu"
 apply_hint = "Hiç log kaybı olmayan dayanıklı merkezi log iletimi kurulur."
 rationale = """\
@@ -2585,7 +2652,7 @@ dilimini mutlaka kontrol edin.\
 # ==========================================================================
 
 [m08]
-title = "Dinamik hostname stratejisi"
+title = "Dinamik hostname"
 sidebar_title = "Dinamik hostname"
 apply_hint = "İmaj hostname'i uygulanır; her açılışta dinamik hostname servisi kurulur."
 rationale = """\
@@ -2682,16 +2749,8 @@ Klonu ikinci kez yeniden başlatın; adın DEĞİŞMEDİĞİNİ doğrulayın. He
 açılışta değişiyorsa tahtada kablolu kart bulunamamıştır.\
 """
 test_sudo = """\
-`time sudo true` komutunun anında döndüğünü doğrulayın (10 saniye sürüyorsa \
-/etc/hosts güncellenmemiştir).\
-"""
-test_session = """\
-Klonun ilk açılışında oturum açıp birkaç uygulama başlatın; ad oturum \
-açıldıktan sonra değişirse yeni pencereler açılamayabilir.\
-"""
-test_two = """\
-İki klonun farklı ad aldığını ve bu adın DHCP/DNS'te, Lider'de ve \
-(kuruluysa) log sunucusunda göründüğünü doğrulayın.\
+`time sudo true` komutu bir saniyeden kısa sürede tamamlanmalı — uzun \
+sürerse /etc/hosts güncellenmemiş, tahta kendi adını çözemiyor demektir.\
 """
 note_prefix = """\
 Önek '{prefix}' önerilen biçimde değil (küçük harf, rakam ve '-', en fazla 8 \
@@ -2892,13 +2951,18 @@ verebilsin), üst sınır 600 saniye (10 dakika).\
 
 [m11.params.exempt_macs]
 label = "Otomatik kapanmadan muaf\ntahtalar (MAC adresleri)"
-placeholder = "ör. 00:1a:2b:3c:4d:5e"
+placeholder = """\
+00:1a:2b:3c:4d:5e   # 5-A sınıfı\n\
+aa-bb-cc-dd-ee-ff   # müdür odası\
+"""
 help = """\
 Bu ayar imajla bütün klonlara gider. Burada MAC adresi verilen tahtalarda \
 klon açıldığında sabit saat ve kullanılmadığında kapatma uygulanmaz; tahta \
 Pardus'un varsayılan ayarıyla (otomatik kapanma kapalı) çalışır, oradaki \
 kullanıcı dilerse ETA Zamanlı Kapatma ile kendi ayarını yapabilir. Her \
-satıra bir adres yazın ya da adresleri virgül/boşlukla ayırın.\
+satıra bir adres yazın; adresin yanına '#' işareti ile hangi tahta \
+olduğuna dair açıklama düşebilirsiniz — açıklamalar yok sayılır, imaja \
+girmez. Adresleri tek satırda virgül/boşlukla da ayırabilirsiniz.\
 """
 
 [m11.report]
@@ -2972,7 +3036,7 @@ kapanmanın çalıştığını da ayrıca görün.\
 # ==========================================================================
 
 [m15]
-title = "Uzaktan uyandırma (Wake-on-LAN)"
+title = "Uzaktan uyandırma"
 sidebar_title = "Uzaktan uyandırma"
 apply_hint = "Ağ kartının magic packet dinleme ayarı her boot'ta yeniden yazılır."
 rationale = """\
@@ -3664,7 +3728,7 @@ gidebilir. Klonları ilk kez ağ hazırken açın.\
 # ==========================================================================
 
 [m14]
-title = "BIOS yönetici parolası"
+title = "BIOS parolası"
 sidebar_title = "BIOS parolası"
 doc_label = "https://github.com/enseitankado/eta-112"
 apply_hint = """\

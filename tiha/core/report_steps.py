@@ -197,6 +197,12 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
     elif qr.get("action") == "restore":
         rep.done.append(t("m01.report.qr_restored"))
 
+    # Her açılışta parola temizliği (eski m02; artık m01'in bir kutusu).
+    # Bu apply'da toggled ise ilgili anlatıcıyı çağır — m02'nin done/notes/
+    # tests satırlarını olduğu gibi kullan.
+    if d.get("boot_wipe_toggled"):
+        narrate_m02(ctx, rep)
+
     # Klonda deneyin
     if "etapadmin" in ok:
         rep.tests.append(t("m01.report.test_etapadmin"))
@@ -406,6 +412,39 @@ def narrate_m05(ctx: StepContext, rep: StepReport) -> None:
 
 
 # ---------------------------------------------------------------------------
+# m04_ssh_and_samba — birleşik uzaktan bakım adımı
+# ---------------------------------------------------------------------------
+
+
+def narrate_m04_ssh_and_samba(ctx: StepContext, rep: StepReport) -> None:
+    """SSH & Samba birleşik adımının raporu; iki alt-akışın narrator'larını
+    çağırır (kendi apply data'sıyla)."""
+    from .report import StepContext as _SC
+
+    d = ctx.data or {}
+    ssh_data = d.get("ssh_data") or {}
+    samba_data = d.get("samba_data") or {}
+
+    if ssh_data:
+        # Alt ctx üret: yalnız SSH data'sı gözüksün.
+        sub = _SC(
+            module_id="m04_ssh_server",
+            title=ctx.title, summary=ctx.summary,
+            data=ssh_data, params=ctx.params, actions=[],
+        )
+        narrate_m04(sub, rep)
+    if samba_data:
+        sub = _SC(
+            module_id="m05_samba_share",
+            title=ctx.title, summary=ctx.summary,
+            data=samba_data, params=ctx.params, actions=[],
+        )
+        narrate_m05(sub, rep)
+    if not ssh_data and not samba_data:
+        rep.done.append(t("m04.apply.no_change"))
+
+
+# ---------------------------------------------------------------------------
 # m06 — Merkezi log iletimi
 # ---------------------------------------------------------------------------
 
@@ -533,8 +572,6 @@ def narrate_m08(ctx: StepContext, rep: StepReport) -> None:
     rep.tests.append(t("m08.report.test_hostnamectl", shown=shown))
     rep.tests.append(t("m08.report.test_reboot"))
     rep.tests.append(t("m08.report.test_sudo"))
-    rep.tests.append(t("m08.report.test_session"))
-    rep.tests.append(t("m08.report.test_two"))
     if prefix and (len(prefix) > 8 or not _HOSTNAME_OK.match(prefix)):
         rep.notes.append(t("m08.report.note_prefix", prefix=prefix))
 
@@ -846,6 +883,7 @@ NARRATORS = {
     "m13_password_dialog": narrate_m13,
     "m04_ssh_server": narrate_m04,
     "m05_samba_share": narrate_m05,
+    "m04_ssh_and_samba": narrate_m04_ssh_and_samba,
     "m06_remote_syslog": narrate_m06,
     "m07_time_sync": narrate_m07,
     "m08_hostname": narrate_m08,
@@ -970,7 +1008,10 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
         w.append(t("core.report.warn.ahenk", step=q("m12_ahenk_reset")))
 
     # --- Benzersiz ad ---------------------------------------------------------
-    by_name = [m for m in ("m04_ssh_server", "m05_samba_share", "m06_remote_syslog") if m in applied]
+    by_name = [
+        m for m in ("m04_ssh_and_samba", "m06_remote_syslog")
+        if m in applied
+    ]
     if by_name and "m08_hostname" not in applied:
         w.append(t(
             "core.report.warn.hostname",
@@ -978,13 +1019,17 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
         ))
 
     # --- Parola, PIN ve QR ilişkileri -----------------------------------------
-    if "m02_boot_password_wipe" in applied:
-        if m01 is not None and m01.applied and "ogretmen" in _m01_passwords(m01)[0]:
-            w.append(t("core.report.warn.wipe_ogretmen", wipe=q("m02_boot_password_wipe")))
+    # m02 (boot-wipe) artık m01'in içinde. Etkinliği m01.data.boot_wipe_on'a
+    # bakılarak anlaşılıyor.
+    _bw_on = bool(m01 is not None and m01.applied
+                  and m01.data.get("boot_wipe_on"))
+    if _bw_on:
+        if "ogretmen" in _m01_passwords(m01)[0]:
+            w.append(t("core.report.warn.wipe_ogretmen", wipe=q("m01_initial_passwords")))
         if "m03_otp_secrets" not in applied:
             w.append(t(
                 "core.report.warn.wipe_no_pin",
-                wipe=q("m02_boot_password_wipe"), pin=q("m03_otp_secrets"),
+                wipe=q("m01_initial_passwords"), pin=q("m03_otp_secrets"),
             ))
     # m01 içinde QR diyaloğunu gizlediyseniz ama PIN adımı uygulanmadıysa,
     # klon öğretmeni ne parola tanımlayabilecek ne PIN'le girebilecek.
@@ -998,13 +1043,13 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
             and (m01.data.get("created_reserve") or m01.data.get("created_branches"))
             and ts("m01_initial_passwords") > ts("m03_otp_secrets")):
         w.append(t("core.report.warn.reserve_after_pin", pin=q("m03_otp_secrets")))
-    if ("m02_boot_password_wipe" in applied and m01 is not None and m01.applied
+    if (_bw_on
             and m01.data.get("created_branches")
             and (m03 is None or not m03.applied
                  or (m03.has_params and "include_other_teachers" in m03.params
                      and not m03.flag("include_other_teachers")))):
         w.append(t("core.report.warn.branches_no_pin",
-                   wipe=q("m02_boot_password_wipe"), pin=q("m03_otp_secrets")))
+                   wipe=q("m01_initial_passwords"), pin=q("m03_otp_secrets")))
 
     # --- Saat -----------------------------------------------------------------
     need_time = []

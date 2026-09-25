@@ -74,6 +74,18 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help_more_label": t("ui.pages.help_more_details"),
         },
         {
+            # Her açılışta parola temizliği (eski m02): kutu sistemin
+            # gerçek durumunu gösterir; işaretlenirse servis kurulur,
+            # kaldırılırsa sökülür.
+            "key": "enable_boot_wipe",
+            "label": t("m01.params.enable_boot_wipe.label"),
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "default_from": "boot_wipe_active",
+            "help": t("m01.params.enable_boot_wipe.help"),
+        },
+        {
             # EBA QR ilk-giriş parola diyaloğunu kapatır (eski m13 adımının
             # işlevi). Varsayılan işaretli — sınıf ortamında parola ifşasını
             # önlemek için. Kutu sistemin GERÇEK durumunu yansıtır: diyalog
@@ -166,20 +178,41 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         # "Fazladan hesapları sil" yalnız Yerel hesaplar adımında
         # (hesap işi orada); aksiyon bu modülde kalır, m01 ona delege eder.
     ],
-    "m05_samba_share": [
+    "m04_ssh_and_samba": [
+        {
+            "key": "enable_ssh",
+            "label": t("m04.params.enable_ssh.label"),
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "default_from": "ssh_installed",
+            "help": t("m04.params.enable_ssh.help"),
+        },
+        {
+            "key": "enable_samba",
+            "label": t("m04.params.enable_samba.label"),
+            "type": "bool",
+            "required": False,
+            "default": "False",
+            "default_from": "samba_installed",
+            "help": t("m04.params.enable_samba.help"),
+        },
         {
             "key": "samba_user",
             "width": 20,
             "label": t("m05.params.samba_user.label"),
             "type": "text",
-            "required": True,
+            "required": False,
             "default": "root",
+            # Samba etkin değilse yazmaya gerek yok.
+            "enable_when_field": "enable_samba",
         },
         {
             "key": "samba_password",
             "label": t("m05.params.samba_password.label"),
             "type": "password",
-            "required": True,
+            "required": False,
+            "enable_when_field": "enable_samba",
         },
     ],
     "m06_remote_syslog": [

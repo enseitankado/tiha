@@ -211,11 +211,8 @@ _WELCOME_FEATURES_TITLE = t("ui.welcome.features_title")
 _WELCOME_FEATURES: tuple[tuple[str, str], ...] = (
     (t("m09.sidebar_title"), t("ui.welcome.features.m09")),
     (t("m01.sidebar_title"), t("ui.welcome.features.m01")),
-    (t("m02.sidebar_title"), t("ui.welcome.features.m02")),
     (t("m03.sidebar_title"), t("ui.welcome.features.m03")),
-    (t("m13.sidebar_title"), t("ui.welcome.features.m13")),
     (t("m04.sidebar_title"), t("ui.welcome.features.m04")),
-    (t("m05.title"), t("ui.welcome.features.m05")),
     (t("m06.sidebar_title"), t("ui.welcome.features.m06")),
     (t("m07.title"), t("ui.welcome.features.m07")),
     (t("m08.sidebar_title"), t("ui.welcome.features.m08")),
@@ -484,7 +481,13 @@ class ModulePage(Gtk.Box):
             self.pack_start(self._make_action_link(link), False, False, 0)
 
     def _make_action_link(self, link: dict) -> Gtk.Widget:
-        """Sol hizalı, mavi altı çizili tıklanabilir bir bağlantı üretir."""
+        """Sol hizalı, mavi altı çizili tıklanabilir bir bağlantı üretir.
+
+        Bu bağlantılar (ör. "Kullanıcılar ve Gruplar uygulamasını aç")
+        dışsal bir programı fırlatır; başarı için canlı çıktı / özet
+        penceresi göstermeye gerek yok. Aksiyon sessizce çalışır;
+        yalnız başarısız olursa küçük bir uyarı diyaloğu gösterilir.
+        """
         btn = Gtk.Button()
         btn.set_relief(Gtk.ReliefStyle.NONE)
         btn.set_halign(Gtk.Align.START)
@@ -494,10 +497,26 @@ class ModulePage(Gtk.Box):
         lbl.set_xalign(0)
         btn.add(lbl)
         action = link.get("action")
-        btn.connect(
-            "clicked",
-            lambda b, a=action: self._run_button_action(a, button=b) if a else None,
-        )
+
+        def on_link_clicked(_btn, a=action):
+            if not a:
+                return
+            fn = getattr(self.module, a, None)
+            if not callable(fn):
+                return
+            try:
+                result = fn()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("extra_link action hatası (%s): %s", a, exc)
+                self._show_warning_dialog(str(exc))
+                return
+            if result is not None and not getattr(result, "success", True):
+                # Yalnız hata durumunda kullanıcıya bilgi ver.
+                self._show_warning_dialog(
+                    result.summary or t("ui.pages.unexpected_error", error=a)
+                )
+
+        btn.connect("clicked", on_link_clicked)
         return btn
 
     def _show_previous_apply_banner(self) -> None:
@@ -1873,8 +1892,11 @@ class ModulePage(Gtk.Box):
         ).strip("= ").strip()
         if current and self._stream_status is not None and self._applying:
             self._stream_status.set_text(current)
-        if streams:
-            self._append_stream_line(line)
+        # Modül ``streams_output=True`` bayrağını taşımasa da progress
+        # satırlarını birikimli olarak modaldeki gövde metnine yazıyoruz.
+        # Böylece m01 gibi çok adımlı ama satır satır bilgi veren
+        # modüller de tarihçeyi kaybetmez.
+        self._append_stream_line(line)
         return False
 
     def _append_stream_line(self, line: str) -> bool:
