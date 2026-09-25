@@ -783,11 +783,6 @@ açılışta aynı sonucu aldığınızı doğrulayın.\
 """
 accounts = "Öğretmen ve öğrenci hesaplarının her biriyle oturum açıp kapatın."
 hardware = "Tahtanın dokunmatiği, kalemi, sesi ve ağ bağlantısının klonda çalıştığını doğrulayın."
-identity = """\
-En az iki klonu aynı anda aynı ağa bağlayın; bilgisayar adlarının, IP \
-adreslerinin ve (kullanıyorsanız) Lider kayıtlarının birbirinden farklı \
-olduğunu doğrulayın.\
-"""
 models = """\
 İmaj farklı tahta modellerine (ör. Intel ve AMD işlemcili) yazılacaksa her \
 modelde en az bir klon deneyin.\

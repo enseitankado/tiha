@@ -58,6 +58,15 @@ li.note::before { content: "! "; font-weight: bold; font-style: normal; }
 ul.check { list-style: none; padding-left: 4px; }
 ul.check li { padding-left: 17px; text-indent: -17px; }
 ul.check li::before { content: "\\2610\\00a0\\00a0"; font-size: 10.5pt; }
+/* Madde kimliği: sürüm soluk, bölüm.madde belirgin (0.1.66-3.2). */
+.tid { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt;
+       white-space: nowrap; margin-right: 4px; }
+.tid .ver { color: #999; }
+.tid .num { font-weight: bold; }
+/* Kabuk komutu: açık sarı zemin; yazdırırken de korunur. */
+code.cmd { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt;
+           background: #fff3a6; padding: 0 3px; border-radius: 2px;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .hint { font-size: 8.5pt; color: #444; }
 .closing { margin-top: 10px; font-weight: bold; }
 @media print { body { padding: 0; max-width: none; } }
@@ -92,6 +101,24 @@ class Report:
     def is_empty(self) -> bool:
         return not self.steps
 
+    def test_groups(self) -> list[tuple[str, list[tuple[str, str]]]]:
+        """Kontrol listesi: [(“3. Başlık”, [(“0.1.66-3.2”, madde), …]), …].
+
+        Madde kimliği TiHA sürümü + bölüm.madde'dir; kâğıttan tek başına
+        okunduğunda bile hangi sürümün raporuna ait olduğu bellidir."""
+        from .. import __version__
+
+        groups = [(s.title, s.tests) for s in self.steps if s.tests]
+        if self.general_tests:
+            groups.append((t("core.report.text.general"), self.general_tests))
+        out = []
+        for sec, (title, items) in enumerate(groups, start=1):
+            out.append((
+                f"{sec}. {title}",
+                [(f"{__version__}-{sec}.{i}", item) for i, item in enumerate(items, start=1)],
+            ))
+        return out
+
     def to_text(self) -> str:
         """Panoya kopyalanabilir / dosyaya yazılabilir düz metin."""
         out = [self.intro, ""]
@@ -111,15 +138,12 @@ class Report:
             out.append(t("core.report.text.section_warnings"))
             out += [f"  ! {w}" for w in self.warnings]
             out.append("")
-        tests = [(s.title, s.tests) for s in self.steps if s.tests]
-        if tests or self.general_tests:
+        groups = self.test_groups()
+        if groups:
             out.append(t("core.report.text.section_tests"))
-            for title, items in tests:
+            for title, items in groups:
                 out.append(f"■ {title}")
-                out += [f"  ☐ {item}" for item in items]
-            if self.general_tests:
-                out.append(f"■ {t('core.report.text.general')}")
-                out += [f"  ☐ {item}" for item in self.general_tests]
+                out += [f"  ☐ [{tid}] {item}" for tid, item in items]
             out.append("")
         out.append(self.closing)
         return "\n".join(out)
@@ -162,16 +186,19 @@ class Report:
                 body += [f'<li class="note">{e(line)}</li>' for line in s.notes]
                 body.append("</ul></div>")
 
-        tests = [(s.title, s.tests) for s in self.steps if s.tests]
-        if self.general_tests:
-            tests.append((t("core.report.text.general"), self.general_tests))
-        if tests:
+        groups = self.test_groups()
+        if groups:
             body.append(f"<h2>{e(t('core.report.html.section_tests'))}</h2>")
             body.append(f'<p class="hint">{e(t("core.report.html.tests_hint"))}</p>')
-            for title, items in tests:
+            for title, items in groups:
                 body.append('<div class="step">')
                 body.append(f'<h3>{e(title)}</h3><ul class="check">')
-                body += [f"<li>{e(item)}</li>" for item in items]
+                for tid, item in items:
+                    ver, _, num = tid.rpartition("-")
+                    body.append(
+                        f'<li><span class="tid"><span class="ver">{e(ver)}-</span>'
+                        f'<span class="num">{e(num)}</span></span>{highlight_commands(e(item))}</li>'
+                    )
                 body.append("</ul></div>")
 
         body.append(f'<p class="closing">{e(self.closing)}</p>')
@@ -184,6 +211,12 @@ class Report:
             + "\n".join(body)
             + "\n</body></html>\n"
         )
+
+
+def highlight_commands(escaped: str) -> str:
+    """HTML'e çevrilmiş metindeki `komut` parçalarını sarı zeminli koda çevirir."""
+    import re
+    return re.sub(r"`([^`]+)`", r'<code class="cmd">\1</code>', escaped)
 
 
 # --- Anlatıcıya verilen bağlam ----------------------------------------------

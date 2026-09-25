@@ -2643,14 +2643,34 @@ class SummaryPage(Gtk.Box):
             ),
             False, False, 0,
         )
-        groups = [(s.title, s.tests) for s in report.steps if s.tests]
-        if report.general_tests:
-            groups.append((t("ui.summary.tests_general"), report.general_tests))
-        for title, tests in groups:
+        # HTML raporla aynı numaralar: sürüm-bölüm.madde (0.1.66-3.2).
+        for title, items in report.test_groups():
             box.pack_start(_wrapping_label(title, klass="tiha-summary-title"), False, False, 0)
-            items = self._bullets(tests, "☐")
-            items.set_margin_start(12)
-            box.pack_start(items, False, False, 0)
+            rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            rows.set_margin_start(12)
+            for tid, item in items:
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                sym = Gtk.Label(label="☐", xalign=0, yalign=0)
+                row.pack_start(sym, False, False, 0)
+                ver, _, num = tid.rpartition("-")
+                id_lbl = Gtk.Label(xalign=0, yalign=0)
+                id_lbl.set_markup(
+                    f'<span font_family="monospace" size="small">'
+                    f'<span alpha="55%">{GLib.markup_escape_text(ver)}-</span>'
+                    f'<b>{GLib.markup_escape_text(num)}</b></span>'
+                )
+                id_lbl.set_selectable(True)
+                row.pack_start(id_lbl, False, False, 0)
+                lbl = _wrapping_label("", selectable=True)
+                # Kabuk komutları açık sarı zeminde (HTML raporla aynı).
+                lbl.set_markup(re.sub(
+                    r"`([^`]+)`",
+                    r'<span font_family="monospace" background="#fff3a6" foreground="#111111">\1</span>',
+                    GLib.markup_escape_text(item),
+                ))
+                row.pack_start(lbl, True, True, 0)
+                rows.pack_start(row, False, False, 0)
+            box.pack_start(rows, False, False, 0)
         return box
 
     def _copy_report(self) -> None:

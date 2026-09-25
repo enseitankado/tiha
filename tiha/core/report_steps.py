@@ -1049,20 +1049,12 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
 
 def general_tests(contexts: dict[str, StepContext]) -> list[str]:
     """Her imaj için geçerli, adımlardan bağımsız klon denetimleri."""
-    applied = {mid for mid, c in contexts.items() if c.applied}
-    tests = [
+    return [
         t("core.report.general.first_boot"),
         t("core.report.general.reboot"),
         t("core.report.general.accounts"),
         t("core.report.general.hardware"),
-    ]
-    identity = {"m04_ssh_server", "m05_samba_share", "m06_remote_syslog",
-                "m08_hostname", "m10_image_sanitize", "m12_ahenk_reset"}
-    if applied & identity:
-        tests.append(t("core.report.general.identity"))
-    tests += [
         t("core.report.general.models"),
         t("core.report.general.school"),
         t("core.report.general.fix_source"),
     ]
-    return tests
