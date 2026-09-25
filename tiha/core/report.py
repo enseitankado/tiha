@@ -50,7 +50,9 @@ ul { margin: 0 0 2px; padding-left: 16px; }
 li { margin: 0; }
 li.note { list-style: none; margin-left: -12px; padding-left: 12px;
           text-indent: -12px; font-style: italic; }
-li.note::before { content: "! "; font-weight: bold; font-style: normal; }
+li.note::before { content: "! "; font-weight: bold; font-style: normal;
+                 color: #c62828; }
+.warn li::marker { color: #c62828; }
 .warn { border: 1px solid #555; border-left: 4px solid #111;
         padding: 2px 8px 4px; margin: 8px 0; }
 .warn h2 { border: none; margin-top: 4px; }
@@ -67,6 +69,12 @@ ul.check li::before { content: "\\2610\\00a0\\00a0"; font-size: 10.5pt; }
 code.cmd { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt;
            background: #fff3a6; padding: 0 3px; border-radius: 2px;
            -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+button.copy { font-size: 7.5pt; margin: 0 2px 0 3px; padding: 0 5px;
+              border: 1px solid #bbb; border-radius: 3px; background: #fff;
+              color: #333; cursor: pointer; vertical-align: 1px; }
+button.copy:hover { background: #eef4ff; }
+button.copy.done { color: #2e7d32; border-color: #2e7d32; }
+@media print { button.copy { display: none; } }
 .hint { font-size: 8.5pt; color: #444; }
 .closing { margin-top: 10px; font-weight: bold; }
 @media print { body { padding: 0; max-width: none; } }
@@ -209,14 +217,45 @@ class Report:
             f"<title>{e(t('core.report.html.title'))}</title>"
             f"<style>{_REPORT_CSS}</style></head><body>\n"
             + "\n".join(body)
-            + "\n</body></html>\n"
+            + "\n<script>" + _COPY_JS.replace("{done}", t("core.report.html.copied"))
+            + "</script>\n</body></html>\n"
         )
 
 
 def highlight_commands(escaped: str) -> str:
-    """HTML'e çevrilmiş metindeki `komut` parçalarını sarı zeminli koda çevirir."""
+    """HTML'e çevrilmiş metindeki `komut` parçalarını sarı zeminli koda
+    çevirir; yanına panoya kopyalayan küçük bir düğme koyar."""
     import re
-    return re.sub(r"`([^`]+)`", r'<code class="cmd">\1</code>', escaped)
+    label = t("core.report.html.copy")
+    return re.sub(
+        r"`([^`]+)`",
+        rf'<code class="cmd">\1</code><button class="copy" type="button">{label}</button>',
+        escaped,
+    )
+
+
+# Kopyala düğmeleri: önce Clipboard API, olmazsa (file:// ya da eski
+# tarayıcı) seçip execCommand("copy").
+_COPY_JS = """
+document.querySelectorAll("button.copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var text = btn.previousElementSibling.textContent;
+    var old = btn.textContent;
+    function ok() {
+      btn.textContent = "{done}"; btn.classList.add("done");
+      setTimeout(function () { btn.textContent = old; btn.classList.remove("done"); }, 1500);
+    }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); ok(); } finally { ta.remove(); }
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(ok, fallback);
+    } else { fallback(); }
+  });
+});
+"""
 
 
 # --- Anlatıcıya verilen bağlam ----------------------------------------------

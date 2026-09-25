@@ -2590,6 +2590,9 @@ class SummaryPage(Gtk.Box):
         for line in lines:
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
             sym = Gtk.Label(label=mark, xalign=0, yalign=0)
+            if mark in ("⚠", "!"):
+                # Uyarı satırlarının simgesi kırmızı (HTML raporla aynı).
+                sym.set_markup(f'<span foreground="#c62828">{GLib.markup_escape_text(mark)}</span>')
             sym.set_size_request(16, -1)
             row.pack_start(sym, False, False, 0)
             lbl = _wrapping_label(line, selectable=True)
@@ -2662,16 +2665,39 @@ class SummaryPage(Gtk.Box):
                 id_lbl.set_selectable(True)
                 row.pack_start(id_lbl, False, False, 0)
                 lbl = _wrapping_label("", selectable=True)
-                # Kabuk komutları açık sarı zeminde (HTML raporla aynı).
-                lbl.set_markup(re.sub(
-                    r"`([^`]+)`",
-                    r'<span font_family="monospace" background="#fff3a6" foreground="#111111">\1</span>',
-                    GLib.markup_escape_text(item),
-                ))
+                # Kabuk komutları açık sarı zeminde (HTML raporla aynı);
+                # tıklanınca panoya kopyalanır.
+                commands = re.findall(r"`([^`]+)`", item)
+                parts = re.split(r"`[^`]+`", item)
+                markup = GLib.markup_escape_text(parts[0])
+                for idx, cmd in enumerate(commands):
+                    markup += (
+                        f'<a href="copy:{idx}" title="{GLib.markup_escape_text(t("ui.summary.copy_command_tip"))}">'
+                        f'<span font_family="monospace" background="#fff3a6" '
+                        f'foreground="#111111" underline="none">{GLib.markup_escape_text(cmd)}</span></a>'
+                        + GLib.markup_escape_text(parts[idx + 1])
+                    )
+                lbl.set_markup(markup)
+                if commands:
+                    lbl.connect("activate-link", self._copy_command_link, commands)
                 row.pack_start(lbl, True, True, 0)
                 rows.pack_start(row, False, False, 0)
             box.pack_start(rows, False, False, 0)
         return box
+
+    def _copy_command_link(self, label: Gtk.Label, uri: str, commands: list[str]) -> bool:
+        """Kontrol listesindeki komuta tıklanınca komutu panoya kopyalar."""
+        if not uri.startswith("copy:"):
+            return False
+        try:
+            command = commands[int(uri[5:])]
+        except (ValueError, IndexError):
+            return True
+        clipboard = Gtk.Clipboard.get_default(label.get_display())
+        clipboard.set_text(command, -1)
+        clipboard.store()
+        label.set_tooltip_text(t("ui.summary.command_copied", command=command))
+        return True
 
     def _copy_report(self) -> None:
         if self._report is None:

@@ -492,6 +492,8 @@ kaldırabilirsiniz._\n\
 """
 
 [ui.summary]
+copy_command_tip = "Kopyalamak için tıklayın"
+command_copied = "Kopyalandı: {command}"
 heading = "Özet"
 undo_info = """\
 Bu tahtada geri alınabilir durumdaki adımlar aşağıda listelenmiştir. Daha \
@@ -665,6 +667,8 @@ section_warnings = "Dikkat"
 section_done = "Yapılanlar"
 section_tests = "Kontrol et: klon tahtada deneyin"
 tests_hint = "İmajı en az bir tahtaya yazın ve her maddeyi o klon tahtada deneyip işaretleyin."
+copy = "Kopyala"
+copied = "Kopyalandı"
 
 [core.report.sensitive]
 shadow = "parola değişikliği öncesi /etc/shadow yedeği"
