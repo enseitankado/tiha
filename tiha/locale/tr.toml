@@ -4408,8 +4408,10 @@ anahtarlık eski\n\
 geçilemeyen 'parola artık\n\
 \u0020\u0020\u0020\u0020\u0020\u0020giriş anahtarlığınızla uyuşmuyor' \
 diyaloğu çıkar\n\
-\u0020\u0020\u0020\u0020- her tahta ilk girişinde kendi anahtarlığını \
-otomatik üretir\n\
+\u0020\u0020\u0020\u0020- yerine ETAP'ın parolasız varsayılan anahtarlığı \
+(/etc/skel) konur;\n\
+\u0020\u0020\u0020\u0020\u0020\u0020PIN / EBA QR ile açılan oturumda Chrome \
+parola sormaz\n\
 \u0020\u0020- /tmp ve /var/tmp içerikleri\n\
 \u0020\u0020- Kullanılmayan diller için yerelleştirme dosyaları\n\
 \u0020\u0020\u0020\u0020({locales} dışındakiler /usr/share/locale altından \
@@ -4454,8 +4456,9 @@ temizlendi, {trash} çöp kutusu öğesi silindi\
 """
 browsers = "Tarayıcılardan (Firefox/Chrome/Edge/Brave/...) {count} önbellek/veri öğesi silindi"
 keyrings = """\
-{count} GNOME anahtarlık dosyası silindi (ilk girişte yenisi oluşur; klonda \
-parola uyuşmazlığı olmaz)\
+{count} GNOME anahtarlık dosyası silindi; yerine ETAP'ın parolasız varsayılan \
+anahtarlığı kondu (klonda parola uyuşmazlığı olmaz, PIN / EBA QR ile açılan \
+oturumda Chrome parola sormaz)\
 """
 tmp = "/tmp ve /var/tmp: {count} öğe silindi"
 finishing = "Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor..."
@@ -4509,7 +4512,9 @@ imajdan silindi).\
 """
 test_login = """\
 etapadmin ve bir öğretmen hesabıyla girişte \"anahtarlık parolası \
-uyuşmuyor\" uyarısı çıkmadığını, Firefox ve Chrome'un açıldığını doğrulayın.\
+uyuşmuyor\" uyarısı çıkmadığını, Firefox ve Chrome'un açıldığını doğrulayın. \
+Bir hesaba PIN ya da EBA QR ile girip Chrome'u açın; \"giriş anahtarlığı \
+açılmadı\" diye parola sormamalı.\
 """
 test_apt = """\
 Klonda `sudo apt update` komutunun çalıştığını ve `sudo cat \

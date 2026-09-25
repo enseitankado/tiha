@@ -39,6 +39,21 @@ dağılır, hem de her klonda parola yeniden tanımlandığı anda yukarıdaki
 uyuşmazlık tekrar doğar. Bu yüzden sanitize adımı (m10) anahtarlıkların
 tamamını siler; ilk girişte her tahta kendi anahtarlığını üretir.
 
+ETAP'ın varsayılan anahtarlığı
+------------------------------
+
+``pardus-etap-settings`` paketi ``/etc/skel`` içine **parolasız** bir
+"Öntanımlı anahtarlık" (Chrome Safe Storage kaydıyla) ve onu varsayılan
+yapan ``default`` işaretçisini koyar. ETAP'ta oturumların çoğu parolasız
+açılır (PIN, EBA QR, USB): ``common-auth`` içindeki bu modüller
+``sufficient`` olduğu için ``pam_gnome_keyring.so`` giriş parolasını hiç
+görmez ve parolalı bir giriş anahtarlığını açamaz. Parolasız varsayılan
+anahtarlık bu yüzden vardır; o silinirse Chrome ilk açılışta "giriş
+anahtarlığı açılmadı" diyerek parola sorar. Bu yüzden silme ve kenara
+alma işlemlerinden sonra :func:`seed_default_keyring` onu ``/etc/skel``'deki
+temiz hâliyle geri koyar. Paketle gelen dosya bütün ETAP tahtalarında
+aynıdır; imaja makineye özgü bir sır taşımaz.
+
 Parolasız anahtarlıklar
 -----------------------
 
@@ -72,6 +87,9 @@ USER_KEYSTORE = "user.keystore"
 
 # Hangi anahtarlığın "varsayılan" olduğunu tutan tek satırlık işaretçi.
 DEFAULT_POINTER = "default"
+
+# ETAP'ın her yeni hesaba verdiği parolasız varsayılan anahtarlık.
+SKEL_KEYRINGS = Path("/etc/skel") / KEYRINGS_SUBDIR
 
 # Şifreli gnome-keyring dosyalarının imzaları. Parolasız (düz metin)
 # anahtarlıklar bunların yerine ``[keyring]`` INI başlığıyla başlar.
@@ -260,6 +278,11 @@ def quarantine_stale_keyrings(username: str, backup_root: Path) -> list[str]:
         except (OSError, shutil.Error) as exc:
             log.warning("default işaretçisi kenara alınamadı: %s", exc)
 
+    # Varsayılan anahtarlık da kenara alındıysa ETAP'ın parolasızını koy;
+    # yoksa PIN / EBA QR ile açılan oturumda Chrome parola sorar.
+    if not _is_file(keyrings_dir(home) / DEFAULT_POINTER):
+        seed_default_keyring(home)
+
     return moved
 
 
@@ -308,14 +331,64 @@ def restore_quarantined_keyrings(username: str, backup_root: Path) -> list[str]:
     return restored
 
 
-def purge_keyrings(home: Path) -> int:
-    """İmaj öncesi: ev dizinindeki tüm anahtarlık dosyalarını siler.
+def seed_default_keyring(home: Path) -> int:
+    """ETAP'ın parolasız varsayılan anahtarlığını ``/etc/skel``'den koyar.
 
-    Silinen anahtarlık kullanıcının ilk girişinde otomatik yeniden
-    oluşturulur, bu yüzden klon tahtada eksik bir şey olmaz. Buradaki
-    amaç hem makineye özgü sırların imaja gömülmesini önlemek, hem de
+    Yalnız eksik dosyalar kopyalanır; sahiplik ev dizininin sahibine,
+    izinler anahtarlıkta 0600, işaretçide 0644 olur. Kopyalanan dosya
+    sayısını döner. ``/etc/skel``'de anahtarlık yoksa (ETAP dışı sistem)
+    hiçbir şey yapmaz.
+    """
+    if not _is_dir(SKEL_KEYRINGS):
+        return 0
+    try:
+        st = home.stat()
+    except OSError:
+        return 0
+    uid, gid = st.st_uid, st.st_gid
+    dest_dir = keyrings_dir(home)
+    # .local, .local/share ve keyrings yoksa kullanıcı adına oluştur.
+    path = home
+    for part in KEYRINGS_SUBDIR.parts:
+        path = path / part
+        if not _is_dir(path):
+            try:
+                path.mkdir(mode=0o700 if part == "keyrings" else 0o755)
+                os.chown(path, uid, gid)
+            except OSError as exc:
+                log.warning("Anahtarlık dizini oluşturulamadı %s: %s", path, exc)
+                return 0
+    copied = 0
+    try:
+        sources = sorted(SKEL_KEYRINGS.iterdir())
+    except OSError:
+        return 0
+    for src in sources:
+        if src.is_symlink() or not _is_file(src):
+            continue
+        dest = dest_dir / src.name
+        if dest.exists():
+            continue
+        try:
+            shutil.copyfile(src, dest)
+            os.chown(dest, uid, gid)
+            os.chmod(dest, 0o644 if src.name == DEFAULT_POINTER else 0o600)
+        except OSError as exc:
+            log.warning("Varsayılan anahtarlık konamadı %s: %s", dest, exc)
+            continue
+        copied += 1
+    return copied
+
+
+def purge_keyrings(home: Path) -> int:
+    """İmaj öncesi: ev dizinindeki tüm anahtarlık dosyalarını siler,
+    ardından ETAP'ın parolasız varsayılan anahtarlığını geri koyar.
+
+    Amaç hem makineye özgü sırların imaja gömülmesini önlemek, hem de
     klonda parola tanımlandığı anda doğacak "anahtarlığınızla uyuşmuyor"
-    hatasının önünü kesmektir.
+    hatasının önünü kesmektir. Varsayılan anahtarlık geri konmazsa PIN /
+    EBA QR ile açılan oturumlarda Chrome "giriş anahtarlığı açılmadı"
+    diyerek parola sorar (bkz. modül açıklaması).
 
     Silinen dosya sayısını döner.
     """
@@ -327,4 +400,5 @@ def purge_keyrings(home: Path) -> int:
             log.warning("Anahtarlık silinemedi %s: %s", path, exc)
             continue
         removed += 1
+    seed_default_keyring(home)
     return removed
