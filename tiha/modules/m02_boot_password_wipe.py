@@ -14,9 +14,12 @@ senaryoyu (ör. dokunmatik ekrana yazılması arka sıralardan görülebilen
 bir parolanın kalıcı kalması) önler — atanan parola bir sonraki açılışta
 otomatik olarak rastgele değişir.
 
-- ogretmen / ogrenci (ortak hesaplar) parolası her açılışta rastgele bir
-  değerle ezilir; bu hesaplara yalnızca EBA-QR, PIN veya USB bellek ile
-  girilebilir.
+- ogrenci (ortak hesap) parolası her açılışta rastgele bir değerle
+  ezilir; bu hesaba yalnızca EBA-QR, PIN veya USB bellek ile girilebilir.
+- ortak ogretmen hesabı bu işlemin DIŞINDADIR: parolası bilinen tek sınırlı
+  hesaptır. Tahtanın pili bitip saati kayarsa PIN'ler çalışmaz, internet
+  yoksa EBA QR da çalışmaz; o durumda etapadmin dışında parolayla
+  girilebilecek tek hesap budur.
 - "Öğretmen PIN anahtarları" adımında oluşturulan kişisel hesaplar (ör.
   ayse.yilmaz, ogretmen01 …) aynı temizliğe dahil edilir; girişleri
   yalnızca PIN kodu ile olur.
@@ -49,6 +52,9 @@ log = get_logger(__name__)
 
 # Kalıcı ayrıcalıklı kullanıcılar — silmeye ASLA dahil edilmez.
 PROTECTED_USERS = {"etapadmin", "root"}
+# Açılışta parolası sıfırlanmayan hesaplar: yönetici ve parolası bilinen
+# tek sınırlı (yedek giriş) hesabı olan ortak ogretmen.
+WIPE_EXCLUDED_USERS = ("root", "etapadmin", "ogretmen")
 # "Standart" dağıtım hesapları — bilerek dokunmayız.
 STANDARD_USERS = {"ogretmen", "ogrenci"}
 
@@ -71,6 +77,9 @@ SCRIPT_CONTENT = """#!/bin/bash
 # EBA-QR / PIN / USB yollarıyla girilebilir.
 # Kurallar:
 #  * etapadmin (yerel yönetici) ASLA değişmez.
+#  * ogretmen (ortak öğretmen) de değişmez: parolası bilinen tek sınırlı
+#    hesaptır; pil bitip PIN'ler çalışmazsa ve QR için internet yoksa
+#    tahtaya girilebilen yedek yoldur.
 #  * UID 1000-59999 aralığındaki diğer tüm kullanıcılar rastgele parola
 #    alır.
 # Parola hazır hash olarak yazılır (chpasswd -e): düz parolayla chpasswd
@@ -79,7 +88,7 @@ SCRIPT_CONTENT = """#!/bin/bash
 set -euo pipefail
 log() { logger -t tiha-boot-wipe "$*"; }
 while IFS=: read -r user _ uid _ _ _ _; do
-    if [[ "$uid" -ge 1000 && "$uid" -lt 60000 && "$user" != "etapadmin" ]]; then
+    if [[ "$uid" -ge 1000 && "$uid" -lt 60000 && "$user" != "etapadmin" && "$user" != "ogretmen" ]]; then
         rand=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)
         hash=$(printf '%s' "$rand" | openssl passwd -6 -stdin 2>/dev/null || true)
         # openssl yoksa hiçbir parolanın eşleşemeyeceği kilitli değer.
@@ -112,7 +121,7 @@ def _account_report() -> str:
     1000–59999, etapadmin hariç) hangi hesapların parolası sıfırlanacak,
     hangilerine dokunulmayacak."""
     otp_users = _otp_registered_users()
-    wiped = sorted(u for u in _human_users() if u not in PROTECTED_USERS)
+    wiped = sorted(u for u in _human_users() if u not in WIPE_EXCLUDED_USERS)
     lines = [t("m02.apply.wiped_header", count=len(wiped))]
     if not wiped:
         lines.append(t("m02.apply.wiped_none"))
@@ -125,6 +134,8 @@ def _account_report() -> str:
             lines.append(f"  - {user}")
     lines += ["", t("m02.apply.kept_header")]
     lines += [f"  - {user}" for user in ("root", "etapadmin")]
+    if _user_exists("ogretmen"):
+        lines.append(t("m02.apply.kept_ogretmen"))
     lines += ["", t("m02.apply.footer")]
     return "\n".join(lines)
 
@@ -174,10 +185,12 @@ class BootPasswordWipeModule(Module):
         lines.append(t("m02.preview.protected_header"))
         lines.append("  - root")
         lines.append("  - etapadmin")
+        if _user_exists("ogretmen"):
+            lines.append(t("m02.apply.kept_ogretmen"))
         lines.append("")
 
         # Ortak hesaplar
-        ortak = [u for u in ("ogretmen", "ogrenci") if _user_exists(u)]
+        ortak = [u for u in ("ogrenci",) if _user_exists(u)]
         if ortak:
             lines.append(t("m02.preview.shared_header"))
             for u in ortak:

@@ -131,7 +131,9 @@ MIN_USERS_FOR_CACHE = 50
 # Varsayılan sistem kullanıcıları (işletim sistemi kurulumunda gelir)
 DEFAULT_SYSTEM_USERS = {"etapadmin", "ogrenci", "ogretmen"}
 # ogretmenler grubuna (ve dolayısıyla grup PIN'ine) hiç girmemesi gereken
-# hesaplar: yönetici ve ortak öğretmen hesabı.
+# hesaplar: yönetici ve ortak öğretmen hesabı. Ortak ogretmen hesabı,
+# parolası bilinen tek sınırlı hesaptır (pil bitip PIN'ler çalışmazsa ve
+# QR için internet yoksa girilebilen yedek yol); grup PIN'i ona geçmemeli.
 GROUP_EXCLUDED_USERS = ("etapadmin", "ogretmen")
 
 
@@ -1523,7 +1525,12 @@ class OTPSecretsModule(Module):
             kind = _paper_account_kind(user, branches)
             kind_html = f' <span class="kind">({_esc(kind)})</span>' if kind else ""
             # Sızması bütün tahtaları etkileyen anahtarlar: kısa uyarı.
-            warn_key = {"@ogretmenler": "warn_group", "etapadmin": "warn_admin"}.get(user)
+            warn_key = {
+                "@ogretmenler": "warn_group",
+                "etapadmin": "warn_admin",
+                # Parolası bilinen tek sınırlı hesap: yedek giriş yolu.
+                "ogretmen": "warn_ogretmen",
+            }.get(user)
             warn_html = (
                 f'    <div class="warn">⚠ {t("m03.paper." + warn_key)}</div>\n'
                 if warn_key else ""

@@ -959,7 +959,16 @@ help = "Tahtada yerel yönetim işleri için kullanılacak parola. Boş bırakı
 
 [m01.params.teacher_password]
 label = "Öğretmen parolası (isteğe bağlı)"
-help = "Öğretmen hesabı varsa, bu hesap için parola belirleyebilirsiniz. Boş bırakılabilir."
+help = """\
+Ortak ogretmen hesabının parolası. Bu hesap, parolası bilinen tek sınırlı \
+hesaptır: açılış parola temizliği ona dokunmaz ve ogretmenler grubuna \
+(dolayısıyla ortak grup PIN'ine) alınmaz. Tahtanın pili bitip saati \
+kayarsa PIN kodları çalışmaz; internet yoksa EBA QR ile de girilemez. O \
+durumda tahtaya etapadmin (sistem yöneticisi) dışında parolayla \
+girilebilecek tek hesap budur. Bu yüzden bir parola belirlemeniz önerilir; \
+parolayı yalnız gerektiğinde kullanılmak üzere güvenli bir yerde saklayın. \
+Boş bırakırsanız mevcut parolası değişmez.\
+"""
 
 [m01.params.reserve_count]
 label = "Yedek hesap sayısı"
@@ -1255,14 +1264,19 @@ title = "Her açılışta parola temizliği"
 sidebar_title = "Otomatik parola temizliği"
 apply_hint = "Açılışta parola temizleme servisi kurulur ve etkinleştirilir."
 rationale = """\
-Tahta her yeniden başladığında etapadmin dışındaki hesapların (ortak \
-`ogretmen`, `ogrenci` ve kişisel öğretmen hesapları) parolasını otomatik \
-olarak rastgele bir değere çeviren sistem servisi kurar. Böylece tahtaya \
-dokunarak yazılan ve sızdırılan herhangi bir parola bir sonraki açılışta işe \
-yaramaz; tahta yalnızca EBA-QR, PIN kodu ya da USB bellek ile açılır.\n\
+Tahta her yeniden başladığında `etapadmin` ve ortak `ogretmen` dışındaki \
+hesapların (`ogrenci`, yedek, branş ve kişisel öğretmen hesapları) \
+parolasını otomatik olarak rastgele bir değere çeviren sistem servisi kurar. \
+Böylece tahtaya dokunarak yazılan ve sızdırılan herhangi bir parola bir \
+sonraki açılışta işe yaramaz; bu hesaplara yalnızca EBA-QR, PIN kodu ya da \
+USB bellek ile girilir.\n\
 \n\
-Yönetici `etapadmin` hesabına bu servis hiç dokunmaz. Teknik bakım erişimi \
-(yerel yönetim, SSH) her zaman korunur.\
+Yönetici `etapadmin` hesabına bu servis hiç dokunmaz; teknik bakım erişimi \
+(yerel yönetim, SSH) her zaman korunur. Ortak `ogretmen` hesabına da \
+dokunmaz: parolasını "Yerel hesaplar" adımında sizin belirlediğiniz, \
+parolası bilinen tek sınırlı hesaptır. Tahtanın pili bitip saati kayarsa \
+PIN kodları çalışmaz; internet yoksa EBA QR da çalışmaz. O durumda \
+etapadmin dışında parolayla girilebilecek tek hesap budur.\
 """
 
 [m02.preview]
@@ -1270,7 +1284,7 @@ service_status = "Servis durumu : {status}"
 service_existing = "zaten kurulu, yeniden yazılacak"
 service_new = "kurulacak ve etkinleştirilecek"
 intro = """\
-Bu servis her açılışta, root ve etapadmin dışındaki hesapların parolasını \
+Bu servis her açılışta, root, etapadmin ve ogretmen dışındaki hesapların parolasını \
 kriptografik olarak rastgele bir değere çevirir. Bu hesaplarda parola \
 YAZARAK giriş yapılamaz - yalnız EBA-QR, PIN veya USB bellek ile giriş \
 yapılabilir.\
@@ -1295,6 +1309,7 @@ wiped_header = "Parolası her açılışta sıfırlanacak hesaplar ({count}):"
 wiped_none = "  (şu an bu kapsama giren hesap yok)"
 wiped_user_no_pin = "  - {user}   ← PIN anahtarı yok; bu hesaba yalnız EBA QR ya da USB bellekle girilebilir"
 kept_header = "Parolasına dokunulmayacak hesaplar:"
+kept_ogretmen = "  - ogretmen  (parolası bilinen yedek giriş hesabı: pil bitip PIN'ler çalışmazsa ve QR için internet yoksa)"
 footer = """\
 Temizlik bir sonraki açılıştan itibaren her açılışta bir kez yapılır. \
 Sonradan açılan hesaplar da (ör. EBA QR ile ilk girişte oluşan öğretmen \
@@ -1323,16 +1338,22 @@ removed_extras = " Ayrıca şu ek hesaplar ve ev dizinleri silindi: {users}."
 
 [m02.report]
 done = """\
-Her açılışta etapadmin dışındaki tüm yerel hesapların (ortak \
-öğretmen/öğrenci, yedek, branş ve kişisel öğretmen hesapları) parolasını rastgele \
+Her açılışta etapadmin ve ortak ogretmen dışındaki tüm yerel hesapların \
+(ogrenci, yedek, branş ve kişisel öğretmen hesapları) parolasını rastgele \
 bir değere çeviren açılış servisini kurdunuz. Bu hesaplara artık yalnız EBA \
-QR, PIN ya da USB bellek ile girilebilir.\
+QR, PIN ya da USB bellek ile girilebilir. Ortak ogretmen hesabının parolası \
+korunur (parolası bilinen yedek giriş hesabı).\
 """
 test_etapadmin = """\
 Klonu yeniden başlatın; etapadmin ile parolayla girebildiğinizi doğrulayın \
 (bu hesaba dokunulmaz).\
 """
-test_ogretmen = "Ortak öğretmen hesabına bilinen parolasıyla girmeyi deneyin; giriş reddedilmeli."
+test_ogretmen = """\
+Bir branş hesabına ve bir kişisel öğretmen hesabına bilinen parolasıyla \
+girmeyi deneyin; girişler reddedilmeli (bu hesaplara yalnız EBA QR / PIN / \
+USB ile giriş yapılır). Ortak ogretmen hesabına ise belirlediğiniz parolayla \
+girilebildiğini doğrulayın.\
+"""
 test_pin = """\
 Bir öğretmen, bir yedek ve bir branş hesabına PIN ile (ya da USB ile) girin; tahtayı \
 yeniden başlattıktan sonra da girilebildiğini doğrulayın.\
@@ -1340,8 +1361,8 @@ yeniden başlattıktan sonra da girilebildiğini doğrulayın.\
 test_journal = "Terminalde `journalctl -t tiha-boot-wipe -b` çıktısında HATA satırı olmadığını doğrulayın."
 note = """\
 Servis bütün klonlarda her açılışta çalışır. PIN ya da USB ile giriş kurulu \
-ve çalışır değilse öğretmenler hiçbir tahtaya giremez; yalnız etapadmin \
-kalır.\
+ve çalışır değilse öğretmenler kendi hesaplarına giremez; parolayla yalnız \
+etapadmin ve ortak ogretmen hesabı kalır.\
 """
 
 # ==========================================================================
@@ -1565,6 +1586,14 @@ hesabına oturum açılabilir; tahtalar her türlü erişime açık kalır. \
 Öğretmenlere bu anahtar yerine branş hesaplarının anahtarlarını ya da \
 kişisel anahtarlarını verin (kişisel anahtar için öğretmenin tahtaya bir \
 kez EBA QR ile oturum açmış olması gerekir).\
+"""
+warn_ogretmen = """\
+Ortak ogretmen hesabı, parolası bilinen tek sınırlı hesaptır ve açılışta \
+parolası sıfırlanmaz. Tahtanın pili bitip saati kayarsa PIN kodları \
+çalışmaz; internet yoksa EBA QR ile de girilemez. O durumda tahtaya \
+etapadmin (sistem yöneticisi) dışında parolayla girilebilecek tek hesap \
+budur; parolası "Yerel hesaplar" adımında belirlediğiniz öğretmen \
+parolasıdır. Bu PIN yalnız bu hesaba giriş sağlar.\
 """
 warn_group = """\
 Bu anahtar okuldaki bütün tahtalarda herhangi bir öğretmen ya da branş \
