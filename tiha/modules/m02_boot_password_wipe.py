@@ -72,16 +72,22 @@ SCRIPT_CONTENT = """#!/bin/bash
 # Kurallar:
 #  * etapadmin (yerel yönetici) ASLA değişmez.
 #  * UID 1000-59999 aralığındaki diğer tüm kullanıcılar rastgele parola
-#    alır ve hesap kilitlenir (-L).
+#    alır.
+# Parola hazır hash olarak yazılır (chpasswd -e): düz parolayla chpasswd
+# PAM'in common-password zincirinden geçer ve ETAP'ın zinciri
+# (pam_script + pam_unix use_authtok) bunu her hesapta reddeder.
 set -euo pipefail
 log() { logger -t tiha-boot-wipe "$*"; }
 while IFS=: read -r user _ uid _ _ _ _; do
     if [[ "$uid" -ge 1000 && "$uid" -lt 60000 && "$user" != "etapadmin" ]]; then
         rand=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)
-        if echo "${user}:${rand}" | chpasswd; then
+        hash=$(printf '%s' "$rand" | openssl passwd -6 -stdin 2>/dev/null || true)
+        # openssl yoksa hiçbir parolanın eşleşemeyeceği kilitli değer.
+        [[ "$hash" == '$6$'* ]] || hash="!${rand}"
+        if err=$(printf '%s:%s\\n' "$user" "$hash" | chpasswd -e 2>&1); then
             log "kullanıcı '$user' parolası rastgele atandı"
         else
-            log "HATA: '$user' için chpasswd başarısız"
+            log "HATA: '$user' için chpasswd başarısız: ${err}"
         fi
     fi
 done < /etc/passwd
