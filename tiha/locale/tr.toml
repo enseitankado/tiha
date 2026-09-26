@@ -511,6 +511,7 @@ denetlenebilen kısmı doğru (kalanını elle deneyin), ☐ elle denenmeli. \
 Ayar değiştirmez; yalnız apt-get update paket listelerini tazeler.\
 """
 clone_check_running = "Maddeler denetleniyor… (apt-get update ve ağ denetimleri biraz sürebilir)"
+clone_check_stream_title = "Klonu kontrol et — canlı akış"
 clone_check_confirm_title = "Bu tahta klon tahta mı?"
 clone_check_confirm_body = """\
 Bu düğme yalnız KLON tahtalarda çalıştırılmalıdır (imajdan çıkmış \

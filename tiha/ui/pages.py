@@ -2723,10 +2723,19 @@ class SummaryPage(Gtk.Box):
         self.tests_exp.set_expanded(True)
         report = self._report
 
+        # Ayrı bir stream penceresi aç: denetim satırları oraya akar,
+        # bitiş özet raporu da orada gösterilir. Bu pencere kapatılabilir
+        # olsa da denetim yine tamamlanır; sayfadaki liste kartları da
+        # güncellenir.
+        self._open_check_stream_dialog()
+
+        def emit(line: str) -> None:
+            GLib.idle_add(self._append_check_stream_line, line)
+
         def worker():
             from ..core.clone_verify import verify
             try:
-                results = verify(report)
+                results = verify(report, progress=emit)
             except Exception as exc:  # noqa: BLE001 — sayfayı düşürme
                 log.warning("Klon kontrolü çalıştırılamadı: %s", exc)
                 results = exc
@@ -2739,10 +2748,112 @@ class SummaryPage(Gtk.Box):
         self._check_spinner.stop()
         self._check_btn.set_sensitive(True)
         if isinstance(results, Exception):
-            self._check_status.set_text(t("ui.summary.clone_check_failed", error=results))
+            self._check_status.set_text(
+                t("ui.summary.clone_check_failed", error=results),
+            )
+            self._finish_check_stream_dialog(
+                t("ui.summary.clone_check_failed", error=results),
+            )
             return False
         self._check_results = {r.tid: r for r in results}
         self._apply_check_results()
+        # Stream penceresine özet yaz + Kapat düğmesini etkinleştir.
+        counts = {"ok": 0, "fail": 0, "partial": 0, "manual": 0}
+        for r in results:
+            counts[r.status] = counts.get(r.status, 0) + 1
+        self._finish_check_stream_dialog(
+            t("ui.summary.clone_check_totals", **counts),
+        )
+        return False
+
+    # ---- Kontrol akışı penceresi -----------------------------------------
+    # Klonu kontrol et düğmesi kendine ait bir modal aç: denetim satırları
+    # canlı olarak metin gövdesine akar, iş bitince Kapat düğmesi
+    # etkinleşir. Pencere kapatılsa bile denetim tamamlanır ve arka
+    # plandaki liste satırları güncellenmeye devam eder.
+
+    def _open_check_stream_dialog(self) -> None:
+        dlg = Gtk.Dialog(
+            title=t("ui.summary.clone_check_stream_title"),
+            transient_for=self.get_toplevel()
+                if isinstance(self.get_toplevel(), Gtk.Window) else None,
+            modal=False,
+            destroy_with_parent=True,
+        )
+        dlg.set_default_size(760, 520)
+        close_btn = dlg.add_button(t("ui.main.close"), Gtk.ResponseType.CLOSE)
+        close_btn.set_sensitive(False)
+        content = dlg.get_content_area()
+        content.set_spacing(6)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(content, f"set_margin_{side}")(12)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        spinner = Gtk.Spinner()
+        spinner.start()
+        header.pack_start(spinner, False, False, 0)
+        status = _wrapping_label(t("ui.summary.clone_check_running"))
+        header.pack_start(status, True, True, 0)
+        content.pack_start(header, False, False, 0)
+
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_hexpand(True)
+        scroller.set_vexpand(True)
+        view = Gtk.TextView()
+        view.set_editable(False)
+        view.set_cursor_visible(False)
+        view.set_monospace(True)
+        view.set_left_margin(6)
+        view.set_right_margin(6)
+        view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        scroller.add(view)
+        content.pack_start(scroller, True, True, 0)
+
+        self._check_dialog = dlg
+        self._check_dialog_view = view
+        self._check_dialog_buffer = view.get_buffer()
+        self._check_dialog_status = status
+        self._check_dialog_spinner = spinner
+        self._check_dialog_close_btn = close_btn
+
+        dlg.connect("response", lambda d, _r: d.destroy())
+        dlg.connect(
+            "destroy", lambda *_: setattr(self, "_check_dialog", None),
+        )
+        content.show_all()
+        dlg.show()
+
+    def _append_check_stream_line(self, line: str) -> bool:
+        buf = getattr(self, "_check_dialog_buffer", None)
+        if buf is None:
+            return False
+        end = buf.get_end_iter()
+        buf.insert(end, line + "\n")
+        view = getattr(self, "_check_dialog_view", None)
+        if view is not None:
+            mark = buf.get_insert()
+            view.scroll_mark_onscreen(mark)
+        # Üst satırın da güncel olsun.
+        status = getattr(self, "_check_dialog_status", None)
+        if status is not None and line.strip() and not line.startswith("  "):
+            status.set_text(line.strip("─ "))
+        return False
+
+    def _finish_check_stream_dialog(self, summary: str) -> bool:
+        spinner = getattr(self, "_check_dialog_spinner", None)
+        if spinner is not None:
+            spinner.stop()
+        status = getattr(self, "_check_dialog_status", None)
+        if status is not None:
+            status.set_text(summary)
+        close_btn = getattr(self, "_check_dialog_close_btn", None)
+        if close_btn is not None:
+            close_btn.set_sensitive(True)
+        buf = getattr(self, "_check_dialog_buffer", None)
+        if buf is not None:
+            end = buf.get_end_iter()
+            buf.insert(end, f"\n── {summary} ──\n")
         return False
 
     _CHECK_MARKS = {

@@ -834,26 +834,47 @@ def check_item(tid: str, text: str) -> ItemResult:
     return ItemResult(tid, text, key, status, detail)
 
 
-def verify(report) -> list[ItemResult]:
+def verify(report, progress=None) -> list[ItemResult]:
     """Raporun "Kontrol et" listesindeki bütün maddeleri denetler.
 
     Aynı denetim (ör. apt-get update) birden çok maddede geçerse bir kez
     çalışır; sonuç önbellekten gelir.
+
+    ``progress`` bir çağrılabilirse her madde için iki kez çağrılır:
+    denetim başlarken ("Denetim: <başlık> — <metin>") ve bittiğinde
+    ("  <işaret> <durum> — <ayrıntı>"). Böylece bir stream penceresine
+    canlı akış gönderilebilir.
     """
     cache: dict[tuple, tuple[str, str]] = {}
     _RUN_CACHE.clear()
     results = []
-    for _title, items in report.test_groups():
+    marks = {OK: "✓", FAIL: "✗", PARTIAL: "◐", MANUAL: "☐"}
+    labels = {OK: "tamam", FAIL: "hatalı", PARTIAL: "kısmen", MANUAL: "elle"}
+    for title, items in report.test_groups():
+        if progress:
+            progress(f"\n── {title} ──")
         for tid, text in items:
             key, params = identify(text)
             fn = CHECKS.get(key)
             ck = (fn, tuple(sorted(params.items())))
+            if progress:
+                progress(f"[{tid}] {text}")
             if fn is not None and ck in cache:
                 status, detail = cache[ck]
+                if progress:
+                    progress(
+                        f"  {marks[status]} {labels[status]} "
+                        f"(önbellek) — {detail}",
+                    )
                 results.append(ItemResult(tid, text, key, status, detail))
                 continue
             res = check_item(tid, text)
             if fn is not None:
                 cache[ck] = (res.status, res.detail)
+            if progress:
+                progress(
+                    f"  {marks.get(res.status, '?')} "
+                    f"{labels.get(res.status, res.status)} — {res.detail}",
+                )
             results.append(res)
     return results
