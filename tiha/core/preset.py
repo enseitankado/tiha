@@ -48,7 +48,7 @@ SCHEMA_VERSION = 1
 # Bu modüllerin parametreleri parola/secret içerebilir; export'ta atlanır.
 SENSITIVE_MODULES = {
     "m01_initial_passwords",
-    "m05_samba_share",
+    "m04_ssh_and_samba",
 }
 
 

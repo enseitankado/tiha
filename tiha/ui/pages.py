@@ -2362,43 +2362,40 @@ class SummaryPage(Gtk.Box):
         self.pack_start(self.report_box, False, False, 0)
         self._report: Report | None = None
 
-        # Üç katlanır grup: Yapılanlar, Özet (adım kartları + geri alma),
-        # Kontrol et (klon tahtada denenecekler). Varsayılan kapalı;
-        # expander'lar bir kez kurulur, refresh() yalnız içlerini
-        # yenilediği için açık/kapalı durumları korunur.
+        # İki katlanır grup: Yapılanlar (rapor içeriği + kontrol düğmesi),
+        # Kontrol et (rapordaki metin/test önerileri). Varsayılan kapalı;
+        # refresh() yalnız içlerini yenilediği için açık/kapalı durumları
+        # korunur.
         self.done_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.done_exp = self._group_expander(self.done_box)
         self.pack_start(self.done_exp, False, False, 0)
 
-        summary_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.summary_exp = self._group_expander(summary_box)
-        self.pack_start(self.summary_exp, False, False, 0)
+        self.done_content = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=8,
+        )
+        self.done_box.pack_start(self.done_content, False, False, 0)
+
+        # "Klonu kontrol et" sonuçları: madde kimliği → ItemResult. Liste
+        # yeniden kurulduğunda (refresh) sonuçlar kaybolmasın diye tutulur.
+        self._check_results: dict = {}
+        self._test_rows: dict = {}
+        self._checking = False
 
         self.tests_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.tests_exp = self._group_expander(self.tests_box)
         self.pack_start(self.tests_exp, False, False, 0)
 
-        info = _wrapping_label(
-            t("ui.summary.undo_info"),
-            klass="tiha-rationale",
-        )
-        summary_box.pack_start(info, False, False, 0)
-
-        self.entries_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        summary_box.pack_start(self.entries_box, False, False, 0)
-
-        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        refresh = Gtk.Button(label=t("ui.summary.refresh"))
-        refresh.connect("clicked", lambda *_: self.refresh())
-        btn_row.pack_start(refresh, False, False, 0)
-
+        # Preset olarak dışa aktar — sayfa altında tek başına düğme.
         if self.on_export_preset is not None:
+            export_row = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+            )
+            export_row.set_margin_top(14)
             export_btn = Gtk.Button(label=t("ui.summary.export_preset"))
             export_btn.set_tooltip_text(t("ui.summary.export_preset_tip"))
             export_btn.connect("clicked", lambda *_: self.on_export_preset())
-            btn_row.pack_start(export_btn, False, False, 0)
-
-        summary_box.pack_start(btn_row, False, False, 0)
+            export_row.pack_start(export_btn, False, False, 0)
+            self.pack_start(export_row, False, False, 0)
 
         self.refresh()
 
@@ -2433,105 +2430,15 @@ class SummaryPage(Gtk.Box):
         self.refresh(report=state)
 
     def refresh(self, report=None) -> None:
-        """Tüm geçmiş kayıtlar arasından her modül için en son durumu
-        gösterir. Hangi oturumda uygulandığına bakılmaksızın, son durumu
-        ``applied`` olan adımlar Geri al düğmesiyle birlikte listelenir;
-        ``undone`` net-sıfır etki olduğu için gizlenir; ``failed`` ayırt
-        edici renkle (geri al düğmesiz) gösterilir."""
+        """Rapor kısmını yeniden kurar; adım-kartları/geri-alma bölümü
+        artık yok, yalnız "Yapılanlar" ve "Kontrol et" listelerini
+        yeniler."""
         self._render_report(report)
-        for child in self.entries_box.get_children():
-            self.entries_box.remove(child)
-
-        latest = self.journal.latest_per_module()
-        # Modülün sihirbaz içindeki sırasıyla dizelim
-        order = {m.id: idx for idx, m in enumerate(self.modules.values())}
-        entries = sorted(
-            (e for e in latest.values() if e.status != "undone"),
-            key=lambda e: order.get(e.module_id, 99),
-        )
-
-        undoable = sum(
-            1 for e in entries
-            if e.status == "applied"
-            and (m := self.modules.get(e.module_id)) is not None
-            and m.undo_supported
-        )
-        self._set_group_title(
-            self.summary_exp, t("ui.summary.group_undo"),
-            t("ui.summary.group_undo_detail", count=len(entries), undoable=undoable)
-            if entries else "",
-        )
-
-        if not entries:
-            empty = _wrapping_label(
-                t("ui.summary.undo_empty"),
-                klass="tiha-rationale",
-            )
-            self.entries_box.pack_start(empty, False, False, 0)
-            self.entries_box.show_all()
-            return
-
-        status_map = {
-            "applied": ("✓", "tiha-summary-ok"),
-            "failed":  ("✗", "tiha-summary-fail"),
-            "skipped": ("–", "tiha-summary-undone"),
-        }
-
-        for entry in entries:
-            sym, css = status_map.get(entry.status, ("?", ""))
-            module = self.modules.get(entry.module_id)
-            if entry.status == "applied" and module is not None:
-                try:
-                    if module.result_is_off(entry.data):
-                        # Kapatarak uygulandı: onay değil, nötr işaret.
-                        sym, css = "–", "tiha-summary-undone"
-                except Exception:
-                    pass
-
-            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            card.get_style_context().add_class("tiha-summary-card")
-            if css:
-                card.get_style_context().add_class(css)
-            card.set_margin_bottom(4)
-
-            head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-
-            sym_lbl = Gtk.Label(label=sym, xalign=0)
-            sym_lbl.get_style_context().add_class("tiha-summary-sym")
-            sym_lbl.set_size_request(24, -1)
-            head.pack_start(sym_lbl, False, False, 0)
-
-            # Günlükteki başlık uygulama anındaki addır; adım sonradan
-            # yeniden adlandırıldıysa (ör. "Başarım (Deneysel)") güncel ad.
-            module = self.modules.get(entry.module_id)
-            title_lbl = _wrapping_label(module.title if module else entry.title)
-            title_lbl.get_style_context().add_class("tiha-summary-title")
-            head.pack_start(title_lbl, True, True, 0)
-
-            module = self.modules.get(entry.module_id)
-            if entry.status == "applied" and module and module.undo_supported:
-                btn = Gtk.Button(label=t("ui.summary.undo"))
-                btn.get_style_context().add_class("destructive-action")
-                btn.set_valign(Gtk.Align.CENTER)
-                btn.connect("clicked", self._make_undo_handler(module, entry))
-                head.pack_end(btn, False, False, 0)
-
-            card.pack_start(head, False, False, 0)
-
-            if entry.summary:
-                desc = _wrapping_label(entry.summary, klass="tiha-summary-desc")
-                desc.set_margin_start(34)
-                desc.set_margin_end(6)
-                card.pack_start(desc, False, False, 0)
-
-            self.entries_box.pack_start(card, False, False, 0)
-
-        self.entries_box.show_all()
 
     # --- "Bu imajda neler yaptınız" raporu ---------------------------------
 
     def _render_report(self, report=None) -> None:
-        for box in (self.report_box, self.done_box, self.tests_box):
+        for box in (self.report_box, self.done_content, self.tests_box):
             for child in box.get_children():
                 box.remove(child)
         try:
@@ -2567,7 +2474,9 @@ class SummaryPage(Gtk.Box):
             exp.set_visible(not report.is_empty)
 
         if not report.is_empty:
-            self.done_box.pack_start(self._report_steps(report.steps), False, False, 0)
+            self.done_content.pack_start(
+                self._report_steps(report.steps), False, False, 0,
+            )
             self._set_group_title(
                 self.done_exp, t("ui.summary.group_done"),
                 t("ui.summary.group_done_detail", count=len(report.steps)),
@@ -2579,7 +2488,7 @@ class SummaryPage(Gtk.Box):
                 self.tests_exp, t("ui.summary.group_tests"),
                 t("ui.summary.group_tests_detail", count=n_tests),
             )
-            _no_focus_labels(self.done_box)
+            _no_focus_labels(self.done_content)
             _no_focus_labels(self.tests_box)
             self.done_box.show_all()
             self.tests_box.show_all()
@@ -2661,6 +2570,7 @@ class SummaryPage(Gtk.Box):
 
     def _report_tests(self, report: Report) -> Gtk.Box:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self._test_rows = {}
         box.pack_start(
             _wrapping_label(
                 t("ui.summary.tests_intro"),
@@ -2674,7 +2584,9 @@ class SummaryPage(Gtk.Box):
             rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             rows.set_margin_start(12)
             for tid, item in items:
+                item_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
                 row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                item_box.pack_start(row, False, False, 0)
                 sym = Gtk.Label(label="☐", xalign=0, yalign=0)
                 row.pack_start(sym, False, False, 0)
                 ver, _, num = tid.rpartition("-")
@@ -2703,8 +2615,31 @@ class SummaryPage(Gtk.Box):
                 if commands:
                     lbl.connect("activate-link", self._copy_command_link, commands)
                 row.pack_start(lbl, True, True, 0)
-                rows.pack_start(row, False, False, 0)
+                # Klon denetiminin sonucu: maddenin altında küçük satır.
+                detail = _wrapping_label("", klass="tiha-check-detail", selectable=True)
+                detail.set_margin_start(30)
+                detail.set_no_show_all(True)
+                item_box.pack_start(detail, False, False, 0)
+                self._test_rows[tid] = (sym, detail, item)
+                rows.pack_start(item_box, False, False, 0)
             box.pack_start(rows, False, False, 0)
+
+        # "Klonu kontrol et": listedeki bütün maddeleri denetler; listenin
+        # sonunda durur, sonuçlar maddelerin yanına yazılır.
+        check_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        check_row.set_margin_top(10)
+        self._check_btn = Gtk.Button(label=t("ui.summary.clone_check"))
+        self._check_btn.set_tooltip_text(t("ui.summary.clone_check_tip"))
+        self._check_btn.get_style_context().add_class("suggested-action")
+        self._check_btn.connect("clicked", lambda *_: self._on_clone_check())
+        self._check_btn.set_sensitive(not self._checking)
+        check_row.pack_start(self._check_btn, False, False, 0)
+        self._check_spinner = Gtk.Spinner()
+        check_row.pack_start(self._check_spinner, False, False, 0)
+        self._check_status = _wrapping_label("", klass="tiha-rationale")
+        check_row.pack_start(self._check_status, True, True, 0)
+        box.pack_start(check_row, False, False, 0)
+        GLib.idle_add(self._apply_check_results)
         return box
 
     def _copy_command_link(self, label: Gtk.Label, uri: str, commands: list[str]) -> bool:
@@ -2755,13 +2690,86 @@ class SummaryPage(Gtk.Box):
         finally:
             dlg.destroy()
 
-    def _make_undo_handler(self, module: Module, entry: JournalEntry):
-        def _handler(_btn: Gtk.Button) -> None:
+    def _on_clone_check(self) -> None:
+        """"Kontrol et" listesindeki bütün maddeleri klonda denetler.
+
+        Önce tahtanın klon olduğu onaylatılır. Denetimler arka planda
+        çalışır (``clone_verify.verify``; salt okunur, yalnız
+        ``apt-get update`` paket listelerini tazeler) ve sonuçlar
+        maddelerin yanına yazılır.
+        """
+        if self._checking or self._report is None:
+            return
+        toplevel = self.get_toplevel()
+        confirm = Gtk.MessageDialog(
+            transient_for=toplevel if isinstance(toplevel, Gtk.Window) else None,
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text=t("ui.summary.clone_check_confirm_title"),
+        )
+        confirm.format_secondary_text(t("ui.summary.clone_check_confirm_body"))
+        confirm.set_default_response(Gtk.ResponseType.NO)
+        response = confirm.run()
+        confirm.destroy()
+        if response != Gtk.ResponseType.YES:
+            return
+
+        self._checking = True
+        self._check_btn.set_sensitive(False)
+        self._check_spinner.start()
+        self._check_status.set_text(t("ui.summary.clone_check_running"))
+        self.tests_exp.set_expanded(True)
+        report = self._report
+
+        def worker():
+            from ..core.clone_verify import verify
             try:
-                result = module.undo_with_logging(entry.data)
-            except Exception as exc:
-                result = ApplyResult(False, t("ui.summary.undo_error", error=exc))
-            if result.success:
-                self.journal.mark_undone(module.id)
-            self.refresh()
-        return _handler
+                results = verify(report)
+            except Exception as exc:  # noqa: BLE001 — sayfayı düşürme
+                log.warning("Klon kontrolü çalıştırılamadı: %s", exc)
+                results = exc
+            GLib.idle_add(self._on_check_done, results)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_check_done(self, results) -> bool:
+        self._checking = False
+        self._check_spinner.stop()
+        self._check_btn.set_sensitive(True)
+        if isinstance(results, Exception):
+            self._check_status.set_text(t("ui.summary.clone_check_failed", error=results))
+            return False
+        self._check_results = {r.tid: r for r in results}
+        self._apply_check_results()
+        return False
+
+    _CHECK_MARKS = {
+        "ok": ("✓", "#2e7d32"),
+        "fail": ("✗", "#c62828"),
+        "partial": ("◐", "#b26a00"),
+        "manual": ("☐", "#666666"),
+    }
+
+    def _apply_check_results(self) -> bool:
+        """Son denetim sonuçlarını listedeki maddelere yazar."""
+        if not self._check_results:
+            return False
+        counts = {"ok": 0, "fail": 0, "partial": 0, "manual": 0}
+        for tid, (sym, detail, text) in self._test_rows.items():
+            res = self._check_results.get(tid)
+            if res is None or res.text != text:
+                continue
+            mark, color = self._CHECK_MARKS.get(res.status, ("☐", "#666666"))
+            sym.set_markup(f'<span foreground="{color}"><b>{mark}</b></span>')
+            detail.set_markup(
+                f'<span size="small" foreground="{color}">'
+                f"{GLib.markup_escape_text(res.detail)}</span>"
+            )
+            detail.set_no_show_all(False)
+            detail.show()
+            counts[res.status] = counts.get(res.status, 0) + 1
+        if getattr(self, "_check_status", None) is not None:
+            self._check_status.set_text(t("ui.summary.clone_check_totals", **counts))
+        return False

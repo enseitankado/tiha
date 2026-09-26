@@ -496,27 +496,30 @@ kaldırabilirsiniz._\n\
 copy_command_tip = "Kopyalamak için tıklayın"
 command_copied = "Kopyalandı: {command}"
 heading = "Özet"
-undo_info = """\
-Bu tahtada geri alınabilir durumdaki adımlar aşağıda listelenmiştir. Daha \
-önceki bir oturumda uygulanmış olsa bile, modül geri almayı destekliyorsa ve \
-günce kaydı hâlâ etkinse buradan geri alabilirsiniz. Alttaki 'Bitir' \
-düğmesi uygulamayı kapatır.\
-"""
-refresh = "Listeyi yenile"
 export_preset = "📦 Preset olarak dışa aktar…"
 export_preset_tip = """\
-Bu oturumda uygulanmış adımların parametrelerini JSON dosyasına kaydeder. \
-Diğer tahtalarda CLI ile aynı ayarları uygulayabilirsiniz: tiha --preset \
+Bu oturumdaki güncel parametreleri JSON dosyasına kaydeder. Diğer \
+tahtalarda CLI ile aynı ayarları uygulayabilirsiniz: tiha --preset \
 <dosya> --apply\
 """
 group_title = "{title} ({detail})"
-group_undo = "Özet ve geri alma"
-group_undo_detail = "{count} adım, {undoable} geri alınabilir"
-undo_empty = """\
-Geri alınabilecek bir adım yok — henüz hiçbir modül uygulanmamış ya da \
-uygulanan tüm adımlar zaten geri alınmış.\
+clone_check = "Klonu kontrol et"
+clone_check_tip = """\
+Yalnız klon tahtada çalıştırın. Yukarıdaki bütün maddeleri denetler ve \
+sonucu her maddenin yanına yazar: ✓ doğrulandı, ✗ sorun var, ◐ makinede \
+denetlenebilen kısmı doğru (kalanını elle deneyin), ☐ elle denenmeli. \
+Ayar değiştirmez; yalnız apt-get update paket listelerini tazeler.\
 """
-undo = "Geri al"
+clone_check_running = "Maddeler denetleniyor… (apt-get update ve ağ denetimleri biraz sürebilir)"
+clone_check_confirm_title = "Bu tahta klon tahta mı?"
+clone_check_confirm_body = """\
+Bu düğme yalnız KLON tahtalarda çalıştırılmalıdır (imajdan çıkmış \
+başka bir tahta). Kaynak tahtada çalıştırırsanız kontroller kaynak \
+tahtanın durumunu değerlendirir, kaynağın "klon gibi hazırlandığını" \
+doğrulamaz. Kalıcı bir değişiklik yapmaz. Devam edilsin mi?\
+"""
+clone_check_totals = "✓ {ok} doğrulandı · ✗ {fail} sorun var · ◐ {partial} kısmen · ☐ {manual} elle denenmeli"
+clone_check_failed = "Kontroller çalıştırılamadı: {error}"
 report_failed = "Rapor oluşturulamadı: {error}"
 report_title = "Bu imajda neler yaptınız?"
 group_done = "Yapılanlar"
@@ -535,9 +538,7 @@ experimental_marker = "deneysel"
 step_experimental = "{title} (deneysel)"
 warnings_title = "Dikkat"
 tests_intro = "İmajı en az bir tahtaya yazın ve aşağıdakilerin her birini o klon tahtada deneyin."
-tests_general = "Genel"
 save_report_title = "Raporu kaydet"
-undo_error = "Hata: {error}"
 
 # ==========================================================================
 # Çekirdek yardımcılar ve rapor
@@ -4620,3 +4621,130 @@ ve imajı canlı USB'den (Clonezilla vb.) alın. Açarsanız makine kimliği ve 
 SSH anahtarları kaynak tahtada yeniden üretilir ve bütün klonlara aynen \
 gider.\
 """
+
+# ==========================================================================
+# Klon denetimi: "Kontrol et" maddelerinin otomatik denetimi (core/clone_verify.py)
+# ==========================================================================
+
+[clone_verify]
+manual = "Bu madde elle denenmeli; makineden doğrulanamıyor."
+check_error = "Denetim çalıştırılamadı: {error}"
+account_missing = "{user} hesabı bu tahtada yok."
+not_in_group = "{user} hesabı ogretmenler grubunda değil."
+branch_ok = "{user} hesabı var ve ogretmenler grubunda. Giriş ekranındaki görünümü elle kontrol edin."
+still_exist = "Silinmiş olması gereken hesaplar hâlâ var: {users}"
+all_deleted = "Hesaplar yok: {users}"
+pw_not_set = "{user} hesabının parolası tanımlı değil (durum: {state})."
+pw_unreadable = "{user} hesabının parola durumu okunamadı; parolayla girişi elle deneyin."
+pw_set_login_manual = "{user} hesabının parolası tanımlı. Parolayla girişi elle deneyin."
+no_reserve = "Bu tahtada yedek öğretmen hesabı (ogretmen1…) yok."
+reserve_groups_bad = "Cihaz gruplarında ya da ogretmenler grubunda olmayan yedek hesaplar: {users}"
+reserve_ok = "{count} yedek hesap var; hepsi cihaz gruplarında ve ogretmenler grubunda."
+no_reserve_left = "Yedek öğretmen hesabı kalmamış."
+student_gone = "ogrenci hesabı yok."
+wipe_no_journal = "Bu açılışta parola temizliği servisinin kaydı yok; servis çalışmamış."
+wipe_errors = "Parola temizliği kaydında {count} HATA satırı var, ilki: {first}"
+wipe_ran = "Parola temizliği bu açılışta çalıştı, HATA satırı yok ({lines} satır)."
+wipe_ran_login_manual = "Parola temizliği bu açılışta çalıştı. Parolayla girişin reddedildiğini elle deneyin."
+unit_disabled = "{unit} etkin değil."
+unit_inactive = "{unit} çalışmıyor."
+unit_ok = "{unit} çalışıyor."
+no_secrets = "PIN anahtar dosyası (/etc/otp-secrets.json) yok ya da boş."
+secrets_count = "{count} hesabın PIN anahtarı var. PIN ile girişi elle deneyin."
+auto_group_ok = "Yeni öğretmen hesaplarını gruba ekleyen servis etkin. EBA QR ile yeni girişi elle deneyin."
+no_secret_for = "{user} için PIN anahtarı yok."
+secret_ok_login_manual = "{user} için PIN anahtarı var. PIN ile girişi elle deneyin."
+extra_left = "Varsayılanlar dışında hesaplar var: {users}"
+only_defaults = "Yalnız etapadmin, ogretmen ve ogrenci hesapları var."
+greeter_missing = "Giriş ekranı önbelleği betiği kurulu değil."
+greeter_ok = "Giriş ekranı önbelleği kurulu. Listeyi yeniden başlattıktan sonra elle kontrol edin."
+group_missing = "ogretmenler grubu yok."
+ogretmen_in_group = "Ortak ogretmen hesabı ogretmenler grubunda; grup PIN'i orada da geçer."
+group_pin_ok = "Grup PIN anahtarı var; grupta {count} hesap var, ortak ogretmen hesabı grupta değil. Ortak kodla girişi elle deneyin."
+ntp_not_synced = "Saat eşitlenmemiş (saat dilimi: {tz})."
+ntp_synced = "Saat NTP ile eşitlenmiş (saat dilimi: {tz})."
+tz_wrong = "Saat dilimi {tz}; beklenen {expected}."
+sshd_cfg = "SSH ayarı beklendiği gibi değil: PermitRootLogin {root}, PasswordAuthentication {pw}."
+sshd_ok = "ssh çalışıyor; PermitRootLogin ve PasswordAuthentication açık."
+not_listening = "Bu tahtada {port} numaralı port dinlenmiyor."
+listening_remote_manual = "SSH {port} numaralı portta dinliyor. Yönetim bilgisayarından bağlanmayı elle deneyin."
+no_host_key = "SSH anahtarları üretilmemiş."
+fingerprint_compare = "Bu klonun SSH parmak izi {fp}. Başka bir klonla farklı olduğunu elle karşılaştırın."
+machine_id_empty = "Makine kimliği (/etc/machine-id) boş."
+identity_compare = "Makine kimliği {mid}…; {fp}"
+share_missing = "Dosya sunucusunda [root] paylaşımı tanımlı değil."
+share_ok_remote_manual = "[root] paylaşımı tanımlı ve smbd çalışıyor. Windows'tan bağlanmayı elle deneyin."
+netbios_name = "nmbd çalışıyor; tahta ağda '{name}' adıyla duyuruluyor. Ad çakışmasını ağda elle kontrol edin."
+exporter_down = "Metrik adresi (127.0.0.1:9100) yanıt vermiyor."
+exporter_local_ok = "Metrikler tahtada yayınlanıyor. İzleme sunucusundan erişimi elle deneyin."
+file_missing = "Beklenen dosya yok: {path}"
+file_still_there = "Kaldırılmış olması gereken dosya hâlâ var: {path}"
+rsyslog_ok_server_manual = "rsyslog çalışıyor ve yönlendirme ayarı var; tahta '{host}' adıyla gönderiyor. Kaydın sunucuya ulaştığını elle kontrol edin."
+queue_files = "Kayıt kuyruğunda bekleyen dosyalar var: {files}"
+queue_empty = "Bekleyen kayıt kuyruğu yok."
+no_sensors = "Sıcaklık okunamadı (sensors çıktısında değer yok)."
+smart_ok = "smartd çalışıyor; sıcaklık okunuyor ({temp})."
+no_wired = "Kablolu ağ kartı bulunamadı."
+hostname_prefix = "Bilgisayar adı '{name}', '{prefix}' ile başlamıyor."
+hostname_mac = "Bilgisayar adı '{name}' kablolu kartın MAC'inin son 6 hanesiyle ({tail}) bitmiyor."
+hostname_ok = "Bilgisayar adı '{name}'; kablolu kartın MAC adresiyle uyumlu."
+reboot_manual = "{detail} Yeniden başlatınca değişmediğini elle kontrol edin."
+hosts_slow = "'{name}' adı çözülemiyor ya da yavaş ({sec} sn); /etc/hosts güncel değil."
+hosts_ok = "'{name}' adı hemen çözülüyor ({sec} sn)."
+apt_failed = "apt-get update hata verdi: {line}"
+apt_ok_repos_manual = "apt-get update hatasız bitti. Okulun depo satırlarını elle kontrol edin."
+image_info_mode = "/etc/tiha-image-info.json izinleri yanlış ({mode}); yalnız root okuyabilmeli (0600)."
+image_info_ok = "İmaj bilgisi yerinde (TiHA {version}), yalnız root okuyabiliyor, apt-get update hatasız. Sürümün beklediğiniz olduğunu kontrol edin."
+wired_connected = "Kablolu ağ bağlı."
+wired_not_connected = "Kablolu ağ bağlı değil."
+host_keys_ok = "{count} SSH anahtarı üretilmiş; SSH kuruluysa çalışıyor."
+hw_no_wired = "kablolu ağ kartı yok"
+hw_no_sound = "ses kartı görünmüyor"
+hw_no_touch = "dokunmatik aygıt görünmüyor"
+hw_ok_manual = "Kablolu kart, ses kartı ve dokunmatik aygıt görünüyor. Ekranı, kalemi ve sesi elle deneyin."
+auto_off = "Sabit saatte kapanma kapalı."
+auto_time_wrong = "Kapanma saati {at}; beklenen {expected}."
+auto_ok_manual = "Sabit saatte kapanma {at} için ayarlı ve servis çalışıyor. Kapanmayı elle deneyin."
+idle_off = "Kullanılmadığında kapatma kapalı."
+idle_ok_manual = "Kullanılmadığında kapatma {minutes} dakikaya ayarlı. Uyarı penceresini elle deneyin."
+shutdown_not_off = "Otomatik kapanma kapalı olmalıydı ama modlardan biri açık."
+shutdown_off = "İki kapanma modu da kapalı."
+exempt_other_board = "Bu tahta ({mac}) listedeki tahta değil; muaf tahtada elle deneyin."
+shutdown_conf_manual = "Kapanma ayar dosyası var. Ayarların beklediğiniz gibi çalıştığını elle deneyin."
+reclaim_api_down = "Klon kaydı API'ye ulaşamamış; ağı düzeltip yeniden başlatın."
+reclaim_ok = "Klon kaydı çalışmış (KAYITLI/KAYITSIZ satırı var)."
+reclaim_no_journal = "Klon kaydı servisinin kaydı yok; servis çalışmamış."
+eba_reachable = "api-etap.eba.gov.tr erişilebilir (HTTP {code})."
+eba_unreachable = "api-etap.eba.gov.tr adresine erişilemiyor."
+qr_dialog_visible = "QR ilk giriş parola penceresi kapatılmamış."
+qr_dialog_hidden_manual = "QR ilk giriş parola penceresi kapalı. İlk girişi elle deneyin."
+bios_ok = "BIOS parolası işlemi başarılı; betik silinmiş."
+bios_no_success = "BIOS parolası işleminin başarılı olduğuna dair kayıt yok."
+bios_script_left = "İşlem kaydı var ama betik (/usr/local/sbin/tiha-first-boot-bios.py) silinmemiş."
+bios_enter_manual = "BIOS parolası işlemi başarılı. BIOS'a girerek elle kontrol edin."
+ethtool_unreadable = "{iface} için Wake-on bilgisi okunamadı (ethtool kurulu mu?)."
+wol_off = "{iface} kartında Wake-on '{value}'; 'g' olmalı."
+wol_on = "{iface} kartında Wake-on açık; MAC {mac}."
+wake_manual = "{detail} Başka bir bilgisayardan uyandırmayı elle deneyin."
+grub_unreadable = "/boot/grub/grub.cfg okunamadı."
+grub_no_password = "GRUB menüsünde parola tanımı yok."
+grub_locked_manual = "GRUB menüsünde kullanıcı ve parola tanımlı. Tuşlarla elle deneyin."
+grub_recovery_open = "Kurtarma girdisi parola sormadan açılıyor."
+grub_recovery_locked = "GRUB parolalı; {count} kurtarma girdisi parolayla korunuyor. Elle deneyin."
+grub_default_locked = "Varsayılan girdi parola istiyor; normal açılış takılır."
+grub_default_ok = "Varsayılan girdi parola sormadan açılıyor. Açılışı elle izleyin."
+grub_saved_recovery = "Açılış varsayılanı kurtarma girdisine kaydedilmiş."
+grub_still_locked = "GRUB menüsü hâlâ parolalı."
+grub_unlocked = "GRUB menüsünde parola yok."
+light_missing = "Hafif mod ayar ya da otomatik başlatma dosyası yok."
+light_ok_manual = "Hafif mod ayarları kurulu. İlk girişte uygulandığını elle kontrol edin."
+light_still_there = "Hafif mod hâlâ kurulu."
+light_removed_manual = "Hafif mod kaldırılmış. Eski hesaplarda görünümün normale döndüğünü elle kontrol edin."
+xorg_not_modesetting = "Ekran sunucusu modesetting sürücüsünü kullanmıyor."
+xorg_ok_manual = "İmleç düzeltmesi kurulu ve modesetting sürücüsü kullanılıyor. İmlecin kaybolmadığını elle deneyin."
+xorg_removed_manual = "İmleç düzeltmesi kaldırılmış. Ekranı ve kalemi elle deneyin."
+cursor_service_manual = "İmleç tazeleme servisi kurulu. Çözünürlük değiştirerek elle deneyin."
+kill_user_processes_off = "Oturum kapanınca süreçler sonlandırılmıyor (KillUserProcesses kapalı)."
+kill_user_processes_on = "Oturum kapanınca süreçler sonlandırılıyor. Elle deneyin."
+failed_units = "Başarısız servisler var: {units}"
+no_failed_units = "Başarısız servis yok. İlk açılışı elle izleyin."
