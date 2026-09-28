@@ -69,7 +69,7 @@ class ApplyResult:
 
 
 def _lock_state() -> None:
-    """/var/lib/tiha/state ağacını yalnız root'a açar (bkz. private_files)."""
+    """/var/lib/tiha ağacını yalnız root'a açar (bkz. private_files)."""
     try:
         from .private_files import protect_state_tree
         protect_state_tree()

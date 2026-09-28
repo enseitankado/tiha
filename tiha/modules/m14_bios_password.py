@@ -762,13 +762,16 @@ class BiosPasswordModule(Module):
         # 6) First-boot script + service
         try:
             FIRST_BOOT_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
-            FIRST_BOOT_SCRIPT.write_text(
-                _build_first_boot_script(
-                    pw, protection, supports_koruma=supports_koruma,
-                ),
-                encoding="utf-8",
+            # Parola düz metin: dosya hiçbir an başkalarına açık olmasın,
+            # baştan 0700 açılır (önce 0644 yazılıp sonra kısılmaz).
+            script_text = _build_first_boot_script(
+                pw, protection, supports_koruma=supports_koruma,
             )
-            os.chmod(FIRST_BOOT_SCRIPT, 0o700)  # parola düz metin → root only
+            FIRST_BOOT_SCRIPT.unlink(missing_ok=True)
+            fd = os.open(FIRST_BOOT_SCRIPT, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(script_text)
+            os.chmod(FIRST_BOOT_SCRIPT, 0o700)
             FIRST_BOOT_SERVICE.write_text(
                 _build_first_boot_service(), encoding="utf-8",
             )

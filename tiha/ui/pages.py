@@ -167,10 +167,22 @@ def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = F
     return lbl
 
 
+def _fit_text_height(scroller: Gtk.ScrolledWindow, text: str) -> None:
+    """Metin kutusunun boyunu içeriğe göre ayarlar (üst sınır _fit_max)."""
+    tv = scroller._textview  # type: ignore[attr-defined]
+    limit = getattr(scroller, "_fit_max", _LONG_TEXT_HEIGHT)
+    line_h = tv.create_pango_layout("Ağ").get_pixel_size()[1] + 4
+    # Uzun satırlar kutu genişliğinde kırılır; ~110 eş aralıklı karakter.
+    rows = sum(max(1, -(-len(line) // 110)) for line in (text or "").split("\n"))
+    height = min(limit, rows * line_h + 18)
+    scroller.set_min_content_height(height)
+    scroller.set_max_content_height(height)
+
+
 def _scrolled_textview(text: str, *, monospace: bool = False,
                        editable: bool = False, height: int = _LONG_TEXT_HEIGHT,
                        css_class: str | None = None,
-                       wrap: bool = True) -> Gtk.ScrolledWindow:
+                       wrap: bool = True, fit: bool = False) -> Gtk.ScrolledWindow:
     """Kaydırma çubuklu, salt-okunur metin kutusu.
 
     ``wrap=False`` tablo benzeri hizalanmış (monospace) içerik için
@@ -184,14 +196,33 @@ def _scrolled_textview(text: str, *, monospace: bool = False,
     if css_class:
         tv.get_style_context().add_class(css_class)
     tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR if wrap else Gtk.WrapMode.NONE)
+    if css_class == "tiha-preview":
+        # Önizleme kutusu: iç boşluk CSS padding yerine metin kenar
+        # boşluklarıyla verilir; padding alanı metin alanından farklı
+        # boyanıp solda şerit (kaydırmalı kutuda siyah) bırakıyordu.
+        tv.set_left_margin(10)
+        tv.set_right_margin(10)
+        tv.set_top_margin(8)
+        tv.set_bottom_margin(8)
     tv.set_pixels_above_lines(2)
     tv.set_pixels_below_lines(2)
     tv.get_buffer().set_text(text)
     scroller = Gtk.ScrolledWindow()
     scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-    scroller.set_min_content_height(height)
-    scroller.set_max_content_height(height)
     scroller.add(tv)
+    scroller._textview = tv  # type: ignore[attr-defined]
+    if css_class == "tiha-preview":
+        scroller.get_style_context().add_class("tiha-preview-box")
+    if fit:
+        # İçeriğe göre boy: kısa metin boşluksuz, uzun metin ``height``
+        # sınırında kaydırmaya geçer. GTK'nın doğal yüksekliği satır
+        # kaydırmalı metinde ilk çizimde yanlış çıktığı için satır
+        # sayısından hesaplanır (bkz. _fit_text_height).
+        scroller._fit_max = height  # type: ignore[attr-defined]
+        _fit_text_height(scroller, text)
+    else:
+        scroller.set_min_content_height(height)
+        scroller.set_max_content_height(height)
     scroller._textview = tv  # type: ignore[attr-defined]
     return scroller
 
@@ -450,18 +481,15 @@ class ModulePage(Gtk.Box):
             # metinler word-wrap yapılır; böylece yatay kaydırma çubuğu
             # gereksiz yere oluşmaz (Türkçe uzun cümleler için önemli).
             is_tabular = bool(getattr(self.module, "preview_tabular", False))
-            if preview_text.count("\n") > 6 or len(preview_text) > 500:
-                self._preview_widget = _scrolled_textview(
-                    preview_text, monospace=True,
-                    height=180, css_class="tiha-preview",
-                    wrap=not is_tabular,
-                )
-                self.pack_start(self._preview_widget, False, False, 0)
-            else:
-                self._preview_widget = _wrapping_label(
-                    preview_text, klass="tiha-preview", selectable=True,
-                )
-                self.pack_start(self._preview_widget, False, False, 0)
+            # Bütün adımlarda aynı kutu (Sistem güncellemesi'ndeki gibi):
+            # beyaz zeminli, eş aralıklı metin kutusu; kısa metinde boyu
+            # içeriğe göre, uzun metinde 180 px'te kaydırmalı.
+            self._preview_widget = _scrolled_textview(
+                preview_text, monospace=True,
+                height=180, css_class="tiha-preview",
+                wrap=not is_tabular, fit=True,
+            )
+            self.pack_start(self._preview_widget, False, False, 0)
 
         schema = params_schema.get(self.module.id)
         if schema:
@@ -807,6 +835,8 @@ class ModulePage(Gtk.Box):
             tv = getattr(self._preview_widget, "_textview", None)
             if tv is not None:
                 tv.get_buffer().set_text(new_text)
+                if hasattr(self._preview_widget, "_fit_max"):
+                    _fit_text_height(self._preview_widget, new_text)
         elif isinstance(self._preview_widget, Gtk.Label):
             self._preview_widget.set_text(new_text)
 

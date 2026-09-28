@@ -10,9 +10,12 @@ güvenlik yapılandırması bulunur. Kural:
   etapadmin), dosya 0600, açılan klasör 0700 — yalnız sahibi okur, taşır,
   siler; grup ve diğer hesaplar göremez. Kayıt pencereleri o kullanıcının
   Masaüstü'nde açılır.
-* **TiHA'nın durum dizini** (``/var/lib/tiha/state`` ve bütün alt
-  dizinleri: yedekler, PIN anahtarları ve kâğıtları): yalnız root —
-  sahibi root:root, dizin 0700, dosya 0600.
+* **TiHA'nın veri dizini** (``/var/lib/tiha`` ve bütün alt dizinleri:
+  günlük (öğretmen adları, adım seçenekleri), eylem kaydı, yedekler, PIN
+  anahtarları ve kâğıtları, araç önbellekleri): yalnız root — sahibi
+  root:root, dizin 0700, dosya 0600 (çalıştırılabilir dosya 0700). Bu dizin
+  imajla bütün klonlara gider; yönetici olmayan hesaplar hiçbirine
+  erişemez.
 * **Sistem dizinlerindeki bilgi dosyaları** (``/var/log/tiha``,
   ``/var/lib/tiha`` altındaki PIN kâğıtları): sahibi root, grubu
   etapadmin; dosya 0640, dizin 0750. etapadmin okur ama değiştiremez
@@ -93,12 +96,13 @@ def make_user_dir(path: Path) -> Path:
 
 
 def protect_state_tree(root: Path | None = None) -> int:
-    """``/var/lib/tiha/state`` ve bütün alt dizinlerini yalnız root'a açar
-    (root:root, dizin 0700, dosya 0600). Sembolik bağlar izlenmez ve
+    """TiHA'nın veri dizinini (varsayılan ``/var/lib/tiha``) ve bütün alt
+    dizinlerini yalnız root'a açar: root:root, dizin 0700, dosya 0600
+    (çalıştırma biti olan dosya 0700). Sembolik bağlar izlenmez ve
     değiştirilmez. Kilitlenen öğe sayısını döner."""
     if root is None:
-        from .paths import STATE_DIR
-        root = STATE_DIR
+        from .paths import VAR_ROOT
+        root = VAR_ROOT
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
         return 0
@@ -121,7 +125,12 @@ def protect_state_tree(root: Path | None = None) -> int:
         for d in dirnames:
             lock(os.path.join(dirpath, d), STATE_DIR_MODE)
         for f in filenames:
-            lock(os.path.join(dirpath, f), STATE_FILE_MODE)
+            path = os.path.join(dirpath, f)
+            try:
+                executable = bool(os.lstat(path).st_mode & 0o100)
+            except OSError:
+                continue
+            lock(path, 0o700 if executable else STATE_FILE_MODE)
     return count
 
 

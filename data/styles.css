@@ -91,6 +91,23 @@ row.tiha-step-failed {
     font-size: 9pt;
 }
 
+/* Adım önizleme kutusu (bütün adımlarda aynı): beyaz zemin, ince çerçeve.
+   İç boşluk metin kenar boşluklarıyla verilir (pages._scrolled_textview). */
+textview.tiha-preview {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+}
+textview.tiha-preview text {
+    background-color: #ffffff;
+    color: #1a1a1a;
+}
+.tiha-preview-box {
+    border: 1px solid alpha(@theme_fg_color, 0.15);
+    border-radius: 6px;
+    background-color: #ffffff;
+}
+
 .tiha-result-ok {
     background: alpha(#1b8a3a, 0.12);
     border-radius: 6px;

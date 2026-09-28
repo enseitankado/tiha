@@ -558,8 +558,6 @@ class InitialPasswordsModule(Module):
             lines.append("")
             lines.append(t("m01.preview.keyrings_title"))
             lines.extend(keyring_lines)
-            lines.append("")
-            lines.append(t("m01.preview.keyrings_note"))
 
         return "\n".join(lines)
 

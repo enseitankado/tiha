@@ -1059,13 +1059,6 @@ ogretmen2 … biçiminde hesap açılır; PIN anahtarları 'Öğretmen PIN \
 anahtarları' adımında üretilir.\
 """
 keyrings_title = "Mevcut GNOME anahtarlıkları:"
-keyrings_note = """\
-\u0020\u0020\u0020\u0020Parola korumalı olanlar yeni parolayla açılamaz.\n\
-\u0020\u0020\u0020\u0020Parolası değişen hesapta bu adım onları kenara alır;\n\
-\u0020\u0020\u0020\u0020ilk girişte yenisi otomatik oluşur, geri alma\n\
-\u0020\u0020\u0020\u0020dosyaları yerine koyar. Parolasız anahtarlıklar\n\
-\u0020\u0020\u0020\u0020parola değişiminden etkilenmez, dokunulmaz.\
-"""
 
 [m01.apply]
 need_action = """\
@@ -1456,7 +1449,7 @@ personal_count = "Kişisel hesaplar     : {count}"
 pin_accounts = "PIN anahtarlı hesap  : {done}/{total}"
 total_pins = "Toplam PIN kaydı     : {count}"
 qr = "QR kodları           : {state}"
-qr_embedded = "kâğıda gömülecek"
+qr_embedded = "HTML rapor olarak dışarı verilecek"
 qr_skipped = "ATLANACAK (python3-qrcode kurulu değil)"
 greeter = "Greeter cache        : {state}"
 greeter_installed = "kurulu"
