@@ -334,6 +334,8 @@ class TiHAWindow(Gtk.Window):
         )
         dlg.set_current_name("tiha-preset.json")
         dlg.set_do_overwrite_confirmation(True)
+        from ..core.private_files import user_desktop_dir
+        dlg.set_current_folder(str(user_desktop_dir()))
         fil = Gtk.FileFilter()
         fil.set_name(t("ui.main.json_filter"))
         fil.add_pattern("*.json")

@@ -67,6 +67,15 @@ class ApplyResult:
     not_applicable: bool = False
 
 
+
+def _lock_state() -> None:
+    """/var/lib/tiha/state ağacını yalnız root'a açar (bkz. private_files)."""
+    try:
+        from .private_files import protect_state_tree
+        protect_state_tree()
+    except Exception:  # izin düzeltmesi adımı düşürmesin
+        pass
+
 class Module:
     """Tüm modüllerin türediği taban sınıf."""
 
@@ -116,7 +125,8 @@ class Module:
         return STATE_DIR / self.id
 
     def ensure_state_dir(self) -> Path:
-        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _lock_state()
         return self.state_dir
 
     # --- Arayüz -----------------------------------------------------------
@@ -125,6 +135,12 @@ class Module:
     # Kutuları boş bırakıp uygulamak bir "kapat/kaldır" isteğidir; günlükte
     # "uygulandı" olarak durur ama sol menüde onay işareti göstermez.
     FEATURE_OFF_KEY = "feature_off"
+
+    def after_apply_ui(self, result: ApplyResult, parent) -> None:
+        """Adım arayüzden başarıyla uygulandıktan sonra ana iş parçacığında
+        çağrılır (ör. PIN kâğıdını kullanıcının seçtiği yere kaydetmek).
+        ``parent`` üst pencere. Varsayılan: hiçbir şey yapmaz."""
+        return None
 
     def result_is_off(self, data: dict | None) -> bool:
         """Bu günlük kaydının sonucu özelliği kapalı mı bıraktı?
@@ -206,6 +222,9 @@ class Module:
             log.error("Süre: %.2f saniye", duration)
             log.error("İstisna: %s", exc, exc_info=True)
             return ApplyResult(False, t("core.module.unexpected_error", error=exc))
+        finally:
+            # Adımın yazdığı yedek/anahtar dosyaları yalnız root'a açık kalsın.
+            _lock_state()
 
     def apply(
         self,
@@ -266,6 +285,9 @@ class Module:
             log.error("Süre: %.2f saniye", duration)
             log.error("İstisna: %s", exc, exc_info=True)
             return ApplyResult(False, t("core.module.unexpected_error", error=exc))
+        finally:
+            # Adımın yazdığı yedek/anahtar dosyaları yalnız root'a açık kalsın.
+            _lock_state()
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         """Daha önce uygulanan işlemi geri alır.

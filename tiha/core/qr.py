@@ -51,6 +51,27 @@ def _load_qrcode():
     return _qrcode_module
 
 
+def qr_matrix(data: str) -> list[list[bool]] | None:
+    """``data``yı kodlayan QR modül matrisi (True = koyu); kütüphane yoksa
+    ya da üretilemezse None. Resim çıktısı (PNG kart) bunu kullanır."""
+    qrcode = _load_qrcode()
+    if qrcode is None:
+        return None
+    try:
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=1,
+            border=0,
+        )
+        qr.add_data(data)
+        qr.make(fit=True)
+        return [[bool(c) for c in row] for row in qr.get_matrix()]
+    except Exception as exc:
+        log.warning("QR üretilemedi: %s", exc)
+        return None
+
+
 def qr_svg(data: str, *, size_px: int = 150, quiet_zone: int = 2) -> str | None:
     """``data``yı kodlayan, HTML'e gömülmeye hazır bir SVG dizgesi döner.
 

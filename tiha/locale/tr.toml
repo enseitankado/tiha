@@ -1628,6 +1628,12 @@ bütün hesaplar risk altına girer; bütün klon tahtalara yeni anahtar \
 kaydetmek, tahta sayısına bağlı olarak ciddi bir bilgi işlem yükü getirir.\
 """
 save_image = "Resim olarak kaydet"
+save_image_warning = """\
+Bu bilgisayara kaydedeceğiniz dosya, tarayıcının varsayılan ayarıyla \
+diğer kullanıcılar (others) tarafından okunabilecek şekilde kaydedilir. \
+Lütfen bu bilgisayara kaydettiğiniz dosyanın erişim izinlerini ayarlayın \
+ya da dosyayı bu bilgisayardan başka bir konuma taşıyın.\
+"""
 save_all_images = "Tüm kartları resim olarak kaydet"
 save_all_note = """\
 Her kart ayrı bir PNG dosyası olarak indirilir; tarayıcı birden çok dosya \
@@ -1672,6 +1678,26 @@ Bu kayıt TiHA'nın eski bir sürümüyle yapıldığı için adımda hangi hesa
 açıldığı bilinmiyor; hiçbir hesap silinmedi. Gereksiz hesapları 'Yerel \
 hesaplar' adımındaki 'Fazladan hesapları sil' düğmesiyle kaldırabilirsiniz.\
 """
+
+[m03.export]
+dialog_title = "PIN anahtarı kâğıdını kaydet"
+folder_name = "PIN-anahtarlari-{ts}"
+html_name = "PIN-anahtarlari.html"
+saving = "PIN anahtarı kâğıdı kaydediliyor… ({done}/{total} resim)"
+saved = """\
+PIN anahtarı kâğıdı kaydedildi: {path}\n\n\
+Klasörde HTML kâğıt ve {count} kart resmi var. Klasör ve dosyalar yalnız \
+sizin hesabınıza açık. Anahtarlar gizlidir; dosyaları öğretmenlere \
+özelden iletin ve işiniz bitince bu bilgisayardan silin ya da güvenli bir \
+yere taşıyın.\
+"""
+cancelled = """\
+PIN anahtarı kâğıdı kaydedilmedi. Kâğıt yalnız root'un okuyabildiği \
+/var/lib/tiha/state dizininde duruyor; sonuç kutusundaki "Dosyaya kaydet…" \
+düğmesiyle HTML olarak yine kaydedebilirsiniz.\
+"""
+exists = "{path} zaten var ve boş değil. Başka bir ad seçin."
+failed = "PIN anahtarı kâğıdı kaydedilemedi: {error}"
 
 [m03.buttons]
 purge_all = "Tüm PIN Anahtarlarını Sil ({count} anahtar)"

@@ -29,7 +29,7 @@ from ..core.report_log import REPORT_PARAMS_KEY, ActionLog, redact_params
 # Rapor sayfa yüklenirken içe aktarılır: imaj temizliği /tmp'yi (bootstrap
 # ile gelen TiHA'nın dizini) boşalttıktan sonra geç içe aktarma bulamaz.
 from ..core.report import Report, StepReport, build_report
-from ..core.private_files import write_user_file
+from ..core.private_files import user_desktop_dir, write_user_file
 
 log = get_logger(__name__)
 
@@ -1943,6 +1943,11 @@ class ModulePage(Gtk.Box):
             # "Mutlaka uyarılsın": sayfadaki blok kaydırılıp kaçırılabilir,
             # modal kaçırılamaz.
             self._show_warning_dialog(result.warning)
+        if result.success:
+            try:
+                self.module.after_apply_ui(result, self.get_toplevel())
+            except Exception as exc:  # adım sonrası iş sonucu düşürmesin
+                log.warning("after_apply_ui hatası %s: %s", self.module.id, exc)
         # Apply de sistem durumunu değiştirmiş olabilir — aynı tazelemeyi
         # buradan da çalıştır.
         self._refresh_after_action()
@@ -2199,16 +2204,8 @@ class ModulePage(Gtk.Box):
             html_filter.add_pattern(f"*{forced_suffix}")
             dlg.add_filter(html_filter)
 
-        # Etapadmin ev dizinini varsayılan konum yap
-        try:
-            etap_home = _pwd.getpwnam("etapadmin").pw_dir
-            for candidate in ("Masaüstü", "Desktop", ""):
-                folder = os.path.join(etap_home, candidate) if candidate else etap_home
-                if os.path.isdir(folder):
-                    dlg.set_current_folder(folder)
-                    break
-        except KeyError:
-            pass
+        # Varsayılan konum: TiHA'yı çalıştıran kullanıcının Masaüstü'sü.
+        dlg.set_current_folder(str(user_desktop_dir()))
 
         response = dlg.run()
         if response == Gtk.ResponseType.ACCEPT:
@@ -2220,15 +2217,8 @@ class ModulePage(Gtk.Box):
                 # parolalar): dosya etapadmin'e ait, 0600 yazılır. Eskiden
                 # 0600 ama sahibi root kalıyordu; etapadmin kendi
                 # kaydettiği dosyayı açamıyordu.
+                # Sahibi çalıştıran kullanıcı, 0600 (bkz. write_user_file).
                 write_user_file(Path(path), text)
-                # Dosya root tarafından yazıldı; etapadmin ev dizinindeyse
-                # sahipliği etapadmin'e çevir ki kullanıcı kolayca açabilsin.
-                try:
-                    etap_pw = _pwd.getpwnam("etapadmin")
-                    if path.startswith(etap_pw.pw_dir):
-                        os.chown(path, etap_pw.pw_uid, etap_pw.pw_gid)
-                except (KeyError, OSError):
-                    pass
                 self._toast(t("ui.pages.saved_to", path=path))
             except OSError as exc:
                 self._toast(t("ui.pages.save_failed", error=exc), error=True)
@@ -2673,6 +2663,8 @@ class SummaryPage(Gtk.Box):
         )
         dlg.add_buttons(t("ui.main.cancel"), Gtk.ResponseType.CANCEL, t("ui.main.save"), Gtk.ResponseType.ACCEPT)
         dlg.set_current_name("tiha-imaj-raporu.html")
+        # Çalıştıran kullanıcının Masaüstü'sü; dosya yalnız ona açık (0600).
+        dlg.set_current_folder(str(user_desktop_dir()))
         dlg.set_do_overwrite_confirmation(True)
         html_filter = Gtk.FileFilter()
         html_filter.set_name("HTML")

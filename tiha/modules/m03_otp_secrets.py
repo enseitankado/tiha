@@ -524,44 +524,25 @@ SECRET_DIR_MODE = 0o750
 
 
 def harden_secret_store(state_dir: Path) -> int:
-    """Anahtar taşıyan durum dizinini ve içindeki dosyaları kilitler.
+    """Anahtar taşıyan durum dizinini ve altındaki her şeyi yalnız root'a
+    açar (root:root, dizin 0700, dosya 0600; bkz.
+    :func:`tiha.core.private_files.protect_state_tree`).
 
-    Dizin 0750, dosyalar 0640 yapılır; sahip root, grup ise etapadmin
-    olur. Böylece yönetici kâğıdı tarayıcıda açıp
-    okuyabilir ama değiştiremez, diğer hesaplar hiç göremez.
-
-    Geçmişte gevşek izinle (0644) yazılmış dosyalar da bu çağrıyla
-    düzeltilir; düzeltilen dosya sayısı döner.
+    Eskiden grup etapadmin'e okuma hakkı veriliyordu (kâğıt tarayıcıda
+    açılsın diye); kâğıt artık adım sonunda kullanıcının seçtiği yere
+    kopyalandığı için durum dizininde kimseye hak gerekmiyor. Gevşek
+    izinli (grup/diğer bitli) dosya sayısını döner.
     """
-    # Yalnız etapadmin: eskiden aktif grafik oturumun kullanıcısının grubu
-    # seçiliyordu; o an bir öğretmen oturumu açıksa kâğıtlar ona açılırdı.
-    admin = owner_ids()
-    gid = admin[1] if admin is not None else 0
-
-    try:
-        os.chown(state_dir, 0, gid)
-        state_dir.chmod(SECRET_DIR_MODE)
-    except OSError as exc:
-        log.warning("Durum dizini kilitlenemedi %s: %s", state_dir, exc)
-
-    try:
-        entries = list(state_dir.iterdir())
-    except OSError as exc:
-        log.warning("Durum dizini listelenemedi %s: %s", state_dir, exc)
-        return 0
+    from ..core.private_files import protect_state_tree
 
     fixed = 0
-    for path in entries:
-        if path.is_symlink() or not path.is_file():
-            continue
-        try:
-            # "Başkalarına açık mı?" — düzeltilen dosyayı saymak için.
-            if path.stat().st_mode & 0o007:
+    try:
+        for path in state_dir.rglob("*"):
+            if not path.is_symlink() and path.is_file() and path.stat().st_mode & 0o077:
                 fixed += 1
-            os.chown(path, 0, gid)
-            path.chmod(SECRET_FILE_MODE)
-        except OSError as exc:
-            log.warning("Dosya izni düzeltilemedi %s: %s", path, exc)
+    except OSError:
+        pass
+    protect_state_tree(state_dir)
     return fixed
 
 
@@ -1480,6 +1461,107 @@ class OTPSecretsModule(Module):
             },
         )
 
+    def after_apply_ui(self, result, parent) -> None:
+        """PIN kâğıdını kullanıcının seçtiği klasöre kaydeder.
+
+        Kâğıt tarayıcıda açılmaz. Masaüstü'nde başlayan bir kayıt penceresi
+        gösterilir; seçilen adla klasör açılır (sahibi çalıştıran kullanıcı,
+        0700), içine HTML kâğıt ve her anahtar kartının telefona uygun PNG
+        resmi (0600) yazılır. Resimler arka planda üretilir.
+        """
+        paper = getattr(self, "_last_paper", None)
+        if not paper:
+            return
+        import threading
+
+        from gi.repository import GLib, Gtk
+
+        from ..core.private_files import make_user_dir, user_desktop_dir, write_user_file
+
+        dlg = Gtk.FileChooserDialog(
+            title=t("m03.export.dialog_title"),
+            transient_for=parent if isinstance(parent, Gtk.Window) else None,
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dlg.add_buttons(t("ui.main.cancel"), Gtk.ResponseType.CANCEL,
+                        t("ui.main.save"), Gtk.ResponseType.ACCEPT)
+        dlg.set_current_folder(str(user_desktop_dir()))
+        dlg.set_current_name(t("m03.export.folder_name", ts=paper["ts"]))
+        while True:
+            if dlg.run() != Gtk.ResponseType.ACCEPT:
+                dlg.destroy()
+                self._export_message(parent, t("m03.export.cancelled"), error=False)
+                return
+            target = Path(dlg.get_filename())
+            if target.exists() and (not target.is_dir() or any(target.iterdir())):
+                self._export_message(parent, t("m03.export.exists", path=target), error=True)
+                continue
+            break
+        dlg.destroy()
+
+        cards = paper["cards"]
+        progress = Gtk.MessageDialog(
+            transient_for=parent if isinstance(parent, Gtk.Window) else None,
+            modal=True, message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text=t("m03.export.saving", done=0, total=len(cards)),
+        )
+        progress.show_all()
+
+        def worker():
+            from ..core.i18n import t as _t
+            from ..core.pin_card_image import render_card_png
+            labels = {
+                "badge_new": _t("m03.paper.badge_new"),
+                "qr_label": _t("m03.paper.qr_label"),
+                "secret_label": _t("m03.paper.secret_label"),
+            }
+            error = None
+            written = 0
+            try:
+                make_user_dir(target)
+                write_user_file(target / t("m03.export.html_name"), paper["html"])
+                used: set[str] = set()
+                for i, card in enumerate(cards, start=1):
+                    name = card["slug"]
+                    n = 2
+                    while name in used:
+                        name = f"{card['slug']}-{n}"
+                        n += 1
+                    used.add(name)
+                    write_user_file(target / f"{name}.png", render_card_png(card, labels))
+                    written += 1
+                    GLib.idle_add(progress.set_property, "text",
+                                  _t("m03.export.saving", done=i, total=len(cards)))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("PIN kâğıdı kaydedilemedi: %s", exc)
+                error = exc
+            GLib.idle_add(done, error, written)
+
+        def done(error, written):
+            progress.destroy()
+            if error is not None:
+                self._export_message(parent, t("m03.export.failed", error=error), error=True)
+            else:
+                self._last_paper = None  # anahtarlar bellekte gereğinden uzun kalmasın
+                self._export_message(parent, t("m03.export.saved", path=target, count=written), error=False)
+            return False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @staticmethod
+    def _export_message(parent, text: str, *, error: bool) -> None:
+        from gi.repository import Gtk
+        msg = Gtk.MessageDialog(
+            transient_for=parent if isinstance(parent, Gtk.Window) else None,
+            modal=True,
+            message_type=Gtk.MessageType.ERROR if error else Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text=text,
+        )
+        msg.run()
+        msg.destroy()
+
     def _write_printable_paper(
         self,
         *,
@@ -1497,12 +1579,13 @@ class OTPSecretsModule(Module):
         yönetici hangi kâğıtları yeni teslim etmesi gerektiğini görür.
 
         Dosya yolunu ve HTML içeriğini döner — içerik "Dosyaya kaydet…"
-        butonunda yeniden kullanılır. Best-effort xdg-open ile aktif
-        kullanıcı oturumunda tarayıcıda açılır.
+        butonunda yeniden kullanılır. Kâğıt tarayıcıda açılmaz; adım
+        bitince arayüz kullanıcının seçtiği klasöre HTML ve kart resimlerini
+        kaydeder (bkz. ``after_apply_ui``). Kâğıt ve kart verisi bunun için
+        yalnız bellekte tutulur (günlüğe yazılmaz: anahtar içerir).
         """
         from datetime import datetime as _dt
         from html import escape as _esc
-        import subprocess as _sp
 
         ts = _dt.now().strftime("%Y%m%d-%H%M%S")
         out = state_dir / f"ogretmen-pin-kagitlari-{ts}.html"
@@ -1518,6 +1601,7 @@ class OTPSecretsModule(Module):
         )
 
         cards: list[str] = []
+        card_data: list[dict] = []
         branches = _branch_usernames()
         for user in paper_order(all_users):
             secret = secrets.get(user, "")
@@ -1584,6 +1668,18 @@ class OTPSecretsModule(Module):
             )
             badge = badge_html if is_new else ""
             file_slug = _paper_filename_slug(user, is_group, display, branches)
+            card_data.append({
+                "slug": file_slug,
+                "title": display,
+                "kind": kind,
+                "new": is_new,
+                "user_line": re.sub(r"<[^>]+>", "", t("m03.paper.group_line", group=user[1:])
+                                    if is_group else t("m03.paper.user_line", user=user)),
+                "warn": t("m03.paper." + warn_key) if warn_key else "",
+                "key": grouped,
+                "steps": steps,
+                "qr_data": otpauth_url(user, secret),
+            })
             cards.append(f'''
 <article class="card{' group' if is_group else ''}{' fresh' if is_new else ''}" data-user="{_esc(user.lstrip('@') + ('-grubu' if is_group else ''))}" data-filename="{_esc(file_slug)}">
   <div class="body">
@@ -1788,11 +1884,18 @@ class OTPSecretsModule(Module):
       .catch(function (e) {{ alert({json.dumps(t("m03.paper.save_failed", error="__E__"))}.replace("__E__", e.message || e)); }});
   }}
   window.tihaCardToPng = cardToPng;
+  // Tarayıcı indirmeleri varsayılan izinlerle (başkalarınca okunabilir)
+  // kaydeder: her kaydetmeden önce uyar.
+  var warning = {json.dumps(t("m03.paper.save_image_warning"))};
   document.querySelectorAll(".save-img").forEach(function (b) {{
-    b.addEventListener("click", function () {{ saveCard(b.closest(".card")); }});
+    b.addEventListener("click", function () {{
+      alert(warning);
+      saveCard(b.closest(".card"));
+    }});
   }});
   var all = document.querySelector(".save-all");
   if (all) all.addEventListener("click", function () {{
+    alert(warning);
     var cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
     // Sırayla, aralıklı: tarayıcılar art arda anlık indirmeleri yutabiliyor.
     cards.reduce(function (p, card) {{
@@ -1816,23 +1919,10 @@ class OTPSecretsModule(Module):
             harden_secret_store(out.parent)
         except OSError as exc:
             log.warning("Yazdırılabilir kâğıt oluşturulamadı: %s", exc)
+            self._last_paper = {"html": html, "cards": card_data, "ts": ts}
             return None, html
 
-        # Best-effort: aktif grafik oturumda tarayıcıyı aç
-        try:
-            from ..core.utils import _find_active_graphical_session
-            env = _find_active_graphical_session()
-            if env:
-                _sp.Popen(
-                    ["sudo", "-u", env["USER"], "env"]
-                    + [f"{k}={v}" for k, v in env.items()]
-                    + ["xdg-open", str(out)],
-                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
-                    start_new_session=True,
-                )
-        except (OSError, ImportError) as exc:
-            log.debug("xdg-open atlandı: %s", exc)
-
+        self._last_paper = {"html": html, "cards": card_data, "ts": ts}
         return out, html
 
     def _apply_with_tool(

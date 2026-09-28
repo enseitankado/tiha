@@ -39,3 +39,7 @@ def ensure_runtime_dirs() -> None:
     """
     for directory in (VAR_ROOT, LOG_ROOT, ETC_ROOT, STATE_DIR):
         directory.mkdir(parents=True, exist_ok=True)
+    # Durum dizini (yedekler, PIN anahtarları ve kâğıtları) ve bütün alt
+    # dizinleri yalnız root'a açık: root:root, dizin 0700, dosya 0600.
+    from .private_files import protect_state_tree
+    protect_state_tree(STATE_DIR)
