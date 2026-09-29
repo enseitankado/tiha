@@ -221,6 +221,10 @@ KEY = "cursor-size"
 # tazelemede birleşsin (çözünürlük ve tazeleme ayrı ayrı uygulanıyor).
 SETTLE_MS = 800
 RESTORE_MS = 300
+# Oturum açılışında Muffin kullanıcının kayıtlı ekran modunu
+# (cinnamon-monitors.xml) bu servis başlamadan uygular; o değişimin
+# sinyali kaçar. Bu yüzden açılıştan kısa süre sonra bir kez de tazele.
+STARTUP_MS = 4000
 
 state = {"timer": 0}
 
@@ -254,6 +258,7 @@ bus.signal_subscribe(
     None, DISPLAY_CONFIG, "MonitorsChanged", DISPLAY_PATH, None,
     Gio.DBusSignalFlags.NONE, on_monitors_changed,
 )
+GLib.timeout_add(STARTUP_MS, nudge)
 GLib.MainLoop().run()
 """
 
@@ -267,6 +272,302 @@ NoDisplay=true
 Terminal=false
 X-GNOME-Autostart-enabled=true
 """
+
+
+# --- Fare imleci (dokunmadan sonra gizlenme) ----------------------------------
+# Muffin (Cinnamon'un pencere yöneticisi) son girdi dokunmatikten gelince
+# imleci gizler (XFixesHideCursor) ve ancak kendi yüzeylerinde (panel,
+# pencere çerçevesi, masaüstü kökü) fare hareketi görünce geri açar.
+# Fare uygulama pencerelerinin üstünde oynatıldığında imleç görünmez
+# kalır; tıklama ve hareket çalışır. Sürücü ayarı (SWcursor) buna etki
+# etmez, çünkü gizleme X sunucusunda yapılır. Küçük bir Cinnamon
+# eklentisi Muffin'in imleç izleyicisini dinler ve imleç gizlendiği anda
+# yeniden gösterir. Eklentiyi her oturumda autostart'taki yardımcı
+# kullanıcının etkin eklenti listesine ekler; böylece sonradan açılan
+# hesaplar da kapsanır.
+CURSOR_EXT_UUID = "tiha-imlec@tiha"
+CURSOR_EXT_DIR = Path("/usr/share/cinnamon/extensions") / CURSOR_EXT_UUID
+CURSOR_EXT_ENABLER = Path("/usr/local/bin/tiha-imlec-eklenti.py")
+CURSOR_EXT_AUTOSTART = Path("/etc/xdg/autostart/tr.org.tiha.imlec-eklenti.desktop")
+
+CURSOR_EXT_METADATA = json.dumps({
+    "uuid": CURSOR_EXT_UUID,
+    "name": "TiHA imleç",
+    "description": "Dokunmatik kullanıldıktan sonra da fare imlecini görünür tutar.",
+    "cinnamon-version": ["5.2"],
+}, ensure_ascii=False, indent=1) + "\n"
+
+CURSOR_EXT_JS = """// TiHA — fare imlecini dokunmatik kullanıldıktan sonra da görünür tutar.
+// Muffin son girdi dokunmatikten gelince imleci gizler; bu eklenti
+// imleç izleyicisinin görünürlük değişimini dinleyip imleci geri açar.
+const Meta = imports.gi.Meta;
+
+let tracker = null;
+let signalId = 0;
+
+function show() {
+    if (tracker && !tracker.get_pointer_visible())
+        tracker.set_pointer_visible(true);
+}
+
+function init(metadata) {}
+
+function enable() {
+    tracker = Meta.CursorTracker.get_for_display(global.display);
+    signalId = tracker.connect("visibility-changed", show);
+    show();
+}
+
+function disable() {
+    if (tracker && signalId)
+        tracker.disconnect(signalId);
+    tracker = null;
+    signalId = 0;
+}
+"""
+
+CURSOR_EXT_ENABLER_CONTENT = f"""#!/usr/bin/python3
+# TiHA — "{CURSOR_EXT_UUID}" Cinnamon eklentisini bu kullanıcıda etkinleştirir.
+# Her oturum açılışında XDG autostart ile bir kez çalışır; eklenti zaten
+# listedeyse hiçbir şey yapmaz. Cinnamon listeyi anında okur.
+from gi.repository import Gio
+
+UUID = "{CURSOR_EXT_UUID}"
+source = Gio.SettingsSchemaSource.get_default()
+if source is None or source.lookup("org.cinnamon", True) is None:
+    raise SystemExit(0)  # Cinnamon yok — yapacak iş yok.
+settings = Gio.Settings.new("org.cinnamon")
+enabled = list(settings.get_strv("enabled-extensions"))
+if UUID not in enabled:
+    settings.set_strv("enabled-extensions", enabled + [UUID])
+    Gio.Settings.sync()
+"""
+
+CURSOR_EXT_AUTOSTART_CONTENT = """[Desktop Entry]
+Type=Application
+Name=TiHA cursor visibility
+Name[tr]=TiHA imleç görünürlüğü
+Comment[tr]=Dokunmatik kullanıldıktan sonra fare imlecini görünür tutan eklentiyi açar
+Exec=/usr/local/bin/tiha-imlec-eklenti.py
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+"""
+
+
+# --- Giriş ekranında NumLock -------------------------------------------------
+# Pardus giriş ekranı açılırken bir kez "numlockx on" çalıştırır; ekran
+# açıldıktan sonra takılan ya da o anda henüz tanınmamış klavyede NumLock
+# kapalı kalır. LightDM'in greeter-setup-script'i giriş ekranı her
+# açıldığında (ilk açılış ve her oturum kapatma) root olarak çalışır; betik
+# NumLock'u açar ve giriş ekranı kapanana kadar arka planda kalıp yeni
+# takılan klavyelerde yeniden açar.
+#
+# Güncellemelere karşı:
+#   * Betik numlockx paketine dayanmaz; NumLock'u doğrudan libX11'in XKB
+#     çağrısıyla açar (numlockx'in yaptığı). Paket kaldırılsa da çalışır.
+#   * LightDM ayarı /etc/lightdm/lightdm.conf.d/99-… adıyla yazılır; aynı
+#     dizindeki diğer dosyalardan sonra okunur.
+#   * Yedek yol olarak giriş ekranının kendi "numlock-on" ayarı da açık
+#     yazılır (bir güncelleme onu kapatsa bile bizimki sonra okunur).
+#   * Her paket kurulum/güncellemesinden sonra (APT DPkg::Post-Invoke)
+#     betik "--onar" ile çalışır: silinmiş ayar dosyalarını yeniden yazar,
+#     LightDM ayarını başka bir dosya eziyorsa günlüğe uyarı düşer.
+NUMLOCK_SCRIPT = Path("/usr/local/sbin/tiha-giris-numlock")
+NUMLOCK_LIGHTDM_CONF = Path("/etc/lightdm/lightdm.conf.d/99-tiha-numlock.conf")
+NUMLOCK_GREETER_CONF = Path("/etc/pardus/greeter.conf.d/99-tiha-numlock.conf")
+NUMLOCK_APT_HOOK = Path("/etc/apt/apt.conf.d/99-tiha-numlock")
+# Önceki sürümün yazdığı ad; kurulum ve kaldırmada temizlenir.
+NUMLOCK_LIGHTDM_CONF_OLD = Path("/etc/lightdm/lightdm.conf.d/60-tiha-numlock.conf")
+NUMLOCK_FILES = (NUMLOCK_LIGHTDM_CONF, NUMLOCK_GREETER_CONF, NUMLOCK_APT_HOOK, NUMLOCK_SCRIPT)
+NUMLOCK_LOG_TAG = "tiha-numlock"
+NUMLOCK_LIGHTDM_CONTENT = f"""# TiHA — Başarım adımı tarafından yazılmıştır.
+# Giriş ekranında NumLock açık olsun.
+[Seat:*]
+greeter-setup-script={NUMLOCK_SCRIPT}
+"""
+NUMLOCK_GREETER_CONTENT = """# TiHA — Başarım adımı tarafından yazılmıştır.
+[keyboard]
+numlock-on=true
+"""
+NUMLOCK_APT_HOOK_CONTENT = f"""// TiHA — paket işlemlerinden sonra giriş ekranı NumLock ayarını denetler.
+DPkg::Post-Invoke {{ "if [ -x {NUMLOCK_SCRIPT} ]; then {NUMLOCK_SCRIPT} --onar || true; fi"; }};
+"""
+NUMLOCK_SCRIPT_TEMPLATE = r'''#!/usr/bin/python3
+# TiHA — giriş ekranında klavyenin NumLock'unu açık tutar.
+# LightDM greeter-setup-script olarak root ile çalışır (DISPLAY ve
+# XAUTHORITY LightDM'den gelir). NumLock'u hemen açar, sonra kendini arka
+# plana alır: giriş ekranı açık kaldıkça ilk saniyelerde NumLock'u açık
+# tutar, sonra yalnız yeni bir klavye takıldığında yeniden açar. Giriş
+# ekranı kapanınca (oturum açılınca) çıkar.
+#
+# "--onar": paket işlemlerinden sonra APT çağırır; silinmiş ayar
+# dosyalarını yeniden yazar, LightDM ayarı ezildiyse günlüğe yazar.
+import ctypes
+import ctypes.util
+import os
+import pwd
+import subprocess
+import sys
+import time
+
+HOLD_SECONDS = 20       # açılışta NumLock'un açık tutulduğu süre
+POLL_SECONDS = 1
+WAIT_GREETER = 30       # giriş ekranı sürecinin başlaması için beklenen süre
+TAG = "@@TAG@@"
+CONFS = @@CONFS@@
+
+XK_NUM_LOCK = 0xFF7F
+XKB_USE_CORE_KBD = 0x0100
+
+
+class XkbState(ctypes.Structure):
+    _fields_ = [
+        ("group", ctypes.c_ubyte), ("locked_group", ctypes.c_ubyte),
+        ("base_group", ctypes.c_ushort), ("latched_group", ctypes.c_ushort),
+        ("mods", ctypes.c_ubyte), ("base_mods", ctypes.c_ubyte),
+        ("latched_mods", ctypes.c_ubyte), ("locked_mods", ctypes.c_ubyte),
+        ("compat_state", ctypes.c_ubyte), ("grab_mods", ctypes.c_ubyte),
+        ("compat_grab_mods", ctypes.c_ubyte), ("lookup_mods", ctypes.c_ubyte),
+        ("compat_lookup_mods", ctypes.c_ubyte), ("ptr_buttons", ctypes.c_ushort),
+    ]
+
+
+class Keyboard:
+    """numlockx'in yaptığı: NumLock'a bağlı değiştiriciyi XKB ile kilitler."""
+
+    def __init__(self):
+        self.x = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        self.x.XOpenDisplay.restype = ctypes.c_void_p
+        self.x.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        self.x.XkbKeysymToModifiers.restype = ctypes.c_uint
+        self.x.XkbKeysymToModifiers.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        self.x.XkbLockModifiers.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint]
+        self.x.XkbGetState.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(XkbState)]
+        self.x.XFlush.argtypes = [ctypes.c_void_p]
+        self.dpy = self.x.XOpenDisplay(None)
+
+    def numlock_on(self):
+        if not self.dpy:
+            return
+        mask = self.x.XkbKeysymToModifiers(self.dpy, XK_NUM_LOCK)
+        if not mask:
+            return
+        state = XkbState()
+        self.x.XkbGetState(self.dpy, XKB_USE_CORE_KBD, ctypes.byref(state))
+        if not state.locked_mods & mask:
+            self.x.XkbLockModifiers(self.dpy, XKB_USE_CORE_KBD, mask, mask)
+            self.x.XFlush(self.dpy)
+
+
+def note(msg):
+    subprocess.run(["logger", "-t", TAG, "--", msg], check=False)
+
+
+def keyboards():
+    # LED'i olan klavye aygıtları; kümenin değişmesi "klavye takıldı" demek.
+    try:
+        with open("/proc/bus/input/devices", encoding="utf-8", errors="replace") as f:
+            blocks = f.read().split("\n\n")
+    except OSError:
+        return frozenset()
+    return frozenset(b for b in blocks if "kbd" in b and "B: LED=" in b)
+
+
+def greeter_running():
+    try:
+        uid = pwd.getpwnam("lightdm").pw_uid
+    except KeyError:
+        return False
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if os.stat(f"/proc/{pid}").st_uid != uid:
+                continue
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                if b"greeter" in f.read():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def watch(kbd):
+    start = time.monotonic()
+    while not greeter_running():
+        if time.monotonic() - start > WAIT_GREETER:
+            return
+        kbd.numlock_on()
+        time.sleep(POLL_SECONDS)
+    seen = keyboards()
+    hold_until = time.monotonic() + HOLD_SECONDS
+    while greeter_running():
+        now = keyboards()
+        if now != seen or time.monotonic() < hold_until:
+            if now - seen:
+                time.sleep(0.5)  # yeni klavye X'e eklensin
+            kbd.numlock_on()
+            seen = now
+        time.sleep(POLL_SECONDS)
+
+
+def repair():
+    for path, content in CONFS.items():
+        try:
+            with open(path, encoding="utf-8") as f:
+                if f.read() == content:
+                    continue
+        except OSError:
+            pass
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.chmod(path, 0o644)
+            note(f"{path} yeniden yazıldı.")
+        except OSError as exc:
+            note(f"{path} yazılamadı: {exc}")
+    try:
+        out = subprocess.run(
+            ["/usr/sbin/lightdm", "--show-config"],
+            capture_output=True, text=True, timeout=20,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return
+    if "greeter-setup-script" in out and os.path.abspath(__file__) not in out:
+        note("UYARI: LightDM'de greeter-setup-script başka bir dosyada "
+             "tanımlı; giriş ekranı NumLock betiği çalışmayacak.")
+
+
+if "--onar" in sys.argv:
+    repair()
+    sys.exit(0)
+try:
+    kbd = Keyboard()
+except OSError:
+    sys.exit(0)
+if "--izle" in sys.argv:
+    watch(kbd)
+    sys.exit(0)
+kbd.numlock_on()
+# LightDM bu betiğin bitmesini bekler; izleyici ayrı oturumda sürer.
+subprocess.Popen(
+    [sys.executable, os.path.abspath(__file__), "--izle"],
+    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True,
+)
+sys.exit(0)
+'''
+NUMLOCK_SCRIPT_CONTENT = (
+    NUMLOCK_SCRIPT_TEMPLATE
+    .replace("@@TAG@@", NUMLOCK_LOG_TAG)
+    .replace("@@CONFS@@", repr({
+        str(NUMLOCK_LIGHTDM_CONF): NUMLOCK_LIGHTDM_CONTENT,
+        str(NUMLOCK_GREETER_CONF): NUMLOCK_GREETER_CONTENT,
+        str(NUMLOCK_APT_HOOK): NUMLOCK_APT_HOOK_CONTENT,
+    }))
+)
 
 
 def _read_file(path: Path) -> str:
@@ -338,6 +639,11 @@ def _unlink_ok(path: Path, errors: list[str]) -> bool:
         errors.append(f"{path}: {exc}")
         return False
     return True
+
+
+def _remove_numlock(errors: list[str]) -> bool:
+    """Giriş ekranı NumLock dosyalarını (eski adlı LightDM ayarı dahil) siler."""
+    return all([_unlink_ok(path, errors) for path in (*NUMLOCK_FILES, NUMLOCK_LIGHTDM_CONF_OLD)])
 
 
 def _runtime_kill_user_processes() -> bool | None:
@@ -659,6 +965,14 @@ class PerformanceModule(Module):
         """İmleç tazeleme servisi kurulu mu?"""
         return CURSOR_AUTOSTART.exists()
 
+    def cursor_visible_active(self) -> bool:
+        """"İmleç hep görünür" eklentisi kurulu mu?"""
+        return CURSOR_EXT_AUTOSTART.exists() and (CURSOR_EXT_DIR / "extension.js").exists()
+
+    def greeter_numlock_active(self) -> bool:
+        """Giriş ekranı NumLock ayarı kurulu mu?"""
+        return all(path.exists() for path in NUMLOCK_FILES)
+
     def light_mode_active(self) -> bool:
         """Hafif mod şu an tüm kullanıcılara uygulanıyor mu?"""
         return _read_light_settings() is not None and LIGHT_AUTOSTART.exists()
@@ -782,6 +1096,17 @@ class PerformanceModule(Module):
             state=t("m17.preview.installed") if CURSOR_AUTOSTART.exists()
             else t("m17.preview.not_installed"),
         ))
+        lines.append(t(
+            "m17.preview.cursor_visible",
+            state=t("m17.preview.installed") if self.cursor_visible_active()
+            else t("m17.preview.not_installed"),
+        ))
+        lines += ["", t("m17.preview.numlock_header")]
+        lines.append(t(
+            "m17.preview.numlock",
+            state=t("m17.preview.installed") if self.greeter_numlock_active()
+            else t("m17.preview.not_installed"),
+        ))
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -814,6 +1139,17 @@ class PerformanceModule(Module):
             "cursor_refresh_service" in p and not cursor_service
             and (CURSOR_AUTOSTART.exists() or CURSOR_SCRIPT.exists())
         )
+        # İmleç görünürlüğü eklentisi ve giriş ekranı NumLock'u hafif moddan
+        # bağımsızdır; işaret kaldırılıp uygulanırsa kurulu olan sökülür.
+        cursor_visible = _as_bool(p.get("cursor_always_visible"))
+        cursor_visible_remove = (
+            "cursor_always_visible" in p and not cursor_visible
+            and self.cursor_visible_active()
+        )
+        numlock = _as_bool(p.get("greeter_numlock"))
+        numlock_remove = (
+            "greeter_numlock" in p and not numlock and self.greeter_numlock_active()
+        )
         # Kutu sisteme bakarak dolduğu için (params.py "default_from"),
         # işaretinin kaldırılıp uygulanması bilinçli bir "kaldır" isteğidir.
         light_remove = not light_mode and self.light_mode_active()
@@ -822,7 +1158,8 @@ class PerformanceModule(Module):
 
         if not (kill_processes or session_remove or light_mode or light_remove
                 or cursor_xorg_on or cursor_remove or cursor_service
-                or service_remove):
+                or service_remove or cursor_visible or cursor_visible_remove
+                or numlock or numlock_remove):
             return ApplyResult(False, t("m17.apply.nothing_selected"))
 
         def say(line: str) -> None:
@@ -940,6 +1277,36 @@ class PerformanceModule(Module):
                 original["touched"]["cursor_service"] = False
                 summary.append(t("m17.apply.cursor_service_removed"))
                 data["cursor_service_removed"] = True
+
+        if cursor_visible:
+            ok, text = self._apply_cursor_visible(original, say)
+            if ok:
+                summary.append(text)
+                details.append(t("m17.apply.details_cursor_visible", path=CURSOR_EXT_DIR))
+                data["cursor_always_visible"] = True
+            else:
+                failures.append(text)
+
+        if cursor_visible_remove:
+            if self._remove_cursor_visible(failures):
+                original["touched"]["cursor_visible"] = False
+                summary.append(t("m17.apply.cursor_visible_removed"))
+                data["cursor_visible_removed"] = True
+
+        if numlock:
+            ok, text = self._apply_numlock(original, say)
+            if ok:
+                summary.append(text)
+                details.append(t("m17.apply.details_numlock", path=NUMLOCK_LIGHTDM_CONF))
+                data["greeter_numlock"] = True
+            else:
+                failures.append(text)
+
+        if numlock_remove:
+            if _remove_numlock(failures):
+                original["touched"]["numlock"] = False
+                summary.append(t("m17.apply.numlock_removed"))
+                data["numlock_removed"] = True
 
         self._save_original(original)
         if not summary:
@@ -1136,6 +1503,83 @@ class PerformanceModule(Module):
         say(t("m17.say.autostart", path=CURSOR_AUTOSTART))
         return True, t("m17.cursor.service_installed")
 
+    def _apply_cursor_visible(self, original: dict, say) -> tuple[bool, str]:
+        """İmleci dokunmadan sonra da görünür tutan eklentiyi ve her
+        oturumda onu etkinleştiren yardımcıyı kurar."""
+        say(t("m17.cursor.visible_header"))
+        try:
+            CURSOR_EXT_DIR.mkdir(parents=True, exist_ok=True)
+            (CURSOR_EXT_DIR / "metadata.json").write_text(CURSOR_EXT_METADATA, encoding="utf-8")
+            (CURSOR_EXT_DIR / "extension.js").write_text(CURSOR_EXT_JS, encoding="utf-8")
+            for f in CURSOR_EXT_DIR.iterdir():
+                f.chmod(0o644)
+            CURSOR_EXT_DIR.chmod(0o755)
+            CURSOR_EXT_ENABLER.parent.mkdir(parents=True, exist_ok=True)
+            CURSOR_EXT_ENABLER.write_text(CURSOR_EXT_ENABLER_CONTENT, encoding="utf-8")
+            CURSOR_EXT_ENABLER.chmod(0o755)
+            CURSOR_EXT_AUTOSTART.parent.mkdir(parents=True, exist_ok=True)
+            CURSOR_EXT_AUTOSTART.write_text(CURSOR_EXT_AUTOSTART_CONTENT, encoding="utf-8")
+            CURSOR_EXT_AUTOSTART.chmod(0o644)
+        except OSError as exc:
+            return False, t("m17.cursor.visible_failed", error=exc)
+        original["touched"]["cursor_visible"] = True
+        self._save_original(original)
+        say(t("m17.say.written", path=CURSOR_EXT_DIR))
+        say(t("m17.say.autostart", path=CURSOR_EXT_AUTOSTART))
+        return True, t("m17.cursor.visible_installed")
+
+    def _remove_cursor_visible(self, errors: list[str]) -> bool:
+        """Eklentiyi, yardımcıyı ve hesapların etkin eklenti listesindeki
+        kaydını kaldırır (listede kalan kayıt zararsızdır ama Cinnamon her
+        açılışta "eklenti bulunamadı" günlüğü yazar)."""
+        ok = all([
+            _unlink_ok(CURSOR_EXT_AUTOSTART, errors),
+            _unlink_ok(CURSOR_EXT_ENABLER, errors),
+        ])
+        try:
+            shutil.rmtree(CURSOR_EXT_DIR)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            errors.append(f"{CURSOR_EXT_DIR}: {exc}")
+            ok = False
+        key = "/org/cinnamon/enabled-extensions"
+        for user in _human_users():
+            raw = (_dconf_dump(user) or {}).get(key, "")
+            if CURSOR_EXT_UUID not in raw:
+                continue
+            uuids = re.findall(r"'([^']*)'", raw)
+            rest = [u for u in uuids if u != CURSOR_EXT_UUID]
+            value = "[" + ", ".join(f"'{u}'" for u in rest) + "]" if rest else None
+            done, err = _dconf_apply(user, key, value)
+            if not done:
+                log.warning("%s: eklenti listesi temizlenemedi — %s", user[0], err)
+        return ok
+
+    def _apply_numlock(self, original: dict, say) -> tuple[bool, str]:
+        """Giriş ekranında NumLock'u açık tutan LightDM betiğini kurar."""
+        say(t("m17.numlock.header"))
+        try:
+            NUMLOCK_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
+            NUMLOCK_SCRIPT.write_text(NUMLOCK_SCRIPT_CONTENT, encoding="utf-8")
+            NUMLOCK_SCRIPT.chmod(0o755)
+            for path, content in (
+                (NUMLOCK_LIGHTDM_CONF, NUMLOCK_LIGHTDM_CONTENT),
+                (NUMLOCK_GREETER_CONF, NUMLOCK_GREETER_CONTENT),
+                (NUMLOCK_APT_HOOK, NUMLOCK_APT_HOOK_CONTENT),
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+                path.chmod(0o644)
+            NUMLOCK_LIGHTDM_CONF_OLD.unlink(missing_ok=True)
+        except OSError as exc:
+            return False, t("m17.numlock.failed", error=exc)
+        original["touched"]["numlock"] = True
+        self._save_original(original)
+        for path in NUMLOCK_FILES:
+            say(t("m17.say.written", path=path))
+        return True, t("m17.numlock.installed")
+
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         original = self._load_original()
         if original is None:
@@ -1189,6 +1633,14 @@ class PerformanceModule(Module):
                 self._restore_or_remove("cursor_autostart", original, errors),
             ]):
                 done.append(t("m17.undo.cursor_service_removed"))
+
+        if original["touched"].get("cursor_visible"):
+            if self._remove_cursor_visible(errors):
+                done.append(t("m17.undo.cursor_visible_removed"))
+
+        if original["touched"].get("numlock"):
+            if _remove_numlock(errors):
+                done.append(t("m17.undo.numlock_removed"))
 
         if errors:
             return ApplyResult(False, t("m17.undo.partial"), details="\n".join(done + errors))

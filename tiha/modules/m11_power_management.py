@@ -1036,7 +1036,12 @@ class PowerManagementModule(Module):
         if exempt:
             lines.append(t("m11.preview.exempt", count=len(exempt)))
             if set(exempt) & _local_macs():
-                lines.append(t("m11.preview.exempt_this_board"))
+                # Kaynak tahtada ayarlar etkin kalır; muaf klonda servis ilk
+                # açılışta ikisini de kapatmıştır.
+                if timed_mode == "none" and not auto_enabled:
+                    lines.append(t("m11.preview.exempt_this_clone"))
+                else:
+                    lines.append(t("m11.preview.exempt_this_board"))
 
         # Config son değişiklik
         try:
@@ -1056,6 +1061,10 @@ class PowerManagementModule(Module):
         lines.append("")
         lines.append(t("m11.preview.before_shutdown", duration=countdown_label))
         return "\n".join(lines)
+
+    def board_is_exempt(self) -> bool:
+        """Bu tahtanın bir MAC adresi muaf listesinde mi?"""
+        return bool(set(_current_exempt_macs()) & _local_macs())
 
     def current_exempt_macs(self) -> str:
         """"Muaf tahtalar" kutusunun açılışta görüneceği liste."""

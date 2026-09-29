@@ -264,7 +264,8 @@ def _build_welcome_host_table() -> Gtk.Widget:
 
     Layout: 4 kolonlu Gtk.Grid (label1, value1 | label2, value2). Sol
     grup donanım (Model/BIOS/CPU/RAM/Disk/Ekran), sağ grup sistem
-    (Hostname/MAC/OS/Kernel/Masaüstü). Değerler ``host_info.collect()``
+    (Hostname/MAC/OS/Kernel/Masaüstü/Makine ve açılış kimliği; bu iki
+    satırın ipucu kimliğin nasıl üretildiğini anlatır). Değerler ``host_info.collect()``
     ile bir kez toplanır. Grid dikey kaydırma çıkarmayacak yüksekliktedir.
     """
     from ..core.host_info import collect
@@ -288,12 +289,16 @@ def _build_welcome_host_table() -> Gtk.Widget:
         (t("ui.welcome.host.label_disk"), cell(info.disk_human)),
         (t("ui.welcome.host.label_display"), cell(info.display)),
     ]
-    sys_rows: list[tuple[str, str]] = [
+    sys_rows: list[tuple[str, ...]] = [
         (t("ui.welcome.host.label_hostname"), cell(info.hostname)),
         (t("ui.welcome.host.label_mac"), cell(info.net_summary)),
         (t("ui.welcome.host.label_os"), cell(info.os_name)),
         (t("ui.welcome.host.label_kernel"), cell(info.kernel)),
         (t("ui.welcome.host.label_desktop"), cell(info.desktop)),
+        (t("ui.welcome.host.label_machine_id"), cell(info.machine_id),
+         t("ui.welcome.host.tip_machine_id")),
+        (t("ui.welcome.host.label_boot_id"), cell(info.boot_id),
+         t("ui.welcome.host.tip_boot_id")),
     ]
 
     outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -309,7 +314,8 @@ def _build_welcome_host_table() -> Gtk.Widget:
     grid.set_margin_start(8)
     grid.set_column_homogeneous(False)
 
-    def _make_row(row_idx: int, col_offset: int, label: str, value: str) -> None:
+    def _make_row(row_idx: int, col_offset: int, label: str, value: str,
+                  tip: str = "") -> None:
         key_lbl = Gtk.Label(xalign=0)
         key_lbl.set_markup(f"<b>{GLib.markup_escape_text(label)}</b>")
         val_lbl = Gtk.Label(label=value, xalign=0)
@@ -318,15 +324,18 @@ def _build_welcome_host_table() -> Gtk.Widget:
         val_lbl.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
         val_lbl.set_max_width_chars(48)
         val_lbl.set_hexpand(True)
+        if tip:
+            key_lbl.set_tooltip_text(tip)
+            val_lbl.set_tooltip_text(tip)
         grid.attach(key_lbl, col_offset + 0, row_idx, 1, 1)
         grid.attach(val_lbl, col_offset + 1, row_idx, 1, 1)
 
     total_rows = max(len(hw_rows), len(sys_rows))
     for i in range(total_rows):
         if i < len(hw_rows):
-            _make_row(i, 0, hw_rows[i][0], hw_rows[i][1])
+            _make_row(i, 0, *hw_rows[i])
         if i < len(sys_rows):
-            _make_row(i, 2, sys_rows[i][0], sys_rows[i][1])
+            _make_row(i, 2, *sys_rows[i])
     outer.pack_start(grid, False, False, 0)
     return outer
 
@@ -815,6 +824,16 @@ class ModulePage(Gtk.Box):
                 getattr(self._fields.get(k), "get_active", lambda: False)()
                 for k in sources
             )
+            # ``enable_also_when``: modülün bir metodu True dönerse kutular
+            # kapalı olsa da alan etkin kalır (ör. m11: muaf klonda kapanma
+            # seçenekleri bilerek kapalıyken imajdan gelen muaf listesi
+            # okunur kalsın).
+            also = getattr(self.module, f.get("enable_also_when") or "", None)
+            if not any_on and callable(also):
+                try:
+                    any_on = bool(also())
+                except Exception as exc:
+                    log.warning("enable_also_when başarısız (%s): %s", f["key"], exc)
             widget.set_sensitive(any_on)
 
     def _refresh_preview(self) -> None:
@@ -1237,6 +1256,9 @@ class ModulePage(Gtk.Box):
         if kind == "bool":
             checkbox = Gtk.CheckButton()
             checkbox.set_active(_as_checked(default))
+            if field.get("locked"):
+                # Hep uygulanan iş: işaretli görünür, değiştirilemez.
+                checkbox.set_sensitive(False)
 
             # Checkbox değişikliklerini dinle ve ilgili alanları aktif/pasif yap
             def on_checkbox_toggled(cb, field_key=field["key"],
@@ -2832,9 +2854,24 @@ class SummaryPage(Gtk.Box):
         scroller.add(view)
         content.pack_start(scroller, True, True, 0)
 
+        buf = view.get_buffer()
+        # Sonuç satırları durumlarına göre renklenir: satırın tamamı açık
+        # zeminle vurgulanır, yazı koyu tonda kalır (koyu temada da okunur).
+        for st, (_mark, color) in self._CHECK_MARKS.items():
+            buf.create_tag(
+                st, foreground=color,
+                paragraph_background=self._CHECK_LINE_BG[st],
+                weight=Pango.Weight.BOLD if st == "fail" else Pango.Weight.NORMAL,
+            )
+        buf.create_tag("group", weight=Pango.Weight.BOLD, scale=1.1,
+                       pixels_above_lines=6)
+        buf.create_tag("summary", weight=Pango.Weight.BOLD)
+        # Denetimin çalıştırdığı komutlar ve kısa çıktıları.
+        buf.create_tag("cmd", foreground="#555555", scale=0.9)
+
         self._check_dialog = dlg
         self._check_dialog_view = view
-        self._check_dialog_buffer = view.get_buffer()
+        self._check_dialog_buffer = buf
         self._check_dialog_status = status
         self._check_dialog_spinner = spinner
         self._check_dialog_close_btn = close_btn
@@ -2850,8 +2887,19 @@ class SummaryPage(Gtk.Box):
         buf = getattr(self, "_check_dialog_buffer", None)
         if buf is None:
             return False
+        tag = None
+        stripped = line.strip()
+        if stripped.startswith("──"):
+            tag = "group"
+        elif line.startswith("    ") and stripped:
+            tag = "cmd"
+        elif line.startswith("  ") and stripped:
+            tag = self._CHECK_STATUS_BY_MARK.get(stripped[0])
         end = buf.get_end_iter()
-        buf.insert(end, line + "\n")
+        if tag:
+            buf.insert_with_tags_by_name(end, line + "\n", tag)
+        else:
+            buf.insert(end, line + "\n")
         view = getattr(self, "_check_dialog_view", None)
         if view is not None:
             mark = buf.get_insert()
@@ -2866,16 +2914,34 @@ class SummaryPage(Gtk.Box):
         spinner = getattr(self, "_check_dialog_spinner", None)
         if spinner is not None:
             spinner.stop()
+        # Toplam satırı "✓ 12 doğrulandı · ✗ 2 sorun var · …" biçiminde;
+        # her parça kendi durum rengiyle yazılır.
+        parts = summary.split(" · ")
         status = getattr(self, "_check_dialog_status", None)
         if status is not None:
-            status.set_text(summary)
+            markup = []
+            for part in parts:
+                st = self._CHECK_STATUS_BY_MARK.get(part.strip()[:1])
+                esc = GLib.markup_escape_text(part)
+                if st:
+                    markup.append(f'<span foreground="{self._CHECK_MARKS[st][1]}"><b>{esc}</b></span>')
+                else:
+                    markup.append(esc)
+            status.set_markup(" · ".join(markup))
         close_btn = getattr(self, "_check_dialog_close_btn", None)
         if close_btn is not None:
             close_btn.set_sensitive(True)
         buf = getattr(self, "_check_dialog_buffer", None)
         if buf is not None:
-            end = buf.get_end_iter()
-            buf.insert(end, f"\n── {summary} ──\n")
+            buf.insert_with_tags_by_name(buf.get_end_iter(), "\n── ", "summary")
+            for i, part in enumerate(parts):
+                if i:
+                    buf.insert_with_tags_by_name(buf.get_end_iter(), " · ", "summary")
+                st = self._CHECK_STATUS_BY_MARK.get(part.strip()[:1])
+                buf.insert_with_tags_by_name(
+                    buf.get_end_iter(), part, *(["summary", st] if st else ["summary"]),
+                )
+            buf.insert_with_tags_by_name(buf.get_end_iter(), " ──\n", "summary")
         return False
 
     _CHECK_MARKS = {
@@ -2884,6 +2950,13 @@ class SummaryPage(Gtk.Box):
         "partial": ("◐", "#b26a00"),
         "manual": ("☐", "#666666"),
     }
+    _CHECK_LINE_BG = {
+        "ok": "#e8f5e9",
+        "fail": "#fdecea",
+        "partial": "#fff4e0",
+        "manual": "#f1f1f1",
+    }
+    _CHECK_STATUS_BY_MARK = {mark: st for st, (mark, _c) in _CHECK_MARKS.items()}
 
     def _apply_check_results(self) -> bool:
         """Son denetim sonuçlarını listedeki maddelere yazar."""

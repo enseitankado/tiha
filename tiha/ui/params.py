@@ -424,6 +424,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "placeholder": t("m11.params.exempt_macs.placeholder"),
             # Kapanma modu seçilmemişse muaf tutulacak bir şey yok: kutu pasif.
             "enable_when_any": ["auto_enabled", "idle_enabled"],
+            # Muaf klonda iki seçenek de bilerek kapalıdır; liste yine okunur kalsın.
+            "enable_also_when": "board_is_exempt",
             # MAC adresleri sabit karakter genişliğinde okunsun (aa:bb:cc:…).
             "monospace": True,
             "help": t("m11.params.exempt_macs.help"),
@@ -540,6 +542,47 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "default_from": "cursor_service_active",
             "help": t("m17.params.cursor_refresh_service.help"),
             "help_folded": True,
+        },
+        # Hafif moddan bağımsız: imleç, dokunmatik kullanılınca da kaybolur.
+        {"label": t("m17.params.heading_input"), "type": "heading"},
+        {
+            "key": "cursor_always_visible",
+            "label": t("m17.params.cursor_always_visible.label"),
+            "type": "bool",
+            "default": "False",
+            # Kurulu eklenti işaretli gelir; işaret kaldırılıp uygulanırsa sökülür.
+            "default_from": "cursor_visible_active",
+            "help": t("m17.params.cursor_always_visible.help"),
+            "help_folded": True,
+        },
+        {
+            "key": "greeter_numlock",
+            "label": t("m17.params.greeter_numlock.label"),
+            "type": "bool",
+            # İstek üzerine hep işaretli gelir; kurulu olup işareti
+            # kaldırılarak uygulanırsa sökülür.
+            "default": "True",
+            "help": t("m17.params.greeter_numlock.help"),
+        },
+    ],
+    "m10_image_sanitize": [
+        # Adım bunları her zaman yapar; kutular bilgi amaçlı, kilitli.
+        {"label": t("m10.params.heading_clone_first_boot"), "type": "heading"},
+        {
+            "key": "clone_machine_id",
+            "label": t("m10.params.clone_machine_id.label"),
+            "type": "bool",
+            "default": "True",
+            "locked": True,
+            "help": t("m10.params.clone_machine_id.help"),
+        },
+        {
+            "key": "clone_boot_id",
+            "label": t("m10.params.clone_boot_id.label"),
+            "type": "bool",
+            "default": "True",
+            "locked": True,
+            "help": t("m10.params.clone_boot_id.help"),
         },
     ],
     "m14_bios_password": [

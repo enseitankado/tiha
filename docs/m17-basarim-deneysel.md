@@ -91,6 +91,95 @@ Kurallar:
 - Ayarlar her girişte yeniden uygulanır; öğretmen kendi oturumunda
   değiştirse de bir sonraki girişte geri gelir.
 
+## 3. Fare imleci ve klavye
+
+### Dokunmatik kullanıldıktan sonra kaybolan imleç
+
+Belirti: etapadmin oturumunda fare imleci görünür; oturum kapatılıp
+ogretmen hesabıyla girilince fare hareket eder ve tıklar ama imleç
+görünmez. Xorg ayarı (modesetting/SWcursor) ve mod değişiminde tazeleme
+servisi bunu düzeltmedi.
+
+Nedenler, olasılık sırasıyla:
+
+1. **Muffin dokunmadan sonra imleci gizliyor.** Cinnamon'un pencere
+   yöneticisi (mutter 3.36 çatalı, muffin 5.6) son girdi dokunmatikten
+   gelince imleci `XFixesHideCursor` ile gizler, ancak kendi yüzeylerinde
+   (panel, pencere çerçevesi, masaüstü kökü) dokunmatik olmayan bir işaretçi
+   hareketi görünce geri açar. X11'de uygulama pencerelerinin üstündeki fare
+   hareketi muffin'e ulaşmaz; imleç görünmez kalır. Gizleme X sunucusunda
+   yapıldığı için donanımsal ya da yazılımsal imleç ayrımı sonucu
+   değiştirmez. Öğretmenler tahtaya dokunduğu, etapadmin denemesi ise
+   genelde yalnız fareyle yapıldığı için fark hesaplar arasında gibi görünür.
+2. **Oturum açılışındaki mod değişimi.** Kullanıcının
+   `~/.config/cinnamon-monitors.xml` dosyası (eta-resolution ya da hafif
+   mod yazar) giriş ekranınkinden farklı bir mod taşıyorsa muffin onu
+   autostart'tan önce uygular; tazeleme servisi o `MonitorsChanged`
+   sinyalini kaçırır.
+
+Çareler:
+
+- **"Dokunmatik kullanıldıktan sonra da fare imlecini göster"**:
+  `/usr/share/cinnamon/extensions/tiha-imlec@tiha/` altına küçük bir
+  Cinnamon eklentisi kurulur. Eklenti
+  `Meta.CursorTracker.get_for_display(global.display)` nesnesinin
+  `visibility-changed` sinyalini dinler, imleç gizlenince
+  `set_pointer_visible(true)` çağırır. Eklentiyi her oturum açılışında
+  `/etc/xdg/autostart/tr.org.tiha.imlec-eklenti.desktop` →
+  `/usr/local/bin/tiha-imlec-eklenti.py` kullanıcının
+  `org.cinnamon enabled-extensions` listesine ekler (gschema override yalnız
+  varsayılanı değiştirirdi, anahtarı kaydetmiş hesaplar kapsanmazdı).
+  Kaldırılınca hesapların listesindeki kayıt da silinir. Geliştirme VM'inde
+  denendi: eklenti yüklendi, `set_pointer_visible(false)` anında `true`'ya
+  döndü.
+- **Tazeleme servisi** artık oturum açılışından ~4 sn sonra da imleci bir
+  kez tazeler (2. neden).
+
+Gerçek tahtada teşhis (ogretmen oturumunda, imleç görünmezken):
+
+```bash
+E='gdbus call --session --dest org.Cinnamon --object-path /org/Cinnamon --method org.Cinnamon.Eval'
+$E 'String(imports.gi.Meta.CursorTracker.get_for_display(global.display).get_pointer_visible())'
+$E 'imports.gi.Meta.CursorTracker.get_for_display(global.display).set_pointer_visible(true)'
+```
+
+İlki `"false"` döner ve ikincisi imleci geri getirirse neden 1'dir. Fareyi
+alt panelin üstünde oynatmak imleci geri getiriyorsa yine neden 1'dir.
+Getirmiyorsa `gsettings get org.cinnamon.desktop.interface cursor-size`,
+`cat ~/.config/cinnamon-monitors.xml` ve
+`grep -iE 'SWcursor|Loading.*_drv' /var/log/Xorg.0.log` çıktılarına bakın.
+
+### Giriş ekranında NumLock
+
+Pardus giriş ekranı (`pardus-lightdm-greeter`, `[keyboard] numlock-on`
+varsayılanı açık) açılırken bir kez `numlockx on` çalıştırır. Ekran
+açıldıktan sonra takılan ya da o anda henüz tanınmamış klavyede NumLock
+kapalı kalır.
+
+`/etc/lightdm/lightdm.conf.d/99-tiha-numlock.conf` LightDM'e
+`greeter-setup-script=/usr/local/sbin/tiha-giris-numlock` ekler. Betik giriş
+ekranı her açıldığında root olarak çalışır, NumLock'u açar ve kendini arka
+plana alır. Giriş ekranı süreci (lightdm kullanıcısının `greeter`
+içeren süreci) yaşadıkça ilk 20 sn NumLock'u açık tutar, sonra yalnız
+`/proc/bus/input/devices`'ta LED'li yeni bir klavye belirince yeniden açar.
+Giriş ekranı kapanınca çıkar.
+
+Güncellemelere karşı önlemler:
+
+- Betik `numlockx` paketine dayanmaz; NumLock'u libX11'in
+  `XkbLockModifiers` çağrısıyla (ctypes) açar. `numlockx` kaldırılsa da
+  çalışır.
+- LightDM ayarı `99-` önekiyle yazılır; `/etc/lightdm/lightdm.conf.d`
+  içindeki diğer dosyalardan sonra okunur.
+- Yedek yol: `/etc/pardus/greeter.conf.d/99-tiha-numlock.conf` giriş
+  ekranının kendi `[keyboard] numlock-on=true` ayarını açık tutar.
+- `/etc/apt/apt.conf.d/99-tiha-numlock` her paket işleminden sonra
+  (`DPkg::Post-Invoke`) betiği `--onar` ile çalıştırır: silinmiş ya da
+  değişmiş ayar dosyalarını yeniden yazar; `lightdm --show-config`'e göre
+  `greeter-setup-script`'i başka bir dosya eziyorsa `journalctl -t
+  tiha-numlock` günlüğüne uyarı düşer (`/etc/lightdm/lightdm.conf` en son
+  okunur, orada tanımlanan bir betik bizimkini ezer).
+
 ## Geri al
 
 İlk uygulamadan önceki durum `/var/lib/tiha/state/m17_performance/

@@ -203,6 +203,8 @@ class HostInfo:
     os_name: str
     kernel: str
     desktop: str
+    machine_id: str = ""
+    boot_id: str = ""
 
     @property
     def memory_human(self) -> str:
@@ -263,4 +265,7 @@ def collect() -> HostInfo:
         os_name=pretty_name(),
         kernel=_kernel_release(),
         desktop=_desktop_env(),
+        # hostnamectl ile aynı biçim: 32 onaltılık hane, tiresiz.
+        machine_id=_read(Path("/etc/machine-id")),
+        boot_id=_read(Path("/proc/sys/kernel/random/boot_id")).replace("-", ""),
     )

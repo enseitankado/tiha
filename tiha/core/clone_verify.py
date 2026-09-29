@@ -11,8 +11,13 @@ anahtarından üretildiğine bakarak tanır ve o maddeye özel bir denetim
   ekranı, BIOS, ikinci klon, telefon…) elle denenmeli.
 * ``manual``  — yalnız elle denenebilir.
 
-Denetimler salt okunurdur; sistemde ayar değiştirmez. Tek istisna
-``apt-get update`` (paket listelerini tazeler, yapılandırmaya dokunmaz).
+Denetimler salt okunurdur; sistemde ayar değiştirmez. İstisnalar
+``apt-get update`` (paket listelerini tazeler, yapılandırmaya dokunmaz)
+ve log sunucusuna gönderilen "tiha-klon-test" deneme kaydıdır.
+
+Maddede elle çalıştırılması istenen komutlar (``systemctl is-active``,
+``id``, ``journalctl``, ``sensors``…) denetimde de çalıştırılır; komut
+ve kısa çıktısı akış penceresinde maddenin altında görünür.
 """
 
 from __future__ import annotations
@@ -99,12 +104,24 @@ def identify(text: str) -> tuple[str, dict]:
 # --- Sistem yardımcıları ------------------------------------------------------
 
 
+# Bir maddenin denetiminde çalışan komutlar ve kısa çıktıları; verify()
+# bunları akış penceresine maddenin altına yazar.
+_TRACE: list[str] = []
+_TRACE_LINES = 4
+
+
 def _run(cmd: list[str], timeout: int = 15):
-    return run_cmd(cmd, timeout=timeout, check=False)
+    r = run_cmd(cmd, timeout=timeout, check=False)
+    out = [ln.rstrip() for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
+    _TRACE.append(f"$ {' '.join(cmd)}  → {r.returncode}")
+    _TRACE.extend(f"  {ln[:160]}" for ln in out[:_TRACE_LINES])
+    if len(out) > _TRACE_LINES:
+        _TRACE.append(f"  … (+{len(out) - _TRACE_LINES} satır)")
+    return r
 
 
 def _active(unit: str) -> bool:
-    return _run(["systemctl", "is-active", "--quiet", unit]).returncode == 0
+    return _run(["systemctl", "is-active", unit]).returncode == 0
 
 
 def _enabled(unit: str) -> bool:
@@ -176,9 +193,12 @@ def _grub_cfg() -> str:
 
 def _read(path: str | Path) -> str:
     try:
-        return Path(path).read_text(encoding="utf-8", errors="replace")
-    except OSError:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        _TRACE.append(f"$ cat {path}  → okunamadı ({exc.strerror})")
         return ""
+    _TRACE.append(f"$ cat {path}  → {len(text.splitlines())} satır")
+    return text
 
 
 def _join(items) -> str:
@@ -382,6 +402,12 @@ def _identity(p):
     mid = _read("/etc/machine-id").strip()
     if not mid:
         return FAIL, M("machine_id_empty")
+    from ..modules.m10_image_sanitize import IDENTITY_LOG_TAG, IDENTITY_MAC_FILE, _local_macs
+    signed = _read(IDENTITY_MAC_FILE).split()
+    if signed:
+        _journal(IDENTITY_LOG_TAG, boot=False)
+        if not set(signed) & set(_local_macs()):
+            return FAIL, M("clone_identity_not_run")
     status, detail = _host_key(p)
     if status == FAIL:
         return status, detail
@@ -419,33 +445,64 @@ def _rsyslog(_p):
         return FAIL, M("unit_inactive", unit="rsyslog")
     if not Path("/etc/rsyslog.d/90-tiha-remote.conf").exists():
         return FAIL, M("file_missing", path="/etc/rsyslog.d/90-tiha-remote.conf")
+    # Maddedeki deneme kaydını gönder; sunucuda aranacak olan bu satır.
+    if not _run(["logger", "-p", "auth.notice", "tiha-klon-test"]).ok:
+        return FAIL, M("logger_failed")
     return PARTIAL, M("rsyslog_ok_server_manual", host=socket.gethostname())
 
 
 def _rsyslog_queue(_p):
     qdir = Path("/var/lib/rsyslog")
+    _run(["ls", "-la", str(qdir)])
     files = [f.name for f in qdir.iterdir() if f.is_file() and not f.name.startswith("imjournal")] \
         if qdir.exists() else []
     return (FAIL, M("queue_files", files=_join(files[:5]))) if files else (OK, M("queue_empty"))
 
 
+def _virt() -> str:
+    """Sanal makinedeyse sanallaştırma adı (ör. vmware), değilse ""."""
+    r = _run(["systemd-detect-virt"])
+    v = r.stdout.strip()
+    return v if r.ok and v and v != "none" else ""
+
+
 def _smart(_p):
-    if not _active("smartd"):
-        return FAIL, M("unit_inactive", unit="smartd")
-    r = _run(["sensors"])
-    temps = re.findall(r"[+-]\d+\.\d°C", r.stdout)
-    if not temps:
-        return FAIL, M("no_sensors")
-    return OK, M("smart_ok", temp=temps[0])
+    """smartd (disk sağlığı), lm-sensors (sıcaklık modülleri) ve sensors.
+
+    ``sensors`` bir servis değil komuttur; servis adı ``lm-sensors``dır
+    (açılışta modülleri yükleyip çıkar, "active (exited)" görünür)."""
+    virt = _virt()
+    problems, notes = [], []
+    if _active("smartd"):
+        notes.append(M("smartd_running"))
+    elif virt:
+        notes.append(M("smartd_vm", virt=virt))
+    elif not _run(["/usr/sbin/smartctl", "--scan"]).stdout.strip():
+        notes.append(M("smartd_no_devices"))
+    else:
+        problems.append(M("unit_inactive", unit="smartd"))
+    if not _active("lm-sensors"):
+        problems.append(M("unit_inactive", unit="lm-sensors"))
+    temps = re.findall(r"[+-]\d+\.\d°C", _run(["sensors"]).stdout)
+    if temps:
+        notes.append(M("temp_ok", temp=temps[0]))
+    elif virt:
+        notes.append(M("no_sensors_vm"))
+    else:
+        problems.append(M("no_sensors"))
+    if problems:
+        return FAIL, " ".join(problems + notes)
+    return (PARTIAL if virt else OK), " ".join(notes)
 
 
 def _hostname(p):
-    name = socket.gethostname()
+    name = _run(["hostnamectl", "hostname"]).stdout.strip() or socket.gethostname()
     m = re.search(r"'([^']+)'", p.get("shown", ""))
     prefix = m.group(1) if m else ""
-    _iface, mac = _wired_iface()
+    iface, mac = _wired_iface()
     if not mac:
         return FAIL, M("no_wired")
+    _run(["ip", "-br", "link", "show", iface])
     tail = mac.replace(":", "")[-6:]
     if prefix and not name.startswith(prefix):
         return FAIL, M("hostname_prefix", name=name, prefix=prefix)
@@ -460,9 +517,14 @@ def _hostname_stable(p):
 
 
 def _hosts(_p):
+    # Maddedeki `time sudo true`: sudo kendi adını çözmeye çalışır;
+    # /etc/hosts güncel değilse DNS zaman aşımını bekler.
     name = socket.gethostname()
     start = time.monotonic()
-    r = _run(["getent", "hosts", name], timeout=15)
+    r = _run(["sudo", "-n", "true"], timeout=15)
+    if not r.ok:  # root değilsek sudo parola ister; adı doğrudan çözdür
+        start = time.monotonic()
+        r = _run(["getent", "hosts", name], timeout=15)
     took = time.monotonic() - start
     if not r.ok or took > 1.0:
         return FAIL, M("hosts_slow", name=name, sec=f"{took:.1f}")
@@ -492,6 +554,7 @@ def _image_info(p):
     path = Path("/etc/tiha-image-info.json")
     if not path.exists():
         return FAIL, M("file_missing", path=str(path))
+    _run(["ls", "-l", str(path)])
     st = path.stat()
     if st.st_uid != 0 or (st.st_mode & 0o777) != 0o600:
         return FAIL, M("image_info_mode", mode=oct(st.st_mode & 0o777))
@@ -514,6 +577,8 @@ def _wired_up(_p):
 
 def _ssh_keys(_p):
     keys = list(Path("/etc/ssh").glob("ssh_host_*_key.pub"))
+    if keys:
+        _run(["ls", *sorted(str(k) for k in keys)])
     if not keys:
         return FAIL, M("no_host_key")
     if _run(["dpkg-query", "-W", "-f=${Status}", "openssh-server"]).stdout.endswith("installed") \
@@ -538,7 +603,10 @@ def _hardware(_p):
 def _shutdown_conf():
     import configparser
     cfg = configparser.ConfigParser()
-    cfg.read("/etc/pardus/eta-shutdown.conf")
+    try:
+        cfg.read_string(_read("/etc/pardus/eta-shutdown.conf"))
+    except configparser.Error:
+        pass
     return cfg
 
 
@@ -547,9 +615,18 @@ def _shutdown_service(_p):
         else (FAIL, M("unit_inactive", unit="eta-shutdown"))
 
 
+def _exempt_macs_here() -> list[str]:
+    """Bu tahtanın muaf listesinde olan MAC adresleri (boşsa muaf değil)."""
+    from ..modules.m11_power_management import _current_exempt_macs, _local_macs
+    return sorted(set(_current_exempt_macs()) & _local_macs())
+
+
 def _shutdown_auto(p):
     cfg = _shutdown_conf()
     if cfg.get("AUTO_SHUTDOWN", "enabled", fallback="False").lower() != "true":
+        # Muaf tahtada kapalı olması beklenen durumdur.
+        if (macs := _exempt_macs_here()):
+            return OK, M("exempt_off", mac=_join(macs))
         return FAIL, M("auto_off")
     at = f'{int(cfg.get("AUTO_SHUTDOWN", "hour", fallback="0")):02d}:{int(cfg.get("AUTO_SHUTDOWN", "minute", fallback="0")):02d}'
     if p.get("at") and p["at"] != at:
@@ -561,6 +638,8 @@ def _shutdown_auto(p):
 def _shutdown_idle(p):
     cfg = _shutdown_conf()
     if cfg.get("TIMED_MODE", "mode", fallback="none") == "none":
+        if (macs := _exempt_macs_here()):
+            return OK, M("exempt_off", mac=_join(macs))
         return FAIL, M("idle_off")
     if not Path("/usr/local/sbin/tiha-shutdown-countdown.py").exists():
         return FAIL, M("file_missing", path="/usr/local/sbin/tiha-shutdown-countdown.py")
@@ -667,19 +746,44 @@ def _grub_recovery(p):
     if status != PARTIAL:
         return status, detail
     cfg = _grub_cfg()
-    rec = [ln for ln in cfg.splitlines() if ln.lstrip().startswith("menuentry") and "recovery" in ln.lower()]
+    rec = [ln for ln in _menu_entries(cfg) if "recovery" in ln.lower()]
     if any("--unrestricted" in ln for ln in rec):
         return FAIL, M("grub_recovery_open")
     return PARTIAL, M("grub_recovery_locked", count=len(rec))
+
+
+_MENUENTRY = re.compile(r"^\s*menuentry\s")
+
+
+def _menu_entries(cfg: str) -> list[str]:
+    """Gerçek menü girdisi satırları. ``menuentry_id_option="--id"`` gibi
+    başlık değişkenleri de "menuentry" ile başladığından boşlukla ayırt
+    edilir."""
+    return [ln for ln in cfg.splitlines() if _MENUENTRY.match(ln)]
+
+
+def _default_entry(cfg: str) -> str:
+    """Açılışta seçilecek girdinin satırı. GRUB_DEFAULT=saved ise (ETAP'ta
+    öyle) grubenv'deki kayıtlı girdi; bulunamazsa ilk girdi."""
+    entries = _menu_entries(cfg)
+    if not entries:
+        return ""
+    if "saved_entry" in cfg:
+        m = re.search(r"^saved_entry=(.+)$", _read("/boot/grub/grubenv"), re.M)
+        if m:
+            # Alt menü yolu "gnulinux-advanced-…>gnulinux-…" biçiminde olabilir.
+            target = m.group(1).strip().split(">")[-1]
+            for ln in entries:
+                if f"'{target}'" in ln:
+                    return ln
+    return entries[0]
 
 
 def _grub_default(p):
     status, detail = _grub_locked(p)
     if status != PARTIAL:
         return status, detail
-    cfg = _grub_cfg()
-    first = next((ln for ln in cfg.splitlines() if ln.lstrip().startswith("menuentry")), "")
-    if "--unrestricted" not in first:
+    if "--unrestricted" not in _default_entry(_grub_cfg()):
         return FAIL, M("grub_default_locked")
     return PARTIAL, M("grub_default_ok")
 
@@ -732,9 +836,37 @@ def _cursor_refresh(_p):
         else (FAIL, M("file_missing", path=str(CURSOR_AUTOSTART)))
 
 
+def _cursor_visible(_p):
+    from ..modules.m17_performance import CURSOR_EXT_AUTOSTART, CURSOR_EXT_DIR, CURSOR_EXT_UUID
+    for path in (CURSOR_EXT_DIR / "extension.js", CURSOR_EXT_AUTOSTART):
+        if not path.exists():
+            return FAIL, M("file_missing", path=str(path))
+    # Denetimi yapan hesabın oturumunda eklenti etkin mi (yardımcı çalışmış mı)?
+    r = _run(["gsettings", "get", "org.cinnamon", "enabled-extensions"])
+    if r.ok and CURSOR_EXT_UUID not in r.stdout:
+        return PARTIAL, M("cursor_ext_not_enabled_here")
+    return PARTIAL, M("cursor_ext_ok_manual")
+
+
+def _numlock(_p):
+    from ..modules.m17_performance import NUMLOCK_FILES, NUMLOCK_SCRIPT
+    for path in NUMLOCK_FILES:
+        if not path.exists():
+            return FAIL, M("file_missing", path=str(path))
+    r = _run(["/usr/sbin/lightdm", "--show-config"])
+    if r.ok and str(NUMLOCK_SCRIPT) not in r.stdout:
+        return FAIL, M("numlock_overridden")
+    return PARTIAL, M("numlock_ok_manual")
+
+
 def _session_cleanup(_p):
-    r = _run(["systemctl", "show", "systemd-logind", "-p", "KillUserProcesses", "--value"])
-    if r.stdout.strip() != "yes":
+    # KillUserProcesses systemd-logind biriminin değil logind'in D-Bus
+    # özelliği; "systemctl show" onu hiç döndürmez (hep boş gelir).
+    from ..modules.m17_performance import _runtime_kill_user_processes
+    state = _runtime_kill_user_processes()
+    if state is None:
+        return MANUAL, M("kill_user_processes_unreadable")
+    if not state:
         return FAIL, M("kill_user_processes_off")
     return PARTIAL, M("kill_user_processes_on")
 
@@ -812,6 +944,8 @@ CHECKS = {
     "m16.report.test_recovery": _grub_recovery,
     "m16.report.test_removed": _grub_removed,
     "m17.report.test_cursor_refresh": _cursor_refresh,
+    "m17.report.test_cursor_visible": _cursor_visible,
+    "m17.report.test_numlock": _numlock,
     "m17.report.test_light_login": _light_login,
     "m17.report.test_light_removed": _light_removed,
     "m17.report.test_session": _session_cleanup,
@@ -868,10 +1002,13 @@ def verify(report, progress=None) -> list[ItemResult]:
                     )
                 results.append(ItemResult(tid, text, key, status, detail))
                 continue
+            _TRACE.clear()
             res = check_item(tid, text)
             if fn is not None:
                 cache[ck] = (res.status, res.detail)
             if progress:
+                for ln in _TRACE:
+                    progress(f"    {ln}")
                 progress(
                     f"  {marks.get(res.status, '?')} "
                     f"{labels.get(res.status, res.status)} — {res.detail}",

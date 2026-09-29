@@ -869,6 +869,16 @@ def narrate_m17(ctx: StepContext, rep: StepReport) -> None:
         rep.tests.append(t("m17.report.test_xorg_removed"))
     if d.get("cursor_service_removed"):
         rep.done.append(t("m17.report.cursor_service_removed"))
+    if d.get("cursor_always_visible"):
+        rep.done.append(t("m17.report.cursor_visible_done"))
+        rep.tests.append(t("m17.report.test_cursor_visible"))
+    if d.get("cursor_visible_removed"):
+        rep.done.append(t("m17.report.cursor_visible_removed"))
+    if d.get("greeter_numlock"):
+        rep.done.append(t("m17.report.numlock_done"))
+        rep.tests.append(t("m17.report.test_numlock"))
+    if d.get("numlock_removed"):
+        rep.done.append(t("m17.report.numlock_removed"))
 
 
 # ---------------------------------------------------------------------------

@@ -249,10 +249,54 @@ def _pkg_installed(pkg: str) -> bool:
     return r.ok and "install ok installed" in r.stdout
 
 
+# node_exporter eskiden "önerilen" paketleriyle kuruluyordu ve bu zincir
+# tahtaya sunucu donanımı yığını getiriyordu (collectors → ipmitool →
+# openipmi). BMC olmayan tahtada openipmi.service her açılışta başarısız
+# oluyor, collectors da boşa çalışan zamanlayıcılar kuruyor.
+_NODE_EXPORTER_EXTRAS = (
+    "prometheus-node-exporter-collectors", "ipmitool", "openipmi",
+)
+
+
+def _purge_node_exporter_extras(progress=None) -> list[str]:
+    """Yukarıdaki paketleri yalnız bağımlılık olarak (otomatik) kurulmuşlarsa
+    kaldırır; elle kurulmuş olana dokunmaz. Kaldırılanların listesini döner."""
+    auto = set(run_cmd(["apt-mark", "showauto"], check=False).stdout.split())
+    targets = [p for p in _NODE_EXPORTER_EXTRAS if p in auto and _pkg_installed(p)]
+    if not targets:
+        return []
+    if progress:
+        progress(t("m06.apply.extras_purging", pkgs=", ".join(targets)))
+    r = run_cmd(
+        ["apt-get", "purge", "-y", *targets],
+        env={"DEBIAN_FRONTEND": "noninteractive"},
+        timeout=300,
+        check=False,
+    )
+    if not r.ok:
+        log.warning("node_exporter fazlalıkları kaldırılamadı: %s", r.stderr.strip())
+        if progress:
+            progress(t("m06.apply.extras_purge_failed"))
+        return []
+    # Başarısız servis kaydı listede kalmasın.
+    run_cmd(["systemctl", "reset-failed", "openipmi.service"], check=False)
+    return targets
+
+
 def _svc_active(unit: str) -> bool:
     """systemctl is-active ile servisin çalışır durumda olduğunu döndürür."""
     r = run_cmd(["systemctl", "is-active", "--quiet", unit], check=False)
     return r.returncode == 0
+
+
+def _smart_capable() -> bool:
+    """Tahtada smartd'nin izleyebileceği disk var mı? Sanal makinede ya da
+    yalnız eMMC diskli tahtada yoktur; smartd orada açılışta başarısız olur."""
+    virt = run_cmd(["systemd-detect-virt"], check=False).stdout.strip()
+    if virt and virt != "none":
+        return False
+    scan = run_cmd(["/usr/sbin/smartctl", "--scan"], check=False)
+    return bool(scan.stdout.strip())
 
 
 def _read_node_exporter_listen() -> str:
@@ -300,7 +344,8 @@ class RemoteSyslogModule(Module):
     def smart_monitoring_active(self) -> str:
         """Disk sağlığı + sıcaklık izleme etkin mi?"""
         return "True" if (
-            _pkg_installed("smartmontools") and _svc_active("smartd")
+            _pkg_installed("smartmontools") and _pkg_installed("lm-sensors")
+            and (_svc_active("smartd") or not _smart_capable())
         ) else "False"
 
     def preview(self) -> str:
@@ -404,12 +449,34 @@ class RemoteSyslogModule(Module):
                     timeout=120,
                     check=False,
                 )
+                # sensors-detect modülleri /etc/modules'a yazar ama
+                # yüklemez; hemen yükle ve lm-sensors servisini tazele ki
+                # sıcaklık bu açılışta da okunsun.
                 run_cmd(
-                    ["systemctl", "enable", "--now", "smartd"], check=False,
+                    ["systemctl", "restart", "systemd-modules-load.service",
+                     "lm-sensors.service"],
+                    check=False,
                 )
-                smart_state = t("m06.apply.smart_installed_state")
-                if progress:
-                    progress(t("m06.apply.smart_installed"))
+                if _smart_capable():
+                    run_cmd(
+                        ["systemctl", "enable", "--now", "smartd"], check=False,
+                    )
+                    smart_state = t("m06.apply.smart_installed_state")
+                    if progress:
+                        progress(t("m06.apply.smart_installed"))
+                else:
+                    # İzlenecek disk yoksa smartd her açılışta "başarısız"
+                    # görünür; kapat, yalnız sıcaklık izlensin.
+                    run_cmd(
+                        ["systemctl", "disable", "--now", "smartd"], check=False,
+                    )
+                    run_cmd(
+                        ["systemctl", "reset-failed", "smartmontools.service"],
+                        check=False,
+                    )
+                    smart_state = t("m06.apply.smart_no_disk_state")
+                    if progress:
+                        progress(t("m06.apply.smart_no_disk"))
             else:
                 smart_state = t("m06.apply.smart_failed_state")
                 if progress:
@@ -421,7 +488,8 @@ class RemoteSyslogModule(Module):
             if progress:
                 progress(t("m06.apply.node_downloading"))
             pkg_ne = run_cmd(
-                ["apt-get", "install", "-y", "prometheus-node-exporter"],
+                ["apt-get", "install", "-y", "--no-install-recommends",
+                 "prometheus-node-exporter"],
                 env={"DEBIAN_FRONTEND": "noninteractive"},
                 timeout=300,
             )
@@ -485,6 +553,10 @@ class RemoteSyslogModule(Module):
                 if progress:
                     progress(t("m06.apply.node_failed"))
 
+        # Önceki sürümlerin "önerilen" paketlerle getirdiği fazlalıkları temizle
+        # (metrik izleme açık da olsa kapalı da olsa).
+        purged_extras = _purge_node_exporter_extras(progress)
+
         # rsyslog yapılandırmasını yaz
         try:
             RSYSLOG_CONF.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
@@ -530,10 +602,14 @@ class RemoteSyslogModule(Module):
                 smart=smart_state,
                 node=node_exporter_state,
                 disk_max=QUEUE_MAX_DISK_SPACE.upper(),
+            ) + (
+                "\n" + t("m06.apply.extras_purged", pkgs=", ".join(purged_extras))
+                if purged_extras else ""
             ),
             data={
                 "install_smart_monitoring": install_smart,
                 "install_node_exporter": install_node_exporter,
+                "purged_extras": purged_extras,
             },
         )
 

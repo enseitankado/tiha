@@ -324,6 +324,24 @@ label_mac = "MAC"
 label_os = "İşletim sistemi"
 label_kernel = "Çekirdek"
 label_desktop = "Masaüstü"
+label_machine_id = "Makine kimliği"
+label_boot_id = "Açılış kimliği"
+tip_machine_id = """\
+/etc/machine-id dosyasındaki 32 haneli kimlik. Sistem ilk kurulduğunda \
+(ya da dosya boşken ilk açılışta) systemd tarafından rastgele üretilir ve \
+sonra değişmez. systemd günlükleri, D-Bus, ağ yöneticisinin DHCP istemci \
+kimliği ve bazı uygulamalar bu bilgisayarı bununla tanır. İmajdan açılan \
+bütün klonlarda aynı kalırsa ağda ve merkezi yönetimde birbirine karışırlar; \
+bu yüzden "İmaj öncesi temizlik" adımı dosyayı boşaltır, her klon ilk açılışta \
+kendi kimliğini üretir.\
+"""
+tip_boot_id = """\
+Çekirdeğin bu açılış için ürettiği rastgele kimlik \
+(/proc/sys/kernel/random/boot_id). Her açılışta yenisi üretilir; kalıcı \
+değildir. systemd günlüğü kayıtları hangi açılışa ait olduğunu bununla \
+işaretler (journalctl -b bu kimlikle çalışır). İki açılışın kayıtlarını \
+ayırmaya yarar; tahtayı tanımlamaz.\
+"""
 label_unknown = "?"
 
 [ui.welcome.features]
@@ -953,7 +971,7 @@ hesap için PIN anahtarı tanımlamanız gerekir.\
 
 [m01.params.root_password]
 label = "Yeni root parolası (isteğe bağlı)"
-help = "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Boş bırakılabilir."
+help = "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Tahta kurtarma (recovery) kipinde açılırsa kabuk da bu parolayı ister. Boş bırakılabilir."
 
 [m01.params.admin_password]
 label = "Yeni etapadmin parolası (isteğe bağlı)"
@@ -2398,6 +2416,8 @@ state_skipped = "atlandı"
 smart_installing = "Disk sağlığı ve sıcaklık izleme paketleri kuruluyor (smartmontools, lm-sensors)..."
 smart_installed_state = "kuruldu (smartd çalışıyor; sensors-detect otomatik modülleri yükledi)"
 smart_installed = "smartd etkinleştirildi, sıcaklık modülleri yüklendi."
+smart_no_disk_state = "kuruldu (sıcaklık izleniyor; diskte SMART desteği yok, smartd kapalı)"
+smart_no_disk = "Sıcaklık modülleri yüklendi. Bu tahtanın diski SMART desteklemiyor (ör. eMMC ya da sanal makine); smartd kapatıldı."
 smart_failed_state = "kurulum başarısız (paket yöneticisi hatası)"
 smart_failed = "smartmontools/lm-sensors kurulamadı — adım devam ediyor."
 node_downloading = "Metrik izleme paketi (prometheus-node-exporter) indiriliyor..."
@@ -2409,6 +2429,9 @@ node_installed_state = "kuruldu (dinleme adresi {listen}; Prometheus sunucusu bu
 node_active = "Metrik izleme aktif — {listen} adresinde dinliyor."
 node_failed_state = "kurulum başarısız (prometheus-node-exporter paketi yüklenemedi)"
 node_failed = "Metrik izleme kurulumu başarısız (paket yöneticisi hatası); log iletim akışı devam ediyor."
+extras_purging = "Tahtada gereksiz sunucu paketleri kaldırılıyor: {pkgs}"
+extras_purge_failed = "Gereksiz sunucu paketleri kaldırılamadı; adım devam ediyor."
+extras_purged = "Kaldırılan gereksiz sunucu paketleri: {pkgs} (BMC olmayan tahtada openipmi servisi her açılışta başarısız oluyordu)."
 write_failed = "rsyslog ek yapılandırma dosyası yazılamadı: {error}"
 restart_failed = "rsyslog yeniden başlatılamadı."
 not_running = "rsyslog servisi çalıştırılamadı."
@@ -2518,8 +2541,11 @@ Log sunucusunu ya da ağı kısa süre kesin; bağlantı gelince aradaki \
 kayıtların sunucuya ulaştığını doğrulayın.\
 """
 test_smart = """\
-Klonda `systemctl is-active smartd` ve `sensors` çalıştırın; farklı tahta \
-modellerinde sıcaklığın okunabildiğini doğrulayın.\
+Klonda `systemctl is-active smartd lm-sensors` çıktısının iki satırının da \
+active olduğunu ve `sensors` komutunun sıcaklık gösterdiğini doğrulayın \
+(sensors bir servis değil, komuttur). Diski SMART desteklemeyen (ör. eMMC) \
+tahtada smartd çalışmaz; bu beklenen durumdur. Farklı tahta modellerinde \
+de deneyin.\
 """
 test_exporter = """\
 İzleme sunucusundan klonun metrik adresine (ör. \
@@ -2855,6 +2881,7 @@ duration_minutes = "{minutes} dakika"
 duration_seconds = "{seconds} saniye"
 exempt = "Muaf tahtalar             : {count} MAC adresi (klon bu tahtalardan birinde açılırsa otomatik kapanma uygulanmaz)"
 exempt_this_board = "⚠️ Bu tahtanın MAC adresi muaf listesinde; ayarlar imajın hazırlandığı bu tahtada etkin kalır."
+exempt_this_clone = "Bu tahta muaf listesinde; otomatik kapanma bu tahtada kapalı. Aşağıdaki liste imajdan (kaynak tahtadan) gelir."
 countdown = "Geri sayım süresi         : {duration}"
 before_shutdown = """\
 Kapanmadan önce:\n\
@@ -3264,6 +3291,7 @@ içeriklerle bir tur çalıştırıp davranışlarını gözle doğrulayın.\
 [m17.params]
 heading_session = "Oturum kalıntıları"
 heading_light_mode = "ETA Hafif Mod (eta-light-mode)"
+heading_input = "Fare imleci ve klavye"
 
 [m17.params.cursor_xorg_fix]
 opt_off = "Kapalı"
@@ -3285,9 +3313,36 @@ label = "Mod değişiminde imleci tazele (servis)"
 help = """\
 Deneysel. Yukarıdaki sürücü ayarına alternatif, hafif yol: her kullanıcının \
 oturumunda küçük bir servis ekran modu değişimini dinler ve ~1 sn sonra \
-imleç boyutunu bir artırıp geri alarak imleci yeniden çizdirir. Donanımsal \
+imleç boyutunu bir artırıp geri alarak imleci yeniden çizdirir; oturum \
+açılışında da (kayıtlı ekran modu uygulandıktan sonra) bir kez tazeler. Donanımsal \
 imleç korunur, başarım bedeli yoktur; imleç yalnız bir an kaybolur. İkisini \
 birlikte de seçebilirsiniz. İşaretini kaldırıp uygularsanız servis kaldırılır.\
+"""
+
+[m17.params.cursor_always_visible]
+label = "Dokunmatik kullanıldıktan sonra da fare imlecini göster"
+help = """\
+Deneysel. Cinnamon masaüstü, ekrana parmakla ya da kalemle dokunulunca fare \
+imlecini gizler ve fare yalnız panelin ya da masaüstünün üstünde oynatılınca \
+geri getirir; uygulama penceresinin üstünde fare hareket eder, tıklar ama \
+imleç görünmez. Bu gizleme ekran sürücüsünden bağımsızdır; yukarıdaki \
+sürücü ayarları ve tazeleme servisi onu düzeltmez. İşaretlenirse küçük bir \
+Cinnamon eklentisi kurulur ve imleç gizlendiği anda yeniden gösterilir; \
+eklenti her kullanıcıda (sonradan açılan hesaplar dahil) oturum açılışında \
+kendiliğinden etkinleşir. Bedeli: dokunduktan sonra imleç dokunulan yerde \
+görünür kalır. Sonraki oturum açılışında geçerli olur. İşaretini kaldırıp \
+uygularsanız eklenti kaldırılır.\
+"""
+
+[m17.params.greeter_numlock]
+label = "Giriş ekranında klavyenin NumLock'u açık olsun"
+help = """\
+Giriş ekranı her açıldığında (ilk açılış ve her oturum kapatma) NumLock \
+açılır; giriş ekranı açıkken sonradan takılan USB klavyede de açılır. \
+Böylece sayısal tuş takımı hep rakam yazar. Sistem güncellemelerinden \
+etkilenmesin diye ek bir pakete dayanmaz ve her paket kurulumundan sonra \
+ayar dosyaları denetlenip silinmişse yeniden yazılır. İşaretini kaldırıp \
+uygularsanız ayar kaldırılır.\
 """
 
 [m17.params.kill_user_processes]
@@ -3370,6 +3425,9 @@ driver = "  Ekran sürücüsü   : {driver}"
 xorg_fix_on = "  Xorg düzeltmesi  : var — {mode}"
 xorg_fix_off = "  Xorg düzeltmesi  : yok"
 cursor_service = "  Tazeleme servisi : {state}"
+cursor_visible = "  Dokunma sonrası  : {state} (imleci hep gösteren eklenti)"
+numlock_header = "Giriş ekranı"
+numlock = "  NumLock açık     : {state}"
 installed = "kurulu"
 not_installed = "kurulu değil"
 
@@ -3383,6 +3441,10 @@ details_light = "Hafif mod: {path} → {keys}"
 details_light_removed = "Hafif mod kaldırıldı (sistem + kullanıcı ayarları)"
 details_cursor_xorg = "İmleç (Xorg): {path} — {choice}"
 details_cursor_service = "İmleç (servis): {path}"
+details_cursor_visible = "İmleç (eklenti): {path}"
+details_numlock = "Giriş ekranı NumLock: {path}"
+cursor_visible_removed = "İmleci hep gösteren eklenti kaldırıldı (sonraki oturumda geçerli)."
+numlock_removed = "Giriş ekranı NumLock ayarı kaldırıldı."
 
 [m17.say]
 written = "Yazıldı: {path}"
@@ -3461,6 +3523,20 @@ service_header = """\
 """
 service_failed = "İmleç tazeleme servisi kurulamadı: {error}"
 service_installed = "İmleç tazeleme servisi kuruldu (sonraki oturum açılışında)."
+visible_header = """\
+\n\
+==== Fare imleci: dokunma sonrası görünürlük ====\
+"""
+visible_failed = "İmleci hep gösteren eklenti kurulamadı: {error}"
+visible_installed = "İmleci dokunmatik kullanıldıktan sonra da gösteren eklenti kuruldu (sonraki oturum açılışında)."
+
+[m17.numlock]
+header = """\
+\n\
+==== Giriş ekranında NumLock ====\
+"""
+failed = "Giriş ekranı NumLock ayarı yazılamadı: {error}"
+installed = "Giriş ekranında NumLock açık olacak (sonraki giriş ekranında geçerli)."
 
 [m17.undo]
 no_original = "Özgün durum kaydı bulunamadı; geri alınacak değişiklik yok."
@@ -3471,6 +3547,8 @@ light_disabled = "ETA Hafif Mod tüm kullanıcılar için kapatıldı"
 users_reverted = "{count} hesabın masaüstü ayarları geri alındı ({accounts})"
 cursor_xorg_restored = "Xorg imleç yapılandırması eski hâline döndü"
 cursor_service_removed = "İmleç tazeleme servisi kaldırıldı"
+cursor_visible_removed = "İmleci hep gösteren eklenti kaldırıldı"
+numlock_removed = "Giriş ekranı NumLock ayarı kaldırıldı"
 partial = "Geri alma kısmen başarısız."
 nothing = "Geri alınacak değişiklik yoktu."
 details = """\
@@ -3552,6 +3630,21 @@ Ekran sürücüsü değişikliği tahta modeline (Intel/AMD grafik) göre farkl�
 davranabilir. İmajı yayacağınız her tahta modelinde ayrı bir klon deneyin.\
 """
 cursor_refresh_done = "Ekran modu değiştiğinde fare imlecini kendiliğinden tazeleyen servisi kurdunuz (deneysel)."
+cursor_visible_done = "Dokunmatik kullanıldıktan sonra da fare imlecini gösteren Cinnamon eklentisini kurdunuz (deneysel)."
+cursor_visible_removed = "Dokunma sonrası imleci gösteren eklentiyi kaldırdınız."
+test_cursor_visible = """\
+Klonda USB fare takılıyken ortak ogretmen hesabıyla oturum açın; ekrana \
+parmakla dokunun, sonra fareyi bir uygulama penceresinin üstünde oynatın: \
+imleç görünmeli. Aynısını etapadmin ve bir branş hesabıyla da deneyin.\
+"""
+numlock_done = "Giriş ekranında klavyenin NumLock'unu açık tutan ayarı kurdunuz."
+numlock_removed = "Giriş ekranı NumLock ayarını kaldırdınız."
+test_numlock = """\
+Klonu USB klavye takılıyken yeniden başlatın; giriş ekranında NumLock \
+ışığının yandığını ve sayısal tuş takımının rakam yazdığını doğrulayın. \
+Klavyeyi çıkarıp yeniden takın, bir oturum açıp kapatın; NumLock yine açık \
+olmalı.\
+"""
 test_cursor_refresh = """\
 Klonda çözünürlüğü değiştirip uygulayın; fare imlecinin bir an sonra yeniden \
 göründüğünü doğrulayın.\
@@ -4005,7 +4098,7 @@ setting = "BIOS yönetici parolası AYARLANIYOR (uzunluk {length}, koruma {prote
 faz1_always = "her açılışta (yön+kul aynı parola atanıyor)"
 faz1_setup = "yalnız BIOS setup'a girilirken (yalnız yönetici)"
 setting_faz1 = "BIOS yönetici parolası AYARLANIYOR (Faz 1 davranışı: {mode})..."
-writing_flash = "(flash'a yazılıyor; bu birkaç saniye sürebilir)"
+writing_flash = "BIOS Setup EEPROM'una yazılıyor; bu birkaç saniye sürebilir…"
 write_bad_json = "eta-112 yazma komutu beklenen JSON çıktısını vermedi."
 failed = "BIOS işlemi başarısız: {error}"
 unchanged = "Değişiklik yapılmadı — BIOS zaten istenen durumdaydı."
@@ -4445,12 +4538,34 @@ adım vardır (Ahenk kimliği sıfırla). O adım kısmi geri almayı destekler,
 sanitize adımı desteklemez.\
 """
 
+[m10.params]
+heading_clone_first_boot = "Klonun ilk açılışında"
+
+[m10.params.clone_machine_id]
+label = "Makine kimliğini ve SSH anahtarlarını yenile"
+help = """\
+Bu adım makine kimliğini boşaltır; ama tahtayı imaj almadan önce yeniden \
+başlatırsanız sistem yeni bir kimlik ve SSH anahtarları üretir ve bunlar \
+imajla bütün klonlara gider. Bu yüzden kaynak tahtanın ağ kartı adresleri \
+imzalanır; bir klon ilk açıldığında bu adreslerin hiçbirini taşımadığını \
+görür ve kendi makine kimliğini ve SSH anahtarlarını üretir. Kaynak tahta \
+kaç kez yeniden başlatılırsa başlatılsın ona dokunulmaz. Her zaman yapılır.\
+"""
+
+[m10.params.clone_boot_id]
+label = "Açılış kimliğini yenile"
+help = """\
+Açılış kimliği (boot ID) diske yazılmaz; çekirdek her açılışta yenisini \
+üretir. Klonun ilk açılışında da kendiliğinden yenidir, ek bir işlem \
+gerekmez.\
+"""
+
 [m10.preview]
 body = """\
 Bu adım uygulandıktan sonra tahta imaj alınmaya hazırdır.\n\
-Tahtayı KAPATIN ve işletim sistemiyle açmadan imajı canlı USB'den\n\
-(Clonezilla vb.) alın. Açarsanız makine kimliği ve SSH anahtarları\n\
-yeniden üretilir ve bütün klonlara aynen gider.\n\
+Tahtayı kapatın ve imajı canlı USB'den (Clonezilla vb.) alın.\n\
+Arada tahtayı yeniden başlatırsanız üretilen makine kimliği ve SSH\n\
+anahtarlarını klon ilk açılışında kendisi yeniler.\n\
 \n\
 Aşağıdaki kategoriler temizlenecek (geri alınamaz):\n\
 \n\
@@ -4462,6 +4577,8 @@ Tekil kimlikler (her kopya kendi kimliğini üretir):\n\
 \u0020\u0020- DHCP/DHCP6 kira (lease) dosyaları\n\
 \u0020\u0020- /var/lib/systemd/random-seed\n\
 \u0020\u0020- SSH anahtar üretiminin 'yapıldı' işareti\n\
+\u0020\u0020- Klonun ilk açılışında kimliği yenileyen servis kurulur\n\
+\u0020\u0020\u0020\u0020(kaynak tahtanın ağ kartı adresleri imzalanır)\n\
 \n\
 TiHA'nın hassas yedekleri (/var/lib/tiha, imaja gider):\n\
 \u0020\u0020- Parola değişikliğinden önceki /etc/shadow yedeği ve\n\
@@ -4543,6 +4660,8 @@ identities = "Tekil kimlikler temizleniyor..."
 machine_id = "machine-id temizlendi"
 ssh_sentinel_removed = "SSH anahtar üretimi 'yapıldı' işareti silindi: {path}"
 ssh_keys = "SSH host anahtarları silindi, ilk açılışta yenilenecek"
+clone_identity = "Klon ilk açılışta makine kimliğini ve SSH anahtarlarını yenileyecek ({path})"
+clone_identity_failed = "Ağ kartı adresi okunamadı; klon kimlik servisi kurulamadı"
 nm_removed = "{count} NetworkManager bağlantı dosyası silindi"
 dhcp_removed = "{count} DHCP lease dosyası silindi"
 random_seed = "systemd random-seed sıfırlandı"
@@ -4587,7 +4706,8 @@ done_identity = """\
 İmajı klonlamaya hazırlamak için kimlik temizliği yaptınız: makine kimliğini \
 (machine-id) sıfırladınız, SSH anahtarlarını sildiniz (her klon ilk \
 açılışta kendi anahtarını üretecek), kayıtlı ağ bağlantılarını ve Wi-Fi \
-parolalarını temizlediniz.\
+parolalarını temizlediniz. Kaynak tahta imajdan önce yeniden açılsa bile \
+klon ilk açılışında makine kimliğini ve SSH anahtarlarını yeniler.\
 """
 done_cleanup = """\
 Günlükleri, APT önbelleğini ve paket listelerini, kabuk geçmişlerini, \
@@ -4636,10 +4756,10 @@ doğrulayın; `ls -l /etc/tiha-image-info.json` yalnız root'a okuma izni \
 (-rw-------) göstermeli.\
 """
 note = """\
-Temizlikten sonra kaynak tahtayı işletim sistemiyle YENİDEN AÇMAYIN: kapatın \
-ve imajı canlı USB'den (Clonezilla vb.) alın. Açarsanız makine kimliği ve \
-SSH anahtarları kaynak tahtada yeniden üretilir ve bütün klonlara aynen \
-gider.\
+Temizlikten sonra kaynak tahtayı mümkünse yeniden açmadan kapatın ve imajı \
+canlı USB'den (Clonezilla vb.) alın. Açarsanız üretilen makine kimliğini ve \
+SSH anahtarlarını her klon ilk açılışında kendisi yeniler; ama o açılışların \
+günlükleri ve (oturum açtıysanız) önbellekleri imaja girer.\
 """
 
 # ==========================================================================
@@ -4689,6 +4809,7 @@ sshd_ok = "ssh çalışıyor; PermitRootLogin ve PasswordAuthentication açık."
 not_listening = "Bu tahtada {port} numaralı port dinlenmiyor."
 listening_remote_manual = "SSH {port} numaralı portta dinliyor. Yönetim bilgisayarından bağlanmayı elle deneyin."
 no_host_key = "SSH anahtarları üretilmemiş."
+clone_identity_not_run = "Klon kimlik servisi bu tahtada çalışmamış (imzada bu tahtanın MAC'i yok); makine kimliği kaynak tahtanınki olabilir."
 fingerprint_compare = "Bu klonun SSH parmak izi {fp}. Başka bir klonla farklı olduğunu elle karşılaştırın."
 machine_id_empty = "Makine kimliği (/etc/machine-id) boş."
 identity_compare = "Makine kimliği {mid}…; {fp}"
@@ -4699,18 +4820,23 @@ exporter_down = "Metrik adresi (127.0.0.1:9100) yanıt vermiyor."
 exporter_local_ok = "Metrikler tahtada yayınlanıyor. İzleme sunucusundan erişimi elle deneyin."
 file_missing = "Beklenen dosya yok: {path}"
 file_still_there = "Kaldırılmış olması gereken dosya hâlâ var: {path}"
-rsyslog_ok_server_manual = "rsyslog çalışıyor ve yönlendirme ayarı var; tahta '{host}' adıyla gönderiyor. Kaydın sunucuya ulaştığını elle kontrol edin."
+rsyslog_ok_server_manual = "rsyslog çalışıyor ve yönlendirme ayarı var; 'tiha-klon-test' deneme kaydı gönderildi. Kaydın sunucuda '{host}' adıyla göründüğünü elle kontrol edin."
+logger_failed = "Deneme kaydı gönderilemedi (logger hata verdi)."
 queue_files = "Kayıt kuyruğunda bekleyen dosyalar var: {files}"
 queue_empty = "Bekleyen kayıt kuyruğu yok."
 no_sensors = "Sıcaklık okunamadı (sensors çıktısında değer yok)."
-smart_ok = "smartd çalışıyor; sıcaklık okunuyor ({temp})."
+no_sensors_vm = "Sanal makinede sıcaklık algılayıcısı yok; gerçek tahtada deneyin."
+temp_ok = "Sıcaklık okunuyor ({temp})."
+smartd_running = "smartd çalışıyor."
+smartd_vm = "Sanal makine ({virt}); smartd yalnız gerçek donanımda çalışır."
+smartd_no_devices = "Bu tahtanın diski SMART izlemesini desteklemiyor (ör. eMMC); smartd'nin çalışmaması beklenen durum."
 no_wired = "Kablolu ağ kartı bulunamadı."
 hostname_prefix = "Bilgisayar adı '{name}', '{prefix}' ile başlamıyor."
 hostname_mac = "Bilgisayar adı '{name}' kablolu kartın MAC'inin son 6 hanesiyle ({tail}) bitmiyor."
 hostname_ok = "Bilgisayar adı '{name}'; kablolu kartın MAC adresiyle uyumlu."
 reboot_manual = "{detail} Yeniden başlatınca değişmediğini elle kontrol edin."
-hosts_slow = "'{name}' adı çözülemiyor ya da yavaş ({sec} sn); /etc/hosts güncel değil."
-hosts_ok = "'{name}' adı hemen çözülüyor ({sec} sn)."
+hosts_slow = "`sudo true` {sec} sn sürdü ya da '{name}' adı çözülemiyor; /etc/hosts güncel değil."
+hosts_ok = "`sudo true` {sec} sn'de bitti; '{name}' adı çözülüyor."
 apt_failed = "apt-get update hata verdi: {line}"
 apt_ok_repos_manual = "apt-get update hatasız bitti. Okulun depo satırlarını elle kontrol edin."
 image_info_mode = "/etc/tiha-image-info.json izinleri yanlış ({mode}); yalnız root okuyabilmeli (0600)."
@@ -4726,6 +4852,7 @@ auto_off = "Sabit saatte kapanma kapalı."
 auto_time_wrong = "Kapanma saati {at}; beklenen {expected}."
 auto_ok_manual = "Sabit saatte kapanma {at} için ayarlı ve servis çalışıyor. Kapanmayı elle deneyin."
 idle_off = "Kullanılmadığında kapatma kapalı."
+exempt_off = "Bu tahta otomatik kapanmadan muaf ({mac}); kapalı olması beklenen durum."
 idle_ok_manual = "Kullanılmadığında kapatma {minutes} dakikaya ayarlı. Uyarı penceresini elle deneyin."
 shutdown_not_off = "Otomatik kapanma kapalı olmalıydı ama modlardan biri açık."
 shutdown_off = "İki kapanma modu da kapalı."
@@ -4764,7 +4891,12 @@ xorg_not_modesetting = "Ekran sunucusu modesetting sürücüsünü kullanmıyor.
 xorg_ok_manual = "İmleç düzeltmesi kurulu ve modesetting sürücüsü kullanılıyor. İmlecin kaybolmadığını elle deneyin."
 xorg_removed_manual = "İmleç düzeltmesi kaldırılmış. Ekranı ve kalemi elle deneyin."
 cursor_service_manual = "İmleç tazeleme servisi kurulu. Çözünürlük değiştirerek elle deneyin."
+cursor_ext_ok_manual = "İmleci hep gösteren eklenti kurulu. Dokunup fareyle elle deneyin."
+cursor_ext_not_enabled_here = "Eklenti kurulu ama bu oturumda henüz etkin değil (oturumu kapatıp açınca etkinleşir). Dokunup fareyle elle deneyin."
+numlock_overridden = "Giriş ekranı NumLock betiği LightDM ayarında görünmüyor; başka bir ayar dosyası greeter-setup-script'i eziyor."
+numlock_ok_manual = "Giriş ekranı NumLock ayarı kurulu. Giriş ekranında klavyeyle elle deneyin."
 kill_user_processes_off = "Oturum kapanınca süreçler sonlandırılmıyor (KillUserProcesses kapalı)."
+kill_user_processes_unreadable = "logind'in KillUserProcesses değeri okunamadı; oturumu kapatıp elle deneyin."
 kill_user_processes_on = "Oturum kapanınca süreçler sonlandırılıyor. Elle deneyin."
 failed_units = "Başarısız servisler var: {units}"
 no_failed_units = "Başarısız servis yok. İlk açılışı elle izleyin."

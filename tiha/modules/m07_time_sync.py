@@ -45,7 +45,6 @@ class TimeSyncModule(Module):
     id = "m07_time_sync"
     title = t("m07.title")
     sidebar_title = t("m07.sidebar_title")
-    rationale_inline = True
     apply_hint = t("m07.apply_hint")
     rationale = t("m07.rationale")
 

@@ -7,11 +7,11 @@ Normal iş akışımız şöyledir:
     1. Boş tahtaya Pardus ETAP temiz kurulum yapılır.
     2. etapadmin'e geçilir, TiHA bu komutla başlatılır.
     3. Adımlar uygulanır; son olarak bu sanitize adımı çalıştırılır.
-    4. Tahta KAPATILIR ve işletim sistemiyle yeniden açılmaz: imaj,
-       canlı USB'den başlatılan bir imaj alma aracıyla (Clonezilla vb.)
-       alınır. Kaynak tahta sanitize'dan sonra açılırsa makine kimliği
-       ve SSH anahtarları o açılışta yeniden üretilir ve imajla bütün
-       klonlara aynen gider; o durumda sanitize yeniden çalıştırılmalıdır.
+    4. Tahta kapatılır ve imaj canlı USB'den başlatılan bir imaj alma
+       aracıyla (Clonezilla vb.) alınır. Kaynak tahta sanitize'dan sonra
+       bir ya da birkaç kez açılırsa makine kimliği ve SSH anahtarları o
+       açılışta yeniden üretilir ve imaja girer; bunları klonun ilk
+       açılışında "klon kimliği" servisi yeniler (aşağıda).
     5. Servisleri denemek için imaj önce bir klon tahtaya yazılır ve
        orada test edilir (bkz. Özet sayfasındaki rapor).
     6. Bu imaj diğer tahtalara uygulanır.
@@ -66,6 +66,21 @@ log = get_logger(__name__)
 # Locale temizliğinde tutulacak diller (LC_MESSAGES alt klasörleri).
 # tr*, en*, C, POSIX kalır; gerisi silinir.
 KEEP_LOCALES = ("tr", "en", "C", "POSIX")
+
+# --- Klonun ilk açılışında kimlik yenileme ------------------------------------
+# Sanitize /etc/machine-id'yi boşaltır; kaynak tahta imaj alınmadan önce
+# yeniden açılırsa systemd yeni bir kimlik üretip kaydeder ve bu kimlik
+# imajla bütün klonlara gider (SSH anahtarları için de aynısı). Bu servis
+# kaynak tahtanın ağ kartlarının MAC adreslerini imzalar; açılışta bu
+# adreslerin hiçbiri tahtada yoksa (klon) makine kimliğini yeniden üretir,
+# SSH anahtarlarını yeniden ürettirir ve imzayı bu tahtanın MAC'leriyle
+# günceller. Kaynak tahta kaç kez açılırsa açılsın MAC'ler eşleştiği için
+# dokunulmaz. Açılış kimliği (boot_id) çekirdek tarafından her açılışta
+# yeniden üretilir; temizlenecek bir şey yoktur.
+IDENTITY_MAC_FILE = STATE_DIR / "imaged-mac-identity"
+IDENTITY_SERVICE = Path("/etc/systemd/system/tiha-clone-identity.service")
+IDENTITY_SCRIPT = Path("/usr/local/sbin/tiha-clone-identity.py")
+IDENTITY_LOG_TAG = "tiha-clone-identity"
 
 REGEN_SSH_SERVICE = Path("/etc/systemd/system/tiha-first-boot-sshkeys.service")
 REGEN_SSH_SCRIPT = Path("/usr/local/sbin/tiha-first-boot-sshkeys.sh")
@@ -124,6 +139,160 @@ ExecStart={REGEN_SSH_SCRIPT}
 [Install]
 WantedBy=multi-user.target
 """
+
+
+IDENTITY_SCRIPT_CONTENT = r'''#!/usr/bin/python3
+# TiHA — klonun ilk açılışında makine kimliğini ve SSH anahtarlarını yeniler.
+# İmza dosyasındaki (kaynak tahta) MAC adreslerinden hiçbiri bu tahtada
+# yoksa tahta klondur: /etc/machine-id yeniden üretilir, journald yeni
+# kimlikle yeniden başlatılır, SSH anahtarları silinip ilk açılış anahtar
+# servisine bırakılır ve imza bu tahtanın MAC'leriyle güncellenir.
+import os
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+
+MAC_FILE = Path("@@MAC_FILE@@")
+SSH_SENTINEL = Path("@@SSH_SENTINEL@@")
+TAG = "@@TAG@@"
+WAIT_SECONDS = 20
+
+
+def note(msg):
+    subprocess.run(["logger", "-t", TAG, "--", msg], check=False)
+    print(f"[{TAG}] {msg}", file=sys.stderr)
+
+
+def local_macs():
+    macs = set()
+    root = Path("/sys/class/net")
+    for d in root.iterdir() if root.is_dir() else []:
+        if d.name == "lo" or not (d / "device").exists():
+            continue
+        try:
+            # NetworkManager taramada Wi-Fi MAC'ini rastgeleler; yalnız
+            # kartın kalıcı adresi (addr_assign_type 0) imzaya girer.
+            if (d / "addr_assign_type").read_text().strip() not in ("0", ""):
+                continue
+            mac = (d / "address").read_text().strip().lower()
+        except OSError:
+            continue
+        if mac and mac != "00:00:00:00:00:00":
+            macs.add(mac)
+    return macs
+
+
+def main():
+    try:
+        saved = {ln.strip().lower() for ln in MAC_FILE.read_text().split() if ln.strip()}
+    except OSError:
+        return 0
+    # Ağ kartları sürücüleri yüklenince görünür; biraz bekle.
+    deadline = time.monotonic() + WAIT_SECONDS
+    mine = local_macs()
+    while not (mine & saved) and time.monotonic() < deadline:
+        time.sleep(1)
+        mine = local_macs()
+    if not mine:
+        note("Ağ kartı bulunamadı; bu açılışta atlanıyor.")
+        return 0
+    if mine & saved:
+        note("MAC eşleşti; kaynak tahta ya da kimliği zaten yenilenmiş klon.")
+        return 0
+
+    note(f"Klon tespit edildi ({', '.join(sorted(mine))}); kimlik yenileniyor.")
+    mid = Path("/etc/machine-id")
+    if os.path.ismount(mid):
+        # İmajda machine-id boştu: systemd bu açılış için zaten yeni ve
+        # benzersiz bir kimlik üretti (sonra kendisi kaydeder).
+        note("machine-id bu açılışta systemd tarafından yeni üretilmiş.")
+    else:
+        tmp = mid.with_name("machine-id.tiha")
+        tmp.write_text(uuid.uuid4().hex + "\n")
+        tmp.chmod(0o444)
+        os.replace(tmp, mid)
+        dbus = Path("/var/lib/dbus/machine-id")
+        if dbus.exists() and not dbus.is_symlink():
+            dbus.write_text(mid.read_text())
+        # journald kimliği açılışta okur; kayıtlar yeni kimliğin dizinine
+        # yazılsın (journalctl yalnız bu tahtanın kimliğini okur).
+        subprocess.run(["systemctl", "restart", "systemd-journald.service"], check=False)
+        note("machine-id yeniden üretildi.")
+
+    for key in Path("/etc/ssh").glob("ssh_host_*"):
+        key.unlink(missing_ok=True)
+    SSH_SENTINEL.unlink(missing_ok=True)
+    note("SSH anahtarları silindi; ilk açılış servisi yenilerini üretecek.")
+
+    try:
+        MAC_FILE.write_text("\n".join(sorted(mine)) + "\n")
+    except OSError as exc:
+        note(f"İmza güncellenemedi: {exc}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+
+IDENTITY_SERVICE_CONTENT = f"""[Unit]
+Description=TiHA — Klonun ilk açılışında makine kimliğini yenile
+DefaultDependencies=no
+After=local-fs.target systemd-journald.service systemd-udev-trigger.service
+Before=sysinit.target systemd-journal-flush.service {REGEN_SSH_SERVICE.name} ssh.service
+ConditionPathExists={IDENTITY_MAC_FILE}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {IDENTITY_SCRIPT}
+TimeoutStartSec=90
+
+[Install]
+WantedBy=sysinit.target
+"""
+
+
+def _local_macs() -> list[str]:
+    """Tahtadaki fiziksel ağ kartlarının (kablolu + kablosuz) MAC'leri."""
+    macs = set()
+    root = Path("/sys/class/net")
+    for d in root.iterdir() if root.is_dir() else []:
+        if d.name == "lo" or not (d / "device").exists():
+            continue
+        try:
+            # NetworkManager taramada Wi-Fi MAC'ini rastgeleler; yalnız
+            # kartın kalıcı adresi (addr_assign_type 0) imzaya girer.
+            if (d / "addr_assign_type").read_text(encoding="utf-8").strip() not in ("0", ""):
+                continue
+            mac = (d / "address").read_text(encoding="utf-8").strip().lower()
+        except OSError:
+            continue
+        if mac and mac != "00:00:00:00:00:00":
+            macs.add(mac)
+    return sorted(macs)
+
+
+def _install_clone_identity() -> bool:
+    """Klon kimlik servisini kurar ve kaynak tahtanın MAC'lerini imzalar."""
+    macs = _local_macs()
+    if not macs:
+        return False
+    IDENTITY_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
+    IDENTITY_MAC_FILE.write_text("\n".join(macs) + "\n", encoding="utf-8")
+    script = (
+        IDENTITY_SCRIPT_CONTENT
+        .replace("@@MAC_FILE@@", str(IDENTITY_MAC_FILE))
+        .replace("@@SSH_SENTINEL@@", str(REGEN_SSH_SENTINEL))
+        .replace("@@TAG@@", IDENTITY_LOG_TAG)
+    )
+    IDENTITY_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
+    IDENTITY_SCRIPT.write_text(script, encoding="utf-8")
+    IDENTITY_SCRIPT.chmod(0o755)
+    IDENTITY_SERVICE.write_text(IDENTITY_SERVICE_CONTENT, encoding="utf-8")
+    run_cmd(["systemctl", "daemon-reload"])
+    return run_cmd(["systemctl", "enable", IDENTITY_SERVICE.name]).ok
 
 
 def _truncate(path: Path) -> bool:
@@ -387,6 +556,13 @@ class ImageSanitizeModule(Module):
         run_cmd(["systemctl", "daemon-reload"])
         run_cmd(["systemctl", "enable", REGEN_SSH_SERVICE.name])
         ops.append(t("m10.apply.ssh_keys"))
+
+        # Kaynak tahta imajdan önce yeniden açılırsa üretilen kimlikleri
+        # klonun ilk açılışında yenileyen servis (form: kilitli, hep açık).
+        if _install_clone_identity():
+            ops.append(t("m10.apply.clone_identity", path=IDENTITY_SERVICE))
+        else:
+            ops.append(t("m10.apply.clone_identity_failed"))
 
         # NetworkManager bağlantıları
         nm_dir = Path("/etc/NetworkManager/system-connections")

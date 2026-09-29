@@ -112,7 +112,7 @@ class SSHAndSambaModule(Module):
             return None
         state = _root_password_set()
         if state is True:
-            return ("info", t("m04.notice.root_set"))
+            return None
         if state is False:
             return ("warning", t("m04.notice.root_missing"))
         return ("warning", t("m04.notice.root_unknown"))

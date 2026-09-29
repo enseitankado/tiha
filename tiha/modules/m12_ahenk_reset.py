@@ -444,7 +444,6 @@ class AhenkResetModule(Module):
     id = "m12_ahenk_reset"
     title = t("m12.title")
     sidebar_title = t("m12.sidebar_title")
-    rationale_inline = True
     streams_output = True
     popup_on_success = True
     apply_hint = t("m12.apply_hint")
