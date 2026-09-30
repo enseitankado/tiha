@@ -380,6 +380,7 @@ def narrate_m04(ctx: StepContext, rep: StepReport) -> None:
         rep.done.append(t("m04.report.done_generic"))
     rep.tests.append(t("m04.report.test_ssh"))
     rep.tests.append(t("m04.report.test_active"))
+    rep.tests.append(t("m04.report.test_only_admins"))
     rep.tests.append(t("m04.report.test_fingerprint"))
     rep.tests.append(t("m04.report.test_network"))
     rep.notes.append(t("m04.report.note"))

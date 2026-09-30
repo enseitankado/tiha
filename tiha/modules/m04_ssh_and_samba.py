@@ -21,6 +21,7 @@ from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
 from .m04_ssh_server import (
     SSH_CONF,
+    ssh_conf_current,
     SSHServerModule,
     _is_package_installed as _pkg_installed,
     _root_password_set,
@@ -151,6 +152,16 @@ class SSHAndSambaModule(Module):
             actions.append(t("m04.apply.ssh_added"))
             if r.warning:
                 warnings.append(r.warning)
+            ssh_changed = True
+        elif enable_ssh and ssh_now and not ssh_conf_current():
+            # Eski sürümün yazdığı ayar (ör. hesap kısıtı yok): güncelle.
+            if progress:
+                progress(t("m04.apply.ssh_updating"))
+            r = self._ssh()._write_conf(progress, True, True)
+            if not r.success:
+                return ApplyResult(False, r.summary, details=r.details or "")
+            data["ssh_data"] = dict(r.data or {})
+            actions.append(t("m04.apply.ssh_updated"))
             ssh_changed = True
         elif not enable_ssh and ssh_now:
             if progress:

@@ -378,7 +378,28 @@ def _ssh_active(_p):
     root, pw = cfg.get("permitrootlogin", "?"), cfg.get("passwordauthentication", "?")
     if root != "yes" or pw != "yes":
         return FAIL, M("sshd_cfg", root=root, pw=pw)
+    if (bad := _ssh_allow_users_bad(r.stdout)) is not None:
+        return FAIL, M("sshd_allow_users", users=bad)
     return OK, M("sshd_ok")
+
+
+def _ssh_allow_users_bad(sshd_t: str) -> str | None:
+    """``sshd -T`` çıktısındaki AllowUsers yalnız root ve etapadmin değilse
+    bulunan listeyi (boşsa "-") döner; doğruysa None."""
+    from ..modules.m04_ssh_server import SSH_ALLOWED_USERS
+    users = sorted({
+        u for ln in sshd_t.splitlines() if ln.startswith("allowusers ")
+        for u in ln.split()[1:]
+    })
+    return None if users == sorted(SSH_ALLOWED_USERS) else _join(users)
+
+
+def _ssh_only_admins(_p):
+    if not _active("ssh"):
+        return FAIL, M("unit_inactive", unit="ssh")
+    if (bad := _ssh_allow_users_bad(_run(["sshd", "-T"]).stdout)) is not None:
+        return FAIL, M("sshd_allow_users", users=bad)
+    return PARTIAL, M("ssh_only_admins_manual")
 
 
 def _ssh_listen(_p):
@@ -902,6 +923,7 @@ CHECKS = {
     "m03.report.test_time": _time,
     "m04.report.test_active": _ssh_active,
     "m04.report.test_fingerprint": _host_key,
+    "m04.report.test_only_admins": _ssh_only_admins,
     "m04.report.test_ssh": _ssh_listen,
     "m05.report.test_active": _smbd,
     "m05.report.test_names": _samba_names,

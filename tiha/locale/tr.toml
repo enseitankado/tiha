@@ -2083,10 +2083,12 @@ yönetim istasyonlarıyla sınırlamanız tavsiye edilir.\
 """
 
 [m04.params.enable_ssh]
-label = "SSH sunucusu — uzak root girişi"
+label = "SSH sunucusu — yalnız root ve etapadmin"
 help = """\
 Kutu işaretlenip uygulanırsa openssh-server kurulur ve root için uzak \
-oturum açılır. İşareti kaldırıp uygulanırsa yapılandırma silinir; paket \
+oturum açılır. SSH ile YALNIZ root ve etapadmin hesapları bağlanabilir; \
+ortak öğretmen, branş, yedek, kişisel öğretmen ve öğrenci hesapları \
+parolaları bilinse bile reddedilir. İşareti kaldırıp uygulanırsa yapılandırma silinir; paket \
 TiHA tarafından kurulmuşsa geri sökülür. Uzak SSH girişi için \"Yerel \
 hesaplar\" adımında root parolası tanımlanmış olmalı — parolasız hesaba \
 kimse ağdan giremez.\
@@ -2121,7 +2123,7 @@ olacak; güçlü bir parola seçtiğinizden emin olun."""
 checking = "SSH ve Samba durumu kontrol ediliyor..."
 state_on = "AÇIK"
 state_off = "kapalı"
-ssh_line = "SSH sunucusu (openssh-server) : {state}"
+ssh_line = "SSH sunucusu (openssh-server) : {state} (yalnız root ve etapadmin bağlanabilir)"
 samba_line = "Samba paylaşımı (/ dizini)   : {state}"
 # Eski m04 delege sınıfının preview'ında hâlâ kullanılıyor (adım olarak
 # görünmüyor ama import edilen yerler kullanabiliyor).
@@ -2147,11 +2149,15 @@ conf_written = "Ek yapılandırma dosyası yazıldı: {path}"
 service_status = "ssh enable/reload: {enable} / {reload}"
 ok_word = "tamam"
 err_word = "hata"
-summary = "SSH sunucusu kuruldu, root girişine izin verildi."
+summary = "SSH sunucusu kuruldu; yalnız root ve etapadmin bağlanabilir."
 details = """\
 Yapılandırma: {path}\n\
+Bağlanabilen hesaplar: root, etapadmin (AllowUsers)\n\
 Servis: ssh (etkin)\
 """
+conf_invalid = "SSH yapılandırması sshd denetiminden geçmedi; servis yeniden yüklenmedi."
+ssh_updating = "SSH ayarı güncelleniyor (yalnız root ve etapadmin bağlanabilecek)..."
+ssh_updated = "SSH ayarı güncellendi: yalnız root ve etapadmin bağlanabilir"
 no_change = "SSH ve Samba kutuları sistemin mevcut durumuyla eşleşiyor; değişiklik yapılmadı."
 ssh_installing = "SSH sunucusu kuruluyor..."
 ssh_removing = "SSH sunucusu kaldırılıyor..."
@@ -2171,21 +2177,29 @@ nothing = "Bu apply'da kurulan servis yok; geri alınacak bir şey yok."
 [m04.report]
 done_installed = """\
 Tahtaya SSH sunucusunu kurdunuz ve root kullanıcısının ağ üzerinden \
-parolayla oturum açmasına izin verdiniz.\
+parolayla oturum açmasına izin verdiniz. SSH ile yalnız root ve etapadmin \
+bağlanabilir.\
 """
 done_existing = """\
 Tahtada zaten kurulu olan SSH sunucusunda root kullanıcısının ağ üzerinden \
-parolayla oturum açmasına izin verdiniz.\
+parolayla oturum açmasına izin verdiniz. SSH ile yalnız root ve etapadmin \
+bağlanabilir.\
 """
-done_generic = "SSH sunucusunu etkinleştirip root girişine izin verdiniz."
+done_generic = "SSH sunucusunu etkinleştirip root girişine izin verdiniz; yalnız root ve etapadmin bağlanabilir."
+test_only_admins = """\
+Yönetim bilgisayarınızdan `ssh ogretmen@<klon-ip>` ile bağlanmayı deneyin; \
+parola doğru olsa bile giriş reddedilmeli (yalnız root ve etapadmin \
+bağlanabilir).\
+"""
 test_ssh = """\
 Yönetim bilgisayarınızdan `ssh root@<klon-ip>` ile klona bağlanın; \
 beklediğiniz root parolasının geçtiğini doğrulayın.\
 """
 test_active = """\
 Klonda `systemctl is-active ssh` çıktısının active olduğunu ve `sudo sshd -T \
-| grep -Ei 'permitrootlogin|passwordauthentication'` çıktısında ikisinin de \
-yes olduğunu doğrulayın.\
+| grep -Ei 'permitrootlogin|passwordauthentication|allowusers'` çıktısında \
+ilk ikisinin yes olduğunu ve allowusers satırlarında yalnız root ile \
+etapadmin bulunduğunu doğrulayın.\
 """
 test_fingerprint = """\
 İki farklı klonda `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` parmak \
@@ -4805,7 +4819,9 @@ ntp_not_synced = "Saat eşitlenmemiş (saat dilimi: {tz})."
 ntp_synced = "Saat NTP ile eşitlenmiş (saat dilimi: {tz})."
 tz_wrong = "Saat dilimi {tz}; beklenen {expected}."
 sshd_cfg = "SSH ayarı beklendiği gibi değil: PermitRootLogin {root}, PasswordAuthentication {pw}."
-sshd_ok = "ssh çalışıyor; PermitRootLogin ve PasswordAuthentication açık."
+sshd_ok = "ssh çalışıyor; PermitRootLogin ve PasswordAuthentication açık, yalnız root ve etapadmin bağlanabilir."
+sshd_allow_users = "SSH hesap kısıtı beklendiği gibi değil: AllowUsers {users} (yalnız root ve etapadmin olmalı)."
+ssh_only_admins_manual = "SSH yalnız root ve etapadmin'e açık (AllowUsers). Öğretmen hesabıyla bağlanmanın reddedildiğini elle deneyin."
 not_listening = "Bu tahtada {port} numaralı port dinlenmiyor."
 listening_remote_manual = "SSH {port} numaralı portta dinliyor. Yönetim bilgisayarından bağlanmayı elle deneyin."
 no_host_key = "SSH anahtarları üretilmemiş."

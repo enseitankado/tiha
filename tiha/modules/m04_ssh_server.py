@@ -2,8 +2,10 @@
 
 Ne yapar?
 openssh-server paketini (yoksa) kurar; /etc/ssh/sshd_config.d/
-altına PermitRootLogin yes ve PasswordAuthentication yes ayarlarını
-içeren ek bir yapılandırma dosyası bırakır; ssh servisini etkinleştirir.
+altına PermitRootLogin yes, PasswordAuthentication yes ve
+AllowUsers root etapadmin ayarlarını içeren ek bir yapılandırma dosyası
+bırakır; ssh servisini etkinleştirir. Öğretmen, branş ve öğrenci
+hesapları SSH ile bağlanamaz.
 
 Neden gerekir?
 Dağıtılmış tahtalarda uzaktan teknik destek/bakım için root erişimi
@@ -34,10 +36,24 @@ log = get_logger(__name__)
 
 SSH_CONF = Path("/etc/ssh/sshd_config.d/99-tiha.conf")
 
-SSH_CONF_CONTENT = """# TiHA tarafından yazılmıştır.
+# SSH ile yalnız bu hesaplar bağlanabilir; öğretmen, branş, yedek ve
+# öğrenci hesapları (parolaları bilinse bile) reddedilir.
+SSH_ALLOWED_USERS = ("root", "etapadmin")
+
+SSH_CONF_CONTENT = f"""# TiHA tarafından yazılmıştır.
 PermitRootLogin yes
 PasswordAuthentication yes
+# Yalnız bu hesaplar SSH ile bağlanabilir.
+AllowUsers {' '.join(SSH_ALLOWED_USERS)}
 """
+
+
+def ssh_conf_current() -> bool:
+    """Kurulu ek yapılandırma bu sürümün yazdığıyla aynı mı?"""
+    try:
+        return SSH_CONF.read_text(encoding="utf-8") == SSH_CONF_CONTENT
+    except OSError:
+        return False
 
 
 def _root_password_set() -> bool | None:
@@ -134,6 +150,11 @@ class SSHServerModule(Module):
                                    data={"was_installed_before": was_installed_before})
 
         # Ek yapılandırma dosyası yaz
+        return self._write_conf(progress, was_installed_before, conf_existed_before)
+
+    def _write_conf(self, progress, was_installed_before: bool,
+                    conf_existed_before: bool) -> ApplyResult:
+        """Ek yapılandırmayı yazar, sözdizimini denetler, servisi açar."""
         try:
             SSH_CONF.parent.mkdir(parents=True, exist_ok=True)
             SSH_CONF.write_text(SSH_CONF_CONTENT, encoding="utf-8")
@@ -146,6 +167,14 @@ class SSHServerModule(Module):
             )
         if progress:
             progress(t("m04.apply.conf_written", path=SSH_CONF))
+        # Bozuk ayarla reload ssh'yi düşürür; önce denetle.
+        test = run_cmd(["/usr/sbin/sshd", "-t"])
+        if not test.ok:
+            return ApplyResult(
+                False, t("m04.apply.conf_invalid"), details=test.stderr.strip(),
+                data={"was_installed_before": was_installed_before,
+                      "conf_existed_before": conf_existed_before},
+            )
 
         # Servis
         en = run_cmd(["systemctl", "enable", "--now", "ssh"])
