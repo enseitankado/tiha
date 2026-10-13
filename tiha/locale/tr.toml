@@ -46,14 +46,119 @@ hızlıca düzeltebiliriz."""
 # ==========================================================================
 
 [cli]
-description = "TiHA — Tahta İmaj Hazırlık Aracı (CLI mod). Hiçbir bayrak verilmezse GUI açılır."
-epilog = "Örnek: sudo tiha --apply --preset okul-a.json"
-help_list = "Modülleri sıralı olarak listele ve çık."
-help_apply = "Preset'teki modülleri sırasıyla uygula."
-help_info = "Preset içeriğini göster; uygulama."
-help_preset = "Preset JSON dosyasının yolu."
-help_only = "Yalnızca verilen modül id'lerini uygula (virgülle ayır)."
-help_skip = "Verilen modül id'lerini atla (virgülle ayır)."
+help_text = """\
+Kullanım: tiha [SEÇENEK]...\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020tiha -r ADIM [-o ANAHTAR=DEĞER]... [-y]\n\
+\n\
+TiHA (Tahta İmaj Hazırlık Aracı) {version} — Pardus ETAP 23 etkileşimli\n\
+tahtaları imaj almaya ve çoğaltmaya hazırlar. Seçeneksiz çalıştırılırsa\n\
+grafik sihirbaz açılır; seçeneklerle adımlar komut satırından tek tek\n\
+uygulanabilir.\n\
+\n\
+Genel seçenekler:\n\
+\u0020\u0020-h, --help              bu yardımı göster ve çık\n\
+\u0020\u0020-V, --version           sürüm bilgisini göster ve çık\n\
+\u0020\u0020-l, --list              adımları sıra numarası, kısa adı ve kimliğiyle listele\n\
+\n\
+Tek adım işlemleri (ADIM: sıra numarası, kısa ad ya da kimlik; bkz. -l):\n\
+\u0020\u0020-p, --params ADIM       adımın parametrelerini ve tahtadaki şu anki\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020değerlerini göster\n\
+\u0020\u0020-n, --preview ADIM      adımın ne yapacağını göster, uygulama\n\
+\u0020\u0020-r, --run ADIM          adımı uygula\n\
+\u0020\u0020-u, --undo ADIM         adımın son uygulamasını geri al\n\
+\u0020\u0020-o, --set ANAHTAR=DEĞER -r ile birlikte: parametre değeri ver\n\
+\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020(birden çok kez verilebilir)\n\
+\u0020\u0020-y, --yes               onay isteyen işlemleri (hesap silme gibi) onayla\n\
+\n\
+Ön ayar dosyasıyla toplu uygulama:\n\
+\u0020\u0020\u0020\u0020\u0020\u0020--apply             ön ayardaki adımları sırayla uygula\n\
+\u0020\u0020\u0020\u0020\u0020\u0020--info              ön ayarın içeriğini göster, uygulama\n\
+\u0020\u0020\u0020\u0020\u0020\u0020--preset DOSYA      ön ayar JSON dosyası (Özet sayfasından dışa aktarılır)\n\
+\u0020\u0020\u0020\u0020\u0020\u0020--only KİMLİK,...   yalnız bu adımları uygula\n\
+\u0020\u0020\u0020\u0020\u0020\u0020--skip KİMLİK,...   bu adımları atla\n\
+\n\
+Değerler:\n\
+\u0020\u0020Onay kutuları evet/hayır (true/false, 1/0) alır. Seçim listelerinde\n\
+\u0020\u0020-p'nin gösterdiği seçeneklerden biri yazılır; çok satırlı alanlarda\n\
+\u0020\u0020satır sonu için \\n kullanılır. Verilmeyen parametreler grafik\n\
+\u0020\u0020sihirbazdaki gibi varsayılanlardan ve tahtanın şu anki durumundan\n\
+\u0020\u0020doldurulur.\n\
+\n\
+Örnekler:\n\
+\u0020\u0020sudo tiha                                   grafik sihirbazı aç\n\
+\u0020\u0020tiha -l                                     adımları listele\n\
+\u0020\u0020sudo tiha -p yerel-hesaplar                 parametreleri göster\n\
+\u0020\u0020sudo tiha -n 7                              7. adımı önizle\n\
+\u0020\u0020sudo tiha -r zaman-senkronizasyonu-ntp -o timezone=Europe/Istanbul\n\
+\u0020\u0020sudo tiha -r m04 -o enable_ssh=evet -o enable_samba=hayır\n\
+\u0020\u0020sudo tiha -r yerel-hesaplar -o reserve_count=2 -y\n\
+\u0020\u0020sudo tiha -u uzaktan-uyandirma\n\
+\u0020\u0020sudo tiha --apply --preset okul-a.json --skip m10_image_sanitize\n\
+\n\
+TiHA tahtada kurulu değilse aynı seçenekler bootstrap ile verilebilir:\n\
+\u0020\u0020curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh \\\n\
+\u0020\u0020\u0020\u0020| bash -s -- -l\n\
+\n\
+Yetki:\n\
+\u0020\u0020-h, -V ve -l dışındaki seçenekler root yetkisiyle (sudo) ve etapadmin\n\
+\u0020\u0020hesabından çalıştırılmalıdır.\n\
+\n\
+Çıkış durumu:\n\
+\u0020\u0020\u00200  başarılı\n\
+\u0020\u0020\u00201  adım uygulanırken hata oluştu\n\
+\u0020\u0020\u00202  yetki yok (root + etapadmin gerekli)\n\
+\u0020\u0020\u00203  çalışma dizini oluşturulamadı\n\
+\u0020\u002010  ön ayar dosyası okunamadı\n\
+\u0020\u002011  tanımsız adım\n\
+\u0020\u002012  geçersiz parametre\n\
+\u0020\u002013  onay gerekiyor (-y verilmedi)\n\
+\u0020\u002014  geri alınacak uygulama yok\n\
+\u0020\u002064  hatalı kullanım\n\
+\n\
+Hata bildirimi ve kaynak kod: https://github.com/enseitankado/tiha\
+"""
+usage_error = """\
+{prog}: {message}\n\
+Ayrıntılı bilgi için: {prog} -h\
+"""
+err_unrecognized = "tanınmayan seçenek: {arg}{extra}"
+err_needs_value = "{arg} bir değer bekliyor{extra}"
+err_no_value = "{arg} değer almaz (verilen: {extra})"
+err_ambiguous = "belirsiz seçenek: {arg} (olası: {extra})"
+one_action = "-p, -n, -r ve -u seçeneklerinden yalnız biri verilebilir"
+set_needs_run = "-o yalnız -r ile birlikte kullanılabilir"
+no_action = "bir işlem seçin (ör. -l, -p ADIM, -r ADIM)"
+unknown_step = "tiha: tanımsız adım: {ref} (adımları görmek için: tiha -l)"
+bad_set = "tiha: -o değeri ANAHTAR=DEĞER biçiminde olmalı: {item}"
+unknown_param = "tiha: '{step}' adımında '{key}' parametresi yok. Geçerli parametreler: {keys}"
+bad_bool = "tiha: {key} için evet ya da hayır yazın (verilen: {value})"
+bad_number = "tiha: {key} bir tam sayı olmalı (verilen: {value})"
+bad_option = "tiha: {key} için geçersiz seçenek: {value}. Seçenekler: {options}"
+needs_yes = "Bu işlem onay istiyor; onaylamak için komutu -y ile yeniden çalıştırın."
+list_header = "  No  Kısa ad                    Kimlik                   Adım"
+list_hint = "Parametreleri görmek için: sudo tiha -p KISA-AD   ·   Uygulamak için: sudo tiha -r KISA-AD"
+params_short_name = "Kısa ad: {slug}"
+params_none = "Bu adımın parametresi yok; doğrudan uygulanır."
+params_secret = "(gizli değer tanımlı)"
+params_empty = "(boş)"
+params_options = "Seçenekler: {options}"
+params_current = "Şu anki / varsayılan değer: {value}"
+params_hint = "Uygulamak için: sudo tiha -r {slug} -o ANAHTAR=DEĞER ..."
+type_bool = "evet/hayır"
+type_text = "metin"
+type_password = "parola"
+type_spin = "sayı"
+type_number = "sayı"
+type_select = "seçim"
+type_textarea = "çok satırlı metin"
+type_branch_accounts = "branş seçimi (JSON)"
+type_file = "dosya yolu"
+preview_title = "önizleme — uygulanmadı"
+undo_title = "geri alma"
+undo_unsupported = "tiha: '{step}' adımı geri alınamaz."
+undo_nothing = "tiha: '{step}' adımının geri alınacak bir uygulaması yok."
+undo_prompt_choice_no = "Onay verilmedi (-y yok): güvenli seçenekle devam ediliyor."
+undo_prompt_choice_yes = "-y verildi: onaylı seçenekle devam ediliyor."
 list_title = "TiHA Modülleri"
 preset_read_error = "HATA: preset okunamadı: {error}"
 info_title = "Preset İçeriği"

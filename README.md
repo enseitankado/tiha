@@ -28,6 +28,36 @@ curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh
 
 İlk çalıştırmada bir kez etapadmin parolanızı sorabilir. Sonrası tamamen görseldir.
 
+### Komut satırından kullanım
+
+TiHA'yı pencere açmadan da kullanabilirsiniz; adımları tek tek, istediğiniz
+ayarlarla uygulamak için. Aynı komutun sonuna `bash -s --` ve ardından
+seçenekleri eklemeniz yeterli. Seçenek vermezseniz her zamanki gibi sihirbaz
+açılır.
+
+```bash
+# Yardım (bütün seçenekler ve örnekler)
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -h
+
+# Adımları listele
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -l
+
+# Bir adımın ayarlarını ve tahtadaki şu anki değerlerini gör
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -p ssh-samba
+
+# Bir adımı uygula (yalnız değiştirmek istediğiniz ayarları yazın)
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -r ssh-samba -o enable_samba=hayır
+```
+
+Dikkat edin:
+
+- Yazmadığınız ayarlar, sihirbazda olduğu gibi tahtanın şu anki durumundan
+  alınır; yani yalnız yazdığınız değişir.
+- Hesap silme gibi geri dönüşü olmayan işlemler `-y` eklemezseniz yapılmaz;
+  TiHA ne silineceğini yazıp durur.
+- Komut satırından yaptıklarınız da Özet sayfasında ve raporda görünür;
+  sihirbazdan geri alınabilir (`-u ADIM` ile komut satırından da).
+
 ## Baştan bilmeniz gerekenler
 
 - **Adımlar isteğe bağlıdır.** Soldaki listeden istediğinize geçebilir, istemediğinizi atlayabilirsiniz. Yalnız sıraya sadık kalmak işinizi kolaylaştırır.

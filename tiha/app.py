@@ -97,16 +97,22 @@ def _install_crash_reports() -> None:
 def main() -> int:
     """Süreç giriş noktası. Başarı durumunda ``0``, aksi hâlde >0 döner.
 
-    argv'de ``--list``, ``--apply``, ``--info``, ``--version`` veya
-    ``--help`` varsa **CLI moda** yönlenir; aksi hâlde GTK GUI başlatılır.
+    Herhangi bir argüman verilirse **komut satırı moduna** yönlenir
+    (``tiha -h``); argümansız çalıştırılırsa GTK sihirbazı başlatılır.
     """
     # Subprocess gürültüsünü kapat — TiHA başlangıcında ayarla,
     # tüm child process'lere env miras kalır.
     _silence_subprocess_warnings()
 
     # CLI mod tespiti — GUI hiç açılmadan tamamen headless çalışır.
-    from .core.cli import is_cli_invocation, run as cli_run
+    from .core.cli import check_usage, is_cli_invocation, needs_root, run as cli_run
     cli_argv = sys.argv[1:]
+    if is_cli_invocation(cli_argv):
+        # Yanlış yazılmış seçenek, yetki iletisinden önce bildirilsin.
+        check_usage(cli_argv)
+    if is_cli_invocation(cli_argv) and not needs_root(cli_argv):
+        # -h / -V / -l: bilgi amaçlı, yetki ve çalışma dizini gerekmez.
+        return cli_run(cli_argv)
     if is_cli_invocation(cli_argv):
         ok, reason = require_root_and_admin()
         if not ok:
