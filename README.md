@@ -33,30 +33,34 @@ curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh
 TiHA'yı pencere açmadan da kullanabilirsiniz; adımları tek tek, istediğiniz
 ayarlarla uygulamak için. Aynı komutun sonuna `bash -s --` ve ardından
 seçenekleri eklemeniz yeterli. Seçenek vermezseniz her zamanki gibi sihirbaz
-açılır.
+açılır. Adımlar, sihirbazın sol menüsündeki numaralarıyla (ya da kısa
+adlarıyla) anılır.
 
 ```bash
 # Yardım (bütün seçenekler ve örnekler)
 curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -h
 
-# Adımları listele
+# Adımları menüdeki numaralarıyla listele
 curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -l
 
-# Bir adımın ayarlarını ve tahtadaki şu anki değerlerini gör
-curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -p ssh-samba
+# 4. adımın (SSH & Samba) ayarlarını ve tahtadaki şu anki değerlerini gör
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -a 4
 
-# Bir adımı uygula (yalnız değiştirmek istediğiniz ayarları yazın)
-curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -r ssh-samba -o enable_samba=hayır
+# 4. adımı uygula: SSH açık, Samba kapalı (yalnız değiştirmek istediğiniz ayarları yazın)
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -u 4 -d enable_ssh=evet -d enable_samba=hayir
 ```
+
+Sık kullanılanlar: `-l` listele, `-a` ayarları göster, `-o` önizle, `-u`
+uygula, `-g` geri al, `-d ANAHTAR=DEĞER` ayar değeri, `-e` onayla.
 
 Dikkat edin:
 
 - Yazmadığınız ayarlar, sihirbazda olduğu gibi tahtanın şu anki durumundan
   alınır; yani yalnız yazdığınız değişir.
-- Hesap silme gibi geri dönüşü olmayan işlemler `-y` eklemezseniz yapılmaz;
+- Hesap silme gibi geri dönüşü olmayan işlemler `-e` eklemezseniz yapılmaz;
   TiHA ne silineceğini yazıp durur.
 - Komut satırından yaptıklarınız da Özet sayfasında ve raporda görünür;
-  sihirbazdan geri alınabilir (`-u ADIM` ile komut satırından da).
+  sihirbazdan ya da `-g ADIM` ile geri alınabilir.
 
 ## Baştan bilmeniz gerekenler
 
