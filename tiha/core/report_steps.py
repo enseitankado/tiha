@@ -133,6 +133,9 @@ def narrate_m01(ctx: StepContext, rep: StepReport) -> None:
         )
     if "ogretmen" in ok:
         rep.done.append(t("m01.report.ogretmen_set"))
+    if d.get("root_banner_on"):
+        rep.done.append(t("m01.report.root_banner"))
+        rep.tests.append(t("m01.report.test_root_banner"))
     for user in failed:
         rep.notes.append(t("m01.report.failed_user", user=user))
     if d.get("teacher_skipped_no_account"):
@@ -1035,8 +1038,6 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
     _bw_on = bool(m01 is not None and m01.applied
                   and m01.data.get("boot_wipe_on"))
     if _bw_on:
-        if "ogretmen" in _m01_passwords(m01)[0]:
-            w.append(t("core.report.warn.wipe_ogretmen", wipe=q("m01_initial_passwords")))
         if "m03_otp_secrets" not in applied:
             w.append(t(
                 "core.report.warn.wipe_no_pin",

@@ -678,6 +678,13 @@ section_warnings = "DİKKAT"
 section_tests = "KLON TAHTADA DENEYİN"
 general = "Genel"
 
+[core.root_banner]
+title = "UYARI · ROOT OTURUMU"
+lead = "Sistem yöneticisi (root) yetkisiyle çalışıyorsunuz."
+bullet_share = "Parolayı kimseyle paylaşmayın."
+bullet_accounts = "Öğretmen ve öğrenci hesapları için root kullanmayın."
+bullet_exit = "İşiniz bitince oturumu kapatın:  exit"
+
 [core.report.html]
 lang = "tr"
 title = "TiHA imaj raporu"
@@ -736,11 +743,6 @@ hostname = """\
 {hostname} adımını uygulamadınız ama {steps} tahtaları ağdaki adlarıyla \
 ayırt etmenizi gerektirir. Bütün klonlar ağda ve log sunucusunda aynı adla \
 görünecek.\
-"""
-wipe_ogretmen = """\
-Ortak öğretmen hesabına (ogretmen) parola belirlediniz ama {wipe} adımı da \
-etkin: bu parola klonun ilk açılışında rastgele bir değerle ezilecek ve işe \
-yaramayacak.\
 """
 wipe_no_pin = """\
 {wipe} etkin ama {pin} adımını uygulamadınız: öğretmenler tahtaya yalnız EBA \
@@ -1079,6 +1081,7 @@ anahtarları' adımında üretilir.\
 keyrings_title = "Mevcut GNOME anahtarlıkları:"
 
 [m01.apply]
+root_banner_installed = "Root olarak açılan oturumlar için uyarı kuruldu."
 need_action = """\
 En az bir aksiyon gerekli: parola belirtin (root, etapadmin, ogretmen) veya \
 yedek hesap sayısını sıfırdan büyük yapın.\
@@ -1178,6 +1181,7 @@ silinir. Bu geri alınamaz bir işlemdir. Devam edilsin mi?\
 """
 
 [m01.undo]
+root_banner_removed = "root oturumu uyarısı kaldırıldı"
 no_backup = "Yedek /etc/shadow bulunamadı; geri alınamıyor."
 restore_failed = "Geri yükleme başarısız: {error}"
 shadow_restored = "Önceki /etc/shadow durumu geri yüklendi"
@@ -1213,6 +1217,14 @@ users_admin_opened = "Kullanıcılar ve Gruplar '{user}' oturumunda açıldı."
 users_admin_opened_details = "Pencereyi kapattığınızda bu adımdaki hesap durumu önizlemesi yenilenir."
 
 [m01.report]
+root_banner = """\
+root olarak açılan her oturumda (SSH, su, sudo -i) kırmızı başlıklı bir \
+uyarı gösterilmesini sağladınız.\
+"""
+test_root_banner = """\
+Klonda `su -` ile ve başka bir bilgisayardan `ssh root@<tahta-adı>` ile \
+root olarak girin; kırmızı başlıklı uyarının çıktığını doğrulayın.\
+"""
 qr_restored = "EBA QR ilk-giriş parola diyaloğunu tekrar açık hâle getirdiniz."
 admins_set_one = "{users} parolasını ayarladınız."
 admins_set_many = "{users} parolalarını ayarladınız."

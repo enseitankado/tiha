@@ -58,6 +58,7 @@ from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
 from ..core.privilege import invoking_username
+from ..core import root_banner
 from ..core.utils import backup_file, restore_file, run_cmd, user_exists
 
 log = get_logger(__name__)
@@ -655,9 +656,18 @@ class InitialPasswordsModule(Module):
         ok_admin = True
         ok_teacher = True
 
+        root_banner_installed = False
         if root_pw:
             ok_root = _set_password("root", root_pw)
             results["root"] = ok_root
+            # Root olarak açılan her oturumda kırmızı uyarı. Zaten kuruluysa
+            # içerik tazelenir; geri alma yalnız bu uygulamanın kurduğunu söker.
+            if ok_root:
+                was_installed = root_banner.is_installed()
+                if root_banner.install():
+                    root_banner_installed = not was_installed
+                    if progress:
+                        progress(t("m01.apply.root_banner_installed"))
 
         if admin_pw:
             ok_admin = _set_password("etapadmin", admin_pw)
@@ -1085,6 +1095,8 @@ class InitialPasswordsModule(Module):
             data={
                 "removed_users": removed_users,
                 "keyrings_moved": keyrings_moved,
+                "root_banner_installed": root_banner_installed,
+                "root_banner_on": root_banner.is_installed(),
                 "created_reserve": created_reserve,
                 # Özet raporu için (gizli değer içermez): hangi hesabın
                 # parolası gerçekten atandı / atanamadı, hangi yedek hesap
@@ -1184,6 +1196,10 @@ class InitialPasswordsModule(Module):
         keyring_count = sum(len(names) for names in restored_keyrings.values())
         if keyring_count:
             summary_parts.append(t("m01.undo.keyrings_restored", count=keyring_count))
+
+        # Root oturumu uyarısını bu apply kurduysa kaldır.
+        if data.get("root_banner_installed") and root_banner.remove():
+            summary_parts.append(t("m01.undo.root_banner_removed"))
 
         # QR diyaloğunu bu apply'da açtı/kapadıysak tersine çevir.
         qr = data.get("qr_dialog") or {}
