@@ -3809,14 +3809,14 @@ file_icon_size = "dosya ve masaüstü simgeleri küçültüldü"
 low_refresh_rate = "yenileme hızı 50 Hz'e düşürüldü"
 
 # ==========================================================================
-# Adım 14: Otomatik Ahenk Kaydı (m12_ahenk_reset)
+# Adım 11: Ahenk (m12_ahenk_reset)
 # ==========================================================================
 
 [m12]
-title = "Otomatik Ahenk Kaydı"
+title = "Ahenk"
 sidebar_title = "Ahenk"
 apply_hint = "Kaynak MAC kaydedilir, ahenk yoksa kurulur, klon-reclaim boot servisi devreye alınır."
-doc_label = "Otomatik Ahenk Kaydı — algoritma akış şeması ve gerekçeler"
+doc_label = "Ahenk — algoritma akış şeması ve gerekçeler"
 rationale = """\
 Sınıftaki tahtaları merkezi yönetim iki katmanlı bir sistemle takip eder. \
 Birinci katman, merkezi tahta envanter veritabanıdır: her tahta önce buraya \
@@ -4829,7 +4829,7 @@ parola sormaz\n\
 silinir)\n\
 \n\
 Uyguladıktan sonra: tahtayı kapatın ve imaj alma aracınızı\n\
-(Clonezilla vb.) canlı USB'den başlatın. Otomatik Ahenk Kaydı\n\
+(Clonezilla vb.) canlı USB'den başlatın. Ahenk\n\
 adımının bu adımdan ÖNCE uygulanmış olması gerekir.\
 """
 

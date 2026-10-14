@@ -1940,10 +1940,22 @@ class ModulePage(Gtk.Box):
             _dlg.hide()
 
         def on_delete(_dlg, _event):
-            return self._applying  # True: kapanmayı engelle
+            # Pencere başlığındaki ✕ ile kapatılınca GTK pencereyi yok eder;
+            # sonraki uygulamada aynı pencere yeniden kullanıldığı için
+            # içi boş bir kabuk açılıyordu. Yok etmek yerine gizlenir.
+            if not self._applying:
+                _dlg.hide()
+            return True  # varsayılan "yok et" davranışını engelle
+
+        def on_destroy(_dlg):
+            # Yine de yok edilirse (ör. üst pencere kapanırken) bir sonraki
+            # akış yeni bir pencere kurar.
+            if self._stream_dialog is _dlg:
+                self._stream_dialog = None
 
         dlg.connect("response", on_response)
         dlg.connect("delete-event", on_delete)
+        dlg.connect("destroy", on_destroy)
 
         self._stream_dialog = dlg
         dlg.show_all()

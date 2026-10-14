@@ -63,7 +63,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Otomatik kapanma | sabit saat × kullanılmadığında kapatma (4 birleşim; ikisi kapalıyken "kapattınız"), muaf MAC listesi, geri sayım süresi, 60 sn altı geri sayım |
 | Uzaktan uyandırma | kuruldu, ethtool kuruldu, kutu işaretsizken servis kaldırıldı / zaten kapalıydı |
 | Başarım | oturum kalıntısı temizliği, hafif mod ayarları tek tek, hafif mod kaldırıldı, imleç düzeltmesi (deneysel; modesetting ya da + yazılımsal imleç, 'Kapalı' seçilince kaldırıldı), imleç tazeleme servisi (deneysel; kuruldu / kaldırıldı) |
-| Otomatik Ahenk Kaydı | ahenk kuruldu ya da vardı, imzalanan MAC |
+| Ahenk | ahenk kuruldu ya da vardı, imzalanan MAC |
 | BIOS parolası | temizleme, yalnız ayarlara girişte, her açılışta, Faz 1 modeli, model adı, kaynak tahtanın BIOS'unun düğmeyle doğrudan değiştirilmesi |
 | GRUB koruması | kuruldu (kurtarma girdisi menüde ve parolalı), eski sürümün kapattığı kurtarma geri açıldı, kurtarma yöneticinin ayarıyla kapalı, kayıtlı açılış varsayılanı sıfırlandı, parola yeniden girilmeden eski kurulum yükseltildi (parola korundu), kaldırıldı, zaten etkindi, etkinleştirilmedi |
 | İmaj öncesi temizlik | uygulandı, boşaltılan alan, hassas TiHA yedeklerinin silinmesi, imaj damgasının yalnız root'a açık olması |
@@ -77,7 +77,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | İmaj öncesi temizlikten sonra adım ya da düğme eylemi | İzler imaja girer; temizliği yeniden çalıştırın |
 | Temizlik uygulandı ama `/etc/machine-id` dolu | Tahta temizlikten sonra yeniden açılmış; klonlar aynı kimliği alır |
 | Temizlik uygulandı ama SSH "yapıldı" işareti var | Klonlar SSH anahtarı üretmez |
-| Ahenk kurulu ama Otomatik Ahenk Kaydı yok | Klonlar Lider'e aynı kimlikle bağlanır |
+| Ahenk kurulu ama Ahenk adımı uygulanmamış | Klonlar Lider'e aynı kimlikle bağlanır |
 | SSH / dosya sunucusu / log var ama dinamik hostname yok | Klonlar ağda ve log sunucusunda aynı adla görünür |
 | Ortak öğretmen parolası + parola temizliği | Parola ilk açılışta ezilir |
 | Parola temizliği var, PIN anahtarı yok | QR çalışmazsa hiçbir öğretmen giremez |
@@ -88,7 +88,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Uzaktan uyandırma (açık) + kullanılmadığında kapatma | Uyandırılan tahta giriş ekranında kendiliğinden kapanır |
 | BIOS parolası "her açılışta" + uzaktan uyandırma (açık) | Uyandırılan tahta BIOS parola ekranında bekler |
 | BIOS parolası + uzaktan uyandırma (açık) | BIOS ayarları her tahtada parola gerektirir |
-| BIOS parolası + Otomatik Ahenk Kaydı | Ortak MAC imzası; BIOS parolasını klonda doğrulayın |
+| BIOS parolası + Ahenk | Ortak MAC imzası; BIOS parolasını klonda doğrulayın |
 | GRUB var, BIOS yok / BIOS var, GRUB yok | Açılış güvenliği tek taraflı |
 | İmaj öncesi temizliğin sildiği hassas yedekler (shadow yedeği, anahtarlıklar, PIN kâğıtları, anahtar yedeği) diskte duruyor — canlı denetim | İmajla klonlara gidecek; temizliği (yeniden) çalıştırın |
 
@@ -169,7 +169,7 @@ YAPTIKLARINIZ
   • Başarımı artırmak için ETA Hafif Mod'u tüm kullanıcılara uyguladınız: pencere ve menü animasyonları kapatıldı, çözünürlük 1600x900'e düşürüldü, yazı boyutu küçültüldü ve dosya ve masaüstü simgeleri küçültüldü. Ayarlar her kullanıcıya oturum açılışında uygulanır; sonradan eklenecek hesaplar dahil.
   • Ekran modu değişiminde kaybolan fare imleci için ekran sürücüsünü değiştirdiniz (deneysel): modesetting + yazılımsal imleç (swcursor).
   ! Ekran sürücüsü değişikliği tahta modeline (Intel/AMD grafik) göre farklı davranabilir. İmajı yayacağınız her tahta modelinde ayrı bir klon deneyin.
-■ Otomatik Ahenk Kaydı
+■ Ahenk
   • İmajdan çıkan her tahtanın ilk açılışta kendini kopya olarak tanıyıp kaynak tahtanın Lider kimliğini silmesini ve Lider'e kendi kimliğiyle yeniden abone olmasını sağlayan mekanizmayı kurdunuz; kaynak tahtanın MAC adresi (aa:bb:cc:dd:ee:ff) imza olarak kaydedildi.
   • Tahtada bulunmayan ahenk paketini de kurdunuz.
   • Kaynak tahtanın kendi Ahenk kimliğine dokunulmadı; imaj alınana kadar Lider'e bağlı çalışmaya devam eder.
@@ -194,7 +194,7 @@ DİKKAT
   ! Uzaktan uyandırılan bir tahta, kimse kullanmazsa yaklaşık 15 dakika + 2 dakika sonra giriş ekranında kendiliğinden kapanacak (kullanılmadığında kapatma giriş ekranında da çalışır). Tahtaları dersten çok önce uyandıracaksanız kullanılmama süresini buna göre seçin.
   ! BIOS parolasının her açılışta sorulmasını seçtiniz ve uzaktan uyandırmayı açtınız: uzaktan uyandırılan tahtalar BIOS parola ekranında bekleyip işletim sistemine hiç geçmeyecek.
   ! Uzaktan uyandırma her tahtada BIOS ayarı (Wake on LAN açık, ErP ve Deep Sleep kapalı) ister ve BIOS'a yönetici parolası koyduğunuz için bu ayarları yapmak her tahtada o parolayı gerektirecek. BIOS ayarlarını mümkünse parola ayarlanmadan önce yapın.
-  ! “BIOS yönetici parolası” ve “Otomatik Ahenk Kaydı” aynı MAC imzasını kullanıyor. BIOS parolası klonun ilk açılışında ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan sonra BIOS'a girerek mutlaka doğrulayın.
+  ! “BIOS yönetici parolası” ve “Ahenk” adımları aynı MAC imzasını kullanıyor. BIOS parolası klonun ilk açılışında ayarlanamazsa, Ahenk kaydı imzayı güncellediği için sonraki açılışlarda da ayarlanmayabilir. Klonda BIOS parolasını ilk açılıştan sonra BIOS'a girerek mutlaka doğrulayın.
 
 KLON TAHTADA DENEYİN
 ■ Sistem güncellemesi (apt)
@@ -266,7 +266,7 @@ KLON TAHTADA DENEYİN
   ☐ Klonda öğretmen ve öğrenci hesaplarıyla ayrı ayrı oturum açın; hafif mod ayarlarının ilk girişte uygulandığını doğrulayın.
   ☐ Çözünürlük 1600x900'e düştüğü için tahtaya parmakla ve kalemle dokunup dokunma noktasının imleçle aynı yere düştüğünü (kalibrasyonun kaymadığını), yazıların ve kalem çizgisinin okunaklı olduğunu doğrulayın.
   ☐ Klonu yeniden başlatın; ekranın açıldığını, dokunmatik ve kalemin çalıştığını doğrulayın. Ardından USB fare takılıyken ekran ayarlarından çözünürlüğü ya da yenileme hızını değiştirip imlecin kaybolmadığını doğrulayın.
-■ Otomatik Ahenk Kaydı
+■ Ahenk
   ☐ Klonu ilk kez açmadan önce kablolu ağa bağlayın; klonun api-etap.eba.gov.tr adresine erişebildiğinden emin olun.
   ☐ Açılıştan sonra `sudo journalctl -t tiha-clone-reclaim` çıktısında "klon" ve ardından "KAYITLI" ya da "KAYITSIZ" satırını görün. "API'ye ulaşılamadı" yazıyorsa ağı düzeltip yeniden başlatın.
   ☐ Lider konsolunda klonun kaynak tahtadan AYRI bir kayıt olarak, kendi MAC adresiyle göründüğünü; klona gönderilen bir test komutunun kaynak tahtaya düşmediğini doğrulayın.
