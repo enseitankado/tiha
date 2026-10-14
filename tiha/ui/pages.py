@@ -1221,40 +1221,17 @@ class ModulePage(Gtk.Box):
             return field_widget
 
         if kind == "button":
-            initial_label = field.get("label", "Button")
-            # Etiket dinamikse (label_from), initial label'ı da o metottan al.
-            label_from = field.get("label_from")
-            if label_from:
-                provider = getattr(self.module, label_from, None)
-                if callable(provider):
-                    try:
-                        dyn = provider()
-                        if isinstance(dyn, str) and dyn:
-                            initial_label = dyn
-                    except Exception as exc:
-                        log.warning(
-                            "label_from başarısız (%s): %s", label_from, exc,
-                        )
-            btn = Gtk.Button(label=initial_label)
-            if field.get("style") == "destructive":
-                btn.get_style_context().add_class("destructive-action")
-            # Refresh mekanizması için provider referansını widget'a bağla.
-            if label_from:
-                btn._label_from = label_from  # type: ignore[attr-defined]
-
-            def on_button_clicked(_btn, action=field.get("action"),
-                                  confirm=field.get("confirm"),
-                                  stream_size=field.get("stream_size")):
-                # Geri alınamaz butonlar şemada bir "confirm" bloğu
-                # taşır; onay alınmadan action çalıştırılmaz.
-                if confirm and not self._confirm_action(confirm):
-                    return
-                if action and hasattr(self.module, action):
-                    self._run_button_action(action, button=_btn,
-                                            stream_size=stream_size)
-
-            btn.connect("clicked", on_button_clicked)
-            return btn
+            btn = self._make_button(field)
+            extras = field.get("extra_buttons") or []
+            if not extras:
+                return btn
+            # Aynı satırda yan yana duran ek düğmeler (ör. Ahenk teşhisi +
+            # ETA Kayıt'ı aç). Ek düğmeler değer taşımaz.
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row.pack_start(btn, False, False, 0)
+            for extra in extras:
+                row.pack_start(self._make_button(extra), False, False, 0)
+            return row
 
         if kind == "bool":
             checkbox = Gtk.CheckButton()
@@ -1621,6 +1598,64 @@ class ModulePage(Gtk.Box):
             )
         except Exception as exc:  # rapor kaydı işlemi asla bozmasın
             log.warning("Eylem kaydı yazılamadı: %s", exc)
+
+    def _make_button(self, field: dict) -> Gtk.Button:
+        """Şemadaki tek bir düğmeyi kurar (etiket, onay, eylem bağlantısı)."""
+        initial_label = field.get("label", "Button")
+        # Etiket dinamikse (label_from), initial label'ı da o metottan al.
+        label_from = field.get("label_from")
+        if label_from:
+            provider = getattr(self.module, label_from, None)
+            if callable(provider):
+                try:
+                    dyn = provider()
+                    if isinstance(dyn, str) and dyn:
+                        initial_label = dyn
+                except Exception as exc:
+                    log.warning(
+                        "label_from başarısız (%s): %s", label_from, exc,
+                    )
+        btn = Gtk.Button(label=initial_label)
+        if field.get("style") == "destructive":
+            btn.get_style_context().add_class("destructive-action")
+        # Refresh mekanizması için provider referansını widget'a bağla.
+        if label_from:
+            btn._label_from = label_from  # type: ignore[attr-defined]
+
+        def on_button_clicked(_btn, action=field.get("action"),
+                              confirm=field.get("confirm"),
+                              stream_size=field.get("stream_size"),
+                              launch=field.get("launch")):
+            # Geri alınamaz butonlar şemada bir "confirm" bloğu
+            # taşır; onay alınmadan action çalıştırılmaz.
+            if confirm and not self._confirm_action(confirm):
+                return
+            if launch and hasattr(self.module, action):
+                # Başka bir programı açan düğme: çıktı penceresi yok,
+                # yalnız açılamazsa sayfada sonuç gösterilir.
+                self._run_launch_action(action)
+                return
+            if action and hasattr(self.module, action):
+                self._run_button_action(action, button=_btn,
+                                        stream_size=stream_size)
+
+        btn.connect("clicked", on_button_clicked)
+        return btn
+
+    def _run_launch_action(self, action: str) -> None:
+        """Başka bir programı açan düğme eylemini doğrudan çalıştırır."""
+        for child in self.result_holder.get_children():
+            self.result_holder.remove(child)
+        try:
+            result = getattr(self.module, action)()
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Düğme eylemi başarısız: %s", action)
+            result = ApplyResult(False, t("ui.pages.unexpected_error", error=exc))
+        if result.success:
+            console.ok(result.summary)
+        else:
+            console.fail(result.summary)
+            self._show_result(result)
 
     def _run_button_action(
         self,

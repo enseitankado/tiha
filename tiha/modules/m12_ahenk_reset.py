@@ -76,6 +76,7 @@ Akışın görsel şeması ve ayrıntılı gerekçeler için bakınız:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ..core.i18n import t
@@ -111,6 +112,20 @@ AHENK_DEBUG_URL = (
     "https://raw.githubusercontent.com/enseitankado/ahenk-debug/main/"
     "ahenk_debug.py"
 )
+# Çalıştırmadan önce aracın depodaki en son sürümü (dosyaya dokunan son
+# commit) sorulur ve dosya o commit'ten indirilir: raw.githubusercontent
+# "main" adresi önbellekte birkaç dakika eski kalabiliyor.
+AHENK_DEBUG_LATEST_API = (
+    "https://api.github.com/repos/enseitankado/ahenk-debug/commits"
+    "?path=ahenk_debug.py&sha=main&per_page=1"
+)
+AHENK_DEBUG_RAW_AT = (
+    "https://raw.githubusercontent.com/enseitankado/ahenk-debug/{sha}/"
+    "ahenk_debug.py"
+)
+
+# "ETA Kayıt'ı aç" düğmesinin açtığı Pardus programı (eta-register).
+ETA_REGISTER_BIN = Path("/usr/bin/eta-register")
 
 
 # --- Boot servisi Python betiği -----------------------------------------------
@@ -449,6 +464,40 @@ def _is_ahenk_installed() -> bool:
 
 # --- Modül -------------------------------------------------------------------
 
+def _latest_ahenk_debug() -> tuple[str, str, str] | None:
+    """ahenk_debug.py'nin depodaki son sürümü: (commit, tarih, başlık).
+
+    GitHub API'ye ulaşılamazsa (ağ yok, istek sınırı) None döner; çağıran
+    o zaman "main" adresinden indirir.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(
+            AHENK_DEBUG_LATEST_API,
+            headers={"User-Agent": "tiha-ahenk-debug",
+                     "Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        commit = data[0]
+        sha = commit["sha"]
+        info = commit["commit"]
+        date = (info.get("committer") or {}).get("date", "")
+        date = date.replace("T", " ").replace("Z", "")[:16]
+        subject = ((info.get("message") or "").splitlines() or [""])[0]
+        if len(subject) > 90:
+            subject = subject[:89].rstrip() + "…"
+    except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError,
+            TypeError):
+        return None
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    return sha, date, subject
+
+
 class AhenkResetModule(Module):
     id = "m12_ahenk_reset"
     title = t("m12.title")
@@ -511,7 +560,20 @@ class AhenkResetModule(Module):
         import urllib.error
         import urllib.request
 
-        url = os.environ.get("AHENK_DEBUG_URL", AHENK_DEBUG_URL)
+        url = os.environ.get("AHENK_DEBUG_URL")
+        if not url:
+            url = AHENK_DEBUG_URL
+            if progress:
+                progress(t("m12.debug.checking_version"))
+            latest = _latest_ahenk_debug()
+            if latest:
+                sha, date, subject = latest
+                url = AHENK_DEBUG_RAW_AT.format(sha=sha)
+                if progress:
+                    progress(t("m12.debug.latest_version",
+                               sha=sha[:7], date=date, subject=subject))
+            elif progress:
+                progress(t("m12.debug.version_unknown"))
 
         if progress:
             progress(t("m12.debug.downloading", url=url))
@@ -565,6 +627,41 @@ class AhenkResetModule(Module):
         ok, key = verdicts.get(res.returncode, (False, None))
         summary = t(key) if key else t("m12.debug.run_failed", code=res.returncode)
         return ApplyResult(ok, summary, copyable=output, output_streamed=True)
+
+    def launch_eta_register_action(self, params: dict | None = None) -> ApplyResult:
+        """Pardus ETA Kayıt (eta-register) programını masaüstü oturumunda açar.
+
+        TiHA root çalışır; program aktif grafik oturumun kullanıcısı olarak
+        başlatılır (yetki gerektiren işlerde kendisi pkexec ile sorar).
+        """
+        import subprocess
+
+        from ..core.privilege import invoking_username
+        from ..core.utils import _find_active_graphical_session
+
+        if not ETA_REGISTER_BIN.exists():
+            return ApplyResult(
+                False, t("m12.eta_register.not_found", path=ETA_REGISTER_BIN),
+            )
+        env = _find_active_graphical_session()
+        if env:
+            cmd = (["sudo", "-u", env["USER"], "env"]
+                   + [f"{k}={v}" for k, v in env.items()]
+                   + [str(ETA_REGISTER_BIN)])
+        else:
+            user = invoking_username()
+            cmd = ["sudo", "-u", user, "env", "DISPLAY=:0",
+                   f"XAUTHORITY=/home/{user}/.Xauthority", str(ETA_REGISTER_BIN)]
+        try:
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            return ApplyResult(False, t("m12.eta_register.failed", error=exc))
+        return ApplyResult(True, t("m12.eta_register.opened"))
 
     def apply(
         self,

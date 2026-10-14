@@ -3860,10 +3860,24 @@ Bu tahtada ahenk-debug tanı aracını çalıştırır: Ahenk kurulu mu, servisi
 çalışıyor mu, kimlik/yapılandırma tutarlı mı ve Lider'e bağlanabiliyor mu \
 diye yerinde bakar. Sistemi DEĞİŞTİRMEZ. Rapor ayrı bir pencerede satır \
 satır, sorunlar renkli olarak görünür; metni oradan seçip kopyalayabilirsiniz. \
-Rapor dışarı GÖNDERİLMEZ (--no-send).\
+Rapor dışarı GÖNDERİLMEZ (--no-send). Çalıştırmadan önce aracın depodaki \
+en son sürümü denetlenir ve o sürüm indirilir. Yanındaki "ETA Kayıt'ı aç" \
+düğmesi Pardus'un ETA Kayıt (eta-register) programını açar; tahtanın kaydını \
+oradan görüp yenileyebilirsiniz.\
 """
 
+[m12.params.open_eta_register]
+label = "ETA Kayıt'ı aç"
+
+[m12.eta_register]
+opened = "ETA Kayıt programı açıldı."
+not_found = "ETA Kayıt programı bu tahtada kurulu değil ({path} bulunamadı)."
+failed = "ETA Kayıt programı açılamadı: {error}"
+
 [m12.debug]
+checking_version = "ahenk-debug aracının güncel sürümü denetleniyor…"
+latest_version = "Güncel sürüm: {sha} ({date} UTC) — {subject}"
+version_unknown = "Güncel sürüm denetlenemedi (GitHub'a ulaşılamadı); main dalındaki dosya indiriliyor."
 downloading = "ahenk-debug aracı indiriliyor: {url}"
 download_failed = "ahenk-debug aracı indirilemedi: {error}"
 running = "ahenk-debug çalıştırılıyor (python3 … --no-send) — bu tahta teşhis ediliyor:"

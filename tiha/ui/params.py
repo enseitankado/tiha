@@ -442,6 +442,14 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "action": "run_ahenk_debug_action",
             # Rapor satırları geniş; teşhis penceresi varsayılandan büyük.
             "stream_size": (1400, 760),
+            # Yanında: Pardus ETA Kayıt programını açan düğme.
+            "extra_buttons": [
+                {
+                    "label": t("m12.params.open_eta_register.label"),
+                    "action": "launch_eta_register_action",
+                    "launch": True,
+                },
+            ],
             "help": t("m12.params.run_ahenk_debug.help"),
         },
     ],
