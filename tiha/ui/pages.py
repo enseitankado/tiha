@@ -25,6 +25,7 @@ from ..core.module import ApplyResult, Module
 log = get_logger(__name__)
 from ..core.undo import Journal, JournalEntry
 from . import params as params_schema
+from . import stream_format
 from ..core.report_log import REPORT_PARAMS_KEY, ActionLog, redact_params
 # Rapor sayfa yüklenirken içe aktarılır: imaj temizliği /tmp'yi (bootstrap
 # ile gelen TiHA'nın dizini) boşalttıktan sonra geç içe aktarma bulamaz.
@@ -1688,11 +1689,13 @@ class ModulePage(Gtk.Box):
 
     def _on_button_action_complete(self, result: ApplyResult) -> None:
         self._record_action(result)
+        streamed = result.output_streamed
         self._finish_stream_dialog(
             result.summary,
             result.success,
-            details=result.details or "",
-            copyable=result.copyable or "",
+            # Çıktı pencerede zaten akıtıldıysa rapor bir daha eklenmez.
+            details="" if streamed else (result.details or ""),
+            copyable="" if streamed else (result.copyable or ""),
         )
         self._applying = False
         if getattr(self, "_active_button", None) is not None:
@@ -1715,9 +1718,15 @@ class ModulePage(Gtk.Box):
             console.ok(result.summary)
         else:
             console.fail(result.summary)
-        self._show_result(result)
-        if result.warning:
-            self._show_warning_dialog(result.warning)
+        if streamed:
+            # Rapor kendi penceresinde; sayfaya sonuç ve uyarı diyaloğu yok.
+            # Yalnız "Çalışıyor…" satırı kaldırılır.
+            for child in self.result_holder.get_children():
+                self.result_holder.remove(child)
+        else:
+            self._show_result(result)
+            if result.warning:
+                self._show_warning_dialog(result.warning)
         # Buton işlemi sistem durumunu değiştirmiş olabilir — önizlemeyi
         # ve "visible_when" şartlı alanların görünürlüğünü tazele.
         self._refresh_after_action()
@@ -1862,6 +1871,9 @@ class ModulePage(Gtk.Box):
         self.stream_view.set_monospace(True)
         self.stream_view.get_style_context().add_class("tiha-stream")
         self._stream_buffer = self.stream_view.get_buffer()
+        # Anlamlı renklendirme için ciddiyet tag'lerini kur (bkz.
+        # stream_format): hata/uyarı/başarı satırları bir bakışta ayrışsın.
+        stream_format.install_tags(self._stream_buffer)
         scroll.add(self.stream_view)
         content.pack_start(scroll, True, True, 0)
 
@@ -1924,10 +1936,15 @@ class ModulePage(Gtk.Box):
                 part.strip() for part in (details, copyable) if part and part.strip()
             )
             if report:
-                if has_content:
-                    self._stream_buffer.insert(end, "\n───\n" + report + "\n")
+                if not has_content:
+                    self._stream_buffer.set_text("")
                 else:
-                    self._stream_buffer.set_text(report + "\n")
+                    # Ayraç çizgisi (gri) — mevcut çıktıdan ayırır.
+                    stream_format.append_line(self._stream_buffer, "───")
+                # Raporu da satır satır renkli ekle (badge'li satırlar
+                # renklensin diye blok hâlinde değil tek tek yazılır).
+                for report_line in report.split("\n"):
+                    stream_format.append_line(self._stream_buffer, report_line)
             # En alta kaydır
             end = self._stream_buffer.get_end_iter()
             mark = self._stream_buffer.get_insert()
@@ -1954,8 +1971,8 @@ class ModulePage(Gtk.Box):
     def _append_stream_line(self, line: str) -> bool:
         if self._stream_buffer is None:
             return False
-        end = self._stream_buffer.get_end_iter()
-        self._stream_buffer.insert(end, line + "\n")
+        # Ciddiyete göre renkli ekle (ANSI temizlenir).
+        stream_format.append_line(self._stream_buffer, line)
         mark = self._stream_buffer.get_insert()
         self.stream_view.scroll_mark_onscreen(mark)
         return False

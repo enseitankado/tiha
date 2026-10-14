@@ -103,6 +103,15 @@ RECLAIM_SCRIPT = Path("/usr/local/sbin/tiha-clone-reclaim.py")
 RECLAIM_SERVICE = Path("/etc/systemd/system/tiha-clone-reclaim.service")
 RECLAIM_SERVICE_NAME = RECLAIM_SERVICE.name
 
+# "Ahenk teşhisini çalıştır" düğmesinin indirdiği tanı aracı. ahenk-debug
+# projesinin tek dosyalık betiği; kalıcı kurulum gerektirmez (bkz. run.sh).
+# Gerekirse AHENK_DEBUG_URL ortam değişkeniyle (ör. test deposu) geçersiz
+# kılınabilir.
+AHENK_DEBUG_URL = (
+    "https://raw.githubusercontent.com/enseitankado/ahenk-debug/main/"
+    "ahenk_debug.py"
+)
+
 
 # --- Boot servisi Python betiği -----------------------------------------------
 # Aşağıdaki şablon @@PLACEHOLDER@@ ile değiştirilen yer-tutucular dışında
@@ -475,6 +484,87 @@ class AhenkResetModule(Module):
             ),
         ]
         return "\n".join(lines)
+
+    def run_ahenk_debug_action(
+        self,
+        params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
+        """ahenk-debug tanı aracını bu tahtada çalıştırır (salt-okuma).
+
+        ``ahenk_debug.py`` depodan akış olarak çekilir, geçici bir dosyaya
+        yazılıp ``python3 … --no-send`` ile çalıştırılır ve çıktısı canlı
+        olarak akıtılır. Ahenk'in kurulu/çalışır olduğunu ve Lider'e
+        bağlanabildiğini yerinde teşhis eder. Sistemi **değiştirmez**.
+
+        ``--no-send``: araç varsayılanda raporu paste.rs + ntfy.sh gibi
+        herkese açık servislere yüklüyor; tahtanın kimlik/yapılandırma
+        verisini dışarı sızdırmamak için gönderimi kapatıyoruz (çıktı
+        zaten ekranda görünür ve kopyalanabilir).
+
+        Çıkış kodu aracın teşhis kararıdır (araç hatası değil):
+        0 = sorun yok, 1 = uyarı, 2 = sorun bulundu; diğer kodlar aracın
+        kendisinin çalışamadığını gösterir.
+        """
+        import os
+        import tempfile
+        import urllib.error
+        import urllib.request
+
+        url = os.environ.get("AHENK_DEBUG_URL", AHENK_DEBUG_URL)
+
+        if progress:
+            progress(t("m12.debug.downloading", url=url))
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "tiha-ahenk-debug"}
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                source = resp.read().decode("utf-8")
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            if progress:
+                progress(t("m12.debug.download_failed", error=exc))
+            return ApplyResult(
+                False, t("m12.debug.download_failed", error=exc), output_streamed=True,
+            )
+
+        tmp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", suffix="_ahenk_debug.py", delete=False, encoding="utf-8"
+            ) as fh:
+                fh.write(source)
+                tmp_path = Path(fh.name)
+            if progress:
+                progress(t("m12.debug.running"))
+                progress("")
+            res = run_cmd_stream(
+                ["python3", str(tmp_path), "--no-send"],
+                progress=progress,
+                timeout=300,
+            )
+        finally:
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+        # Rapor teşhis penceresinde satır satır gösterildi; karar yalnız
+        # o pencerenin durum satırına düşer (sayfaya çıktı ve "sorun
+        # bulundu" diyaloğu yok — bkz. ApplyResult.output_streamed).
+        output = res.stdout or ""
+        verdicts = {
+            0: (True, "m12.debug.verdict_ok"),
+            1: (True, "m12.debug.verdict_warn"),
+            2: (False, "m12.debug.verdict_fail"),
+            # Araç root olmadan 3 ile çıkıyor. Sihirbaz üretimde root
+            # çalışır; bu yalnız geliştirme (run-dev.sh) modunda görülür.
+            3: (False, "m12.debug.root_required"),
+        }
+        ok, key = verdicts.get(res.returncode, (False, None))
+        summary = t(key) if key else t("m12.debug.run_failed", code=res.returncode)
+        return ApplyResult(ok, summary, copyable=output, output_streamed=True)
 
     def apply(
         self,

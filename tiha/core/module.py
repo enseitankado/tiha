@@ -66,6 +66,12 @@ class ApplyResult:
     # imaj raporu onu başarısız saymaz. ``success`` bu durumda False'tur.
     not_applicable: bool = False
 
+    # Çıktı akış penceresinde zaten satır satır gösterildi (ör. Ahenk
+    # teşhisi kendi raporunu orada basar). UI bu durumda raporu pencerenin
+    # sonuna bir daha eklemez, sayfaya sonuç kutusu basmaz ve uyarı
+    # diyaloğu açmaz; karar pencerenin durum satırında görünür.
+    output_streamed: bool = False
+
 
 
 def _lock_state() -> None:

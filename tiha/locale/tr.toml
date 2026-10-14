@@ -3853,6 +3853,26 @@ kaydını yapmanız gerekir; envanter kaydı fiziksel lokasyon bilgisi istediği
 için elle yapılan bir adımdır.\
 """
 
+[m12.params.run_ahenk_debug]
+label = "Ahenk teşhisini çalıştır"
+help = """\
+Bu tahtada ahenk-debug tanı aracını çalıştırır: Ahenk kurulu mu, servisi \
+çalışıyor mu, kimlik/yapılandırma tutarlı mı ve Lider'e bağlanabiliyor mu \
+diye yerinde bakar. Sistemi DEĞİŞTİRMEZ. Rapor ayrı bir pencerede satır \
+satır, sorunlar renkli olarak görünür; metni oradan seçip kopyalayabilirsiniz. \
+Rapor dışarı GÖNDERİLMEZ (--no-send).\
+"""
+
+[m12.debug]
+downloading = "ahenk-debug aracı indiriliyor: {url}"
+download_failed = "ahenk-debug aracı indirilemedi: {error}"
+running = "ahenk-debug çalıştırılıyor (python3 … --no-send) — bu tahta teşhis ediliyor:"
+verdict_ok = "Teşhis tamam: Ahenk sağlıklı görünüyor, sorun bulunamadı."
+verdict_warn = "Teşhis tamam: UYARI bulundu — ayrıntı için çıktıya bakın."
+verdict_fail = "Teşhis tamam: SORUN bulundu — Ahenk düzgün çalışmıyor olabilir, ayrıntı çıktıda."
+root_required = "ahenk-debug root yetkisi istiyor; teşhis yapılamadı. Sihirbaz imajlama sırasında root çalışır, bu uyarı yalnız geliştirme modunda (run-dev.sh) görülür."
+run_failed = "ahenk-debug aracı çalıştırılamadı (çıkış kodu {code})."
+
 [m12.preview]
 mac_unknown = "(tespit edilemedi)"
 header = "Bu adımda yapılacaklar:"

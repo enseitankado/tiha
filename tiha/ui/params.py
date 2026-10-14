@@ -431,6 +431,18 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m11.params.exempt_macs.help"),
         },
     ],
+    "m12_ahenk_reset": [
+        {
+            # Tanı düğmesi: ahenk-debug aracını bu tahtada çalıştırır.
+            # Sistemi değiştirmez; yalnız Ahenk'in kurulu/çalışır
+            # olduğunu yerinde teşhis eder ve çıktıyı canlı gösterir.
+            "key": "run_ahenk_debug",
+            "label": t("m12.params.run_ahenk_debug.label"),
+            "type": "button",
+            "action": "run_ahenk_debug_action",
+            "help": t("m12.params.run_ahenk_debug.help"),
+        },
+    ],
     "m17_performance": [
         {"label": t("m17.params.heading_session"), "type": "heading"},
         {
