@@ -76,12 +76,12 @@ def export_preset(
         if not include_sensitive and mid in SENSITIVE_MODULES:
             continue
         # Parola benzeri anahtarları herhangi bir modülde atla
-        scrubbed = {
+        # Parametresiz adım da yazılır: preset'te bulunması "bu adımı
+        # uygula" demektir.
+        clean[mid] = {
             k: v for k, v in params.items()
             if not _looks_secret(k)
         }
-        if scrubbed:
-            clean[mid] = scrubbed
 
     blob = {
         "schema_version": SCHEMA_VERSION,

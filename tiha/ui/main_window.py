@@ -311,10 +311,7 @@ class TiHAWindow(Gtk.Window):
         last_apply_params'ını toplar, FileChooser ile hedef seçer, JSON yazar."""
         from ..core.preset import export_preset
 
-        collected: dict[str, dict] = {}
-        for page in self.pages:
-            if isinstance(page, ModulePage) and page.last_apply_params:
-                collected[page.module.id] = page.last_apply_params
+        collected = self._collect_preset_params()
 
         if not collected:
             self._info_dialog(
@@ -322,6 +319,12 @@ class TiHAWindow(Gtk.Window):
                 t("ui.main.export_empty_body"),
             )
             return
+
+        from ..core.preset import SENSITIVE_MODULES
+
+        titles = {m.id: m.sidebar_title or m.title for m in self.modules}
+        exported = [mid for mid in collected if mid not in SENSITIVE_MODULES]
+        skipped = [titles.get(mid, mid) for mid in collected if mid in SENSITIVE_MODULES]
 
         dlg = Gtk.FileChooserDialog(
             title=t("ui.main.export_dialog_title"),
@@ -347,8 +350,10 @@ class TiHAWindow(Gtk.Window):
                     written = export_preset(collected, target=target)
                     self._info_dialog(
                         t("ui.main.export_done_title"),
-                        t("ui.main.export_done_body", count=len(collected),
-                          path=written, name=written.name),
+                        t("ui.main.export_done_body", count=len(exported),
+                          path=written, name=written.name)
+                        + (t("ui.main.export_skipped_sensitive",
+                             steps=", ".join(skipped)) if skipped else ""),
                     )
                 except Exception as exc:
                     self._info_dialog(
@@ -358,6 +363,38 @@ class TiHAWindow(Gtk.Window):
                     )
         finally:
             dlg.destroy()
+
+    def _collect_preset_params(self) -> dict[str, dict]:
+        """Dışa aktarılacak {adım: parametreler}, sihirbaz sırasıyla.
+
+        Bu oturumda uygulanan adımın formdaki son değerleri kullanılır.
+        Önceki oturumlarda uygulanıp hâlâ yürürlükte olan (sol menüde
+        işaretli) adımlarınki günceden alınır; orada gizli alanlar
+        maskelidir ve dosyaya yazılmaz.
+        """
+        from ..core.report_log import REPORT_PARAMS_KEY, SECRET_MARK
+
+        latest = self.journal.latest_per_module()
+        collected: dict[str, dict] = {}
+        for page in self.pages:
+            if not isinstance(page, ModulePage):
+                continue
+            mid = page.module.id
+            entry = latest.get(mid)
+            if page.last_apply_params is not None and entry is not None \
+                    and entry.status == "applied":
+                collected[mid] = dict(page.last_apply_params)
+                continue
+            if entry is None or entry.status != "applied":
+                continue
+            saved = (entry.data or {}).get(REPORT_PARAMS_KEY)
+            if not isinstance(saved, dict):
+                # Parametreleri kaydedilmeden önceki bir sürümle uygulanmış.
+                continue
+            collected[mid] = {
+                key: value for key, value in saved.items() if value != SECRET_MARK
+            }
+        return collected
 
     def _info_dialog(self, title: str, body: str, *, error: bool = False) -> None:
         dlg = Gtk.MessageDialog(

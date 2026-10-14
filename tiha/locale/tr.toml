@@ -371,8 +371,8 @@ loading = "Yükleniyor…"
 window_title = "TiHA — Tahta İmaj Hazırlık Aracı"
 export_empty_title = "Dışa aktarılacak parametre yok"
 export_empty_body = """\
-Henüz bu oturumda parametre alan bir modül uygulanmamış. En az bir adımı \
-uygulayıp tekrar deneyin.\
+Uygulanmış ve hâlâ yürürlükte olan bir adım yok (sol menüde işaretli adım \
+bulunmuyor). En az bir adımı uygulayıp tekrar deneyin.\
 """
 export_dialog_title = "Preset'i kaydet"
 cancel = "İptal"
@@ -380,12 +380,17 @@ save = "Kaydet"
 json_filter = "JSON dosyaları (*.json)"
 export_done_title = "Preset kaydedildi"
 export_done_body = """\
-{count} modülün parametreleri şu dosyaya yazıldı:\n\
+{count} adımın ayarları şu dosyaya yazıldı:\n\
 \n\
 {path}\n\
 \n\
 Diğer tahtalarda uygulamak için:\n\
-\u0020\u0020sudo tiha --preset {name} --apply\
+\u0020\u0020sudo tiha -t -f {name}\
+"""
+export_skipped_sensitive = """\
+\n\n\
+Parola taşıdığı için dosyaya yazılmayan adımlar: {steps}. Bunları \
+diğer tahtalarda elle uygulayın.\
 """
 export_failed_title = "Kayıt başarısız"
 export_failed_body = "Preset yazılamadı: {error}"
