@@ -440,6 +440,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "label": t("m12.params.run_ahenk_debug.label"),
             "type": "button",
             "action": "run_ahenk_debug_action",
+            # Rapor satırları geniş; teşhis penceresi varsayılandan büyük.
+            "stream_size": (1400, 760),
             "help": t("m12.params.run_ahenk_debug.help"),
         },
     ],

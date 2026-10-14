@@ -3814,7 +3814,7 @@ low_refresh_rate = "yenileme hızı 50 Hz'e düşürüldü"
 
 [m12]
 title = "Otomatik Ahenk Kaydı"
-sidebar_title = "Otomatik Ahenk Kaydı"
+sidebar_title = "Ahenk"
 apply_hint = "Kaynak MAC kaydedilir, ahenk yoksa kurulur, klon-reclaim boot servisi devreye alınır."
 doc_label = "Otomatik Ahenk Kaydı — algoritma akış şeması ve gerekçeler"
 rationale = """\

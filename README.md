@@ -128,7 +128,7 @@ Raporu panoya kopyalayabilir ya da yazdırmaya uygun bir dosya olarak kaydedebil
 <td><a href="docs/images/13-basarim.png"><img src="docs/images/13-basarim.png" alt="Başarım"></a><br><sub><b>13. Başarım</b> — oturum kalıntıları ve ETA Hafif Mod</sub></td>
 </tr>
 <tr>
-<td><a href="docs/images/14-otomatik-ahenk-kaydi.png"><img src="docs/images/14-otomatik-ahenk-kaydi.png" alt="Otomatik Ahenk Kaydı"></a><br><sub><b>14. Otomatik Ahenk Kaydı</b> — klonlar kendi kimliğiyle kaydolur</sub></td>
+<td><a href="docs/images/14-otomatik-ahenk-kaydi.png"><img src="docs/images/14-otomatik-ahenk-kaydi.png" alt="Otomatik Ahenk Kaydı"></a><br><sub><b>14. Ahenk</b> — klonlar kendi kimliğiyle kaydolur</sub></td>
 <td><a href="docs/images/15-bios-yonetici-parolasi.png"><img src="docs/images/15-bios-yonetici-parolasi.png" alt="BIOS parolası"></a><br><sub><b>15. BIOS parolası</b> — klonda ilk açılışta ayarlanır</sub></td>
 </tr>
 <tr>

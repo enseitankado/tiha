@@ -15,7 +15,7 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 
 from ..core import console
 from ..core.i18n import t
@@ -1243,13 +1243,15 @@ class ModulePage(Gtk.Box):
                 btn._label_from = label_from  # type: ignore[attr-defined]
 
             def on_button_clicked(_btn, action=field.get("action"),
-                                  confirm=field.get("confirm")):
+                                  confirm=field.get("confirm"),
+                                  stream_size=field.get("stream_size")):
                 # Geri alınamaz butonlar şemada bir "confirm" bloğu
                 # taşır; onay alınmadan action çalıştırılmaz.
                 if confirm and not self._confirm_action(confirm):
                     return
                 if action and hasattr(self.module, action):
-                    self._run_button_action(action, button=_btn)
+                    self._run_button_action(action, button=_btn,
+                                            stream_size=stream_size)
 
             btn.connect("clicked", on_button_clicked)
             return btn
@@ -1620,7 +1622,12 @@ class ModulePage(Gtk.Box):
         except Exception as exc:  # rapor kaydı işlemi asla bozmasın
             log.warning("Eylem kaydı yazılamadı: %s", exc)
 
-    def _run_button_action(self, action: str, button: Gtk.Button | None = None) -> None:
+    def _run_button_action(
+        self,
+        action: str,
+        button: Gtk.Button | None = None,
+        stream_size: tuple[int, int] | None = None,
+    ) -> None:
         """Button action'ını canlı çıktı ve görsel geri bildirimle çalıştırır."""
         if self._applying:
             return
@@ -1651,7 +1658,10 @@ class ModulePage(Gtk.Box):
         console.step(t("ui.pages.console_action", title=self.module.title, label=label) if label else self.module.title)
 
         # Canlı çıktıyı modalda göster
-        self._open_stream_dialog(t("ui.pages.stream_title_running", title=self.module.title))
+        self._open_stream_dialog(
+            t("ui.pages.stream_title_running", title=self.module.title),
+            size=stream_size,
+        )
 
         def progress_callback(text: str) -> None:
             GLib.idle_add(self._append_stream_line, text)
@@ -1818,8 +1828,15 @@ class ModulePage(Gtk.Box):
     # gerekiyordu. Artık adım uygulanırken geniş bir modal açılıp akış
     # oraya yazılır; iş bitene kadar kapatılamaz.
 
-    def _open_stream_dialog(self, title: str) -> None:
-        """Canlı çıktı modalını açar (varsa yeniden kullanır)."""
+    def _open_stream_dialog(
+        self, title: str, size: tuple[int, int] | None = None
+    ) -> None:
+        """Canlı çıktı modalını açar (varsa yeniden kullanır).
+
+        ``size`` verilirse pencere o boyutta açılır (geniş satırlı
+        raporlar için, ör. Ahenk teşhisi); ekrandan büyükse ekrana sığdırılır.
+        """
+        width, height = self._fit_stream_size(size or (920, 620))
         # Bitişte başlık "<adım> — tamamlandı" olur; özet başlığa girmez.
         self._stream_title_base = self.module.title
         if self._stream_dialog is not None:
@@ -1830,6 +1847,7 @@ class ModulePage(Gtk.Box):
             self._stream_status.set_ellipsize(Pango.EllipsizeMode.END)
             self._stream_spinner.start()
             self._stream_close_btn.set_sensitive(False)
+            self._stream_dialog.resize(width, height)
             self._stream_dialog.present()
             return
 
@@ -1838,7 +1856,7 @@ class ModulePage(Gtk.Box):
             transient_for=self.get_toplevel(),
             modal=True,
         )
-        dlg.set_default_size(920, 620)
+        dlg.set_default_size(width, height)
         dlg.set_resizable(True)
 
         content = dlg.get_content_area()
@@ -1967,6 +1985,21 @@ class ModulePage(Gtk.Box):
         # modüller de tarihçeyi kaybetmez.
         self._append_stream_line(line)
         return False
+
+    def _fit_stream_size(self, size: tuple[int, int]) -> tuple[int, int]:
+        """İstenen pencere boyutunu bulunduğu monitörün %95'ine sınırlar."""
+        width, height = size
+        try:
+            display = Gdk.Display.get_default()
+            window = self.get_toplevel().get_window()
+            monitor = (display.get_monitor_at_window(window) if window
+                       else display.get_primary_monitor())
+            area = monitor.get_workarea()
+            width = min(width, int(area.width * 0.95))
+            height = min(height, int(area.height * 0.95))
+        except Exception:  # noqa: BLE001 — boyut sınırı kozmetik
+            pass
+        return width, height
 
     def _append_stream_line(self, line: str) -> bool:
         if self._stream_buffer is None:
