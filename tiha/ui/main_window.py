@@ -372,6 +372,7 @@ class TiHAWindow(Gtk.Window):
         işaretli) adımlarınki günceden alınır; orada gizli alanlar
         maskelidir ve dosyaya yazılmaz.
         """
+        from ..core.preset import NEVER_EXPORTED_MODULES
         from ..core.report_log import REPORT_PARAMS_KEY, SECRET_MARK
 
         latest = self.journal.latest_per_module()
@@ -380,6 +381,9 @@ class TiHAWindow(Gtk.Window):
             if not isinstance(page, ModulePage):
                 continue
             mid = page.module.id
+            if mid in NEVER_EXPORTED_MODULES:
+                # İmaj öncesi temizlik başka tahtaya taşınmaz.
+                continue
             entry = latest.get(mid)
             if page.last_apply_params is not None and entry is not None \
                     and entry.status == "applied":

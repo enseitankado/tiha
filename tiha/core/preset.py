@@ -51,6 +51,12 @@ SENSITIVE_MODULES = {
     "m04_ssh_and_samba",
 }
 
+# İmaj öncesi temizlik kaynak tahtaya özgü son adımdır; başka bir tahtaya
+# preset ile uygulanırsa o tahtanın kimliğini siler. Preset'e hiç girmez.
+NEVER_EXPORTED_MODULES = {
+    "m10_image_sanitize",
+}
+
 
 def export_preset(
     modules_with_params: dict[str, dict],
@@ -72,6 +78,8 @@ def export_preset(
     clean: dict[str, dict] = {}
     for mid, params in modules_with_params.items():
         if not isinstance(params, dict):
+            continue
+        if mid in NEVER_EXPORTED_MODULES:
             continue
         if not include_sensitive and mid in SENSITIVE_MODULES:
             continue
