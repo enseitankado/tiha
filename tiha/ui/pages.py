@@ -342,7 +342,7 @@ def _build_welcome_host_table() -> Gtk.Widget:
 
 
 class WelcomePage(Gtk.Box):
-    def __init__(self) -> None:
+    def __init__(self, on_load_preset=None) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=_ROW_SPACING)
         self.get_style_context().add_class("tiha-welcome")
         self.set_margin_top(_PAGE_MARGIN)
@@ -369,6 +369,19 @@ class WelcomePage(Gtk.Box):
             )
 
         add_paragraph(_WELCOME_INTRO)
+
+        # Preset yükle: başka bir tahtadan dışa aktarılmış ayarlar bütün
+        # adımların formlarına yazılır (uygulanmaz).
+        if on_load_preset is not None:
+            preset_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            load_btn = Gtk.Button(label=t("ui.welcome.load_preset"))
+            load_btn.connect("clicked", lambda *_: on_load_preset())
+            load_btn.set_valign(Gtk.Align.CENTER)
+            preset_row.pack_start(load_btn, False, False, 0)
+            hint = _wrapping_label(t("ui.welcome.load_preset_hint"), klass="tiha-rationale")
+            hint.set_max_width_chars(90)
+            preset_row.pack_start(hint, True, True, 0)
+            self.pack_start(preset_row, False, False, 0)
 
         # Bu tahtanın donanım + işletim sistemi özeti (iki sütun).
         # Hoşgeldiniz metninden hemen sonra, adımlar listesinden önce.
@@ -416,6 +429,9 @@ class ModulePage(Gtk.Box):
         self.set_margin_start(_PAGE_MARGIN + 4)
         self.set_margin_end(_PAGE_MARGIN + 4)
         self._fields: dict[str, Gtk.Widget] = {}
+        # Preset'ten yüklenen alanlar: sistem durumundan tazeleme bunları
+        # ezmez; adım başarıyla uygulanınca bayrak kalkar.
+        self._preset_keys: set[str] = set()
         self._stream_buffer: Gtk.TextBuffer | None = None
         # Canlı çıktı modali ve parçaları — ilk akışta kurulur.
         self._stream_dialog: Gtk.Dialog | None = None
@@ -730,7 +746,7 @@ class ModulePage(Gtk.Box):
         dokunulmaz — ör. "yedek hesap sayısı" 20 yapılıp alakasız bir düğmeye
         basılınca eski değere dönüyordu."""
         widget = self._fields.get(key)
-        if widget is None:
+        if widget is None or key in self._preset_keys:
             return
         if kind == "bool":
             if hasattr(widget, "set_active"):
@@ -864,7 +880,7 @@ class ModulePage(Gtk.Box):
         """Form alanlarını verilen config değerleriyle güncelle."""
         for key, value in config_values.items():
             widget = self._fields.get(key)
-            if widget is None:
+            if widget is None or key in self._preset_keys:
                 continue
 
             # Widget tipine göre değer ataması
@@ -881,6 +897,54 @@ class ModulePage(Gtk.Box):
             except Exception as exc:
                 log.warning("Form field güncelleme hatası %s: %s", key, exc)
             _apply_line_spacing(self._preview_widget)
+
+    def load_preset(self, params: dict) -> int:
+        """Preset'teki değerleri bu adımın formuna yazar; uygulamaz.
+
+        Formda karşılığı olmayan anahtarlar atlanır. Yazılan alan sayısını
+        döndürür.
+        """
+        schema = params_schema.get(self.module.id) or []
+        by_key = {f["key"]: f for f in schema if "key" in f}
+        count = 0
+        for key, value in (params or {}).items():
+            field = by_key.get(key)
+            widget = self._fields.get(key)
+            if field is None or widget is None:
+                continue
+            kind = field.get("type", "text")
+            text = "" if value is None else str(value)
+            try:
+                if kind in ("button", "heading", "readonly"):
+                    continue
+                if kind == "bool":
+                    checked = _as_checked(value)
+                    widget.set_active(checked)
+                    self._update_conditional_fields(key, checked)
+                elif kind == "spin":
+                    widget.set_value(float(text or 0))
+                elif kind == "select":
+                    options = field.get("options", [])
+                    if text not in options:
+                        continue
+                    widget.set_active(options.index(text))
+                elif kind == "textarea":
+                    _set_textarea_text(widget, text)
+                elif kind == "branch_accounts":
+                    widget._set_branch_selection(text)  # type: ignore[attr-defined]
+                elif isinstance(getattr(widget, "_entry", None), Gtk.Entry):
+                    widget._entry.set_text(text)  # type: ignore[attr-defined]
+                elif isinstance(widget, Gtk.Entry):
+                    widget.set_text(text)
+                else:
+                    continue
+            except (TypeError, ValueError) as exc:
+                log.warning("Preset değeri yazılamadı %s.%s: %s", self.module.id, key, exc)
+                continue
+            self._preset_keys.add(key)
+            count += 1
+        self._refresh_conditional_fields()
+        return count
 
     def _refresh_after_action(self) -> None:
         """Apply / buton işlemi sonrası önizleme + şartlı alan + dinamik
@@ -2093,6 +2157,8 @@ class ModulePage(Gtk.Box):
             # modal kaçırılamaz.
             self._show_warning_dialog(result.warning)
         if result.success:
+            # Uygulandı: alanlar artık sistem durumundan tazelenebilir.
+            self._preset_keys.clear()
             try:
                 self.module.after_apply_ui(result, self.get_toplevel())
             except Exception as exc:  # adım sonrası iş sonucu düşürmesin

@@ -375,6 +375,22 @@ Uygulanmış ve hâlâ yürürlükte olan bir adım yok (sol menüde işaretli a
 bulunmuyor). En az bir adımı uygulayıp tekrar deneyin.\
 """
 export_dialog_title = "Preset'i kaydet"
+import_dialog_title = "Preset dosyasını seç"
+open = "Aç"
+import_failed_title = "Preset okunamadı"
+import_failed_body = "Dosya TiHA preset'i olarak okunamadı: {error}"
+import_empty_title = "Preset'te yüklenecek adım yok"
+import_empty_body = "{name} dosyasında bu TiHA sürümünün tanıdığı bir adım bulunamadı."
+import_done_title = "Preset yüklendi ({count} adım)"
+import_done_body = """\
+{name} dosyasındaki ayarlar şu adımların formlarına yazıldı:\n\
+\n\
+{steps}\n\
+\n\
+Hiçbir adım henüz UYGULANMADI. Adımları sırayla açıp gözden geçirin ve \
+Uygula'ya basın.\
+"""
+import_unknown = "\n\nBu sürümde karşılığı olmayan, atlanan adımlar: {ids}"
 cancel = "İptal"
 save = "Kaydet"
 json_filter = "JSON dosyaları (*.json)"
@@ -433,6 +449,12 @@ TiHA, Pardus ETAP etkileşimli tahtayı imaj alınmaya hazırlayan bir \
 sihirbazdır. Örnek bir tahtayı bu adımlarla hazırlar, imajını alır ve \
 onlarca tahtaya dağıtırsınız. Her klon aynı ayarlarla, ama kendi kimliğiyle \
 açılır.\
+"""
+load_preset = "Preset yükle…"
+load_preset_hint = """\
+Başka bir tahtada Özet sayfasından dışa aktarılmış ayar dosyasını (.json) \
+seçin; adımların formları o ayarlarla dolar. Hiçbir adım kendiliğinden \
+uygulanmaz.\
 """
 features_title = "Adımlar"
 

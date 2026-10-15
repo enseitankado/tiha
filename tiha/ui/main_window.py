@@ -364,6 +364,67 @@ class TiHAWindow(Gtk.Window):
         finally:
             dlg.destroy()
 
+    def _on_load_preset_clicked(self) -> None:
+        """Hoş geldiniz sayfasındaki 'Preset yükle' düğmesi: dosyadaki
+        ayarları bütün adımların formlarına yazar (hiçbir adımı uygulamaz)."""
+        from ..core.preset import NEVER_EXPORTED_MODULES, import_preset
+        from ..core.private_files import user_desktop_dir
+
+        dlg = Gtk.FileChooserDialog(
+            title=t("ui.main.import_dialog_title"),
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dlg.add_buttons(
+            t("ui.main.cancel"), Gtk.ResponseType.CANCEL,
+            t("ui.main.open"), Gtk.ResponseType.ACCEPT,
+        )
+        dlg.set_current_folder(str(user_desktop_dir()))
+        fil = Gtk.FileFilter()
+        fil.set_name(t("ui.main.json_filter"))
+        fil.add_pattern("*.json")
+        dlg.add_filter(fil)
+        try:
+            if dlg.run() != Gtk.ResponseType.ACCEPT:
+                return
+            source = Path(dlg.get_filename())
+        finally:
+            dlg.destroy()
+
+        try:
+            preset = import_preset(source)
+        except (OSError, ValueError) as exc:
+            self._info_dialog(
+                t("ui.main.import_failed_title"),
+                t("ui.main.import_failed_body", error=exc),
+                error=True,
+            )
+            return
+
+        numbers = {m.id: idx for idx, m in enumerate(self.modules, start=1)}
+        loaded: list[str] = []
+        for page in self.pages:
+            if not isinstance(page, ModulePage):
+                continue
+            mid = page.module.id
+            if mid not in preset or mid in NEVER_EXPORTED_MODULES:
+                continue
+            page.load_preset(preset[mid])
+            loaded.append(f"{numbers[mid]}. {page.module.sidebar_title or page.module.title}")
+        unknown = [mid for mid in preset if mid not in numbers]
+
+        if not loaded:
+            self._info_dialog(
+                t("ui.main.import_empty_title"),
+                t("ui.main.import_empty_body", name=source.name),
+            )
+            return
+        body = t("ui.main.import_done_body", name=source.name,
+                 steps="\n".join(f"  • {s}" for s in loaded))
+        if unknown:
+            body += t("ui.main.import_unknown", ids=", ".join(unknown))
+        self._info_dialog(t("ui.main.import_done_title", count=len(loaded)), body)
+
     def _collect_preset_params(self) -> dict[str, dict]:
         """Dışa aktarılacak {adım: parametreler}, sihirbaz sırasıyla.
 
@@ -880,7 +941,7 @@ class TiHAWindow(Gtk.Window):
         paned.set_position(240)
 
     def _build_welcome(self) -> None:
-        page = WelcomePage()
+        page = WelcomePage(on_load_preset=self._on_load_preset_clicked)
         self.pages.append(page)
         self.stack.add_named(page, "welcome")
         self._add_sidebar_entry(t("ui.main.sidebar_welcome"))
