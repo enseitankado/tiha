@@ -121,6 +121,19 @@ def import_preset(source: Path) -> dict[str, dict]:
     return {mid: (p or {}) for mid, p in mods.items() if isinstance(p, dict)}
 
 
+def preset_is_reset(source: Path) -> bool:
+    """Dosya bir sıfırlama preset'i mi (üst düzeyde ``"reset": true``)?
+
+    Sıfırlama preset'i bütün adımları varsayılana döndürür; yüklenirken
+    sihirbazın "uygulandı" kayıtları da (kullanıcı onayıyla) silinir.
+    """
+    try:
+        raw = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(raw, dict) and raw.get("reset") is True
+
+
 def extract_from_journal(journal: Journal) -> dict[str, dict]:
     """Journal'da uygulanmış adımların ``data`` alanından preset üretmeye
     çalışır. Her modülün ``data`` formatı kendine özeldir; bu sadece

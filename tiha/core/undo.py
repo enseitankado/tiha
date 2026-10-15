@@ -118,6 +118,28 @@ class Journal:
                 self._save()
                 return
 
+    def clear(self) -> Path | None:
+        """Bütün kayıtları siler (sıfırlama preset'i yüklenirken).
+
+        Sol menü işaretleri ve "Bu adımı geri al" düğmeleri bu kayıtlardan
+        gelir. Eski günce silinmeden önce yanına zaman damgalı bir yedek
+        olarak kopyalanır; yedeğin yolu döner (yazılamadıysa None).
+        """
+        backup: Path | None = None
+        if self.path.exists():
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = self.path.with_name(f"{self.path.stem}.{stamp}.bak.json")
+            try:
+                backup.write_bytes(self.path.read_bytes())
+                backup.chmod(0o600)
+            except OSError as exc:
+                log.error("Günce yedeklenemedi (%s): %s", backup, exc)
+                backup = None
+        self._entries = []
+        self._save()
+        log.info("Günce sıfırlandı (yedek: %s)", backup)
+        return backup
+
     def all(self) -> list[JournalEntry]:
         return list(self._entries)
 

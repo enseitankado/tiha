@@ -390,6 +390,32 @@ import_done_body = """\
 Hiçbir adım henüz UYGULANMADI. Adımları sırayla açıp gözden geçirin ve \
 Uygula'ya basın.\
 """
+reset_confirm_title = "Sıfırlama preset'i: uygulandı işaretleri silinsin mi?"
+reset_confirm_body = """\
+{name} bütün adımları varsayılan ayarlara döndüren bir sıfırlama \
+preset'idir.
+
+"Sıfırla" derseniz sol menüdeki ✓ işaretleri ve adımlardaki "Bu adımı \
+geri al" düğmeleri silinir; TiHA bu tahtada hiçbir adım uygulanmamış gibi \
+açılır. Tahtadaki ayarlar DEĞİŞMEZ: önceden uygulanan adımlar yürürlükte \
+kalır, yalnız TiHA'dan geri alınamaz hâle gelir. Gerekirse her adımı \
+varsayılan ayarlarla yeniden uygulayın.
+
+Eski kayıtların bir yedeği /var/lib/tiha altında saklanır.\
+"""
+reset_cancel = "Vazgeç"
+reset_forms_only = "Yalnız formları doldur"
+reset_confirm = "Sıfırla"
+reset_done = """\
+\n\n\
+Uygulandı işaretleri ve geri alma kayıtları silindi. Eski kayıtların \
+yedeği: {path}\
+"""
+reset_done_nobackup = """\
+\n\n\
+Uygulandı işaretleri ve geri alma kayıtları silindi (eski kayıtlar \
+yedeklenemedi).\
+"""
 import_unknown = "\n\nBu sürümde karşılığı olmayan, atlanan adımlar: {ids}"
 cancel = "İptal"
 save = "Kaydet"
@@ -454,11 +480,7 @@ onlarca tahtaya dağıtırsınız. Her klon aynı ayarlarla, ama kendi kimliğiy
 açılır.\
 """
 load_preset = "Preset yükle…"
-load_preset_hint = """\
-Başka bir tahtada Özet sayfasından dışa aktarılmış ayar dosyasını (.json) \
-seçin; adımların formları o ayarlarla dolar. Hiçbir adım kendiliğinden \
-uygulanmaz.\
-"""
+load_preset_hint = "Özet'ten dışa aktarılmış ayarlarla bütün formları doldurur; hiçbir adımı uygulamaz."
 features_title = "Adımlar"
 
 [ui.welcome.host]

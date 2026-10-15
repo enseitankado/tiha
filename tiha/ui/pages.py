@@ -370,19 +370,6 @@ class WelcomePage(Gtk.Box):
 
         add_paragraph(_WELCOME_INTRO)
 
-        # Preset yükle: başka bir tahtadan dışa aktarılmış ayarlar bütün
-        # adımların formlarına yazılır (uygulanmaz).
-        if on_load_preset is not None:
-            preset_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            load_btn = Gtk.Button(label=t("ui.welcome.load_preset"))
-            load_btn.connect("clicked", lambda *_: on_load_preset())
-            load_btn.set_valign(Gtk.Align.CENTER)
-            preset_row.pack_start(load_btn, False, False, 0)
-            hint = _wrapping_label(t("ui.welcome.load_preset_hint"), klass="tiha-rationale")
-            hint.set_max_width_chars(90)
-            preset_row.pack_start(hint, True, True, 0)
-            self.pack_start(preset_row, False, False, 0)
-
         # Bu tahtanın donanım + işletim sistemi özeti (iki sütun).
         # Hoşgeldiniz metninden hemen sonra, adımlar listesinden önce.
         self.pack_start(_build_welcome_host_table(), False, False, 0)
@@ -396,7 +383,7 @@ class WelcomePage(Gtk.Box):
         # sağ sütun açıklama; tüm açıklamaların ilk harfi aynı x'ten
         # başlar. Satırlar arası boşluk 0.
         features_grid = Gtk.Grid()
-        features_grid.set_row_spacing(2)
+        features_grid.set_row_spacing(1)
         features_grid.set_column_spacing(14)
         features_grid.set_margin_start(8)
         for row_idx, (title, description) in enumerate(_WELCOME_FEATURES):
@@ -410,6 +397,19 @@ class WelcomePage(Gtk.Box):
             features_grid.attach(title_lbl, 1, row_idx, 1, 1)
             features_grid.attach(desc_lbl,  2, row_idx, 1, 1)
         self.pack_start(features_grid, False, False, 0)
+
+        # Preset yükle: başka bir tahtadan dışa aktarılmış ayarlar bütün
+        # adımların formlarına yazılır (uygulanmaz).
+        if on_load_preset is not None:
+            preset_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            load_btn = Gtk.Button(label=t("ui.welcome.load_preset"))
+            load_btn.connect("clicked", lambda *_: on_load_preset())
+            load_btn.set_valign(Gtk.Align.CENTER)
+            preset_row.pack_start(load_btn, False, False, 0)
+            hint = _wrapping_label(t("ui.welcome.load_preset_hint"), klass="tiha-rationale")
+            hint.set_max_width_chars(90)
+            preset_row.pack_start(hint, True, True, 0)
+            self.pack_start(preset_row, False, False, 0)
 
 
 # =========================================================================
@@ -897,6 +897,13 @@ class ModulePage(Gtk.Box):
             except Exception as exc:
                 log.warning("Form field güncelleme hatası %s: %s", key, exc)
             _apply_line_spacing(self._preview_widget)
+
+    def forget_applied_state(self) -> None:
+        """Günce sıfırlanınca: "daha önce uygulanmış / Bu adımı geri al"
+        kutusu ve bu oturumun sonuç kutusu kalkar."""
+        for child in self.result_holder.get_children():
+            self.result_holder.remove(child)
+        self.last_apply_params = None
 
     def load_preset(self, params: dict) -> int:
         """Preset'teki değerleri bu adımın formuna yazar; uygulamaz.

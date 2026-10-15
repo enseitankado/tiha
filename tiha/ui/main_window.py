@@ -365,7 +365,9 @@ class TiHAWindow(Gtk.Window):
     def _on_load_preset_clicked(self) -> None:
         """Hoş geldiniz sayfasındaki 'Preset yükle' düğmesi: dosyadaki
         ayarları bütün adımların formlarına yazar (hiçbir adımı uygulamaz)."""
-        from ..core.preset import NEVER_EXPORTED_MODULES, import_preset
+        from ..core.preset import (
+            NEVER_EXPORTED_MODULES, import_preset, preset_is_reset,
+        )
         from ..core.private_files import user_desktop_dir
 
         dlg = Gtk.FileChooserDialog(
@@ -399,6 +401,14 @@ class TiHAWindow(Gtk.Window):
             )
             return
 
+        reset_note = ""
+        if preset_is_reset(source):
+            choice = self._ask_reset_journal(source.name)
+            if choice is None:
+                return
+            if choice:
+                reset_note = self._reset_journal()
+
         numbers = {m.id: idx for idx, m in enumerate(self.modules, start=1)}
         loaded: list[str] = []
         for page in self.pages:
@@ -421,8 +431,52 @@ class TiHAWindow(Gtk.Window):
                  steps="\n".join(f"  • {s}" for s in loaded))
         if unknown:
             body += t("ui.main.import_unknown", ids=", ".join(unknown))
+        body += reset_note
         body += self._preset_exclusion_note(present=set(preset))
         self._info_dialog(t("ui.main.import_done_title", count=len(loaded)), body)
+
+    def _ask_reset_journal(self, name: str) -> bool | None:
+        """Sıfırlama preset'i: işaretler ve geri alma kayıtları silinsin mi?
+
+        True: sil ve formları doldur; False: yalnız formları doldur;
+        None: vazgeç. Varsayılan yanıt "Vazgeç".
+        """
+        dlg = Gtk.MessageDialog(
+            transient_for=self, modal=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.NONE,
+            text=t("ui.main.reset_confirm_title"),
+        )
+        dlg.format_secondary_text(t("ui.main.reset_confirm_body", name=name))
+        dlg.add_buttons(
+            t("ui.main.reset_cancel"), Gtk.ResponseType.CANCEL,
+            t("ui.main.reset_forms_only"), Gtk.ResponseType.NO,
+            t("ui.main.reset_confirm"), Gtk.ResponseType.YES,
+        )
+        confirm_btn = dlg.get_widget_for_response(Gtk.ResponseType.YES)
+        if confirm_btn is not None:
+            confirm_btn.get_style_context().add_class("destructive-action")
+        dlg.set_default_response(Gtk.ResponseType.CANCEL)
+        response = dlg.run()
+        dlg.destroy()
+        if response == Gtk.ResponseType.YES:
+            return True
+        if response == Gtk.ResponseType.NO:
+            return False
+        return None
+
+    def _reset_journal(self) -> str:
+        """Günceyi siler; sol menü işaretleri ve sayfalardaki "Bu adımı
+        geri al" kutuları kalkar. Sonuç penceresine eklenecek notu döner."""
+        backup = self.journal.clear()
+        for page in self.pages:
+            if isinstance(page, ModulePage):
+                page.forget_applied_state()
+        self._refresh_sidebar_status()
+        self._update_navigation_gate()
+        if backup is None:
+            return t("ui.main.reset_done_nobackup")
+        return t("ui.main.reset_done", path=backup)
 
     def _preset_exclusion_note(self, present: set[str] | None = None) -> str:
         """Preset'e hiç yazılmayan, her tahtada yeniden girilmesi gereken
@@ -906,6 +960,10 @@ class TiHAWindow(Gtk.Window):
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.stack.set_transition_duration(180)
+        # Her sayfa kendi boyunda: Stack varsayılanda bütün sayfaları en
+        # uzun sayfanın yüksekliğine getiriyor, kısa sayfalarda (Hoş
+        # geldiniz) gereksiz kaydırma çubuğu çıkıyordu.
+        self.stack.set_vhomogeneous(False)
 
         self.content_scroll = Gtk.ScrolledWindow()
         self.content_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
