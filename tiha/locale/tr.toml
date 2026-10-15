@@ -403,11 +403,14 @@ export_done_body = """\
 Diğer tahtalarda uygulamak için:\n\
 \u0020\u0020sudo tiha -t -f {name}\
 """
-export_skipped_sensitive = """\
+preset_excluded_note = """\
 \n\n\
-Parola taşıdığı için dosyaya yazılmayan adımlar: {steps}. Bunları \
-diğer tahtalarda elle uygulayın.\
+Güvenlik gereği preset'e HİÇ yazılmayanlar — her tahtada yeniden girin:\n\
+{lines}\
 """
+preset_excluded_step = "  • {step}: bütün ayarları (parolalar dahil)"
+preset_excluded_fields = "  • {step}: {fields}"
+preset_excluded_sanitize = "  • {step}: her tahtada imaj almadan hemen önce elle uygulanır"
 export_failed_title = "Kayıt başarısız"
 export_failed_body = "Preset yazılamadı: {error}"
 update_badge = "<a href=\"tiha-update\">v{version}</a>"

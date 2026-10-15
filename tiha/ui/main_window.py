@@ -9,6 +9,7 @@ altında sabit kalır.
 
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 
@@ -322,9 +323,7 @@ class TiHAWindow(Gtk.Window):
 
         from ..core.preset import SENSITIVE_MODULES
 
-        titles = {m.id: m.sidebar_title or m.title for m in self.modules}
         exported = [mid for mid in collected if mid not in SENSITIVE_MODULES]
-        skipped = [titles.get(mid, mid) for mid in collected if mid in SENSITIVE_MODULES]
 
         dlg = Gtk.FileChooserDialog(
             title=t("ui.main.export_dialog_title"),
@@ -352,8 +351,7 @@ class TiHAWindow(Gtk.Window):
                         t("ui.main.export_done_title"),
                         t("ui.main.export_done_body", count=len(exported),
                           path=written, name=written.name)
-                        + (t("ui.main.export_skipped_sensitive",
-                             steps=", ".join(skipped)) if skipped else ""),
+                        + self._preset_exclusion_note(),
                     )
                 except Exception as exc:
                     self._info_dialog(
@@ -423,7 +421,45 @@ class TiHAWindow(Gtk.Window):
                  steps="\n".join(f"  • {s}" for s in loaded))
         if unknown:
             body += t("ui.main.import_unknown", ids=", ".join(unknown))
+        body += self._preset_exclusion_note(present=set(preset))
         self._info_dialog(t("ui.main.import_done_title", count=len(loaded)), body)
+
+    def _preset_exclusion_note(self, present: set[str] | None = None) -> str:
+        """Preset'e hiç yazılmayan, her tahtada yeniden girilmesi gereken
+        adım ve alanların listesi (kaydetme ve yükleme pencereleri için).
+
+        ``present``: yüklenen dosyadaki adımlar. Elle hazırlanmış bir
+        dosyada parolalı adımın ayarları bulunabilir; o zaman yalnız
+        parola alanları listelenir.
+        """
+        from ..core.preset import (
+            NEVER_EXPORTED_MODULES, SENSITIVE_MODULES, _looks_secret,
+        )
+        from . import params as params_schema
+
+        lines: list[str] = []
+        for idx, mod in enumerate(self.modules, start=1):
+            name = f"{idx}. {mod.sidebar_title or mod.title}"
+            if mod.id in SENSITIVE_MODULES and mod.id not in (present or ()):
+                lines.append(t("ui.main.preset_excluded_step", step=name))
+                continue
+            if mod.id in NEVER_EXPORTED_MODULES:
+                lines.append(t("ui.main.preset_excluded_sanitize", step=name))
+                continue
+            secrets = [
+                # "(isteğe bağlı)" gibi açıklama ekleri listede gereksiz.
+                re.sub(r"\s*\([^)]*\)$", "", f.get("label", f["key"]))
+                for f in params_schema.get(mod.id) or []
+                if "key" in f
+                and f.get("type") not in ("bool", "button", "heading", "readonly")
+                and (f.get("type") == "password" or _looks_secret(f["key"]))
+            ]
+            if secrets:
+                lines.append(t("ui.main.preset_excluded_fields",
+                               step=name, fields=", ".join(secrets)))
+        if not lines:
+            return ""
+        return t("ui.main.preset_excluded_note", lines="\n".join(lines))
 
     def _collect_preset_params(self) -> dict[str, dict]:
         """Dışa aktarılacak {adım: parametreler}, sihirbaz sırasıyla.
