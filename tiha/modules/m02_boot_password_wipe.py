@@ -104,7 +104,10 @@ done < /etc/passwd
 
 SERVICE_CONTENT = """[Unit]
 Description=TiHA — Açılışta genel kullanıcı parolalarını rastgele ata
-After=multi-user.target
+# Parolalar, giriş yolları (getty/SSH/LightDM) açılmadan ÖNCE ezilmeli;
+# After=multi-user.target ile eski parolalar açılıştan sonra bir süre geçerli
+# kalıyordu (systemd-user-sessions /run/nologin'i kaldırmadan önce bitmeli).
+Before=systemd-user-sessions.service ssh.service display-manager.service
 ConditionPathExists=!/etc/tiha/boot-wipe.disabled
 
 [Service]
