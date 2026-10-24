@@ -1,21 +1,24 @@
-"""TiHA uygulama kaydı ve klonun ilk açılışında Tiha-Mon'a gönderimi.
+"""TiHA uygulama kaydı: dosyaya, sistem günlüğüne ve klonda Tiha-Mon'a.
 
 TiHA'nın bu tahtada yaptığı her işlem (adım uygulama, geri alma, düğme
-işlemleri) sonucu ve ayrıntısıyla ``/var/lib/tiha/apply-log.jsonl``
-dosyasına satır satır eklenir. Dizin imaj temizliğinde korunur; dosya
-imajla bütün klonlara gider.
+işlemleri) sonucu ve ayrıntısıyla iki yere yazılır:
+
+* ``/var/lib/tiha/apply-log.jsonl`` — kalıcı kayıt. Dizin imaj
+  temizliğinde korunur; dosya imajla bütün klonlara gider.
+* Sistem günlüğü (journald/syslog) — program adı ``tiha``, tesis
+  ``local5``, her satır "TiHA" ile başlar: ``journalctl -t tiha``.
 
 Parolalar kayda girmez: parametreler ``redact_params`` ile maskelenir,
 özet ve ayrıntı metinlerindeki parola değerleri ``***`` ile değiştirilir.
 
-İmaj öncesi temizlik bir gönderici servis kurar
-(``tiha-apply-log-send.service``). Servis klonun her açılışında ağdan
-sonra çalışır; tahta kaynak tahta değilse (kaynak tahtanın MAC'lerinden
-hiçbiri yoksa) kaydı Merkezi log adımının yazdığı sunucuya (Tiha-Mon)
-syslog olarak bir kez gönderir. Sunucuya doğrudan bağlanır; böylece
-yerel log profili (ör. "Güvenlik") ``local5`` kanalını iletmese de kayıt
-ulaşır. Sunucuya ulaşılamazsa gönderilmiş sayılmaz, sonraki açılışta
-yeniden dener.
+İmaj öncesi temizlik bir servis kurar (``tiha-apply-log-send.service``).
+Klonun ilk açılışında (kaynak tahtanın MAC'lerinden hiçbiri yoksa) kaydın
+tamamı klonun kendi sistem günlüğüne "TiHA imaj kaydı" olarak yazılır.
+Merkezi log adımının profili ``local5``'i iletiyorsa (Bakım, Kapsamlı)
+rsyslog bunları diskte bekleterek Tiha-Mon'a iletir; iletmiyorsa
+(Güvenlik) servis kaydı ayrıca doğrudan Tiha-Mon'a gönderir. Böylece
+Tiha-Mon'a her satır bir kez gider. Sunucuya ulaşılamazsa sonraki
+açılışta yeniden denenir.
 """
 
 from __future__ import annotations
@@ -37,12 +40,49 @@ SOURCE_MAC_FILE = STATE_DIR / "imaged-mac-apply-log"
 SENT_MARKER = VAR_ROOT / "apply-log.sent"
 SENDER_SCRIPT = Path("/usr/local/sbin/tiha-apply-log-send.py")
 SENDER_SERVICE = Path("/etc/systemd/system/tiha-apply-log-send.service")
-SYSLOG_TAG = "tiha-apply"
+SYSLOG_TAG = "tiha"
 
 # Tek kaydın ayrıntısı en çok bu kadar karakter saklanır.
 _MAX_DETAILS = 6000
 # Dosya bu boyutu aşarsa en eski kayıtların yarısı atılır.
 _MAX_FILE_BYTES = 2 * 1024 * 1024
+
+# Kayıt satırlarını biçimleyen kod. Hem TiHA (canlı sistem günlüğü) hem
+# klondaki gönderici betik aynı kodu kullanır; betiğe metin olarak gömülür.
+LINES_CODE = r'''
+ACTIONS = {"apply": "uygulandı", "undo": "geri alındı", "button": "düğme"}
+STATUSES = {"ok": "BAŞARILI", "failed": "BAŞARISIZ", "skipped": "ATLANDI"}
+MAX_DETAIL_LINES = 40
+
+
+def entry_lines(e, prefix, origin=""):
+    """Bir kaydın sistem günlüğü satırları: [(önem, metin), ...]."""
+    status = e.get("status", "")
+    sev = {"ok": 6, "failed": 3, "skipped": 5}.get(status, 6)
+    step = f"{e['step']}. " if e.get("step") else ""
+    action = ACTIONS.get(e.get("action"), e.get("action", ""))
+    if e.get("action") == "button" and e.get("label"):
+        action = f"düğme '{e['label']}'"
+    dur = f" ({e['duration']} sn)" if e.get("duration") is not None else ""
+    head = (f"{prefix} {step}{e.get('title') or e.get('module', '')} · {action} · "
+            f"{STATUSES.get(status, status)}{dur} · {e.get('summary', '')}")
+    out = [(sev, head + (f" · {origin}" if origin else ""))]
+    if e.get("warning"):
+        out.append((4, f"{prefix}   uyarı: {e['warning']}"))
+    params = e.get("params") or {}
+    if params:
+        shown = ", ".join(f"{k}={v}" for k, v in params.items())
+        out.append((sev, f"{prefix}   ayarlar: {shown}"))
+    lines = [ln for ln in (e.get("details") or "").splitlines() if ln.strip()]
+    for ln in lines[:MAX_DETAIL_LINES]:
+        out.append((sev, f"{prefix}   | {ln}"))
+    if len(lines) > MAX_DETAIL_LINES:
+        out.append((sev, f"{prefix}   | … {len(lines) - MAX_DETAIL_LINES} satır daha"))
+    return out
+'''
+_ns: dict = {}
+exec(LINES_CODE, _ns)
+entry_lines = _ns["entry_lines"]
 
 _step_numbers: dict[str, int] | None = None
 
@@ -108,6 +148,21 @@ def record(
         _append(json.dumps(entry, ensure_ascii=False, default=str))
     except Exception as exc:  # noqa: BLE001
         log.warning("Uygulama kaydı yazılamadı: %s", exc)
+        return
+    _to_syslog(entry_lines(entry, "TiHA:"))
+
+
+def _to_syslog(lines: list[tuple[int, str]]) -> None:
+    """Satırları sistem günlüğüne yazar (program adı ``tiha``, local5)."""
+    try:
+        import syslog
+
+        syslog.openlog(SYSLOG_TAG, 0, syslog.LOG_LOCAL5)
+        for sev, text in lines:
+            syslog.syslog(sev, text)
+        syslog.closelog()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Sistem günlüğüne yazılamadı: %s", exc)
 
 
 def _append(line: str) -> None:
@@ -133,15 +188,14 @@ def entry_count() -> int:
 # --- Klonun ilk açılışında gönderim ------------------------------------------
 
 SENDER_SCRIPT_CONTENT = r'''#!/usr/bin/python3
-# TiHA — klonun ilk açılışında TiHA uygulama kaydını Tiha-Mon'a gönderir.
-# İmaj öncesi temizlik adımı kurar. Kaynak tahtada hiçbir şey göndermez.
-# Sunucu Merkezi log adımının yazdığı rsyslog dosyasından okunur ve
-# doğrudan ona bağlanılır (yerel log profili local5'i iletmese de ulaşsın).
+# TiHA — klonun ilk açılışında TiHA uygulama kaydını klonun sistem
+# günlüğüne yazar ve Merkezi log sunucusuna (Tiha-Mon) ulaştırır.
+# İmaj öncesi temizlik adımı kurar. Kaynak tahtada hiçbir şey yapmaz.
 import json
 import re
 import socket
-import subprocess
 import sys
+import syslog
 import time
 from datetime import datetime
 from pathlib import Path
@@ -149,18 +203,16 @@ from pathlib import Path
 LOG = Path("@@LOG@@")
 MACS = Path("@@MACS@@")
 SENT = Path("@@SENT@@")
+LOCAL_DONE = Path("@@SENT@@.local")
 RSYSLOG = Path("@@RSYSLOG@@")
 TAG = "@@TAG@@"
 FACILITY = 21  # local5
-MAX_DETAIL_LINES = 40
 WAIT_SECONDS = 60
-
-ACTIONS = {"apply": "uygulandı", "undo": "geri alındı", "button": "düğme"}
-STATUSES = {"ok": "BAŞARILI", "failed": "BAŞARISIZ", "skipped": "ATLANDI"}
-
+@@LINES_CODE@@
 
 def note(msg):
-    subprocess.run(["logger", "-t", TAG, "--", msg], check=False)
+    syslog.openlog(TAG, 0, syslog.LOG_LOCAL5)
+    syslog.syslog(syslog.LOG_NOTICE, msg if msg.startswith("TiHA") else f"TiHA: {msg}")
     print(f"[{TAG}] {msg}", file=sys.stderr)
 
 
@@ -181,11 +233,14 @@ def local_macs():
     return macs
 
 
-def target():
+def remote_config():
     try:
-        text = RSYSLOG.read_text(encoding="utf-8")
+        return RSYSLOG.read_text(encoding="utf-8")
     except OSError:
-        return None
+        return ""
+
+
+def target(text):
     host = re.search(r'target="([^"]+)"', text)
     port = re.search(r'port="(\d+)"', text)
     proto = re.search(r'protocol="(\w+)"', text)
@@ -195,45 +250,48 @@ def target():
             (proto.group(1) if proto else "udp").lower())
 
 
+def forwards_local5(text):
+    # Profil satırları: "<seçici>   call tiha_remote". local5 bilgi
+    # düzeyinde iletiliyorsa rsyslog kaydı zaten Tiha-Mon'a taşır.
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "call tiha_remote" not in line:
+            continue
+        for part in line.split()[0].split(";"):
+            facs, _, pri = part.partition(".")
+            if pri in ("*", "debug", "info") and (
+                    "*" in facs.split(",") or "local5" in facs.split(",")):
+                return True
+    return False
+
+
+def all_lines(entries):
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    total = len(entries)
+    src = entries[-1].get("host", "?")
+    yield 6, now, (f"TiHA imaj kaydı başlıyor: {total} işlem, kaynak tahta {src}, "
+                   f"TiHA {entries[-1].get('tiha', '?')}, "
+                   f"{entries[0].get('ts', '?')} – {entries[-1].get('ts', '?')}")
+    for n, e in enumerate(entries, 1):
+        ts = e.get("ts") or now
+        origin = f"kaynak tahtada {ts.replace('T', ' ')[:16]} ({e.get('host', '?')})"
+        for sev, text in entry_lines(e, f"TiHA imaj kaydı [{n}/{total}]:", origin):
+            yield sev, ts, text
+    yield 6, now, f"TiHA imaj kaydı bitti: {total} işlem."
+
+
+def write_local(lines):
+    syslog.openlog(TAG, 0, syslog.LOG_LOCAL5)
+    for sev, _ts, text in lines:
+        syslog.syslog(sev, text)
+        time.sleep(0.003)
+    syslog.closelog()
+
+
 def frame(sev, ts, host, text):
-    # RFC 5424: zaman damgası işlemin tahtada yapıldığı an.
+    # RFC 5424: zaman damgası işlemin kaynak tahtada yapıldığı an.
     text = text.replace("\n", " ").strip()[:4000]
     return f"<{FACILITY * 8 + sev}>1 {ts} {host} {TAG} - - - {text}"
-
-
-def messages(entries, host):
-    now = datetime.now().astimezone().isoformat(timespec="seconds")
-    first = entries[0].get("ts", "?")
-    last = entries[-1].get("ts", "?")
-    src = entries[-1].get("host", "?")
-    ver = entries[-1].get("tiha", "?")
-    yield 6, now, (f"TiHA imaj kaydı başlıyor: {len(entries)} işlem, kaynak tahta "
-                   f"{src}, TiHA {ver}, {first} – {last}")
-    total = len(entries)
-    for n, e in enumerate(entries, 1):
-        status = e.get("status", "")
-        sev = {"ok": 6, "failed": 3, "skipped": 5}.get(status, 6)
-        step = f"{e['step']}. " if e.get("step") else ""
-        action = ACTIONS.get(e.get("action"), e.get("action", ""))
-        if e.get("action") == "button" and e.get("label"):
-            action = f"düğme '{e['label']}'"
-        dur = f" ({e['duration']} sn)" if e.get("duration") is not None else ""
-        ts = e.get("ts") or now
-        yield sev, ts, (f"[{n}/{total}] {step}{e.get('title', e.get('module', ''))} · "
-                        f"{action} · {STATUSES.get(status, status)}{dur} · "
-                        f"{e.get('summary', '')}")
-        if e.get("warning"):
-            yield 4, ts, f"[{n}/{total}]   uyarı: {e['warning']}"
-        params = e.get("params") or {}
-        if params:
-            shown = ", ".join(f"{k}={v}" for k, v in params.items())
-            yield sev, ts, f"[{n}/{total}]   ayarlar: {shown}"
-        lines = [ln for ln in (e.get("details") or "").splitlines() if ln.strip()]
-        for ln in lines[:MAX_DETAIL_LINES]:
-            yield sev, ts, f"[{n}/{total}]   | {ln}"
-        if len(lines) > MAX_DETAIL_LINES:
-            yield sev, ts, f"[{n}/{total}]   | … {len(lines) - MAX_DETAIL_LINES} satır daha"
-    yield 6, now, f"TiHA imaj kaydı bitti: {total} işlem gönderildi."
 
 
 def send(dest, items):
@@ -251,6 +309,10 @@ def send(dest, items):
                 time.sleep(0.01)
 
 
+def mark(path):
+    path.write_text(datetime.now().astimezone().isoformat() + "\n")
+
+
 def main():
     if SENT.exists():
         return 0
@@ -264,7 +326,7 @@ def main():
         time.sleep(2)
         mine = local_macs()
     if not mine or mine & source:
-        # Kaynak tahta (ya da ağ kartı yok): gönderilmez, sonra yine bakılır.
+        # Kaynak tahta (ya da ağ kartı yok): bir şey yapılmaz.
         return 0
     try:
         entries = [json.loads(ln) for ln in LOG.read_text(encoding="utf-8").splitlines()
@@ -273,14 +335,32 @@ def main():
         note(f"Uygulama kaydı okunamadı: {exc}")
         return 0
     if not entries:
-        SENT.write_text(datetime.now().astimezone().isoformat() + "\n")
+        mark(SENT)
         return 0
-    dest = target()
+    lines = list(all_lines(entries))
+
+    # 1) Klonun kendi sistem günlüğüne (bir kez).
+    if not LOCAL_DONE.exists():
+        write_local(lines)
+        mark(LOCAL_DONE)
+
+    conf = remote_config()
+    dest = target(conf)
     if dest is None:
-        note("Merkezi log sunucusu ayarlı değil; TiHA kaydı gönderilmedi.")
+        note(f"TiHA imaj kaydı ({len(entries)} işlem) sistem günlüğüne yazıldı; "
+             "Merkezi log sunucusu ayarlı değil.")
+        mark(SENT)
         return 0
+    if forwards_local5(conf):
+        # 2a) Log profili local5'i iletiyor: rsyslog diskte bekleterek iletir.
+        note(f"TiHA imaj kaydı ({len(entries)} işlem) sistem günlüğüne yazıldı; "
+             f"rsyslog {dest[0]}:{dest[1]} adresine iletecek.")
+        mark(SENT)
+        return 0
+
+    # 2b) Profil iletmiyor (ör. Güvenlik): doğrudan gönder.
     host = socket.gethostname()
-    items = [frame(sev, ts, host, text) for sev, ts, text in messages(entries, host)]
+    items = [frame(sev, ts, host, text) for sev, ts, text in lines]
     last_exc = None
     while time.monotonic() < deadline + 240:
         try:
@@ -293,9 +373,9 @@ def main():
         note(f"Tiha-Mon'a ulaşılamadı ({dest[0]}:{dest[1]}): {last_exc}; "
              "sonraki açılışta yeniden denenecek.")
         return 0
-    SENT.write_text(datetime.now().astimezone().isoformat() + "\n")
-    note(f"TiHA uygulama kaydı ({len(entries)} işlem) {dest[0]}:{dest[1]}/{dest[2]} "
-         "adresine gönderildi.")
+    mark(SENT)
+    note(f"TiHA imaj kaydı ({len(entries)} işlem) {dest[0]}:{dest[1]}/{dest[2]} "
+         "adresine doğrudan gönderildi.")
     return 0
 
 
@@ -304,7 +384,7 @@ if __name__ == "__main__":
 '''
 
 SENDER_SERVICE_CONTENT = f"""[Unit]
-Description=TiHA — Klonun ilk açılışında TiHA uygulama kaydını Tiha-Mon'a gönder
+Description=TiHA — Klonun ilk açılışında TiHA uygulama kaydını sistem günlüğüne yaz ve Tiha-Mon'a ulaştır
 Wants=network-online.target
 After=network-online.target tiha-first-boot-hostname.service tiha-clone-identity.service
 ConditionPathExists={SOURCE_MAC_FILE}
@@ -334,6 +414,7 @@ def install_sender(source_macs: list[str]) -> bool:
         SOURCE_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
         SOURCE_MAC_FILE.write_text("\n".join(source_macs) + "\n", encoding="utf-8")
         SENT_MARKER.unlink(missing_ok=True)
+        SENT_MARKER.with_name(SENT_MARKER.name + ".local").unlink(missing_ok=True)
         script = (
             SENDER_SCRIPT_CONTENT
             .replace("@@LOG@@", str(APPLY_LOG_FILE))
@@ -341,6 +422,7 @@ def install_sender(source_macs: list[str]) -> bool:
             .replace("@@SENT@@", str(SENT_MARKER))
             .replace("@@RSYSLOG@@", str(RSYSLOG_CONF))
             .replace("@@TAG@@", SYSLOG_TAG)
+            .replace("@@LINES_CODE@@", LINES_CODE)
         )
         SENDER_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
         SENDER_SCRIPT.write_text(script, encoding="utf-8")
