@@ -57,6 +57,7 @@ from ..core.image_info import IMAGE_INFO_FILE, write_image_info
 from ..core.keyring import purge_keyrings
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
+from ..core import apply_log
 from ..core.paths import STATE_DIR
 from ..core.undo import Journal
 from ..core.utils import run_cmd
@@ -563,6 +564,14 @@ class ImageSanitizeModule(Module):
             ops.append(t("m10.apply.clone_identity", path=IDENTITY_SERVICE))
         else:
             ops.append(t("m10.apply.clone_identity_failed"))
+
+        # TiHA uygulama kaydı klonun ilk açılışında Tiha-Mon'a gönderilir
+        # (kaynak tahtada gönderilmez; bkz. core/apply_log).
+        if apply_log.install_sender(_local_macs()):
+            ops.append(t("m10.apply.apply_log_sender",
+                         count=apply_log.entry_count(), path=apply_log.APPLY_LOG_FILE))
+        else:
+            ops.append(t("m10.apply.apply_log_sender_failed"))
 
         # NetworkManager bağlantıları
         nm_dir = Path("/etc/NetworkManager/system-connections")

@@ -203,6 +203,13 @@ class ActionLog:
         )
         self._records.append(rec)
         self._save()
+        from .apply_log import record as record_apply_log
+
+        record_apply_log(
+            module_id=module_id, title=title, action="button", label=label,
+            status="ok" if success else "failed", summary=summary,
+            params=params, data=data,
+        )
         return rec
 
     def all(self) -> list[ActionRecord]:

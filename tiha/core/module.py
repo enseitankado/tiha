@@ -219,6 +219,7 @@ class Module:
             if not result.success:
                 log.error("MODÜL APPLY BAŞARISIZ: %s - %s", self.id, result.summary)
 
+            self._record_apply_log("apply", result, params, duration)
             return result
 
         except Exception as exc:
@@ -227,7 +228,9 @@ class Module:
             log.error("Modül: %s", self.id)
             log.error("Süre: %.2f saniye", duration)
             log.error("İstisna: %s", exc, exc_info=True)
-            return ApplyResult(False, t("core.module.unexpected_error", error=exc))
+            result = ApplyResult(False, t("core.module.unexpected_error", error=exc))
+            self._record_apply_log("apply", result, params, duration)
+            return result
         finally:
             # Adımın yazdığı yedek/anahtar dosyaları yalnız root'a açık kalsın.
             _lock_state()
@@ -282,6 +285,7 @@ class Module:
             if not result.success:
                 log.error("MODÜL UNDO BAŞARISIZ: %s - %s", self.id, result.summary)
 
+            self._record_apply_log("undo", result, params, duration)
             return result
 
         except Exception as exc:
@@ -290,10 +294,32 @@ class Module:
             log.error("Modül: %s", self.id)
             log.error("Süre: %.2f saniye", duration)
             log.error("İstisna: %s", exc, exc_info=True)
-            return ApplyResult(False, t("core.module.unexpected_error", error=exc))
+            result = ApplyResult(False, t("core.module.unexpected_error", error=exc))
+            self._record_apply_log("undo", result, params, duration)
+            return result
         finally:
             # Adımın yazdığı yedek/anahtar dosyaları yalnız root'a açık kalsın.
             _lock_state()
+
+    def _record_apply_log(
+        self, action: str, result: ApplyResult, params: dict | None, duration: float,
+    ) -> None:
+        """İşlemi kalıcı uygulama kaydına ekler (klonda Tiha-Mon'a gider)."""
+        from .apply_log import record
+
+        record(
+            module_id=self.id,
+            title=self.sidebar_title or self.title,
+            action=action,
+            status=("skipped" if result.not_applicable
+                    else "ok" if result.success else "failed"),
+            summary=result.summary,
+            details=result.details or "",
+            warning=result.warning or "",
+            params=params,
+            data=result.data if isinstance(result.data, dict) else None,
+            duration=duration,
+        )
 
     def undo(self, data: dict, params: dict | None = None) -> ApplyResult:
         """Daha önce uygulanan işlemi geri alır.

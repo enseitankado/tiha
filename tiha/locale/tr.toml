@@ -4845,6 +4845,10 @@ edilir)\n\
 .python_history)\n\
 \u0020\u0020- Web tarayıcı önbellekleri ve gezinti verileri\n\
 \u0020\u0020\u0020\u0020(Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, \
+\u0020\u0020- TiHA'nın bu tahtada yaptığı bütün işlemlerin kaydı\n\
+\u0020\u0020\u0020\u0020(/var/lib/tiha/apply-log.jsonl) imajda kalır; klon ilk\n\
+\u0020\u0020\u0020\u0020açılışında bu kaydı Merkezi log sunucusuna (Tiha-Mon)\n\
+\u0020\u0020\u0020\u0020bir kez gönderir\n\
 Opera, Yandex)\n\
 \u0020\u0020\u0020\u0020- gezinti geçmişi, çerezler, indirme geçmişi, \
 oturumlar, yerel\n\
@@ -4928,6 +4932,8 @@ oturumda Chrome parola sormaz)\
 tmp = "/tmp ve /var/tmp: {count} öğe silindi"
 finishing = "Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor..."
 freed_unknown = "ölçülemedi"
+apply_log_sender = "Klon ilk açılışta TiHA uygulama kaydını ({count} işlem, {path}) Merkezi log sunucusuna (Tiha-Mon) gönderecek"
+apply_log_sender_failed = "Ağ kartı adresi okunamadı; TiHA uygulama kaydını gönderecek servis kurulamadı"
 done = "İmaj öncesi temizlik tamamlandı; ~{freed} alan boşaltıldı."
 detail_item = "• {item}"
 
