@@ -83,8 +83,9 @@ row.tiha-step-failed {
     color: #111;
 }
 
-/* Form alanının sağındaki açıklama düğmesi: mavi yuvarlak zemin, beyaz
-   "?". Tıklanınca açıklama konuşma balonunda (popover) açılır. */
+/* Form alanının sağındaki açıklama düğmesi: açık gri yuvarlak zemin,
+   beyaz "?" — göze batmaz. Tıklanınca açıklama konuşma balonunda
+   (popover) açılır. */
 button.tiha-help-dot,
 .tiha-form button.tiha-help-dot {
     min-width: 20px;
@@ -94,11 +95,11 @@ button.tiha-help-dot,
     border-radius: 50%;
     border: none;
     background-image: none;
-    background-color: #1c6fb0;
+    background-color: #c3c8ce;
     color: #ffffff;
     font-size: 9pt;
     font-weight: 800;
-    box-shadow: 0 1px 2px alpha(#000000, 0.25);
+    box-shadow: none;
     -gtk-icon-shadow: none;
     text-shadow: none;
 }
@@ -111,23 +112,23 @@ button.tiha-help-dot label,
 }
 button.tiha-help-dot:hover,
 .tiha-form button.tiha-help-dot:hover {
-    background-color: #155a8a;
+    background-color: #9ea5ad;
 }
 button.tiha-help-dot:active,
 button.tiha-help-dot:checked,
 .tiha-form button.tiha-help-dot:active {
-    background-color: #0f4570;
+    background-color: #868d95;
 }
 
-/* Açıklama balonu: beyaz kart, yumuşak köşe, ince mavi kenar ve gölge. */
+/* Açıklama balonu: beyaz kart, yumuşak köşe, ince gri kenar. */
 popover.tiha-help-popover {
     background-color: #ffffff;
-    border: 1px solid #b9d3ea;
+    border: 1px solid #d3d7dc;
     border-radius: 12px;
     padding: 14px 16px 14px 16px;
 }
 popover.tiha-help-popover label.tiha-help-popover-title {
-    color: #155a8a;
+    color: #3a3f45;
     font-weight: 700;
     font-size: 10pt;
 }

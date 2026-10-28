@@ -157,22 +157,27 @@ def _no_focus_labels(widget: Gtk.Widget) -> None:
             _no_focus_labels(child)
 
 
-# Uzun alan açıklamalarının sayfa yerine "?" balonunda gösterildiği adımlar.
-_HELP_BUBBLE_MODULES = {"m01_initial_passwords"}
+# Uzun alan açıklamaları (2 satırı aşan) sayfa yerine "?" balonunda.
 # Satır sayısı bu genişlikte ölçülür: varsayılan pencerede form açıklama
 # sütununun genişliği (piksel).
 _HELP_COLUMN_WIDTH = 580
 
 
-def _help_line_count(text: str) -> int:
-    """Açıklamanın form sütununda (9 pt) kaç satır tuttuğu."""
+def _help_full_text(field: dict) -> str:
+    """Alanın balonda gösterilecek açıklaması (ek "Ayrıntılar" dahil)."""
+    parts = [field.get("help") or "", field.get("help_more") or ""]
+    return "\n\n".join(p.strip() for p in parts if p.strip())
+
+
+def _help_line_count(text: str, width: int = 0) -> int:
+    """Açıklamanın verilen genişlikte (9 pt) kaç satır tuttuğu."""
     settings = Gtk.Settings.get_default()
     font_name = settings.get_property("gtk-font-name") if settings else "Sans 10"
     font = Pango.FontDescription.from_string(font_name or "Sans 10")
     font.set_size(9 * Pango.SCALE)
     layout = Gtk.Label().create_pango_layout(text)
     layout.set_font_description(font)
-    layout.set_width(_HELP_COLUMN_WIDTH * Pango.SCALE)
+    layout.set_width((width or _HELP_COLUMN_WIDTH) * Pango.SCALE)
     layout.set_wrap(Pango.WrapMode.WORD_CHAR)
     return layout.get_line_count()
 
@@ -502,6 +507,9 @@ class ModulePage(Gtk.Box):
         # Apply / buton işlemi sonrası tazelemek için saklanır.
         self._preview_widget: Gtk.Widget | None = None
         self._conditional_field_widgets: dict[str, list[Gtk.Widget]] = {}
+        # Uzun açıklamalar: "?" balonu ile sayfa içi metin arasında seçim.
+        self._help_rows: list[dict] = []
+        self._help_column_width = _HELP_COLUMN_WIDTH
         self._build()
         # Önceki oturumda uygulanmış mı? Varsa "geri al" banner'ı göster.
         self._show_previous_apply_banner()
@@ -705,19 +713,25 @@ class ModulePage(Gtk.Box):
                     entry.set_width_chars(chars)
             else:
                 widget.set_hexpand(True)
-            # Uzun açıklama: sayfada değil, alanın sağındaki "?" balonunda.
-            bubble_text = self._help_bubble_text(field)
+            # Açıklama: 2 satırı aşarsa sayfada değil, alanın sağındaki "?"
+            # balonunda. Satır sayısı sütunun gerçek genişliğine bağlı
+            # olduğundan iki görünüm de kurulur; _apply_help_modes seçer.
+            help_text = _help_full_text(field)
             cell: Gtk.Widget = widget
-            if bubble_text:
+            dot: Gtk.Widget | None = None
+            if help_text:
                 if kind == "bool":
                     # "?" onay kutusunun hemen yanında dursun, satır sonunda değil.
                     widget.set_hexpand(False)
                     widget.set_halign(Gtk.Align.START)
                 cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
                 cell.pack_start(widget, widget.get_hexpand(), True, 0)
-                cell.pack_start(
-                    _help_bubble_button(field["label"], bubble_text), False, False, 0,
-                )
+                dot = _help_bubble_button(field["label"], help_text)
+                if kind == "textarea":
+                    # Çok satırlı kutuda "?" üst satır hizasında dursun.
+                    dot.set_valign(Gtk.Align.START)
+                    dot.set_margin_top(4)
+                cell.pack_start(dot, False, False, 0)
                 cell.set_hexpand(widget.get_hexpand())
                 cell.set_halign(widget.get_halign())
                 widget.set_halign(Gtk.Align.FILL if widget.get_hexpand() else Gtk.Align.START)
@@ -729,7 +743,8 @@ class ModulePage(Gtk.Box):
                 self._auto_values[field["key"]] = _widget_text(widget)
             row_idx += 1
             row_widgets: list[Gtk.Widget] = [label, cell]
-            if field.get("help") and not bubble_text:
+            inline: list[Gtk.Widget] = []
+            if field.get("help"):
                 help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
                 # Kutular daraldı; sütunu sayfa genişliğine yardım metni yayar.
                 help_lbl.set_hexpand(True)
@@ -744,8 +759,8 @@ class ModulePage(Gtk.Box):
                     help_widget = expander
                 grid.attach(help_widget, 1, row_idx, 1, 1)
                 row_idx += 1
-                row_widgets.append(help_widget)
-            if field.get("help_more") and not bubble_text:
+                inline.append(help_widget)
+            if field.get("help_more"):
                 # Yardımın ilk kısmı açıkta, uzun devamı (neden/nasıl)
                 # kapalı başlayan bir katlayıcıda.
                 more_lbl = _wrapping_label(field["help_more"], klass="tiha-rationale")
@@ -758,7 +773,17 @@ class ModulePage(Gtk.Box):
                 more.get_style_context().add_class("tiha-rationale")
                 grid.attach(more, 1, row_idx, 1, 1)
                 row_idx += 1
-                row_widgets.append(more)
+                inline.append(more)
+            if dot is not None:
+                self._help_rows.append({
+                    "text": help_text,
+                    # Ek "Ayrıntılar" metni olan açıklama zaten uzundur.
+                    "always": bool(field.get("help_more")),
+                    "label": label,
+                    "dot": dot,
+                    "inline": inline,
+                    "bubble": None,
+                })
 
             if gate:
                 self._conditional_field_widgets[field["key"]] = row_widgets
@@ -766,6 +791,13 @@ class ModulePage(Gtk.Box):
                     for w in row_widgets:
                         w.set_no_show_all(True)
                         w.set_visible(False)
+
+        # Açıklamaların ilk görünümü varsayılan pencere genişliğine göre;
+        # sayfa yerleşince gerçek sütun genişliğiyle yeniden ölçülür.
+        self._help_column_width = _HELP_COLUMN_WIDTH
+        self._apply_help_modes()
+        if self._help_rows:
+            grid.connect("size-allocate", self._on_form_allocate)
 
         # Checkbox'ların başlangıç durumuna göre ilgili alanları ayarla
         for field in schema:
@@ -777,22 +809,31 @@ class ModulePage(Gtk.Box):
 
         return grid
 
-    def _help_bubble_text(self, field: dict) -> str:
-        """Açıklama "?" balonuna taşınacaksa balon metni, yoksa "".
+    def _on_form_allocate(self, grid: Gtk.Grid, allocation) -> None:
+        """Form yerleşince açıklama sütununun gerçek genişliğini ölçer."""
+        label = self._help_rows[0]["label"]
+        width = allocation.width - label.get_allocated_width() - grid.get_column_spacing()
+        if width < 200 or abs(width - self._help_column_width) < 12:
+            return
+        self._help_column_width = width
+        GLib.idle_add(self._apply_help_modes)
 
-        Yalnız ``_HELP_BUBBLE_MODULES`` adımlarında ve açıklaması (ek
-        "Ayrıntılar" metniyle birlikte) form sütununda 2 satırı aşan
-        alanlarda kullanılır; kısa açıklamalar alanın altında kalır.
-        """
-        if self.module.id not in _HELP_BUBBLE_MODULES:
-            return ""
-        parts = [field.get("help") or "", field.get("help_more") or ""]
-        text = "\n\n".join(p.strip() for p in parts if p.strip())
-        if not text:
-            return ""
-        if not field.get("help_more") and _help_line_count(text) <= 2:
-            return ""
-        return text
+    def _apply_help_modes(self) -> bool:
+        """Her açıklamayı sütun genişliğinde ölçer: 2 satırı aşan "?"
+        balonuna, kısa olan alanın altına."""
+        for row in self._help_rows:
+            bubble = row["always"] or _help_line_count(
+                row["text"], self._help_column_width) > 2
+            # Şartlı gizlenen satırda (visible_when) açıklama da gizli kalır.
+            row_visible = not row["label"].get_no_show_all()
+            row["bubble"] = bubble
+            row["dot"].set_no_show_all(not bubble)
+            row["dot"].set_visible(bubble)
+            for w in row["inline"]:
+                show = row_visible and not bubble
+                w.set_no_show_all(not show)
+                w.set_visible(show)
+        return False
 
     def _refresh_dynamic_defaults(self, *, bools_only: bool = False) -> None:
         """``default_from``'lu alanları sistemin güncel durumundan tazeler.
@@ -879,6 +920,7 @@ class ModulePage(Gtk.Box):
             for w in self._conditional_field_widgets.get(field["key"], ()):
                 w.set_no_show_all(not visible)
                 w.set_visible(visible)
+        self._apply_help_modes()
 
     def _update_conditional_fields(self, checkbox_key: str, is_active: bool) -> None:
         """Checkbox durumuna göre ilgili alanları etkinleştir/pasifleştir."""
@@ -1121,6 +1163,7 @@ class ModulePage(Gtk.Box):
             for w in self._conditional_field_widgets.get(key, ()):
                 w.set_no_show_all(not visible)
                 w.set_visible(visible)
+        self._apply_help_modes()
         # Düğme etiketleri
         for key, label in (state.get("labels") or {}).items():
             widget = self._fields.get(key)
