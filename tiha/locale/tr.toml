@@ -585,6 +585,7 @@ confirm = "Onayla"
 char_rejected = "Bu karakter burada kullanılamaz; ayrıntı alanın altındaki açıklamada."
 help_expander = "Açıklama"
 help_more_expander = "Ayrıntılar: neden gerekli, nasıl çalışır?"
+help_bubble_tip = "Açıklamayı göster"
 help_more_details = "Ayrıntılar"
 rationale_toggle_tip = "Bu adımın açıklamasını ayrı pencerede göster"
 experimental_banner = """\

@@ -157,6 +157,60 @@ def _no_focus_labels(widget: Gtk.Widget) -> None:
             _no_focus_labels(child)
 
 
+# Uzun alan açıklamalarının sayfa yerine "?" balonunda gösterildiği adımlar.
+_HELP_BUBBLE_MODULES = {"m01_initial_passwords"}
+# Satır sayısı bu genişlikte ölçülür: varsayılan pencerede form açıklama
+# sütununun genişliği (piksel).
+_HELP_COLUMN_WIDTH = 580
+
+
+def _help_line_count(text: str) -> int:
+    """Açıklamanın form sütununda (9 pt) kaç satır tuttuğu."""
+    settings = Gtk.Settings.get_default()
+    font_name = settings.get_property("gtk-font-name") if settings else "Sans 10"
+    font = Pango.FontDescription.from_string(font_name or "Sans 10")
+    font.set_size(9 * Pango.SCALE)
+    layout = Gtk.Label().create_pango_layout(text)
+    layout.set_font_description(font)
+    layout.set_width(_HELP_COLUMN_WIDTH * Pango.SCALE)
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+    return layout.get_line_count()
+
+
+def _help_bubble_button(title: str, text: str) -> Gtk.Button:
+    """Mavi yuvarlak "?" düğmesi; tıklanınca açıklamayı balonda gösterir."""
+    btn = Gtk.Button(label="?")
+    btn.get_style_context().add_class("tiha-help-dot")
+    btn.set_valign(Gtk.Align.CENTER)
+    btn.set_tooltip_text(t("ui.pages.help_bubble_tip"))
+    btn.set_relief(Gtk.ReliefStyle.NONE)
+
+    popover = Gtk.Popover.new(btn)
+    popover.set_position(Gtk.PositionType.BOTTOM)
+    popover.get_style_context().add_class("tiha-help-popover")
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    heading = Gtk.Label(label=title, xalign=0)
+    heading.get_style_context().add_class("tiha-help-popover-title")
+    heading.set_line_wrap(True)
+    heading.set_max_width_chars(56)
+    box.pack_start(heading, False, False, 0)
+    body = _wrapping_label(text, klass="tiha-help-popover-body")
+    body.set_max_width_chars(64)
+    body.set_width_chars(48)
+    box.pack_start(body, False, False, 0)
+    box.show_all()
+    popover.add(box)
+
+    def toggle(_btn) -> None:
+        if popover.get_visible():
+            popover.popdown()
+        else:
+            popover.popup()
+
+    btn.connect("clicked", toggle)
+    return btn
+
+
 def _wrapping_label(text: str, *, klass: str | None = None, selectable: bool = False) -> Gtk.Label:
     lbl = Gtk.Label(label=text, xalign=0)
     lbl.set_line_wrap(True)
@@ -651,15 +705,31 @@ class ModulePage(Gtk.Box):
                     entry.set_width_chars(chars)
             else:
                 widget.set_hexpand(True)
-            grid.attach(widget, 1, row_idx, 1, 1)
+            # Uzun açıklama: sayfada değil, alanın sağındaki "?" balonunda.
+            bubble_text = self._help_bubble_text(field)
+            cell: Gtk.Widget = widget
+            if bubble_text:
+                if kind == "bool":
+                    # "?" onay kutusunun hemen yanında dursun, satır sonunda değil.
+                    widget.set_hexpand(False)
+                    widget.set_halign(Gtk.Align.START)
+                cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                cell.pack_start(widget, widget.get_hexpand(), True, 0)
+                cell.pack_start(
+                    _help_bubble_button(field["label"], bubble_text), False, False, 0,
+                )
+                cell.set_hexpand(widget.get_hexpand())
+                cell.set_halign(widget.get_halign())
+                widget.set_halign(Gtk.Align.FILL if widget.get_hexpand() else Gtk.Align.START)
+            grid.attach(cell, 1, row_idx, 1, 1)
             self._fields[field["key"]] = widget
             if field.get("default_from") and field.get("type") != "bool":
                 # Sistemden okunarak doldurulan değer; kullanıcı bunu
                 # değiştirirse tazeleme onun değerine dokunmaz.
                 self._auto_values[field["key"]] = _widget_text(widget)
             row_idx += 1
-            row_widgets: list[Gtk.Widget] = [label, widget]
-            if field.get("help"):
+            row_widgets: list[Gtk.Widget] = [label, cell]
+            if field.get("help") and not bubble_text:
                 help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
                 # Kutular daraldı; sütunu sayfa genişliğine yardım metni yayar.
                 help_lbl.set_hexpand(True)
@@ -675,7 +745,7 @@ class ModulePage(Gtk.Box):
                 grid.attach(help_widget, 1, row_idx, 1, 1)
                 row_idx += 1
                 row_widgets.append(help_widget)
-            if field.get("help_more"):
+            if field.get("help_more") and not bubble_text:
                 # Yardımın ilk kısmı açıkta, uzun devamı (neden/nasıl)
                 # kapalı başlayan bir katlayıcıda.
                 more_lbl = _wrapping_label(field["help_more"], klass="tiha-rationale")
@@ -706,6 +776,23 @@ class ModulePage(Gtk.Box):
                     self._update_conditional_fields(checkbox_key, widget.get_active())
 
         return grid
+
+    def _help_bubble_text(self, field: dict) -> str:
+        """Açıklama "?" balonuna taşınacaksa balon metni, yoksa "".
+
+        Yalnız ``_HELP_BUBBLE_MODULES`` adımlarında ve açıklaması (ek
+        "Ayrıntılar" metniyle birlikte) form sütununda 2 satırı aşan
+        alanlarda kullanılır; kısa açıklamalar alanın altında kalır.
+        """
+        if self.module.id not in _HELP_BUBBLE_MODULES:
+            return ""
+        parts = [field.get("help") or "", field.get("help_more") or ""]
+        text = "\n\n".join(p.strip() for p in parts if p.strip())
+        if not text:
+            return ""
+        if not field.get("help_more") and _help_line_count(text) <= 2:
+            return ""
+        return text
 
     def _refresh_dynamic_defaults(self, *, bools_only: bool = False) -> None:
         """``default_from``'lu alanları sistemin güncel durumundan tazeler.

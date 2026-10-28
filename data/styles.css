@@ -83,6 +83,59 @@ row.tiha-step-failed {
     color: #111;
 }
 
+/* Form alanının sağındaki açıklama düğmesi: mavi yuvarlak zemin, beyaz
+   "?". Tıklanınca açıklama konuşma balonunda (popover) açılır. */
+button.tiha-help-dot,
+.tiha-form button.tiha-help-dot {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0;
+    margin: 0;
+    border-radius: 50%;
+    border: none;
+    background-image: none;
+    background-color: #1c6fb0;
+    color: #ffffff;
+    font-size: 9pt;
+    font-weight: 800;
+    box-shadow: 0 1px 2px alpha(#000000, 0.25);
+    -gtk-icon-shadow: none;
+    text-shadow: none;
+}
+button.tiha-help-dot label,
+.tiha-form button.tiha-help-dot label {
+    color: #ffffff;
+    font-size: 9pt;
+    font-weight: 800;
+    padding: 0;
+}
+button.tiha-help-dot:hover,
+.tiha-form button.tiha-help-dot:hover {
+    background-color: #155a8a;
+}
+button.tiha-help-dot:active,
+button.tiha-help-dot:checked,
+.tiha-form button.tiha-help-dot:active {
+    background-color: #0f4570;
+}
+
+/* Açıklama balonu: beyaz kart, yumuşak köşe, ince mavi kenar ve gölge. */
+popover.tiha-help-popover {
+    background-color: #ffffff;
+    border: 1px solid #b9d3ea;
+    border-radius: 12px;
+    padding: 14px 16px 14px 16px;
+}
+popover.tiha-help-popover label.tiha-help-popover-title {
+    color: #155a8a;
+    font-weight: 700;
+    font-size: 10pt;
+}
+popover.tiha-help-popover label.tiha-help-popover-body {
+    color: #2b2f33;
+    font-size: 9.5pt;
+}
+
 .tiha-preview {
     background: alpha(@theme_fg_color, 0.05);
     border-radius: 6px;
@@ -634,7 +687,7 @@ scrolledwindow.tiha-textarea textview {
    Yalnız metinli düğmeler (text-button) hedeflenir: simgeli düğmeler
    (çip kapatma, spin +/-), combobox ve "?" yardım düğmesi kendi
    kurallarını korur. */
-.tiha button.text-button:not(.tiha-help-btn),
+.tiha button.text-button:not(.tiha-help-btn):not(.tiha-help-dot),
 .tiha-branch-dialog button.text-button {
     font-size: 10pt;
     font-weight: normal;
