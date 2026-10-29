@@ -137,6 +137,12 @@ popover.tiha-help-popover label.tiha-help-popover-body {
     font-size: 9.5pt;
 }
 
+/* Adım başındaki "Mevcut durum" katlayıcısı: kalın, sakin başlık. */
+expander.tiha-preview-expander > title > label {
+    font-weight: 600;
+    color: alpha(@theme_fg_color, 0.85);
+}
+
 .tiha-preview {
     background: alpha(@theme_fg_color, 0.05);
     border-radius: 6px;

@@ -577,7 +577,14 @@ class ModulePage(Gtk.Box):
                 height=180, css_class="tiha-preview",
                 wrap=not is_tabular, fit=True,
             )
-            self.pack_start(self._preview_widget, False, False, 0)
+            # Mevcut durum kutusu kapalı bir katlayıcıda başlar; sayfa
+            # doğrudan ayarlarla açılır, durum istenirse açılıp okunur.
+            self._preview_expander = Gtk.Expander(label=t("ui.pages.preview_expander"))
+            self._preview_expander.set_expanded(False)
+            self._preview_expander.get_style_context().add_class("tiha-preview-expander")
+            self._preview_widget.set_margin_top(6)
+            self._preview_expander.add(self._preview_widget)
+            self.pack_start(self._preview_expander, False, False, 0)
 
         schema = params_schema.get(self.module.id)
         if schema:
