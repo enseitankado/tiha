@@ -4832,6 +4832,10 @@ Tekil kimlikler (her kopya kendi kimliğini üretir):\n\
 \u0020\u0020- SSH anahtar üretiminin 'yapıldı' işareti\n\
 \u0020\u0020- Klonun ilk açılışında kimliği yenileyen servis kurulur\n\
 \u0020\u0020\u0020\u0020(kaynak tahtanın ağ kartı adresleri imzalanır)\n\
+\u0020\u0020- TiHA'nın bu tahtada yaptığı bütün işlemlerin kaydı\n\
+\u0020\u0020\u0020\u0020(/var/lib/tiha/apply-log.jsonl) imajda kalır; klon ilk\n\
+\u0020\u0020\u0020\u0020açılışında bu kaydı kendi sistem günlüğüne yazar ve\n\
+\u0020\u0020\u0020\u0020Merkezi log sunucusuna (Tiha-Mon) bir kez ulaştırır\n\
 \n\
 TiHA'nın hassas yedekleri (/var/lib/tiha, imaja gider):\n\
 \u0020\u0020- Parola değişikliğinden önceki /etc/shadow yedeği ve\n\
@@ -4865,10 +4869,6 @@ edilir)\n\
 .python_history)\n\
 \u0020\u0020- Web tarayıcı önbellekleri ve gezinti verileri\n\
 \u0020\u0020\u0020\u0020(Firefox, Chrome, Chromium, Edge, Brave, Vivaldi, \
-\u0020\u0020- TiHA'nın bu tahtada yaptığı bütün işlemlerin kaydı\n\
-\u0020\u0020\u0020\u0020(/var/lib/tiha/apply-log.jsonl) imajda kalır; klon ilk\n\
-\u0020\u0020\u0020\u0020açılışında bu kaydı kendi sistem günlüğüne yazar ve\n\
-\u0020\u0020\u0020\u0020Merkezi log sunucusuna (Tiha-Mon) bir kez ulaştırır\n\
 Opera, Yandex)\n\
 \u0020\u0020\u0020\u0020- gezinti geçmişi, çerezler, indirme geçmişi, \
 oturumlar, yerel\n\
@@ -4919,6 +4919,8 @@ ssh_sentinel_removed = "SSH anahtar üretimi 'yapıldı' işareti silindi: {path
 ssh_keys = "SSH host anahtarları silindi, ilk açılışta yenilenecek"
 clone_identity = "Klon ilk açılışta makine kimliğini ve SSH anahtarlarını yenileyecek ({path})"
 clone_identity_failed = "Ağ kartı adresi okunamadı; klon kimlik servisi kurulamadı"
+apply_log_sender = "Klon ilk açılışta TiHA uygulama kaydını ({count} işlem, {path}) kendi sistem günlüğüne yazıp Merkezi log sunucusuna (Tiha-Mon) ulaştıracak"
+apply_log_sender_failed = "Ağ kartı adresi okunamadı; TiHA uygulama kaydını gönderecek servis kurulamadı"
 nm_removed = "{count} NetworkManager bağlantı dosyası silindi"
 dhcp_removed = "{count} DHCP lease dosyası silindi"
 random_seed = "systemd random-seed sıfırlandı"
@@ -4952,8 +4954,6 @@ oturumda Chrome parola sormaz)\
 tmp = "/tmp ve /var/tmp: {count} öğe silindi"
 finishing = "Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor..."
 freed_unknown = "ölçülemedi"
-apply_log_sender = "Klon ilk açılışta TiHA uygulama kaydını ({count} işlem, {path}) kendi sistem günlüğüne yazıp Merkezi log sunucusuna (Tiha-Mon) ulaştıracak"
-apply_log_sender_failed = "Ağ kartı adresi okunamadı; TiHA uygulama kaydını gönderecek servis kurulamadı"
 done = "İmaj öncesi temizlik tamamlandı; ~{freed} alan boşaltıldı."
 detail_item = "• {item}"
 
