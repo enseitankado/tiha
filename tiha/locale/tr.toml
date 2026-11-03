@@ -1148,7 +1148,7 @@ hesap için PIN anahtarı tanımlamanız gerekir.\
 
 [m01.params.root_password]
 label = "Yeni root parolası (isteğe bağlı)"
-help = "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Tahta kurtarma (recovery) kipinde açılırsa kabuk da bu parolayı ister. Boş bırakılabilir."
+help = "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Tahta kurtarma (recovery) kipinde açılırsa kabuk da bu parolayı ister. [[ankamon]] tahtalara SSH ile bu parolayla root olarak bağlanır; Ankamon'un Ayarlar'ındaki SSH parolası bununla aynı olmalıdır. Boş bırakılabilir."
 
 [m01.params.admin_password]
 label = "Yeni etapadmin parolası (isteğe bağlı)"
@@ -1164,7 +1164,11 @@ kayarsa PIN kodları çalışmaz; internet yoksa EBA QR ile de girilemez. O \
 durumda tahtaya etapadmin (sistem yöneticisi) dışında parolayla \
 girilebilecek tek hesap budur. Bu yüzden bir parola belirlemeniz önerilir; \
 parolayı yalnız gerektiğinde kullanılmak üzere güvenli bir yerde saklayın. \
-Boş bırakırsanız mevcut parolası değişmez.\
+Boş bırakırsanız mevcut parolası değişmez. \
+[[dikkat]]Dikkat: Bu parola sızarsa okuldaki bütün tahtalar etkilenir. Böyle \
+bir durumda parolanın etapadmin tarafından bütün tahtalarda değiştirilmesi \
+gerekir. [[ankamon]] kullanıyorsanız tahtalara ağ üzerinden erişerek \
+parolayı toplu olarak da değiştirebilirsiniz (Kullanıcı parolası ayarla).[[/dikkat]]\
 """
 
 [m01.params.reserve_count]
@@ -2278,7 +2282,9 @@ ortak öğretmen, branş, yedek, kişisel öğretmen ve öğrenci hesapları \
 parolaları bilinse bile reddedilir. İşareti kaldırıp uygulanırsa yapılandırma silinir; paket \
 TiHA tarafından kurulmuşsa geri sökülür. Uzak SSH girişi için \"Yerel \
 hesaplar\" adımında root parolası tanımlanmış olmalı — parolasız hesaba \
-kimse ağdan giremez.\
+kimse ağdan giremez. [[ankamon]] tahtalara SSH ile root olarak bağlanır: \
+toplu güncelleme, parola değiştirme, kapatma gibi uzaktan işlemler, dosya \
+yöneticisi ve ekran görünümleri bu bağlantıyla çalışır.\
 """
 
 [m04.params.enable_samba]
@@ -2289,7 +2295,9 @@ yazma yetkili olarak paylaşıma açılır. Bakımcı Windows/Linux dosya \
 gezgininden `smb://<tahta-ip>/root` adresine bağlanır. İşareti kaldırıp \
 uygulanırsa paylaşım kaldırılır; paket TiHA tarafından kurulmuşsa geri \
 sökülür. Tüm klonlarda aynı Samba parolası olacağı için güçlü seçin ve \
-erişimi yönetim istasyonlarıyla sınırlayın.\
+erişimi yönetim istasyonlarıyla sınırlayın. Bu parolayı [[ankamon]]'un \
+Ayarlar ▸ Samba erişimi bölümüne girerseniz Ankamon'un ağ envanteri \
+tahtaların paylaşımlarını da listeler.\
 """
 
 [m04.notice]
@@ -2543,7 +2551,9 @@ uyarıları (kern.warning), servis hataları/notice (daemon.notice), kimlik \
 doğrulama (auth/authpriv), TiHA + Ahenk servisleri (local0-7). Öğretmen \
 davranışı ve tarayıcı içeriği iletilmez. Kapsamlı: her mesaj gönderilir; \
 ayıklama için, kalıcı olarak açık tutmayın. Yalnız güvenlik: minimum trafik, \
-sadece kimlik ve kritik hatalar.\
+sadece kimlik ve kritik hatalar. Merkezi sunucu olarak [[ankamon]] \
+kurarsanız loglar 514 numaralı porttan alınır ve Ankamon'un Loglar \
+sayfasında tahta tahta aranabilir; Bakım profili Ankamon için yeterlidir.\
 """
 
 [m06.params.syslog_host]
@@ -2562,7 +2572,9 @@ help = """\
 okuma) paketleri kurulur; smartd servisi etkinleştirilir ve sensors-detect \
 otomatik çalıştırılır. Bu araçlar 'daemon' facility'sine log yazar; Bakım \
 veya Kapsamlı profil seçilmişse otomatik olarak merkezi sunucuya iletilir. \
-Böylece disk arızası ve aşırı ısınma erkenden görünür.\
+Böylece disk arızası ve aşırı ısınma erkenden görünür. Aşağıdaki "Metrik \
+izleme" ile birlikte açıkken [[ankamon]] sıcaklık ve disk sağlığını tahta \
+başına grafiklerle gösterir.\
 """
 
 [m06.params.install_node_exporter]
@@ -3556,7 +3568,9 @@ gibi başka açık oturumlarına dokunulmaz; root hariç tutulur. Bu ayar \
 system-wide logind yapılandırmasıdır; klon tahtaya sonradan eklenen hesaplar \
 dahil, root dışındaki tüm kullanıcılara otomatik uygulanır. Kutu \
 tahtadaki mevcut durumu gösterir; işaretini kaldırıp uygularsanız ayar \
-kaldırılır (bu da yeniden başlatınca etkin olur).\
+kaldırılır (bu da yeniden başlatınca etkin olur). Asılı kalan süreçlerin \
+tahtayı yavaşlatıp yavaşlatmadığını [[ankamon]]'un Ekranlar ▸ Başarım \
+görünümünden (işlemci, bellek, süreç sayısı) izleyebilirsiniz.\
 """
 
 [m17.params.light_mode_enabled]
@@ -3568,7 +3582,9 @@ kullanıcıya (klon tahtaya sonradan eklenen hesaplar dahil) oturum açılışı
 uygulanır. Kullanıcı kendi oturumunda değiştirse de bir sonraki girişte \
 yeniden uygulanır. Kutu sistemin o anki durumunu gösterir: işaretliyken \
 kaldırıp uygularsanız hafif mod sistemden kaldırılır ve daha önce giriş \
-yapmış hesapların masaüstü ayarları da geri alınır. Paket kaldırılmaz.\
+yapmış hesapların masaüstü ayarları da geri alınır. Paket kaldırılmaz. \
+Hafif modun etkisini [[ankamon]]'un Ekranlar ▸ Başarım görünümünde \
+tahtanın işlemci ve bellek kullanımını canlı izleyerek görebilirsiniz.\
 """
 
 [m17.params.lm_effects]

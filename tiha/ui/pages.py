@@ -157,10 +157,71 @@ def _no_focus_labels(widget: Gtk.Widget) -> None:
             _no_focus_labels(child)
 
 
+# Form ad sütununun genişliği (karakter).
+_FORM_LABEL_CHARS = 26
 # Uzun alan açıklamaları (2 satırı aşan) sayfa yerine "?" balonunda.
 # Satır sayısı bu genişlikte ölçülür: varsayılan pencerede form açıklama
 # sütununun genişliği (piksel).
 _HELP_COLUMN_WIDTH = 580
+
+
+# Açıklama metinlerindeki işaretler: [[ankamon]] → Ankamon'un GitHub
+# sayfasına mavi bağlantı; [[dikkat]]…[[/dikkat]] → kırmızı uyarı.
+ANKAMON_URL = "https://github.com/enseitankado/ankamon"
+
+
+def _help_markup(text: str) -> str:
+    """Açıklama metnini Pango işaretlemesine çevirir (metin kaçışlı)."""
+    markup = GLib.markup_escape_text(text)
+    # Bağlantı kırmızı uyarı içinde de mavi kalsın diye rengi açıkça verilir.
+    markup = markup.replace(
+        "[[ankamon]]",
+        f'<a href="{ANKAMON_URL}"><span foreground="#1c6fb0">Ankamon</span></a>',
+    )
+    markup = markup.replace("[[dikkat]]", '<span foreground="#c62828">')
+    return markup.replace("[[/dikkat]]", "</span>")
+
+
+def _help_plain(text: str) -> str:
+    """İşaretleri çıkarılmış düz metin (satır ölçümü için)."""
+    return (text.replace("[[ankamon]]", "Ankamon")
+            .replace("[[dikkat]]", "").replace("[[/dikkat]]", ""))
+
+
+def _open_url_as_desktop_user(url: str) -> None:
+    """Bağlantıyı masaüstü oturumundaki kullanıcının tarayıcısında açar.
+
+    TiHA root çalışır; root'un oturumunda xdg-open tarayıcı bulamaz.
+    """
+    import subprocess
+
+    try:
+        from ..core.utils import _find_active_graphical_session
+        env = _find_active_graphical_session()
+    except ImportError:
+        env = None
+    cmd = ["xdg-open", url]
+    if env:
+        cmd = (["sudo", "-u", env["USER"], "env"]
+               + [f"{k}={v}" for k, v in env.items()] + cmd)
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as exc:
+        log.warning("Bağlantı açılamadı (%s): %s", url, exc)
+
+
+def _on_help_link(_label: Gtk.Label, uri: str) -> bool:
+    _open_url_as_desktop_user(uri)
+    return True  # GTK'nın kendi (root oturumunda çalışmayan) açma denemesi yok
+
+
+def _help_label(text: str, *, klass: str = "tiha-rationale") -> Gtk.Label:
+    """Bağlantı ve kırmızı uyarı içerebilen açıklama etiketi."""
+    lbl = _wrapping_label("", klass=klass)
+    lbl.set_markup(_help_markup(text))
+    lbl.connect("activate-link", _on_help_link)
+    return lbl
 
 
 def _help_full_text(field: dict) -> str:
@@ -175,7 +236,7 @@ def _help_line_count(text: str, width: int = 0) -> int:
     font_name = settings.get_property("gtk-font-name") if settings else "Sans 10"
     font = Pango.FontDescription.from_string(font_name or "Sans 10")
     font.set_size(9 * Pango.SCALE)
-    layout = Gtk.Label().create_pango_layout(text)
+    layout = Gtk.Label().create_pango_layout(_help_plain(text))
     layout.set_font_description(font)
     layout.set_width((width or _HELP_COLUMN_WIDTH) * Pango.SCALE)
     layout.set_wrap(Pango.WrapMode.WORD_CHAR)
@@ -199,7 +260,7 @@ def _help_bubble_button(title: str, text: str) -> Gtk.Button:
     heading.set_line_wrap(True)
     heading.set_max_width_chars(56)
     box.pack_start(heading, False, False, 0)
-    body = _wrapping_label(text, klass="tiha-help-popover-body")
+    body = _help_label(text, klass="tiha-help-popover-body")
     body.set_max_width_chars(64)
     body.set_width_chars(48)
     box.pack_start(body, False, False, 0)
@@ -213,6 +274,7 @@ def _help_bubble_button(title: str, text: str) -> Gtk.Button:
             popover.popup()
 
     btn.connect("clicked", toggle)
+    btn._help_title = title  # type: ignore[attr-defined]
     return btn
 
 
@@ -706,6 +768,11 @@ class ModulePage(Gtk.Box):
                     initial_visible = bool(gate_fn())
 
             label = _wrapping_label(field["label"])
+            # Ad sütunu sabit genişlikte kalsın: uzun açıklamalar balona
+            # taşınınca sütun adların tek satırlık boyuna yayılıp alanları
+            # sağa itiyordu. Uzun adlar iki satıra sarılır.
+            label.set_max_width_chars(_FORM_LABEL_CHARS)
+            label.set_width_chars(_FORM_LABEL_CHARS)
             grid.attach(label, 0, row_idx, 1, 1)
             widget = self._make_field(field)
             kind = field.get("type", "text")
@@ -752,7 +819,7 @@ class ModulePage(Gtk.Box):
             row_widgets: list[Gtk.Widget] = [label, cell]
             inline: list[Gtk.Widget] = []
             if field.get("help"):
-                help_lbl = _wrapping_label(field["help"], klass="tiha-rationale")
+                help_lbl = _help_label(field["help"])
                 # Kutular daraldı; sütunu sayfa genişliğine yardım metni yayar.
                 help_lbl.set_hexpand(True)
                 help_widget: Gtk.Widget = help_lbl
@@ -770,7 +837,7 @@ class ModulePage(Gtk.Box):
             if field.get("help_more"):
                 # Yardımın ilk kısmı açıkta, uzun devamı (neden/nasıl)
                 # kapalı başlayan bir katlayıcıda.
-                more_lbl = _wrapping_label(field["help_more"], klass="tiha-rationale")
+                more_lbl = _help_label(field["help_more"])
                 more_lbl.set_hexpand(True)
                 more = Gtk.Expander(
                     label=field.get("help_more_label") or t("ui.pages.help_more_expander")
