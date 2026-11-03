@@ -269,6 +269,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             # Yeniden açıldığında paket + servis çalışıyorsa işaretli aç.
             "default_from": "node_exporter_active",
             "help": t("m06.params.install_node_exporter.help"),
+            "help_more": t("m06.params.install_node_exporter.help_more"),
         },
         {
             "key": "node_exporter_listen",

@@ -503,6 +503,10 @@ def narrate_m06(ctx: StepContext, rep: StepReport) -> None:
             t("m06.report.exporter_listen", listen=listen) if listen
             else t("m06.report.exporter")
         )
+        if d.get("smartmon_installed"):
+            rep.done.append(t("m06.report.exporter_smartmon"))
+        if d.get("sensors_loaded"):
+            rep.done.append(t("m06.report.exporter_sensors"))
         rep.notes.append(t("m06.report.note_exporter"))
     if profile == "kapsamli":
         rep.notes.append(t("m06.report.note_kapsamli"))

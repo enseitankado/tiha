@@ -56,6 +56,7 @@ from pathlib import Path
 from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
+from ..core import smartmon_collector
 from ..core.paths import RSYSLOG_CONF
 from ..core.utils import run_cmd
 
@@ -472,6 +473,79 @@ def _purge_node_exporter_extras(progress=None) -> list[str]:
     return targets
 
 
+def _load_sensor_drivers() -> None:
+    """sensors-detect ile anakarttaki algılayıcı yongalarının sürücülerini
+    bulur, kalıcı yapar ve hemen yükler."""
+    # sensors-detect etkileşimli — tüm sorulara varsayılan
+    # (Enter=yes) ile devam edecek şekilde çağırıyoruz.
+    run_cmd(
+        ["bash", "-lc", "yes '' | sensors-detect --auto || true"],
+        timeout=120,
+        check=False,
+    )
+    # sensors-detect modülleri /etc/modules'a yazar ama
+    # yüklemez; hemen yükle ve lm-sensors servisini tazele ki
+    # sıcaklık bu açılışta da okunsun.
+    run_cmd(
+        ["systemctl", "restart", "systemd-modules-load.service",
+         "lm-sensors.service"],
+        check=False,
+    )
+
+
+def _setup_sensors(progress=None) -> bool:
+    """Metrik izleme için sensör sürücülerini yükler (lm-sensors gerekirse
+    kurulur). Başarılıysa True."""
+    if progress:
+        progress(t("m06.apply.sensors_loading"))
+    if not _pkg_installed("lm-sensors"):
+        pkg = run_cmd(
+            ["apt-get", "install", "-y", "--no-install-recommends", "lm-sensors"],
+            env={"DEBIAN_FRONTEND": "noninteractive"},
+            timeout=300,
+        )
+        if not pkg.ok:
+            if progress:
+                progress(t("m06.apply.sensors_failed"))
+            return False
+    _load_sensor_drivers()
+    chips = sorted({
+        (p / "name").read_text(encoding="utf-8").strip()
+        for p in Path("/sys/class/hwmon").glob("hwmon*")
+        if (p / "name").exists()
+    })
+    if progress:
+        progress(t("m06.apply.sensors_loaded", chips=", ".join(chips) or "-"))
+    return True
+
+
+def _setup_smartmon(progress=None) -> str:
+    """Disk sıcaklığı ve SMART sağlığı metriklerini node_exporter'a
+    ekleyen toplayıcıyı kurar; özet satırı için durum metnini döner."""
+    if smartmon_collector.package_collector_present():
+        return t("m06.apply.smartmon_package_state")
+    if progress:
+        progress(t("m06.apply.smartmon_installing"))
+    if not _pkg_installed("smartmontools"):
+        # smartmontools posta sunucusu önerir; tahtaya gereksiz.
+        pkg = run_cmd(
+            ["apt-get", "install", "-y", "--no-install-recommends", "smartmontools"],
+            env={"DEBIAN_FRONTEND": "noninteractive"},
+            timeout=300,
+        )
+        if not pkg.ok:
+            if progress:
+                progress(t("m06.apply.smartmon_failed"))
+            return t("m06.apply.smartmon_failed_state")
+    if not smartmon_collector.install():
+        if progress:
+            progress(t("m06.apply.smartmon_failed"))
+        return t("m06.apply.smartmon_failed_state")
+    if progress:
+        progress(t("m06.apply.smartmon_done"))
+    return t("m06.apply.smartmon_installed_state")
+
+
 def _svc_active(unit: str) -> bool:
     """systemctl is-active ile servisin çalışır durumda olduğunu döndürür."""
     r = run_cmd(["systemctl", "is-active", "--quiet", unit], check=False)
@@ -645,6 +719,7 @@ class RemoteSyslogModule(Module):
 
         # Disk sağlığı + sıcaklık izleme paketleri
         smart_state = t("m06.apply.state_skipped")
+        sensors_loaded = False
         if install_smart:
             if progress:
                 progress(t("m06.apply.smart_installing"))
@@ -654,21 +729,8 @@ class RemoteSyslogModule(Module):
                 timeout=300,
             )
             if pkg.ok:
-                # sensors-detect etkileşimli — tüm sorulara varsayılan
-                # (Enter=yes) ile devam edecek şekilde çağırıyoruz.
-                run_cmd(
-                    ["bash", "-lc", "yes '' | sensors-detect --auto || true"],
-                    timeout=120,
-                    check=False,
-                )
-                # sensors-detect modülleri /etc/modules'a yazar ama
-                # yüklemez; hemen yükle ve lm-sensors servisini tazele ki
-                # sıcaklık bu açılışta da okunsun.
-                run_cmd(
-                    ["systemctl", "restart", "systemd-modules-load.service",
-                     "lm-sensors.service"],
-                    check=False,
-                )
+                _load_sensor_drivers()
+                sensors_loaded = True
                 if _smart_capable():
                     run_cmd(
                         ["systemctl", "enable", "--now", "smartd"], check=False,
@@ -694,8 +756,14 @@ class RemoteSyslogModule(Module):
                 if progress:
                     progress(t("m06.apply.smart_failed"))
 
+        # Önceki sürümlerin "önerilen" paketlerle getirdiği fazlalıkları temizle
+        # (metrik izleme açık da olsa kapalı da olsa). Toplayıcı kurulmadan
+        # önce yapılır: paketteki smartmon görünürse TiHA'nınki kurulmaz.
+        purged_extras = _purge_node_exporter_extras(progress)
+
         # Metrik izleme — Prometheus node_exporter
         node_exporter_state = t("m06.apply.state_skipped")
+        smartmon_state = t("m06.apply.state_skipped")
         if install_node_exporter:
             if progress:
                 progress(t("m06.apply.node_downloading"))
@@ -760,14 +828,15 @@ class RemoteSyslogModule(Module):
                 )
                 if progress:
                     progress(t("m06.apply.node_active", listen=node_exporter_listen))
+                smartmon_state = _setup_smartmon(progress)
+                # Kasa sıcaklığı, fan devri ve pil voltajı node_exporter'a
+                # ancak sensör yongasının sürücüsü yüklüyse gelir.
+                if not sensors_loaded:
+                    sensors_loaded = _setup_sensors(progress)
             else:
                 node_exporter_state = t("m06.apply.node_failed_state")
                 if progress:
                     progress(t("m06.apply.node_failed"))
-
-        # Önceki sürümlerin "önerilen" paketlerle getirdiği fazlalıkları temizle
-        # (metrik izleme açık da olsa kapalı da olsa).
-        purged_extras = _purge_node_exporter_extras(progress)
 
         # rsyslog yapılandırmasını yaz
         try:
@@ -830,6 +899,7 @@ class RemoteSyslogModule(Module):
                 profile=prof['label'],
                 smart=smart_state,
                 node=node_exporter_state,
+                smartmon=smartmon_state,
                 disk_max=QUEUE_MAX_DISK_SPACE.upper(),
             ) + (
                 "\n" + t("m06.apply.extras_purged", pkgs=", ".join(purged_extras))
@@ -849,6 +919,8 @@ class RemoteSyslogModule(Module):
                 "install_smart_monitoring": install_smart,
                 "install_node_exporter": install_node_exporter,
                 "purged_extras": purged_extras,
+                "smartmon_installed": smartmon_collector.is_installed(),
+                "sensors_loaded": sensors_loaded,
             },
         )
 
@@ -965,6 +1037,12 @@ class RemoteSyslogModule(Module):
                 except OSError as exc:
                     log.warning("Kuyruk dosyaları temizlenemedi: %s", exc)
 
+        # Disk SMART metrik toplayıcısı TiHA'nın kendi dosyası; node_exporter
+        # paketinin kendisi yerinde kalsa da toplayıcı kaldırılır.
+        smartmon_removed = (
+            smartmon_collector.is_installed() and smartmon_collector.remove()
+        )
+
         # rsyslog'u yeniden başlat
         restart = run_cmd(["systemctl", "restart", "rsyslog"])
         restart_ok = restart.ok
@@ -977,6 +1055,8 @@ class RemoteSyslogModule(Module):
             summary_parts.append(t("m06.undo.part_config_removed"))
         if cleaned_queue:
             summary_parts.append(t("m06.undo.part_queue_cleaned"))
+        if smartmon_removed:
+            summary_parts.append(t("m06.undo.part_smartmon_removed"))
         if restart_ok:
             summary_parts.append(t("m06.undo.part_restarted"))
 

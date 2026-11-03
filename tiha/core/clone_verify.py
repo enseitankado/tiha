@@ -458,7 +458,10 @@ def _exporter(_p):
     r = _run(["curl", "-fsS", "--max-time", "5", "http://127.0.0.1:9100/metrics"])
     if not r.ok:
         return FAIL, M("exporter_down")
-    return PARTIAL, M("exporter_local_ok")
+    temps = re.findall(r"^smartmon_temperature_celsius_raw_value\{.*\} (\S+)$",
+                       r.stdout, re.MULTILINE)
+    disk = M("exporter_disk_temp", temp=temps[0]) if temps else M("exporter_no_disk_temp")
+    return PARTIAL, M("exporter_local_ok") + " " + disk
 
 
 def _rsyslog(_p):

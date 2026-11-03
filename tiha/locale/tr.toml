@@ -2632,6 +2632,18 @@ bağlanır. Merkezi Prometheus sunucusu buradan CPU, RAM, disk, sıcaklık, ağ 
 ve boot metriklerini toplar; Grafana panosunda onlarca tahtanın sağlığı tek \
 ekrandan izlenir.\
 """
+help_more = """\
+Disk sıcaklığı, SMART sağlık durumu, çalışma saati ve SSD aşınması da \
+eklenir: TiHA 15 dakikada bir diskleri okuyan küçük bir toplayıcı kurar \
+(smartmon_* metrikleri, hazır Grafana SMART panolarıyla uyumlu). eMMC \
+diskli tahtalarda SMART olmadığı için disk değerleri gelmez.\n\
+\n\
+Anakarttaki sensörlerin sürücüleri de otomatik yüklenir (sensors-detect). \
+İşlemci sıcaklığı çoğu tahtada gelir. Kasa sıcaklığı, fan devri ve CMOS pil \
+voltajı ise anakartta ayrı bir algılayıcı yongası varsa görünür; birçok \
+tahtada yoktur. Hangilerinin geldiğini klonda sensors komutuyla \
+görebilirsiniz.\
+"""
 
 [m06.params.node_exporter_listen]
 label = "Metrik dinleme adresi"
@@ -2689,6 +2701,15 @@ node_installed_state = "kuruldu (dinleme adresi {listen}; Prometheus sunucusu bu
 node_active = "Metrik izleme aktif — {listen} adresinde dinliyor."
 node_failed_state = "kurulum başarısız (prometheus-node-exporter paketi yüklenemedi)"
 node_failed = "Metrik izleme kurulumu başarısız (paket yöneticisi hatası); log iletim akışı devam ediyor."
+sensors_loading = "Donanım sensörlerinin sürücüleri aranıyor ve yükleniyor (sensors-detect)..."
+sensors_loaded = "Okunabilen sensör yongaları: {chips}. Kasa sıcaklığı, fan devri ve pil voltajı yalnız anakartta bunları ölçen bir yonga (ör. nct6775, it87) varsa görünür."
+sensors_failed = "lm-sensors kurulamadı; sensör sürücüleri yüklenmedi, metrik izleme devam ediyor."
+smartmon_installing = "Disk sıcaklığı ve SMART sağlığı metrikleri ekleniyor..."
+smartmon_done = "Disk SMART metrikleri 15 dakikada bir toplanacak (smartmon_* metrikleri)."
+smartmon_installed_state = "kuruldu (disk sıcaklığı ve sağlığı 15 dakikada bir okunuyor)"
+smartmon_package_state = "paketteki smartmon toplayıcısı zaten kurulu; TiHA'nınki eklenmedi"
+smartmon_failed = "Disk SMART metrikleri eklenemedi; metrik izleme diğer değerlerle çalışmaya devam ediyor."
+smartmon_failed_state = "kurulamadı (smartmontools ya da zamanlayıcı hatası)"
 extras_purging = "Tahtada gereksiz sunucu paketleri kaldırılıyor: {pkgs}"
 extras_purge_failed = "Gereksiz sunucu paketleri kaldırılamadı; adım devam ediyor."
 extras_purged = "Kaldırılan gereksiz sunucu paketleri: {pkgs} (BMC olmayan tahtada openipmi servisi her açılışta başarısız oluyordu)."
@@ -2704,6 +2725,7 @@ Hedef                : {host}:{port} ({proto})\n\
 Log profili          : {profile}\n\
 Disk/sıcaklık izleme : {smart}\n\
 Metrik izleme (node) : {node}\n\
+Disk SMART metrikleri: {smartmon}\n\
 \n\
 Kuyruk özellikleri:\n\
 \u0020\u0020- Uzak sunucu offline: loglar yerel diskte birikir\n\
@@ -2745,6 +2767,7 @@ UDP'de ack yoktur — sunucu tarafında `journalctl -u rsyslog` veya `tcpdump \
 [m06.undo]
 part_config_removed = "Yapılandırma dosyası kaldırıldı"
 part_queue_cleaned = "bekleyen log kuyruğu temizlendi"
+part_smartmon_removed = "disk SMART metrik toplayıcısı kaldırıldı"
 part_restarted = "rsyslog yeniden başlatıldı"
 summary = "Dayanıklı log iletimi kaldırıldı: {parts}."
 removed_count = "Kaldırılan dosya sayısı: {count}"
@@ -2776,6 +2799,12 @@ kayıtlar kaybolabilir. Kayıpsız iletim için TCP önerilir.\
 smart = "Disk sağlığı (SMART) ve sıcaklık izleme paketlerinin kurulmasını istediniz."
 exporter = "Metrik izleme ajanının (node_exporter) dinlemesini istediniz."
 exporter_listen = "Metrik izleme ajanının (node_exporter) {listen} adresinde dinlemesini istediniz."
+exporter_sensors = """\
+Anakart sensörlerinin sürücüleri yüklendi; işlemci sıcaklığı ve (anakartta \
+ölçen yonga varsa) kasa sıcaklığı, fan devri ve pil voltajı metriklere \
+eklenir (node_hwmon_*).\
+"""
+exporter_smartmon = "Disk sıcaklığı ve SMART sağlığı da 15 dakikada bir okunup metriklere ekleniyor (smartmon_*)."
 note_exporter = "node_exporter metrikleri kimlik doğrulamasız sunar; erişimi yönetim ağıyla sınırlayın."
 note_kapsamli = """\
 Kapsamlı profil bütün kayıtları gönderir; ayıklama içindir. Bütün klonlarda \
@@ -2809,7 +2838,11 @@ de deneyin.\
 """
 test_exporter = """\
 İzleme sunucusundan klonun metrik adresine (ör. \
-http://<klon-ip>:9100/metrics) erişebildiğinizi doğrulayın.\
+http://<klon-ip>:9100/metrics) erişebildiğinizi doğrulayın. Disk sıcaklığı \
+için `curl -s localhost:9100/metrics | grep smartmon_temperature` çıktısında \
+bir değer görün (eMMC diskli tahtada gelmez). Kasa sıcaklığı, fan ve \
+voltaj değerleri için `sensors` çıktısına bakın; orada görünen her değer \
+node_hwmon_* metriği olarak sunucuya da gider.\
 """
 
 # ==========================================================================
@@ -5128,6 +5161,8 @@ share_ok_remote_manual = "[root] paylaşımı tanımlı ve smbd çalışıyor. W
 netbios_name = "nmbd çalışıyor; tahta ağda '{name}' adıyla duyuruluyor. Ad çakışmasını ağda elle kontrol edin."
 exporter_down = "Metrik adresi (127.0.0.1:9100) yanıt vermiyor."
 exporter_local_ok = "Metrikler tahtada yayınlanıyor. İzleme sunucusundan erişimi elle deneyin."
+exporter_disk_temp = "Disk sıcaklığı da yayınlanıyor ({temp} °C)."
+exporter_no_disk_temp = "Disk sıcaklığı metriği yok (disk SMART desteklemiyor olabilir; ör. eMMC)."
 file_missing = "Beklenen dosya yok: {path}"
 file_still_there = "Kaldırılmış olması gereken dosya hâlâ var: {path}"
 rsyslog_ok_server_manual = "rsyslog çalışıyor ve yönlendirme ayarı var; 'tiha-klon-test' deneme kaydı gönderildi. Kaydın sunucuda '{host}' adıyla göründüğünü elle kontrol edin."
