@@ -282,6 +282,16 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m06.params.node_exporter_listen.help"),
         },
         {
+            "key": "install_snoopy",
+            "label": t("m06.params.install_snoopy.label"),
+            "type": "bool",
+            "required": False,
+            "default": "True",
+            # Yeniden açıldığında snoopy kurulu ve yükleniyorsa işaretli aç.
+            "default_from": "snoopy_active",
+            "help": t("m06.params.install_snoopy.help"),
+        },
+        {
             "key": "test_log_server",
             "label": t("m06.params.test_log_server.label"),
             "type": "button",

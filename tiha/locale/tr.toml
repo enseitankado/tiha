@@ -919,6 +919,15 @@ hostname = """\
 ayırt etmenizi gerektirir. Bütün klonlar ağda ve log sunucusunda aynı adla \
 görünecek.\
 """
+wipe_ogretmen = """\
+{wipe} adımındaki her açılışta parola temizliği ortak ogretmen hesabına \
+dokunmaz: bu hesap, belirlediğiniz parolayla girilebilen tek sınırlı \
+hesaptır ve parolası bütün klon tahtalarda aynıdır. Dikkat: bu parola \
+sızarsa okuldaki bütün tahtalar etkilenir; parolanın etapadmin tarafından \
+bütün tahtalarda değiştirilmesi gerekir. Ankamon kullanıyorsanız tahtalara \
+ağ üzerinden erişerek toplu olarak da değiştirebilirsiniz (Kullanıcı \
+parolası ayarla).\
+"""
 wipe_no_pin = """\
 {wipe} etkin ama {pin} adımını uygulamadınız: öğretmenler tahtaya yalnız EBA \
 QR ya da USB bellekle girebilir. QR çalışmadığında hiçbir öğretmen giriş \
@@ -2548,10 +2557,15 @@ opt_kapsamli = "Kapsamlı"
 opt_guvenlik = "Yalnız güvenlik"
 label = "Log profili"
 help = """\
-Merkezi sunucuya iletilecek olayların kapsamını seçin. Bakım: donanım \
-uyarıları (kern.warning), servis hataları/notice (daemon.notice), kimlik \
-doğrulama (auth/authpriv), TiHA + Ahenk servisleri (local0-7). Öğretmen \
-davranışı ve tarayıcı içeriği iletilmez. Kapsamlı: her mesaj gönderilir; \
+Merkezi sunucuya iletilecek olayların kapsamını seçin. Bakım: çekirdek \
+olayları (kern.info: USB bellek takılıp çıkarılması, ağ kartının bağlanıp \
+kopması), ağ bağlantısı olayları (NetworkManager), servis bildirimleri \
+(daemon.notice), bütün uygulama hataları (*.err), zamanlanmış görevler \
+(cron), kimlik doğrulama (auth/authpriv), TiHA'nın kendi kayıtları ve \
+local0-7; ayrıca syslog'a yazmayan Ahenk, apt, dpkg ve eta-kisit log \
+dosyaları (rsyslog imfile ile). Metrik izleme kapalıysa 30 dakikada bir \
+"yaşıyorum" kaydı da gider: kayıt kesilirse tahta kapalı, bozuk ya da \
+ağı kopuk demektir. Öğretmen davranışı ve tarayıcı içeriği iletilmez. Kapsamlı: her mesaj gönderilir; \
 ayıklama için, kalıcı olarak açık tutmayın. Yalnız güvenlik: minimum trafik, \
 sadece kimlik ve kritik hatalar. Merkezi sunucu olarak [[ankamon]] \
 kurarsanız loglar 514 numaralı porttan alınır ve Ankamon'un Loglar \
@@ -2566,6 +2580,37 @@ label = "Port"
 
 [m06.params.syslog_proto]
 label = "Protokol"
+
+[m06.params.install_snoopy]
+label = "Terminal ve SSH komutlarını kaydet (snoopy)"
+help = """\
+İşaretlenirse snoopy kurulur: tahtada bir terminalde ya da SSH ile \
+çalıştırılan her komut (kim çalıştırdı, hangi terminalden, hangi klasörde, \
+komutun kendisi) sistem günlüğüne yazılır ve merkezi sunucuya iletilir. \
+Masaüstünün arka planda başlattığı programlar kaydedilmez; yalnız \
+terminale bağlı komutlar. Kayıt kişisel veri içerir (öğretmenin terminalde \
+yazdıkları dahil): KVKK gereği kullanıcıları bilgilendirin ve kayıtlara \
+erişimi sınırlayın. Komutlara yazılan parolalar (ör. komut satırında \
+verilen parola) da kayda girer. İşareti kaldırıp uygularsanız TiHA'nın \
+kurduğu snoopy kaldırılır.\
+"""
+
+[m06.snoopy]
+installing = "Komut kaydı kuruluyor (snoopy: terminal ve SSH komutları)..."
+done = "Komut kaydı etkin: terminal ve SSH oturumlarındaki komutlar authpriv tesisine yazılıyor."
+failed = "snoopy kurulamadı; komut kaydı yapılmayacak, log iletimi devam ediyor."
+failed_state = "kurulamadı"
+state_on = "etkin (yalnız terminale bağlı komutlar, authpriv.info)"
+undo_removed = "komut kaydı (snoopy) kaldırıldı"
+
+[m06.extra]
+details = """\
+Dosya logları (imfile): {files}\n\
+Yaşıyorum kaydı      : {heartbeat}\n\
+Komut kaydı (snoopy) : {snoopy}\
+"""
+heartbeat_on = "her {minutes} dakikada bir (-- MARK --)"
+heartbeat_off = "gerekmiyor; metrik izleme açık (Prometheus up metriği)"
 
 [m06.params.install_smart_monitoring]
 label = "Disk sağlığı + sıcaklık izleme paketlerini kur"

@@ -81,20 +81,41 @@ QUEUE_MEMORY_SIZE = "100000"
 
 # Log kapsamı profilleri — kullanıcının seçimi rsyslog selector'larına
 # çevrilir. Ayrıntı: iletilecek olayların facility/severity kümesi.
+# Profil alanları:
+#   selectors — facility.severity seçicileri (rsyslog prifilt söz dizimi)
+#   programs  — program adına göre ek kurallar: (ad, en düşük önem);
+#               ad "*" ile bitiyorsa önek eşleşmesi
+#   files     — dosya loglarını (imfile, bkz. LOG_FILES) iletir mi
+# Bütün koşullar tek bir "if … then call" ifadesinde birleşir; bir kayıt
+# birden çok koşula uysa da sunucuya bir kez gider.
 LOG_PROFILES = {
     "bakim": {
         "label": t("m06.params.log_profile.opt_bakim"),
         "selectors": [
             "auth,authpriv.*",
-            "kern.warning",
+            # kern.info: USB bellek takma/çıkarma, ağ kartı bağlantı/kopma
+            # (kernel "Link is Up/Down") satırları bu düzeydedir.
+            "kern.info",
             "daemon.notice",
             "syslog.*",
+            "cron.*",
+            # Uygulama hataları: her tesisten hata ve daha ciddisi.
+            "*.err",
             "local0,local1,local2,local3,local4,local5,local6,local7.*",
         ],
+        "programs": [
+            # Ağ bağlantısı kuruldu/koptu, DHCP, Wi-Fi olayları.
+            ("NetworkManager", 6),
+            # TiHA'nın kendi servisleri (user/daemon tesisine yazanlar dahil).
+            ("tiha*", 7),
+        ],
+        "files": True,
     },
     "kapsamli": {
         "label": t("m06.params.log_profile.opt_kapsamli"),
         "selectors": ["*.*"],
+        "programs": [],
+        "files": True,
     },
     "guvenlik": {
         "label": t("m06.params.log_profile.opt_guvenlik"),
@@ -103,8 +124,26 @@ LOG_PROFILES = {
             "kern.err",
             "daemon.err",
         ],
+        "programs": [],
+        "files": False,
     },
 }
+
+# Syslog'a yazmayan programların dosya logları (rsyslog imfile ile okunur).
+# (dosya, etiket, çok satırlı kaydın ilk satırı için düzenli ifade)
+LOG_FILES = (
+    ("/var/log/ahenk.log", "ahenk", None),
+    ("/var/log/apt/history.log", "apt-history", "^Start-Date:"),
+    ("/var/log/dpkg.log", "dpkg", None),
+    ("/var/log/eta-kisit.log", "eta-kisit", None),
+)
+# Dosya logları bu tesisle iletilir (sunucuda program adıyla ayrışır).
+LOG_FILES_FACILITY = "local6"
+
+# Metrik izleme kapalıyken tahtanın "yaşıyorum" kaydı aralığı (saniye).
+# Kayıt gelmiyorsa tahtanın kapalı mı, bozuk mu, ağının mı koptuğu
+# anlaşılamaz; metrik izleme açıksa Prometheus'un up metriği bunu çözer.
+HEARTBEAT_INTERVAL = 1800
 
 # Yapılandırma dosyasının içine gömdüğümüz manşet — form'da mevcut
 # profili yeniden yükleyebilmek için _parse_config bunu okur.
@@ -176,34 +215,74 @@ def _parse_config() -> dict | None:
     return {"host": host, "port": port, "proto": proto, "profile": profile}
 
 
-def _render(host: str, port: int, proto: str, profile: str = "bakim") -> str:
+def _filter_expression(prof: dict) -> str:
+    """Profilin bütün koşullarını tek bir RainerScript ifadesinde birleştirir."""
+    terms = [f'prifilt("{sel}")' for sel in prof["selectors"]]
+    for name, max_sev in prof.get("programs", []):
+        if name.endswith("*"):
+            match = f'$programname startswith "{name[:-1]}"'
+        else:
+            match = f'$programname == "{name}"'
+        terms.append(f"({match} and $syslogseverity <= {max_sev})")
+    return "\n   or ".join(terms)
+
+
+def _render(host: str, port: int, proto: str, profile: str = "bakim",
+            *, heartbeat: bool = False) -> str:
     """Dayanıklı log iletimi için rsyslog yapılandırması üretir.
 
     Disk destekli kuyruk (uzak sunucu offline olsa da kayıp yok) tek bir
-    ruleset içinde tanımlanır; profil kararı sadece bu ruleset'e hangi
-    facility.severity satırlarının yönlendirileceğini belirler.
+    ruleset içinde tanımlanır; profil kararı yalnız bu ruleset'e hangi
+    kayıtların yönlendirileceğini belirler. ``heartbeat`` açıksa (metrik
+    izleme kapalı) her 30 dakikada bir "yaşıyorum" (MARK) kaydı da gider.
     """
     profile = _profile_key(profile)
     prof = LOG_PROFILES[profile]
 
-    selector_col_width = 60
-    call_lines = []
-    for sel in prof["selectors"]:
-        pad = " " * max(1, selector_col_width - len(sel))
-        call_lines.append(f"{sel}{pad}call tiha_remote")
-    call_block = "\n".join(call_lines)
+    modules = []
+    if prof.get("files"):
+        modules.append('module(load="imfile")')
+    if heartbeat:
+        # use.syslogcall=off: MARK rsyslog içinde syslog.info olarak üretilir
+        # (varsayılanda syslog() ile /dev/log'a yazılıp dolaşıyordu).
+        modules.append(
+            f'module(load="immark" interval="{HEARTBEAT_INTERVAL}" use.syslogcall="off")'
+        )
+    module_block = "\n".join(modules)
+
+    file_inputs = []
+    if prof.get("files"):
+        for path, tag, start_re in LOG_FILES:
+            # Çok satırlı kayıt (apt) bir sonraki kayıt başlayınca biter;
+            # readTimeout son kaydı da 10 sn sonra gönderir.
+            multiline = (
+                f'\n      startmsg.regex="{start_re}" readTimeout="10"'
+                if start_re else ""
+            )
+            file_inputs.append(
+                f'input(type="imfile" File="{path}" Tag="{tag}:"\n'
+                f'      Facility="{LOG_FILES_FACILITY}" Severity="info"\n'
+                # Yalnız yeni satırlar: ilk kurulumda dosyanın bütün
+                # geçmişi bir anda gönderilmez.
+                f'      freshStartTail="on"{multiline}\n'
+                f'      ruleset="tiha_remote")'
+            )
+    file_block = "\n".join(file_inputs)
+
+    filter_expr = _filter_expression(prof)
+    heartbeat_term = (
+        '\n   or ($msg contains "-- MARK --")' if heartbeat else ""
+    )
 
     # DHCP ile IP alan bir log sunucusuna gönderim yapıyorsak, rsyslog'un
     # bağlantı başında yaptığı DNS çözümlemesi ömür boyu cache'lenmemeli.
     # RebindInterval her N mesajda socket'i kapatıp yeniden açar; bu
     # sırada getaddrinfo yeniden çağrılır ve güncel IP alınır. UDP için
     # ayrı parametre adı kullanılır. 60 mesaj = düşük hacimli tahtada
-    # ortalama 5-15 dakikada bir taze çözümleme.
-    rebind_line = (
-        'UDP.RebindInterval="60"'
-        if proto.lower() == "udp"
-        else 'RebindInterval="60"'
-    )
+    # ortalama 5-15 dakikada bir taze çözümleme. action() söz diziminde
+    # parametre TCP ve UDP için aynıdır ("UDP.RebindInterval" bu rsyslog
+    # sürümünde tanınmıyor, her başlangıçta hata basıyordu).
+    rebind_line = 'RebindInterval="60"'
 
     return f"""# TiHA - Dayanıklı merkezi log iletimi
 # Profil: {prof['label']}
@@ -215,12 +294,13 @@ def _render(host: str, port: int, proto: str, profile: str = "bakim") -> str:
 # Yerel disk tavanı: {QUEUE_MAX_DISK_SPACE} - en kötü senaryoda 3+ ay kayıt.
 
 $CreateDirs on
-$Umask 0000
+{module_block}
 
-# Ortak kuyruk + iletim ruleset'i. Profile göre seçilen selector
-# satırları (aşağıda) bu ruleset'i çağırır; kuyruk paylaşılır.
+# Ortak kuyruk + iletim ruleset'i. Aşağıdaki profil koşulu ve dosya
+# logları bu ruleset'i çağırır; kuyruk paylaşılır.
 ruleset(name="tiha_remote"
         queue.filename="tiha_remote"
+        queue.spoolDirectory="{RSYSLOG_QUEUE_DIR}"
         queue.type="LinkedList"
         queue.saveonshutdown="on"
         queue.maxdiskspace="{QUEUE_MAX_DISK_SPACE}"
@@ -231,16 +311,125 @@ ruleset(name="tiha_remote"
            target="{host}"
            port="{port}"
            protocol="{proto}"
+           template="RSYSLOG_ForwardFormat"
            {rebind_line}
            action.resumeretrycount="-1"
            action.resumeinterval="30"
-           action.resumeintervalmultiplier="2"
            action.resumeintervalmax="600")
 }}
 
-# Profile göre iletilen olaylar
-{call_block}
+# Syslog'a yazmayan programların dosya logları (doğrudan iletime gider)
+{file_block}
+
+# Profile göre iletilen olaylar (tek koşul: kayıt bir kez gider)
+if {filter_expr}{heartbeat_term}
+then {{
+    call tiha_remote
+}}
 """
+
+
+# --- Komut kaydı (snoopy) --------------------------------------------------
+# snoopy her program çalıştırılışını syslog'a yazan bir kitaplıktır
+# (/etc/ld.so.preload ile bütün süreçlere yüklenir). Masaüstünün arka
+# planda başlattığı süreçler logu boğmasın diye yalnız bir terminale bağlı
+# (SSH, terminal penceresi) komutlar kaydedilir; kayıtlar authpriv.info
+# olarak gider (bütün profillerde iletilir).
+SNOOPY_INI = Path("/etc/snoopy.ini")
+SNOOPY_MARKER = "; TiHA"
+SNOOPY_INI_CONTENT = f"""{SNOOPY_MARKER} — terminal ve SSH oturumlarında çalıştırılan komutların kaydı.
+; Merkezi log sunucusu adımı yazar; adım geri alınınca kaldırılır.
+[snoopy]
+message_format = "[kullanici:%{{username}} uid:%{{uid}} login:%{{login}} tty:%{{tty}} ip:%{{ipaddr}} cwd:%{{cwd}}]: %{{cmdline}}"
+filter_chain = "only_tty"
+output = devlog
+syslog_facility = LOG_AUTHPRIV
+syslog_level = LOG_INFO
+syslog_ident = "snoopy"
+"""
+
+
+def _snoopy_active() -> bool:
+    """snoopy kurulu ve bütün süreçlere yükleniyor mu?"""
+    try:
+        preload = Path("/etc/ld.so.preload").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return "libsnoopy.so" in preload and _pkg_installed("snoopy")
+
+
+def _setup_snoopy(progress=None) -> tuple[str, bool]:
+    """snoopy'yi kurar ve TiHA ayarını yazar.
+
+    (özet satırı, TiHA mı kurdu) döner. Paket önceden kuruluysa mevcut
+    ayar dosyası geri alma için yedeklenir.
+    """
+    from ..core.paths import STATE_DIR
+
+    installed_by_tiha = False
+    if progress:
+        progress(t("m06.snoopy.installing"))
+    if not _pkg_installed("snoopy"):
+        # Kurulum sorusu: kitaplık /etc/ld.so.preload'a eklensin mi? Evet.
+        run_cmd(["bash", "-c",
+                 "echo 'snoopy snoopy/install-ld-preload boolean true' "
+                 "| debconf-set-selections"], check=False)
+        pkg = run_cmd(
+            ["apt-get", "install", "-y", "--no-install-recommends", "snoopy"],
+            env={"DEBIAN_FRONTEND": "noninteractive"},
+            timeout=300,
+        )
+        if not pkg.ok:
+            if progress:
+                progress(t("m06.snoopy.failed"))
+            return t("m06.snoopy.failed_state"), False
+        installed_by_tiha = True
+    else:
+        backup = STATE_DIR / "m06_remote_syslog" / "snoopy.ini.orig"
+        try:
+            if SNOOPY_INI.exists() and SNOOPY_MARKER not in SNOOPY_INI.read_text(
+                    encoding="utf-8") and not backup.exists():
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                backup.write_bytes(SNOOPY_INI.read_bytes())
+        except OSError as exc:
+            log.warning("snoopy ayarı yedeklenemedi: %s", exc)
+        # Paket önceden kuruluydu ama ön-yüklemesi kapalıysa açılır.
+        run_cmd(["bash", "-c",
+                 "echo 'snoopy snoopy/install-ld-preload boolean true' "
+                 "| debconf-set-selections && dpkg-reconfigure -f noninteractive snoopy"],
+                check=False)
+    try:
+        SNOOPY_INI.write_text(SNOOPY_INI_CONTENT, encoding="utf-8")
+        SNOOPY_INI.chmod(0o644)
+    except OSError as exc:
+        log.warning("snoopy ayarı yazılamadı: %s", exc)
+        return t("m06.snoopy.failed_state"), installed_by_tiha
+    if progress:
+        progress(t("m06.snoopy.done"))
+    return t("m06.snoopy.state_on"), installed_by_tiha
+
+
+def _remove_snoopy(installed_by_tiha: bool) -> bool:
+    """snoopy'yi kaldırır (TiHA kurduysa paketle birlikte); kaldırıldıysa True."""
+    from ..core.paths import STATE_DIR
+
+    if not _pkg_installed("snoopy"):
+        return False
+    if installed_by_tiha:
+        # purge: kitaplık /etc/ld.so.preload'dan ve ayar dosyası diskten çıkar.
+        return run_cmd(
+            ["apt-get", "purge", "-y", "snoopy"],
+            env={"DEBIAN_FRONTEND": "noninteractive"},
+            timeout=300,
+        ).ok
+    backup = STATE_DIR / "m06_remote_syslog" / "snoopy.ini.orig"
+    try:
+        if backup.exists():
+            SNOOPY_INI.write_bytes(backup.read_bytes())
+            backup.unlink()
+    except OSError as exc:
+        log.warning("snoopy ayarı geri yüklenemedi: %s", exc)
+    return True
 
 
 def _pkg_installed(pkg: str) -> bool:
@@ -341,6 +530,26 @@ class RemoteSyslogModule(Module):
         """Kurulu servis hangi adresi dinliyor? Boşsa ":9100" varsayılanı."""
         return _read_node_exporter_listen() or ":9100"
 
+    def snoopy_active(self) -> str:
+        """Komut kaydı kutusunun durumu: snoopy çalışıyorsa açık; adım hiç
+        uygulanmamışsa önerilen değer (açık); yoksa son uygulamadaki seçim."""
+        if _snoopy_active():
+            return "True"
+        prev = self._previous_data()
+        if prev is None:
+            return "True"
+        return "True" if prev.get("install_snoopy") else "False"
+
+    def _previous_data(self) -> dict | None:
+        """Bu adımın son uygulamasında kaydedilen veri (yoksa None)."""
+        try:
+            from ..core.undo import Journal
+
+            entry = Journal().last_applied(self.id)
+        except Exception:  # noqa: BLE001
+            return None
+        return entry.data if entry is not None and isinstance(entry.data, dict) else None
+
     def smart_monitoring_active(self) -> str:
         """Disk sağlığı + sıcaklık izleme etkin mi?"""
         return "True" if (
@@ -414,6 +623,9 @@ class RemoteSyslogModule(Module):
         node_exporter_listen = (
             params.get("node_exporter_listen") or ":9100"
         ).strip()
+        install_snoopy = str(
+            params.get("install_snoopy", "False")
+        ).lower() in ("true", "1", "yes", "on")
         if not host:
             return ApplyResult(False, t("m06.apply.no_host"))
 
@@ -560,7 +772,12 @@ class RemoteSyslogModule(Module):
         # rsyslog yapılandırmasını yaz
         try:
             RSYSLOG_CONF.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-            config_content = _render(host, port, proto, profile=profile)
+            # Metrik izleme açıksa Prometheus'un up metriği tahtanın
+            # ayakta olduğunu gösterir; değilse 30 dakikada bir MARK kaydı.
+            config_content = _render(
+                host, port, proto, profile=profile,
+                heartbeat=not install_node_exporter,
+            )
             RSYSLOG_CONF.write_text(config_content, encoding="utf-8")
             RSYSLOG_CONF.chmod(0o644)
         except OSError as exc:
@@ -568,6 +785,18 @@ class RemoteSyslogModule(Module):
                 False,
                 t("m06.apply.write_failed", error=exc),
             )
+
+        # Komut kaydı (snoopy): işaretliyse kurulur, değilse TiHA'nın
+        # kurduğu snoopy kaldırılır.
+        prev = (self._previous_data() or {})
+        snoopy_by_tiha = bool(prev.get("snoopy_installed_by_tiha"))
+        if install_snoopy:
+            snoopy_state, newly = _setup_snoopy(progress)
+            snoopy_by_tiha = snoopy_by_tiha or newly
+        else:
+            if snoopy_by_tiha and _remove_snoopy(True):
+                snoopy_by_tiha = False
+            snoopy_state = t("m06.apply.state_skipped")
 
         # rsyslog'u yeniden başlat
         restart = run_cmd(["systemctl", "restart", "rsyslog"])
@@ -605,8 +834,18 @@ class RemoteSyslogModule(Module):
             ) + (
                 "\n" + t("m06.apply.extras_purged", pkgs=", ".join(purged_extras))
                 if purged_extras else ""
+            ) + "\n" + t(
+                "m06.extra.details",
+                files=(", ".join(path for path, _tag, _re in LOG_FILES)
+                       if prof.get("files") else t("m06.apply.state_skipped")),
+                heartbeat=(t("m06.extra.heartbeat_off") if install_node_exporter
+                           else t("m06.extra.heartbeat_on",
+                                  minutes=HEARTBEAT_INTERVAL // 60)),
+                snoopy=snoopy_state,
             ),
             data={
+                "snoopy_installed_by_tiha": snoopy_by_tiha,
+                "install_snoopy": install_snoopy,
                 "install_smart_monitoring": install_smart,
                 "install_node_exporter": install_node_exporter,
                 "purged_extras": purged_extras,
@@ -699,6 +938,13 @@ class RemoteSyslogModule(Module):
         removed_files = 0
         cleaned_queue = False
 
+        # Komut kaydı: TiHA kurduysa paket kaldırılır, değilse eski ayar döner.
+        snoopy_removed = False
+        if data.get("snoopy_installed_by_tiha") or (
+                SNOOPY_INI.exists()
+                and SNOOPY_MARKER in SNOOPY_INI.read_text(encoding="utf-8")):
+            snoopy_removed = _remove_snoopy(bool(data.get("snoopy_installed_by_tiha")))
+
         # Yapılandırma dosyasını kaldır
         try:
             if RSYSLOG_CONF.exists():
@@ -725,6 +971,8 @@ class RemoteSyslogModule(Module):
 
         # Sonuç raporu
         summary_parts = []
+        if snoopy_removed:
+            summary_parts.append(t("m06.snoopy.undo_removed"))
         if removed_files > 0:
             summary_parts.append(t("m06.undo.part_config_removed"))
         if cleaned_queue:

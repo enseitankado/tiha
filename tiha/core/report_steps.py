@@ -1038,6 +1038,9 @@ def cross_step_warnings(contexts: dict[str, StepContext], modules: list, journal
     _bw_on = bool(m01 is not None and m01.applied
                   and m01.data.get("boot_wipe_on"))
     if _bw_on:
+        # Temizlik ortak ogretmen hesabına dokunmaz: parolası bütün
+        # klonlarda aynı kalır; sızarsa her tahtada değiştirilmelidir.
+        w.append(t("core.report.warn.wipe_ogretmen", wipe=q("m01_initial_passwords")))
         if "m03_otp_secrets" not in applied:
             w.append(t(
                 "core.report.warn.wipe_no_pin",
