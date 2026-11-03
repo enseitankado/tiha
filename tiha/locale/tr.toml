@@ -1888,8 +1888,10 @@ html_name = "PIN-anahtarlari.html"
 saving = "PIN anahtarı kâğıdı kaydediliyor… ({done}/{total} resim)"
 saved = """\
 PIN anahtarı kâğıdı kaydedildi: {path}\n\n\
-Klasörde HTML kâğıt ve {count} kart resmi var. Klasör ve dosyalar yalnız \
-sizin hesabınıza açık. Anahtarlar gizlidir; dosyaları öğretmenlere \
+Klasörde HTML kâğıt ve {count} kart resmi var: ortak hesaplar (etapadmin, \
+ogretmen, ogrenci) ve grup PIN'i ana klasörde, kişisel ve yedek öğretmen \
+hesapları "ogretmenler", branş hesapları "branslar" alt klasöründe. Klasör \
+ve dosyalar yalnız sizin hesabınıza açık. Anahtarlar gizlidir; dosyaları öğretmenlere \
 özelden iletin ve işiniz bitince bu bilgisayardan silin ya da güvenli bir \
 yere taşıyın.\
 """

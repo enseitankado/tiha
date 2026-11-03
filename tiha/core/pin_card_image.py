@@ -24,6 +24,8 @@ WIDTH = 400
 SCALE = 3
 PAD = 18
 QR_SIZE = 280
+# Kartın tepesindeki ad (GECOS) puntosu.
+TITLE_SIZE = 30
 
 _BORDER = (0.53, 0.53, 0.53)
 _BORDER_NEW = (0.18, 0.49, 0.2)
@@ -33,6 +35,15 @@ _WARN_BG = (0.99, 0.93, 0.92)
 _WARN_BORDER = (0.88, 0.64, 0.64)
 _WARN_TEXT = (0.54, 0.11, 0.11)
 _KEY = (0.1, 0.45, 0.91)
+_BADGE = (0.18, 0.49, 0.2)
+
+
+def _split_title_note(title: str) -> tuple[str, str]:
+    """Başlığın sonundaki parantezli notu ayırır: ("ad", "(not)")."""
+    m = re.match(r"^(.*?)\s*(\([^()]*\))\s*$", title or "")
+    if m and m.group(1).strip():
+        return m.group(1).strip(), m.group(2)
+    return title or "", ""
 
 
 def _html_to_markup(text: str) -> str:
@@ -102,10 +113,23 @@ def _paint(ctx: cairo.Context | None, card: dict, labels: dict) -> float:
     p = _Painter(ctx)
     inner = WIDTH - 2 * PAD
 
-    title = f"<b>{_escape(card['title'])}</b>"
+    # Başlıktaki parantezli not (ör. "(sistemde hesap yok)") başlıktan
+    # ayrılır; alt satırda kullanıcı adı satırıyla aynı boyda yazılır.
+    name, note = _split_title_note(card["title"])
+    p.text(f"<b>{_escape(name)}</b>", TITLE_SIZE, _TEXT, gap=4)
     if card.get("new"):
-        title += f'  <span background="#2e7d32" foreground="#ffffff" size="small"> {_escape(labels["badge_new"])} </span>'
-    p.text(title, 15, _TEXT, gap=2)
+        # "YENİ" rozeti başlığın altında kendi kutusunda: büyük başlık
+        # satırına gömülünce zemini satır boyunca uzuyordu.
+        badge = p._layout(f"<b>{_escape(labels['badge_new'])}</b>", 9)
+        bw, bh = badge.get_pixel_size()
+        p.box(PAD, p.y, bw + 14, bh + 6, fill=_BADGE, radius=4)
+        if ctx:
+            ctx.set_source_rgb(1, 1, 1)
+            ctx.move_to(PAD + 7, p.y + 3)
+            PangoCairo.show_layout(ctx, badge)
+        p.y += bh + 6 + 4
+    if note:
+        p.text(_escape(note), 10, _MUTED, gap=2)
     if card.get("kind"):
         p.text(f"({_escape(card['kind'])})", 10, _MUTED, gap=2)
     p.text(_escape(card.get("user_line", "")), 10, _MUTED, gap=10)

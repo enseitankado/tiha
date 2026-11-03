@@ -560,13 +560,35 @@ def paper_order(users) -> list[str]:
 
 
 def _branch_usernames() -> set[str]:
-    """MEB branş listesinden türeyen bütün branş hesabı adları."""
+    """Branş hesabı adları: MEB listesinden türeyenler ve TiHA işaretli
+    (elle eklenmiş branşlar dahil) hesaplar."""
+    names: set[str] = set()
     try:
-        from ..core.meb_data import all_branch_labels, branch_to_username
-        return {branch_to_username(label) for label in all_branch_labels()}
+        from ..core.meb_data import (
+            all_branch_labels, branch_to_username, tagged_branch_labels,
+        )
+        names = {branch_to_username(label) for label in all_branch_labels()}
+        names |= {branch_to_username(label) for label in tagged_branch_labels()}
     except Exception as exc:  # veri dosyası yok/bozuk: tür eki yazılmaz
         log.debug("Branş listesi okunamadı: %s", exc)
-        return set()
+    return names
+
+
+# Kart resimleri kaydedilirken alt dizinler: ortak hesaplar ve grup PIN'i
+# ana dizinde, branş hesapları "branslar", diğer (kişisel ve yedek)
+# öğretmen hesapları "ogretmenler" altında.
+CARD_ROOT_USERS = ("etapadmin", "ogretmen", "ogrenci")
+CARD_DIR_BRANCHES = "branslar"
+CARD_DIR_TEACHERS = "ogretmenler"
+
+
+def card_subdir(user: str, branches: set[str]) -> str:
+    """Kart resminin kayıt dizinine göre alt dizini ("" = ana dizin)."""
+    if user.startswith("@") or user in CARD_ROOT_USERS:
+        return ""
+    if user in branches:
+        return CARD_DIR_BRANCHES
+    return CARD_DIR_TEACHERS
 
 
 def _paper_account_kind(user: str, branches: set[str]) -> str:
@@ -643,8 +665,9 @@ def _paper_filename_slug(
         return f"pin-anahtari-brans-{_slug(user)}"
 
     # Kişisel/yedek: GECOS'tan ad-soyad. display "Ayşe Yılmaz" gibi
-    # olur; slugify: "ayse-yilmaz".
-    name = display or user
+    # olur; slugify: "ayse-yilmaz". Sondaki parantezli not (ör.
+    # "(sistemde hesap yok)") dosya adına girmez.
+    name = _re.sub(r"\s*\([^()]*\)\s*$", "", display or "") or user
     slug = _slug(name)
     if not slug:
         slug = _slug(user) or "kart"
@@ -1523,13 +1546,18 @@ class OTPSecretsModule(Module):
                 write_user_file(target / t("m03.export.html_name"), paper["html"])
                 used: set[str] = set()
                 for i, card in enumerate(cards, start=1):
+                    # Ortak hesaplar ana dizinde; branş ve öğretmen
+                    # hesapları kendi alt dizinlerinde (bkz. card_subdir).
+                    folder = target / card["subdir"] if card.get("subdir") else target
+                    if folder != target:
+                        make_user_dir(folder)
                     name = card["slug"]
                     n = 2
-                    while name in used:
+                    while (card.get("subdir"), name) in used:
                         name = f"{card['slug']}-{n}"
                         n += 1
-                    used.add(name)
-                    write_user_file(target / f"{name}.png", render_card_png(card, labels))
+                    used.add((card.get("subdir"), name))
+                    write_user_file(folder / f"{name}.png", render_card_png(card, labels))
                     written += 1
                     GLib.idle_add(progress.set_property, "text",
                                   _t("m03.export.saving", done=i, total=len(cards)))
@@ -1670,6 +1698,7 @@ class OTPSecretsModule(Module):
             file_slug = _paper_filename_slug(user, is_group, display, branches)
             card_data.append({
                 "slug": file_slug,
+                "subdir": card_subdir(user, branches),
                 "title": display,
                 "kind": kind,
                 "new": is_new,
