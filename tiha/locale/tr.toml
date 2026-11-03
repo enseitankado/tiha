@@ -4905,6 +4905,8 @@ Yer açan ve iz silen temizlikler:\n\
 edilir)\n\
 \u0020\u0020- systemd journal (boyut 1 KB'a indirilir)\n\
 \u0020\u0020- /var/log altındaki dosyalar (yapı korunur, içerik boşaltılır)\n\
+\u0020\u0020- Komut kayıtları (snoopy) ve merkezi log sunucusuna\n\
+\u0020\u0020\u0020\u0020gönderilmeyi bekleyen rsyslog kuyruğu\n\
 \u0020\u0020- Çökme raporları (/var/crash, /var/lib/whoopsie)\n\
 \u0020\u0020- Posta / cups / anacron kuyrukları\n\
 \u0020\u0020- man / fontconfig / debconf / lightdm önbellekleri\n\
@@ -4978,6 +4980,8 @@ apt_lists = "APT paket listesi temizlendi ({count} dosya)"
 logs = "Sistem logları ve journal temizleniyor..."
 journal = "systemd journal vakumlandı"
 var_log = "/var/log: {truncated} dosya boşaltıldı, {removed} eski dosya silindi"
+remote_queue = "Merkezi log sunucusuna gönderilmemiş kuyruk ve dosya okuma konumları silindi ({count} dosya); klonlar kaynak tahtanın kayıtlarını yeniden göndermez"
+snoopy_logs = "Komut kayıtları (snoopy) silindi: /var/log/auth.log ve systemd günlüğü boşaltıldı, gönderilmemiş kuyruk temizlendi"
 installer_logs = "Debian installer logları silindi"
 crash = "{count} crash/telemetri öğesi silindi"
 spool = "Spool kuyruklarından {count} öğe silindi"

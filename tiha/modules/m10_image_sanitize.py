@@ -105,6 +105,48 @@ SENSITIVE_STATE = (
 )
 
 
+# Merkezi log sunucusuna gönderilmeyi bekleyen rsyslog kuyruğu ve dosya
+# okuma (imfile) konumları. Sunucuya ulaşılamadıysa kaynak tahtanın
+# kayıtları (snoopy komut kayıtları dahil) burada birikir; imajda kalırsa
+# her klon bunları kendi adıyla yeniden gönderir.
+RSYSLOG_STATE_DIRS = (Path("/var/lib/rsyslog"), Path("/var/spool/rsyslog"))
+RSYSLOG_STATE_PATTERNS = ("tiha_remote*", "imfile-state:*")
+
+
+def _stop_rsyslog() -> bool:
+    """rsyslog'u durdurur; çalışıyorduysa True.
+
+    syslog.socket da durdurulur: yoksa günlüğe düşen ilk kayıt rsyslog'u
+    yeniden uyandırır. Dururken bellekteki kuyruk diske yazılır.
+    """
+    was_active = run_cmd(["systemctl", "is-active", "--quiet", "rsyslog"]).ok
+    if was_active:
+        run_cmd(["systemctl", "stop", "syslog.socket", "rsyslog.service"])
+    return was_active
+
+
+def _purge_rsyslog_state() -> int:
+    """Gönderilmemiş kuyruk ve imfile konum dosyalarını siler (sayı döner)."""
+    removed = 0
+    for root in RSYSLOG_STATE_DIRS:
+        if not root.is_dir():
+            continue
+        for pattern in RSYSLOG_STATE_PATTERNS:
+            for item in root.glob(pattern):
+                if item.is_file() and _rm(item):
+                    removed += 1
+    return removed
+
+
+def _snoopy_present() -> bool:
+    """snoopy (komut kaydı) bu tahtada kurulu mu?"""
+    try:
+        preload = Path("/etc/ld.so.preload").read_text(encoding="utf-8")
+    except OSError:
+        preload = ""
+    return "libsnoopy" in preload or Path("/etc/snoopy.ini").exists()
+
+
 def _purge_sensitive_state(state_dir: Path = STATE_DIR) -> list[str]:
     """Hassas TiHA yedeklerini siler; silinenlerin göreli yollarını döner."""
     removed: list[str] = []
@@ -624,6 +666,13 @@ class ImageSanitizeModule(Module):
         # ===== 3) Journal & loglar ====================================
         if progress:
             progress(t("m10.apply.logs"))
+        # rsyslog dururken temizlenir: kuyruk ve loglar boşaltılırken
+        # yeniden yazılmaz. snoopy komut kayıtları auth.log'da, günlükte
+        # ve gönderilmemiş kuyrukta durur; üçü de aşağıda silinir.
+        rsyslog_was_active = _stop_rsyslog()
+        n = _purge_rsyslog_state()
+        if n:
+            ops.append(t("m10.apply.remote_queue", count=n))
         # Journald: önce rotate, sonra boyut 1K'a indir
         run_cmd(["journalctl", "--rotate"])
         run_cmd(["journalctl", "--vacuum-size=1K"])
@@ -649,6 +698,10 @@ class ImageSanitizeModule(Module):
                     if _truncate(item):
                         truncated += 1
             ops.append(t("m10.apply.var_log", truncated=truncated, removed=removed))
+        if _snoopy_present():
+            ops.append(t("m10.apply.snoopy_logs"))
+        if rsyslog_was_active:
+            run_cmd(["systemctl", "start", "syslog.socket", "rsyslog.service"])
 
         # Installer logları (Debian kurulum izleri)
         n = _glob_remove(Path("/var/log"), ["installer/*", "installer"])
