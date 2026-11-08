@@ -72,6 +72,12 @@ class ApplyResult:
     # diyaloğu açmaz; karar pencerenin durum satırında görünür.
     output_streamed: bool = False
 
+    # ``details`` / ``copyable`` gizli değer taşıyor (ör. üretilen PIN
+    # anahtarlarının metin raporu). Sihirbaz bunları ekranda gösterir;
+    # makine arayüzü (--json) göndermez — yönetim aracının görev kaydına
+    # (veritabanına) düşmesinler.
+    contains_secrets: bool = False
+
 
 
 def _lock_state() -> None:
@@ -81,6 +87,24 @@ def _lock_state() -> None:
         protect_state_tree()
     except Exception:  # izin düzeltmesi adımı düşürmesin
         pass
+
+# İşlem kilidi doluyken dönen sonucun data anahtarı (komut satırı buna
+# bakıp ayrı çıkış koduyla çıkar).
+LOCK_BUSY_KEY = "lock_busy"
+
+
+def run_locked(what: str, fn: Callable[[], "ApplyResult"]) -> "ApplyResult":
+    """``fn``'i TiHA işlem kilidiyle çalıştırır; kilit doluysa başarısız
+    bir sonuç döner (bkz. :mod:`tiha.core.oplock`)."""
+    from .oplock import Busy, operation_lock
+    try:
+        with operation_lock(what):
+            return fn()
+    except Busy as busy:
+        log.warning("İşlem kilidi dolu: %s", busy.holder)
+        return ApplyResult(False, t("core.oplock.busy", holder=busy.holder or "?"),
+                           data={LOCK_BUSY_KEY: True})
+
 
 class Module:
     """Tüm modüllerin türediği taban sınıf."""
@@ -122,6 +146,15 @@ class Module:
     # adım ekranında gösterilsin. Kısa adımlarda katlamak içeriği
     # gereksizce gizliyordu.
     rationale_inline: bool = False
+    # Uzaktan (SSH ile bir yönetim aracından) uygulama için bilgiler; makine
+    # arayüzü (``tiha --sema``) bunları yayımlar, sihirbaz kullanmaz.
+    # scope: "both" — kurulu tahtada da imaj hazırlarken de anlamlı;
+    #        "image" — yalnız imaj alınacak kaynak tahtada çalıştırılmalı.
+    scope: str = "both"
+    # Uzaktan uygulamadan önce gösterilecek uyarı (ör. bağlantıyı koparır).
+    remote_warning: str = ""
+    # Geri almanın uzaktan erişimi etkilediği durum için uyarı.
+    undo_remote_warning: str = ""
 
     # --- Yardımcılar ------------------------------------------------------
 
@@ -187,14 +220,23 @@ class Module:
         params: dict | None = None,
         progress: ProgressCallback | None = None,
     ) -> ApplyResult:
-        """İşlemi detaylı loglama ile uygular."""
+        """İşlemi detaylı loglama ile, TiHA işlem kilidini tutarak uygular."""
+        return run_locked(t("core.oplock.what_apply", title=self.title),
+                       lambda: self._apply_logged(params, progress))
+
+    def _apply_logged(
+        self,
+        params: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ) -> ApplyResult:
         log.info("=== MODÜL APPLY BAŞLADI ===")
         log.info("Modül: %s (%s)", self.id, self.title)
         if params:
-            # Parolaları loglamaktan kaçın
+            # Parolaları ve anahtarları loglamaktan kaçın
+            from .report_log import looks_secret
             safe_params = {}
             for key, value in params.items():
-                if "password" in key.lower() or "parola" in key.lower():
+                if looks_secret(key):
                     safe_params[key] = f"[{len(value)} karakter]" if value else "[boş]"
                 else:
                     safe_params[key] = value
@@ -262,7 +304,11 @@ class Module:
         return None
 
     def undo_with_logging(self, data: dict, params: dict | None = None) -> ApplyResult:
-        """İşlemi detaylı loglama ile geri alır."""
+        """İşlemi detaylı loglama ile, TiHA işlem kilidini tutarak geri alır."""
+        return run_locked(t("core.oplock.what_undo", title=self.title),
+                       lambda: self._undo_logged(data, params))
+
+    def _undo_logged(self, data: dict, params: dict | None = None) -> ApplyResult:
         log.info("=== MODÜL UNDO BAŞLADI ===")
         log.info("Modül: %s (%s)", self.id, self.title)
         if data:

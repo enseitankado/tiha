@@ -22,7 +22,14 @@ TiHA'ya katkılarınız için teşekkürler! Bu kısa doküman, projeye sağlık
    ```bash
    python3 -m py_compile $(find tiha -name '*.py')
    bash -n bootstrap.sh
+   python3 tools/i18n_check.py    # metin kataloğu
+   python3 tools/cli_check.py     # komut satırı ↔ sihirbaz uyumu
    ```
+   Adım ya da düğme eklediyseniz `python3 tools/cli_check.py --guncelle` yeni
+   komut satırı adlarını `tools/cli_names.json`'a kaydeder. Bir adımı ya da
+   düğmeyi yeniden adlandırdıysanız araç eski adı `tiha/core/cli.py`'deki
+   takma ad listesine eklemenizi ister; yayımlanmış adlar betikleri
+   bozmamak için çalışmaya devam etmelidir.
 5. Yeni özellik eklediyseniz README'yi ve ilgili modülün docstring'ini de güncelleyin.
 
 ## Kod konvansiyonları

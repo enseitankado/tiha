@@ -34,7 +34,14 @@ CYAN   = _c("\033[36m")
 GRAY   = _c("\033[90m")
 
 
+# Komut satırının makine çıktısı (--json) açıkken insan okuyacak satırlar
+# basılmaz; stdout yalnız JSON olaylarını taşır.
+SILENT = False
+
+
 def _write(text: str = "") -> None:
+    if SILENT:
+        return
     try:
         print(text, flush=True)
     except (BrokenPipeError, OSError):

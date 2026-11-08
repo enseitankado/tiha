@@ -48,17 +48,40 @@ curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh
 
 # 4. adımı uygula: SSH açık, Samba kapalı (yalnız değiştirmek istediğiniz ayarları yazın)
 curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -u 4 -d enable_ssh=evet -d enable_samba=hayir
+
+# 5. adımın sayfasındaki "Log Sunucusunu Test Et" düğmesine bas
+curl -fsSL https://raw.githubusercontent.com/enseitankado/tiha/main/bootstrap.sh | bash -s -- -x 5 log-sunucusunu-test-et
 ```
 
 Sık kullanılanlar: `-l` listele, `-a` ayarları göster, `-o` önizle, `-u`
-uygula, `-g` geri al, `-d ANAHTAR=DEĞER` ayar değeri, `-e` onayla.
+uygula, `-g` geri al, `-x` sayfadaki bir düğmeyi çalıştır, `-d ANAHTAR=DEĞER`
+ayar değeri, `-e` onayla.
+
+Sayfalardaki düğmeler (log sunucusunu test et, Ahenk teşhisi, PIN
+anahtarlarını sil, BIOS parolasını oku gibi) de komut satırından
+çalıştırılabilir. Bir adımda hangi düğmelerin olduğunu `-x ADIM` yazıp
+görebilirsiniz; düğme o tahtada sihirbazda gizliyse (ör. BIOS'u desteklenmeyen
+tahtada) komut satırında da çalışmaz.
 
 Dikkat edin:
 
 - Yazmadığınız ayarlar, sihirbazda olduğu gibi tahtanın şu anki durumundan
   alınır; yani yalnız yazdığınız değişir.
-- Hesap silme gibi geri dönüşü olmayan işlemler `-e` eklemezseniz yapılmaz;
-  TiHA ne silineceğini yazıp durur.
+- Hesap ya da anahtar silme gibi geri dönüşü olmayan işlemler `-e`
+  eklemezseniz yapılmaz; TiHA ne silineceğini yazıp durur.
+- Kısa adlar sihirbazdaki adlardan türer. Bir adımın adı sonradan değişse de
+  eski kısa adı çalışmaya devam eder; betiklerinizi bozmaz.
+- Aynı tahtada aynı anda tek TiHA işlemi çalışır. Biri sihirbazda "Uygula"ya
+  basmışken komut satırından gelen işlem beklemeden reddedilir (ve tersi).
+
+**Yönetim sunucusundan kullanım (Ankamon gibi).** TiHA, okul ağındaki
+tahtaları uzaktan yöneten bir programdan SSH ile, doğrudan root olarak da
+çalıştırılabilir. Böyle programlar için `--sema` bütün adımların form
+tanımını (ayarlar, seçenekler, düğmeler, uyarılar) JSON olarak verir;
+`--json` her işlemin çıktısını satır satır JSON olarak verir; `--degerler -`
+parolaları komut satırında görünmeden alır. Yönetim programı TiHA'nın
+formlarını bunlardan kendisi çizer; TiHA'ya eklenen her şey orada da
+kendiliğinden görünür. Ayrıntılar: [docs/makine-arayuzu.md](docs/makine-arayuzu.md).
 - Komut satırından yaptıklarınız da Özet sayfasında ve raporda görünür;
   sihirbazdan ya da `-g ADIM` ile geri alınabilir.
 

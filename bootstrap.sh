@@ -4,6 +4,12 @@
 # KULLANIM: etapadmin hesabıyla açılmış bir terminale bu satırı yapıştırın:
 #   curl -fsSL <kısaltılmış-url> | bash
 #
+# Yönetim sunucusundan (SSH, root) komut satırı seçenekleriyle:
+#   ssh root@tahta 'curl -fsSL <url> | bash -s -- --json -l'
+# root'ta sudo ve parola sorulmaz; sihirbaz değil yalnız komut satırı
+# kullanılabilir. TIHA_LOCAL_DIR verilirse TiHA indirilmez, o klasördeki
+# kopya çalıştırılır (ör. yönetim sunucusunun SFTP ile koyduğu sürüm).
+#
 # Yaptığı işler:
 #   1. Kullanıcının etapadmin olduğunu doğrular
 #   2. Eksik sistem paketlerini (python3-gi, python3-pyotp, tar, curl) kurar
@@ -23,24 +29,34 @@ WORKDIR="$(mktemp -d /tmp/tiha.XXXXXX)"
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
-c_info()  { printf '\033[1;34m[TiHA]\033[0m %s\n' "$*"; }
-c_ok()    { printf '\033[1;32m[TiHA]\033[0m %s\n' "$*"; }
-c_warn()  { printf '\033[1;33m[UYARI]\033[0m %s\n' "$*"; }
-c_err()   { printf '\033[1;31m[HATA]\033[0m %s\n' "$*" >&2; }
+# Durum satırları stderr'e gider: stdout TiHA'nın çıktısına (ör. --json
+# olaylarına) ayrılmıştır. Renk yalnız terminalde.
+if [[ -t 2 ]]; then B=$'\033[1;34m' G=$'\033[1;32m' Y=$'\033[1;33m' R=$'\033[1;31m' N=$'\033[0m'
+else B="" G="" Y="" R="" N=""; fi
+c_info()  { printf '%s[TiHA]%s %s\n' "$B" "$N" "$*" >&2; }
+c_ok()    { printf '%s[TiHA]%s %s\n' "$G" "$N" "$*" >&2; }
+c_warn()  { printf '%s[UYARI]%s %s\n' "$Y" "$N" "$*" >&2; }
+c_err()   { printf '%s[HATA]%s %s\n' "$R" "$N" "$*" >&2; }
 
 # --- 1) Kullanıcı denetimi -------------------------------------------------
-if [[ "$(id -un)" != "etapadmin" ]]; then
-    c_err "TiHA yalnızca 'etapadmin' kullanıcısıyla çalıştırılmalıdır."
+# root (ör. yönetim sunucusunun SSH oturumu): sudo gerekmez. Sihirbaz
+# yalnız etapadmin'den açılır; root'ta seçeneksiz çalıştırılırsa TiHA
+# kendisi reddeder.
+if [[ "$(id -u)" == 0 ]]; then
+    SUDO=()
+elif [[ "$(id -un)" != "etapadmin" ]]; then
+    c_err "TiHA yalnızca 'etapadmin' kullanıcısıyla (ya da root olarak) çalıştırılmalıdır."
     c_err "Geçerli kullanıcı: $(id -un)"
     exit 2
-fi
-
-# --- 2) sudo oturumu ön-doğrulama -----------------------------------------
-# curl|bash akışında dahi sudo, parola isteğini /dev/tty üzerinden alır.
-c_info "Yönetici yetkisi doğrulanıyor. İstenirse etapadmin parolasını girin."
-if ! sudo -v; then
-    c_err "Yetki doğrulanamadı; çıkılıyor."
-    exit 3
+else
+    SUDO=(sudo)
+    # --- 2) sudo oturumu ön-doğrulama -------------------------------------
+    # curl|bash akışında dahi sudo, parola isteğini /dev/tty üzerinden alır.
+    c_info "Yönetici yetkisi doğrulanıyor. İstenirse etapadmin parolasını girin."
+    if ! sudo -v; then
+        c_err "Yetki doğrulanamadı; çıkılıyor."
+        exit 3
+    fi
 fi
 
 # --- 3) Gerekli paketler ---------------------------------------------------
@@ -57,35 +73,44 @@ for pkg in "${REQUIRED[@]}"; do
 done
 if (( ${#MISSING[@]} > 0 )); then
     c_info "Eksik paketler kuruluyor: ${MISSING[*]}"
-    sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${MISSING[@]}"
+    "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get update -qq >&2
+    "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${MISSING[@]}" >&2
 else
     c_ok "Tüm paketler hazır."
 fi
 
 # --- 4) TiHA kaynak kodu indir --------------------------------------------
-c_info "TiHA kaynak kodu indiriliyor..."
-if ! curl -fsSL "$REPO_TARBALL" | tar -xz -C "$WORKDIR" --strip-components=1; then
-    c_err "Kaynak kodu indirilemedi. İnternet bağlantınızı kontrol edin."
-    exit 4
-fi
-
-# Yerelden çalıştırma (geliştirme) için: eğer TIHA_LOCAL_DIR tanımlıysa onu kullan
+# Yerel kopya (geliştirme ya da yönetim sunucusunun koyduğu sürüm) varsa
+# indirme yapılmaz.
 if [[ -n "${TIHA_LOCAL_DIR:-}" && -d "$TIHA_LOCAL_DIR/tiha" ]]; then
     c_info "TIHA_LOCAL_DIR kullanılıyor: $TIHA_LOCAL_DIR"
+    rm -rf "$WORKDIR"
     WORKDIR="$TIHA_LOCAL_DIR"
     trap - EXIT   # yerel dizini silme
+else
+    c_info "TiHA kaynak kodu indiriliyor..."
+    if ! curl -fsSL --connect-timeout 15 "$REPO_TARBALL" | tar -xz -C "$WORKDIR" --strip-components=1; then
+        c_err "Kaynak kodu indirilemedi. İnternet bağlantınızı kontrol edin."
+        exit 4
+    fi
 fi
 
 # --- 5) eta-otp-cli aracını indir -----------------------------------------
 # TiHA Modül 4 (PIN anahtarları) bu aracı kullanır. İndirme başarısız olursa
 # TiHA dahili pyotp tabanlı yedek yolu kullanır — fatal değildir.
+# Yerel kopyada araç zaten varsa (yönetim sunucusu birlikte koyduysa)
+# yeniden indirilmez; internetsiz tahtada da çalışır.
 ETA_OTP_CLI_DIR="$WORKDIR/eta-otp-cli"
 mkdir -p "$ETA_OTP_CLI_DIR"
-c_info "enseitankado/eta-otp-cli aracı indiriliyor..."
 ETA_OK=true
-for f in otp-cli.py toplu-kullanici-olustur.py README.md; do
-    if ! curl -fsSL "$ETA_OTP_RAW/$f" -o "$ETA_OTP_CLI_DIR/$f"; then
+if [[ -f "$ETA_OTP_CLI_DIR/otp-cli.py" ]]; then
+    OTP_FILES=()
+else
+    c_info "enseitankado/eta-otp-cli aracı indiriliyor..."
+    OTP_FILES=(otp-cli.py toplu-kullanici-olustur.py README.md)
+fi
+for f in "${OTP_FILES[@]}"; do
+    if ! curl -fsSL --connect-timeout 15 --max-time 60 "$ETA_OTP_RAW/$f" -o "$ETA_OTP_CLI_DIR/$f"; then
         c_warn "eta-otp-cli/$f indirilemedi."
         rm -f "$ETA_OTP_CLI_DIR/$f"
         ETA_OK=false
@@ -105,20 +130,25 @@ fi
 # de tekrar denemeyi yapar — bootstrap fatal değildir.
 ETA_112_DIR="$WORKDIR/eta-112"
 mkdir -p "$ETA_112_DIR"
-c_info "enseitankado/eta-112 aracı indiriliyor..."
-if curl -fsSL "$ETA_112_RAW/eta-112.py" -o "$ETA_112_DIR/eta-112.py"; then
+if [[ ! -f "$ETA_112_DIR/eta-112.py" ]]; then
+    c_info "enseitankado/eta-112 aracı indiriliyor..."
+    curl -fsSL --connect-timeout 15 --max-time 60 "$ETA_112_RAW/eta-112.py" \
+        -o "$ETA_112_DIR/eta-112.py" || rm -f "$ETA_112_DIR/eta-112.py"
+fi
+if [[ -f "$ETA_112_DIR/eta-112.py" ]]; then
     chmod +x "$ETA_112_DIR/eta-112.py" 2>/dev/null || true
     c_ok "eta-112 hazır: $ETA_112_DIR"
     export TIHA_ETA_112_DIR="$ETA_112_DIR"
 else
     c_warn "eta-112 indirilemedi; TiHA modülün içinden tekrar deneyecek."
-    rm -f "$ETA_112_DIR/eta-112.py"
 fi
 
 # --- 6) Uygulamayı başlat --------------------------------------------------
-c_info "Sihirbaz başlatılıyor..."
-# DISPLAY/XAUTHORITY gibi değişkenleri sudo içinde de erişilebilir tut.
-exec sudo -E \
+c_info "TiHA başlatılıyor..."
+# DISPLAY/XAUTHORITY gibi değişkenleri sudo içinde de erişilebilir tut
+# (root'ta sudo yok; ortam zaten aynı).
+if (( ${#SUDO[@]} )); then SUDO+=(-E); fi
+exec "${SUDO[@]}" env \
     PYTHONPATH="$WORKDIR" \
     TIHA_HOME="$WORKDIR" \
     TIHA_ETA_OTP_CLI_DIR="${TIHA_ETA_OTP_CLI_DIR:-}" \

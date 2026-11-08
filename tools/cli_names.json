@@ -1,0 +1,41 @@
+{
+  "actions": {
+    "m01_initial_passwords": {
+      "fazladan-hesaplari-sil": "remove_extra_users",
+      "ogrenci-hesabini-sil": "remove_student"
+    },
+    "m03_otp_secrets": {
+      "tum-pin-anahtarlarini-sil": "purge_all_secrets"
+    },
+    "m06_remote_syslog": {
+      "log-sunucusunu-test-et": "test_log_server"
+    },
+    "m07_time_sync": {
+      "ntp-sunucularini-test-et": "test_ntp_servers"
+    },
+    "m12_ahenk_reset": {
+      "ahenk-teshisini-calistir": "run_ahenk_debug"
+    },
+    "m14_bios_password": {
+      "bu-makinenin-bios-parolasini-ayarla": "set_local",
+      "mevcut-yonetici-parolasini-oku": "read_current"
+    }
+  },
+  "steps": {
+    "ahenk": "m12_ahenk_reset",
+    "basarim": "m17_performance",
+    "bios-parolasi": "m14_bios_password",
+    "dinamik-hostname": "m08_hostname",
+    "grub-korumasi": "m16_grub_protection",
+    "imaj-oncesi-temizlik": "m10_image_sanitize",
+    "merkezi-log-sunucusu": "m06_remote_syslog",
+    "otomatik-ahenk-kaydi": "m12_ahenk_reset",
+    "otomatik-kapanma": "m11_power_management",
+    "pin-anahtarlari": "m03_otp_secrets",
+    "sistem-guncellemesi": "m09_system_update",
+    "ssh-samba": "m04_ssh_and_samba",
+    "uzaktan-uyandirma": "m15_wake_on_lan",
+    "yerel-hesaplar": "m01_initial_passwords",
+    "zaman-senkronizasyonu-ntp": "m07_time_sync"
+  }
+}

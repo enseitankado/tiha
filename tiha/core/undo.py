@@ -29,6 +29,29 @@ _LEGACY_NOT_APPLICABLE = {
 }
 
 
+def step_state(module, entry) -> str:
+    """Adımın tahtadaki durumu, günlüğün son kaydından: sihirbazın sol menüsü
+    ve makine arayüzü (``tiha -l --json``) aynı kuralı kullanır.
+
+    ``none`` hiç uygulanmadı · ``applied`` uygulandı (menüde ✓) · ``off``
+    kutular boş bırakılıp uygulandı, özellik kapalı (işaret yok) ·
+    ``failed`` son deneme başarısız (⚠) · ``skipped`` bu tahtada
+    uygulanamaz · ``undone`` geri alındı.
+    """
+    if entry is None:
+        return "none"
+    if entry.status == "applied":
+        try:
+            if module is not None and module.result_is_off(entry.data):
+                return "off"
+        except Exception:
+            pass
+        return "applied"
+    if entry.status in ("failed", "skipped", "undone"):
+        return entry.status
+    return "none"
+
+
 @dataclass
 class JournalEntry:
     """Uygulanmış bir işlemin özeti."""

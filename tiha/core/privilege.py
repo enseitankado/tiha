@@ -44,8 +44,13 @@ def is_admin_user() -> bool:
     return invoking_username() == ADMIN_USER
 
 
-def require_root_and_admin() -> tuple[bool, str]:
+def require_root_and_admin(allow_root_login: bool = False) -> tuple[bool, str]:
     """Kök yetki + yönetici kullanıcı koşulunu birlikte denetler.
+
+    ``allow_root_login``: komut satırı modunda doğrudan root oturumu da
+    kabul edilir (ör. bir yönetim sunucusunun ``ssh root@tahta tiha …``
+    çağrısı; ``sudo`` olmadığı için çağıran kullanıcı root görünür).
+    Sihirbaz yalnız etapadmin'den açılır.
 
     :return: ``(ok, aciklama)`` çifti. ``ok`` False ise ``aciklama`` kullanıcıya
         gösterilebilecek Türkçe bir ileti içerir.
@@ -53,6 +58,8 @@ def require_root_and_admin() -> tuple[bool, str]:
     if not is_root():
         return False, t("core.privilege.root_required")
     user = invoking_username()
+    if allow_root_login and user == "root":
+        return True, ""
     if user != ADMIN_USER:
         return False, t("core.privilege.admin_only", admin=ADMIN_USER, user=user)
     return True, ""

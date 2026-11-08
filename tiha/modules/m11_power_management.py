@@ -1080,9 +1080,22 @@ class PowerManagementModule(Module):
     # Bu iki kutu "şu an açık mı" sorusunun cevabıdır, bir tercih değil.
     # Geri alma eta-shutdown yapılandırmasını sıfırlıyor ama kutular
     # işaretli kalıyordu; adıma tekrar girildiğinde de sistemde kurulu
-    # olan kapanma kutuda görünmüyordu. Saat, dakika ve geri sayım
-    # süresi kutuları bilinçli olarak dışarıda: onlar kullanıcının
-    # girdiği tercih, sistem durumu değil.
+    # olan kapanma kutuda görünmüyordu. Saat, dakika ve süre kutuları da
+    # kurulu değeri gösterir (yukarıda) ama tercih oldukları için arayüz,
+    # kullanıcı değiştirdiyse onları sistemden gelen değerle ezmez.
+
+    # Saat, dakika ve boşta kalma süresi kutuları: kurulu eta-shutdown
+    # yapılandırmasından (ETA Zamanlı Kapatma arayüzünden de değişmiş
+    # olabilir). Yapılandırma yoksa None — şemadaki varsayılan kalır.
+
+    def current_auto_hour(self) -> str | None:
+        return self.get_current_config().get("auto_hour")
+
+    def current_auto_minute(self) -> str | None:
+        return self.get_current_config().get("auto_minute")
+
+    def current_idle_minute(self) -> str | None:
+        return self.get_current_config().get("idle_minute")
 
     def auto_shutdown_active(self) -> bool:
         """Sabit saatte kapanma sistemde açık mı?"""

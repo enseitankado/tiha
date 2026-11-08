@@ -105,24 +105,30 @@ def main() -> int:
     _silence_subprocess_warnings()
 
     # CLI mod tespiti — GUI hiç açılmadan tamamen headless çalışır.
-    from .core.cli import check_usage, is_cli_invocation, needs_root, run as cli_run
+    from .core.cli import (
+        check_usage, early_error, finish, is_cli_invocation, needs_root, prepare,
+        run as cli_run,
+    )
     cli_argv = sys.argv[1:]
     if is_cli_invocation(cli_argv):
+        # --json ise hatalar da makine çıktısı olarak gitsin.
+        prepare(cli_argv)
         # Yanlış yazılmış seçenek, yetki iletisinden önce bildirilsin.
-        check_usage(cli_argv)
+        try:
+            check_usage(cli_argv)
+        except SystemExit as exc:
+            raise SystemExit(finish(exc.code if isinstance(exc.code, int) else 64))
     if is_cli_invocation(cli_argv) and not needs_root(cli_argv):
-        # -h / -V / -l: bilgi amaçlı, yetki ve çalışma dizini gerekmez.
+        # -h / -V / -l / --sema: bilgi amaçlı, yetki ve çalışma dizini gerekmez.
         return cli_run(cli_argv)
     if is_cli_invocation(cli_argv):
-        ok, reason = require_root_and_admin()
+        ok, reason = require_root_and_admin(allow_root_login=True)
         if not ok:
-            print(t("app.error_line", reason=reason), file=sys.stderr)
-            return 2
+            return early_error(t("app.error_line", reason=reason), 2)
         try:
             ensure_runtime_dirs()
         except OSError as exc:
-            print(t("app.error_runtime_dir_cli", error=exc), file=sys.stderr)
-            return 3
+            return early_error(t("app.error_runtime_dir_cli", error=exc), 3)
         # İmaj damgası yalnız root'a açık olmalı (eski sürümler 0644 yazıyordu).
         protect_image_info()
         log_startup_info()

@@ -593,6 +593,25 @@ class RemoteSyslogModule(Module):
     # önce uygulanmış ayarlar "işaretsiz" gelmesin diye gereklidir.
     # ------------------------------------------------------------------
 
+    # Sunucu, port, protokol ve profil kutuları: TiHA'nın yazdığı rsyslog
+    # dosyasından. Dosya yoksa None — şemadaki varsayılan kalır.
+
+    def current_syslog_host(self) -> str | None:
+        return (_parse_config() or {}).get("host")
+
+    def current_syslog_port(self) -> str | None:
+        config = _parse_config()
+        return str(config["port"]) if config else None
+
+    def current_syslog_proto(self) -> str | None:
+        return (_parse_config() or {}).get("proto")
+
+    def current_log_profile(self) -> str | None:
+        """Profil seçim listesinin etiketi (ör. "Bakım (önerilen)")."""
+        config = _parse_config()
+        prof = LOG_PROFILES.get(config.get("profile", "bakim")) if config else None
+        return prof["label"] if prof else None
+
     def node_exporter_active(self) -> str:
         """Metrik izleme (prometheus-node-exporter) etkin mi?"""
         return "True" if (

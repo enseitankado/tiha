@@ -22,6 +22,9 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m01_initial_passwords": [
         {
             "key": "root_password",
+            # Makine arayüzü: değer verilirse uzaktan uygulamada uyarı.
+            "remote_warning": t("m01.params.root_password.remote_warning"),
+            "remote_warning_when": "*",
             "label": t("m01.params.root_password.label"),
             "type": "password",
             "show_toggle": True,
@@ -162,6 +165,18 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m03.params.make_group_pin.help"),
         },
         {
+            # Yalnız makine arayüzü (sihirbazda çizilmez): yönetim aracı
+            # birden çok tahtaya aynı anahtarları dağıtır. Bkz. modüldeki
+            # shared_secrets ve docs/makine-arayuzu.md.
+            "key": "shared_pin_secrets",
+            "label": t("m03.params.shared_pin_secrets.label"),
+            "type": "textarea",
+            "machine_only": True,
+            "required": False,
+            "default": "",
+            "help": t("m03.params.shared_pin_secrets.help"),
+        },
+        {
             "key": "purge_all_secrets",
             "label": t("m03.params.purge_all_secrets.label"),
             "label_from": "label_purge_all_secrets",
@@ -181,6 +196,8 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m04_ssh_and_samba": [
         {
             "key": "enable_ssh",
+            "remote_warning": t("m04.params.enable_ssh.remote_warning"),
+            "remote_warning_when": "False",
             "label": t("m04.params.enable_ssh.label"),
             "type": "bool",
             "required": False,
@@ -218,12 +235,14 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
     "m06_remote_syslog": [
         {
             "key": "syslog_host",
+            "default_from": "current_syslog_host",
             "label": t("m06.params.syslog_host.label"),
             "type": "text",
             "required": True,
         },
         {
             "key": "syslog_port",
+            "default_from": "current_syslog_port",
             "label": t("m06.params.syslog_port.label"),
             "type": "number",
             "required": False,
@@ -231,6 +250,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "syslog_proto",
+            "default_from": "current_syslog_proto",
             "label": t("m06.params.syslog_proto.label"),
             "type": "select",
             "required": False,
@@ -239,6 +259,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "log_profile",
+            "default_from": "current_log_profile",
             "label": t("m06.params.log_profile.label"),
             "type": "select",
             "required": False,
@@ -366,6 +387,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "auto_hour",
+            "default_from": "current_auto_hour",
             "label": t("m11.params.auto_hour.label"),
             "type": "spin",
             "required": False,
@@ -377,6 +399,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "auto_minute",
+            "default_from": "current_auto_minute",
             "label": t("m11.params.auto_minute.label"),
             "type": "spin",
             "required": False,
@@ -397,6 +420,7 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
         },
         {
             "key": "idle_minute",
+            "default_from": "current_idle_minute",
             "label": t("m11.params.idle_minute.label"),
             "type": "spin",
             "required": False,

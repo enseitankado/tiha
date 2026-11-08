@@ -23,7 +23,8 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # noqa: E402
 from .. import __version__
 from ..core.i18n import t
 from ..core.logger import get_logger
-from ..core.undo import Journal
+from ..core.undo import Journal, step_state
+from .layout import SIDEBAR_MARKS
 from ..core.update_check import (
     CheckResult,
     UpdateInfo,
@@ -251,16 +252,6 @@ _CREDITS_SECTIONS: tuple[dict, ...] = (
         ),
     },
 )
-
-
-def _result_is_off(module, entry) -> bool:
-    """Günlük kaydı "uygulandı" ama özelliği kapalı mı bıraktı?"""
-    if module is None:
-        return False
-    try:
-        return bool(module.result_is_off(entry.data))
-    except Exception:
-        return False
 
 
 class TiHAWindow(Gtk.Window):
@@ -1134,31 +1125,14 @@ class TiHAWindow(Gtk.Window):
                         "tiha-step-status-fail",
                         "tiha-step-status-undone"):
                 ctx.remove_class(cls)
-            if entry is None:
-                status_lbl.set_text("")
-                status_lbl.set_tooltip_text("")
-            elif entry.status == "applied" and _result_is_off(by_id.get(module_id), entry):
-                # Kutular boş bırakılıp uygulandı: özellik kapalı, işaret yok.
-                status_lbl.set_text("")
-                status_lbl.set_tooltip_text(t("ui.main.status_off", summary=entry.summary))
-            elif entry.status == "applied":
-                status_lbl.set_text("✓")
-                ctx.add_class("tiha-step-status-ok")
-                status_lbl.set_tooltip_text(t("ui.main.status_applied", summary=entry.summary))
-            elif entry.status == "failed":
-                status_lbl.set_text("⚠")
-                ctx.add_class("tiha-step-status-fail")
-                status_lbl.set_tooltip_text(t("ui.main.status_failed", summary=entry.summary))
-            elif entry.status == "skipped":
-                # Bu tahtada uygulanamaz (ör. donanım desteklenmiyor):
-                # hata değil, simge yok; nedeni ipucunda.
-                status_lbl.set_text("")
-                status_lbl.set_tooltip_text(t("ui.main.status_skipped", summary=entry.summary))
-            elif entry.status == "undone":
-                status_lbl.set_text("")
-                status_lbl.set_tooltip_text("")
-            else:
-                status_lbl.set_text("")
+            # Durum kuralı makine arayüzüyle ortak (core.undo.step_state);
+            # işaret, renk ve ipucu da (SIDEBAR_MARKS).
+            state = step_state(by_id.get(module_id), entry)
+            mark, css_class, tip_key = SIDEBAR_MARKS.get(state, ("", "", ""))
+            status_lbl.set_text(mark)
+            if css_class:
+                ctx.add_class(css_class)
+            status_lbl.set_tooltip_text(t(tip_key, summary=entry.summary) if tip_key else "")
 
     # ---- Navigasyon ------------------------------------------------------
 

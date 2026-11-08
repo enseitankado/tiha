@@ -20,10 +20,11 @@ from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 from ..core import console
 from ..core.i18n import t
 from ..core.logger import get_logger
-from ..core.module import ApplyResult, Module
+from ..core.module import ApplyResult, Module, run_locked
 
 log = get_logger(__name__)
 from ..core.undo import Journal, JournalEntry
+from . import layout
 from . import params as params_schema
 from . import stream_format
 from ..core.report_log import REPORT_PARAMS_KEY, ActionLog, redact_params
@@ -35,23 +36,12 @@ from ..core.private_files import user_desktop_dir, write_user_file
 log = get_logger(__name__)
 
 
-# Yardımcı: içerik sayfasının ortak çerçeve marjları (kompakt ama nefes alan)
-_PAGE_MARGIN = 18
-_ROW_SPACING = 14
-
-# Kısa değer alan form kutularının varsayılan genişliği (karakter). Bu
-# türler satır boyunca uzamaz, sola yaslanır; alan başına şemadaki
-# "width" ile değiştirilir. 0: doğal genişlik (spin, select).
-_COMPACT_FIELD_WIDTHS = {
-    "text": 28,
-    "password": 28,
-    "number": 8,
-    "readonly": 20,
-    "spin": 0,
-    "select": 0,
-    "button": 0,
-}
-_LONG_TEXT_HEIGHT = 180  # uzun metin kutularının sabit yüksekliği
+# Yerleşim sabitleri tek kaynaktan (ui/layout.py): makine arayüzü
+# (tiha --sema) aynı değerleri yayımlar.
+_PAGE_MARGIN = layout.PAGE_MARGIN
+_ROW_SPACING = layout.PAGE_ROW_SPACING
+_COMPACT_FIELD_WIDTHS = layout.COMPACT_FIELD_WIDTHS
+_LONG_TEXT_HEIGHT = layout.LONG_TEXT_HEIGHT
 
 
 def _compact_page() -> Gtk.Box:
@@ -78,20 +68,6 @@ def _apply_line_spacing(label: Gtk.Label, factor: float = 1.35) -> None:
     except Exception:
         # Pango çok eskiyse veya öznitelik kabul etmezse görsel sorun yok
         pass
-
-
-def _count_sentences(text: str) -> int:
-    """Cümle sayısını yaklaşık olarak sayar (. ! ? ile biten dizeler).
-
-    Aynı satırdaki birden çok cümleyi ve boş satırları (paragraf ayırıcı)
-    hesaba katar. Rationale'ın "kısa" mı "uzun" mu olduğunu belirlemek
-    için kullanılır — kesin dilbilimsel sayım değil, hızlı bir yaklaşım.
-    """
-    if not text:
-        return 0
-    import re
-    parts = [p for p in re.split(r"[.!?]+", text) if p.strip()]
-    return len(parts)
 
 
 def _as_checked(value: object) -> bool:
@@ -157,17 +133,12 @@ def _no_focus_labels(widget: Gtk.Widget) -> None:
             _no_focus_labels(child)
 
 
-# Form ad sütununun genişliği (karakter).
-_FORM_LABEL_CHARS = 26
-# Uzun alan açıklamaları (2 satırı aşan) sayfa yerine "?" balonunda.
-# Satır sayısı bu genişlikte ölçülür: varsayılan pencerede form açıklama
-# sütununun genişliği (piksel).
-_HELP_COLUMN_WIDTH = 580
-
+_FORM_LABEL_CHARS = layout.FORM_LABEL_CHARS
+_HELP_COLUMN_WIDTH = layout.HELP_COLUMN_WIDTH
 
 # Açıklama metinlerindeki işaretler: [[ankamon]] → Ankamon'un GitHub
 # sayfasına mavi bağlantı; [[dikkat]]…[[/dikkat]] → kırmızı uyarı.
-ANKAMON_URL = "https://github.com/enseitankado/ankamon"
+ANKAMON_URL = layout.ANKAMON_URL
 
 
 def _help_markup(text: str) -> str:
@@ -176,9 +147,9 @@ def _help_markup(text: str) -> str:
     # Bağlantı kırmızı uyarı içinde de mavi kalsın diye rengi açıkça verilir.
     markup = markup.replace(
         "[[ankamon]]",
-        f'<a href="{ANKAMON_URL}"><span foreground="#1c6fb0">Ankamon</span></a>',
+        f'<a href="{ANKAMON_URL}"><span foreground="{layout.LINK_COLOR}">Ankamon</span></a>',
     )
-    markup = markup.replace("[[dikkat]]", '<span foreground="#c62828">')
+    markup = markup.replace("[[dikkat]]", f'<span foreground="{layout.WARNING_TEXT_COLOR}">')
     return markup.replace("[[/dikkat]]", "</span>")
 
 
@@ -584,11 +555,7 @@ class ModulePage(Gtk.Box):
         # Rationale 3 cümleden uzunsa: başlığın sağına yuvarlak "?" düğmesi;
         # tıklanınca rationale ayrı bir pencerede açılır, sayfa kaymaz. 3 ve
         # altı ise rationale sayfada hemen görünür — düğme yok.
-        rationale_text = (self.module.rationale or "").strip()
-        sentence_count = _count_sentences(rationale_text)
-        is_long_rationale = sentence_count > 3 and not getattr(
-            self.module, "rationale_inline", False,
-        )
+        is_long_rationale = layout.rationale_mode(self.module) == "dialog"
 
         heading_lbl = _wrapping_label(self.module.title, klass="tiha-heading")
         if is_long_rationale:
@@ -636,7 +603,7 @@ class ModulePage(Gtk.Box):
             # içeriğe göre, uzun metinde 180 px'te kaydırmalı.
             self._preview_widget = _scrolled_textview(
                 preview_text, monospace=True,
-                height=180, css_class="tiha-preview",
+                height=layout.LONG_TEXT_HEIGHT, css_class="tiha-preview",
                 wrap=not is_tabular, fit=True,
             )
             # Mevcut durum kutusu kapalı bir katlayıcıda başlar; sayfa
@@ -744,10 +711,14 @@ class ModulePage(Gtk.Box):
     def _build_form(self, schema: list[dict]) -> Gtk.Grid:
         if not hasattr(self, "_auto_values"):
             self._auto_values: dict[str, str] = {}
-        grid = Gtk.Grid(column_spacing=10, row_spacing=4)
+        grid = Gtk.Grid(column_spacing=layout.FORM_COLUMN_SPACING,
+                        row_spacing=layout.FORM_ROW_SPACING)
         grid.get_style_context().add_class("tiha-form")
         row_idx = 0
         for field in schema:
+            # Yalnız komut satırı / yönetim araçları için alan: çizilmez.
+            if field.get("machine_only"):
+                continue
             # Bölüm başlığı: değer taşımaz, iki sütuna yayılan kalın etiket.
             if field.get("type") == "heading":
                 section = _wrapping_label(field["label"], klass="tiha-form-section")
@@ -897,7 +868,7 @@ class ModulePage(Gtk.Box):
         balonuna, kısa olan alanın altına."""
         for row in self._help_rows:
             bubble = row["always"] or _help_line_count(
-                row["text"], self._help_column_width) > 2
+                row["text"], self._help_column_width) > layout.HELP_BUBBLE_OVER_LINES
             # Şartlı gizlenen satırda (visible_when) açıklama da gizli kalır.
             row_visible = not row["label"].get_no_show_all()
             row["bubble"] = bubble
@@ -1079,28 +1050,6 @@ class ModulePage(Gtk.Box):
         elif isinstance(self._preview_widget, Gtk.Label):
             self._preview_widget.set_text(new_text)
 
-    def _update_form_fields(self, config_values: dict) -> None:
-        """Form alanlarını verilen config değerleriyle güncelle."""
-        for key, value in config_values.items():
-            widget = self._fields.get(key)
-            if widget is None or key in self._preset_keys:
-                continue
-
-            # Widget tipine göre değer ataması
-            try:
-                if hasattr(widget, 'set_active'):  # CheckBox
-                    is_checked = str(value).lower() in ("true", "1", "yes", "on")
-                    widget.set_active(is_checked)
-                    # Checkbox değişikliklerini tetikle (conditional fields için)
-                    self._update_conditional_fields(key, is_checked)
-                elif hasattr(widget, 'set_value'):  # SpinButton
-                    widget.set_value(float(value))
-                elif hasattr(widget, 'set_text'):  # Entry
-                    widget.set_text(str(value))
-            except Exception as exc:
-                log.warning("Form field güncelleme hatası %s: %s", key, exc)
-            _apply_line_spacing(self._preview_widget)
-
     def forget_applied_state(self) -> None:
         """Günce sıfırlanınca: "daha önce uygulanmış / Bu adımı geri al"
         kutusu ve bu oturumun sonuç kutusu kalkar."""
@@ -1210,12 +1159,6 @@ class ModulePage(Gtk.Box):
             if callable(fn):
                 defaults[field["key"]] = (field.get("type", "text"), safe(source, fn))
         state["defaults"] = defaults
-        # Otomatik kapanma: form her açılışta güncel eta-shutdown ayarını
-        # göstersin (ETA Zamanlı Kapatma arayüzünden değişmiş olabilir).
-        if self.module.id == "m11_power_management":
-            fn = getattr(self.module, "get_current_config", None)
-            if callable(fn):
-                state["config"] = safe("get_current_config", fn)
         return state
 
     def apply_view_state(self, state: dict | None) -> None:
@@ -1243,8 +1186,6 @@ class ModulePage(Gtk.Box):
             widget = self._fields.get(key)
             if isinstance(widget, Gtk.Button):
                 widget.set_label(label)
-        if state.get("config"):
-            self._update_form_fields(state["config"])
         for key, (kind, value) in (state.get("defaults") or {}).items():
             if value is not None:
                 self._apply_default_value(key, kind, value)
@@ -1363,29 +1304,6 @@ class ModulePage(Gtk.Box):
                 else:
                     if value is not None:
                         default = str(value)
-
-        # Remote Syslog modülü için mevcut yapılandırmayı okuyup formu
-        # ön-doldur. _parse_config dict döner: {"host","port","proto","profile"}.
-        if self.module.id == "m06_remote_syslog":
-            try:
-                from ..modules.m06_remote_syslog import (
-                    _parse_config, LOG_PROFILES,
-                )
-                config = _parse_config()
-                if config:
-                    if field["key"] == "syslog_host":
-                        default = config.get("host", "")
-                    elif field["key"] == "syslog_port":
-                        default = str(config.get("port", 514))
-                    elif field["key"] == "syslog_proto":
-                        default = config.get("proto", "udp")
-                    elif field["key"] == "log_profile":
-                        prof_key = config.get("profile", "bakim")
-                        prof = LOG_PROFILES.get(prof_key)
-                        if prof:
-                            default = prof["label"]
-            except Exception:
-                pass
 
         # BIOS yönetici parolası — adıma girişte gösterme. Kullanıcı
         # "Mevcut yönetici parolasını oku" düğmesine basınca asenkron
@@ -1733,9 +1651,7 @@ class ModulePage(Gtk.Box):
                     lbl.set_markup("")
                     lbl.set_visible(False)
                     return
-                colors = ("#c62828", "#e65100", "#f9a825",
-                          "#2e7d32", "#1b5e20")
-                color = colors[s.score]
+                color = layout.STRENGTH_COLORS[s.score]
                 main = (
                     f'<span foreground="{color}"><b>'
                     + GLib.markup_escape_text(
@@ -1985,18 +1901,25 @@ class ModulePage(Gtk.Box):
         # Eylem kaydı (Özet raporu) için tamamlanınca kullanılır.
         self._action_ctx = (action, label, dict(params))
 
+        def call_action():
+            action_func = getattr(self.module, action)
+            try:
+                return action_func(params=params, progress=progress_callback)
+            except TypeError:
+                # Parametre kabul etmeyen eski action imzaları için
+                # zarif geri dönüş.
+                try:
+                    return action_func(progress=progress_callback)
+                except TypeError:
+                    return action_func()
+
         def worker():
             try:
-                action_func = getattr(self.module, action)
-                try:
-                    result = action_func(params=params, progress=progress_callback)
-                except TypeError:
-                    # Parametre kabul etmeyen eski action imzaları için
-                    # zarif geri dönüş.
-                    try:
-                        result = action_func(progress=progress_callback)
-                    except TypeError:
-                        result = action_func()
+                # Uzaktan gelen bir TiHA işlemiyle aynı anda çalışmasın.
+                result = run_locked(
+                    t("core.oplock.what_action", title=self.module.title, label=label),
+                    call_action,
+                )
                 GLib.idle_add(self._on_button_action_complete, result)
             except Exception as exc:
                 log.exception("Düğme işlemi başarısız: %s.%s", self.module.id, action)
@@ -2146,7 +2069,7 @@ class ModulePage(Gtk.Box):
         ``size`` verilirse pencere o boyutta açılır (geniş satırlı
         raporlar için, ör. Ahenk teşhisi); ekrandan büyükse ekrana sığdırılır.
         """
-        width, height = self._fit_stream_size(size or (920, 620))
+        width, height = self._fit_stream_size(size or layout.STREAM_DEFAULT_SIZE)
         # Bitişte başlık "<adım> — tamamlandı" olur; özet başlığa girmez.
         self._stream_title_base = self.module.title
         if self._stream_dialog is not None:

@@ -55,6 +55,7 @@ class SSHAndSambaModule(Module):
     apply_hint = t("m04.apply_hint")
     rationale = t("m04.rationale")
     streams_output = True
+    undo_remote_warning = t("m04.remote_undo_warning")
 
     # ---- Delegate örnekleri (lazy) ---------------------------------------
 

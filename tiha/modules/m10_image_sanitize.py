@@ -553,6 +553,8 @@ class ImageSanitizeModule(Module):
     popup_on_success = True
     rationale = t("m10.rationale")
     undo_supported = False
+    scope = "image"
+    remote_warning = t("m10.remote_warning")
 
     def preview(self) -> str:
         return t("m10.preview.body", locales=', '.join(KEEP_LOCALES))

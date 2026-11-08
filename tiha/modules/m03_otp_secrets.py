@@ -461,6 +461,33 @@ def load_secrets() -> dict[str, str]:
         return {}
 
 
+# TOTP anahtarı: Base32 (RFC 4648), en az 16 karakter (80 bit).
+_BASE32_SECRET = re.compile(r"^[A-Z2-7]{16,}=*$")
+
+
+def parse_shared_secrets(raw: str | None) -> tuple[dict[str, str], str]:
+    """Yönetim aracının verdiği ortak anahtarları çözer.
+
+    Biçim /etc/otp-secrets.json ile aynıdır: ``{"kullanıcı": "BASE32", …}``
+    (grup anahtarları ``@grup``). Boşsa ``({}, "")``; bozuksa ``({}, neden)``.
+    Anahtarlar hata iletisine yazılmaz.
+    """
+    if not raw or not str(raw).strip():
+        return {}, ""
+    try:
+        data = json.loads(raw)
+    except ValueError as exc:
+        return {}, t("m03.apply.shared_not_json", error=exc.msg)
+    if not isinstance(data, dict):
+        return {}, t("m03.apply.shared_not_object")
+    bad = [str(user) for user, secret in data.items()
+           if not isinstance(user, str) or not user.strip()
+           or not isinstance(secret, str) or not _BASE32_SECRET.match(secret.strip().upper())]
+    if bad:
+        return {}, t("m03.apply.shared_bad_entries", users=", ".join(bad[:10]))
+    return {user.strip(): secret.strip().upper() for user, secret in data.items()}, ""
+
+
 def save_secrets(secrets: dict[str, str]) -> None:
     OTP_SECRETS_FILE.write_text(
         json.dumps(secrets, indent=2, ensure_ascii=False),
@@ -966,6 +993,10 @@ class OTPSecretsModule(Module):
     save_filename = "ogretmen-pin-kagitlari.html"
     streams_output = True
     rationale = t("m03.rationale")
+    # Anahtarlar her tahtada rastgele üretilir. Yönetim aracı birden çok
+    # tahtada aynı anahtarların geçmesini isterse bir tahtada uygular,
+    # o tahtanın anahtar dosyasını alır ve diğerlerine bu alanla verir.
+    shared_secrets = {"field": "shared_pin_secrets", "source_file": str(OTP_SECRETS_FILE)}
 
     def prefetch_preview_state(self, on_ready=None) -> None:
         """Sayfa açıldığında eta-otp-cli erişilebilirlik kontrolünü arka
@@ -1093,6 +1124,11 @@ class OTPSecretsModule(Module):
             params.get("include_ogretmen", "False")
         ).lower() in ("true", "1", "yes", "on")
         teacher_names = [line.strip() for line in raw_list.splitlines() if line.strip()]
+        # Ortak anahtarlar (yönetim aracından): hiçbir şeye dokunmadan önce
+        # doğrula; bozuksa adım hiç başlamasın.
+        shared_map, shared_error = parse_shared_secrets(params.get("shared_pin_secrets"))
+        if shared_error:
+            return ApplyResult(False, t("m03.apply.shared_invalid"), details=shared_error)
 
         # Yedek hesaplar (ogretmen1 … ogretmenN, eski kurulumlarda
         # ogretmen01 / ogretmen.N / ogretmen.01 biçimi de olabilir) m01
@@ -1279,6 +1315,32 @@ class OTPSecretsModule(Module):
                     progress("\n" + t("m03.apply.group_pin_created", key=group_key))
 
 
+        # ===== Ortak anahtarlar ======================================
+        # Bu turda anahtarı olacak her hesap için ortak değer varsa o
+        # kullanılır; böylece öğretmenin tek kartı bütün tahtalarda geçer.
+        # Bu tahtada anahtar almayacak hesaplar (ör. burada olmayan bir
+        # branş hesabı) atlanır; ortak listede olmayanlar bu tahtaya özgü
+        # kalır ve sonuçta adlarıyla bildirilir.
+        shared_synced: list[str] = []
+        shared_not_here: list[str] = []
+        board_only: list[str] = []
+        if shared_map:
+            for user, secret in shared_map.items():
+                if user not in after_secrets:
+                    shared_not_here.append(user)
+                elif after_secrets[user] != secret:
+                    after_secrets[user] = secret
+                    shared_synced.append(user)
+            if shared_synced:
+                save_secrets(after_secrets)
+                # Eşitlenen hesabın anahtarı "dokunulmadı" sayılmaz.
+                preserved_users = [u for u in preserved_users if u not in shared_synced]
+            board_only = sorted(u for u in after_secrets if u not in shared_map)
+            if progress:
+                progress("\n" + t("m03.apply.shared_synced", count=len(shared_synced)))
+                if board_only:
+                    progress(t("m03.apply.shared_board_only", users=", ".join(board_only)))
+
         # ===== Madde: değişen anahtarlar =============================
         # Tasarım gereği hiçbir mevcut anahtar değişmemeli. Yine de her
         # turda karşılaştırıp değişen olursa yöneticiyi MUTLAKA uyarırız:
@@ -1296,7 +1358,8 @@ class OTPSecretsModule(Module):
             progress(t("m03.apply.changed_hint"))
             progress("!" * 60)
 
-        if not new_users and not group_secret_is_new and not preserved_users:
+        if (not new_users and not group_secret_is_new and not preserved_users
+                and not shared_synced):
             return ApplyResult(
                 False,
                 t("m03.apply.none_generated"),
@@ -1447,12 +1510,17 @@ class OTPSecretsModule(Module):
             ))
         if auto_group_service_installed:
             summary_parts.append(t("m03.apply.summary_auto_group"))
+        if shared_map:
+            summary_parts.append(t("m03.apply.summary_shared", synced=len(shared_synced),
+                                   board_only=len(board_only)))
 
         return ApplyResult(
             success=True,
             summary=" ".join(summary_parts),
             details=details,
             copyable=copyable,
+            # Metin raporu anahtarların kendisini içerir.
+            contains_secrets=True,
             # "Dosyaya kaydet…" ekrandaki metin raporunu değil,
             # yazdırılabilir HTML kâğıdı kaydeder: teslim edilecek çıktı
             # bu, ve tarayıcıda/yazıcıda doğru görünen biçim de bu.
@@ -1481,6 +1549,14 @@ class OTPSecretsModule(Module):
                 "greeter_cache_applied": greeter_cache_applied,
                 "total_users": total_users,
                 "auto_group_service_installed": auto_group_service_installed,
+                # Ortak anahtar modu (yalnız hesap adları; anahtarlar değil).
+                "shared_mode": bool(shared_map),
+                "shared_synced": sorted(shared_synced),
+                "shared_not_here": sorted(shared_not_here),
+                "board_only_keys": board_only,
+                # Yazdırılabilir kâğıdın tahtadaki yolu (yalnız root okur);
+                # yönetim aracı SFTP ile alır.
+                "paper_file": str(html_path) if html_path else "",
             },
         )
 

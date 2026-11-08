@@ -60,6 +60,10 @@ h_mandatory = "Uzun seçeneklerin zorunlu argümanları kısa seçenekler için 
 h_sec_general = "Genel seçenekler:"
 h_sec_step = "Tek adım işlemleri:"
 h_sec_preset = "Ön ayar dosyasıyla toplu uygulama:"
+h_sec_machine = "Yönetim araçları için (makine arayüzü):"
+h_opt_json = "çıktıyı satır satır JSON olay olarak ver (biçim: docs/makine-arayuzu.md); hatalar da olay olarak gelir"
+h_opt_schema = "bütün adımların form tanımını (ayarlar, türler, seçenekler, düğmeler, uyarılar) JSON olarak yaz ve çık; tahtayı değiştirmez, yetki istemez"
+h_opt_values = "-u ya da -x ile ayar değerlerini bir JSON nesnesinden oku (- ise standart girdi); parolalar komut satırında görünmez"
 h_opt_help = "bu yardımı göster ve çık"
 h_opt_version = "sürüm bilgisini göster ve çık"
 h_opt_list = "adımları sihirbazın sol menüsündeki numaraları ve kısa adlarıyla listele"
@@ -68,7 +72,8 @@ h_opt_params = "adımın ayarlarını, türlerini ve tahtadaki şu anki değerle
 h_opt_preview = "adımın ne yapacağını göster; hiçbir şeyi değiştirme"
 h_opt_run = "adımı uygula"
 h_opt_undo = "adımın son uygulamasını geri al"
-h_opt_set = "-u ile birlikte bir ayarın değerini ver; birden çok kez kullanılabilir"
+h_opt_action = "adımın sayfasındaki bir düğmeyi (ör. log sunucusunu test et) çalıştır; EYLEM verilmezse adımın eylemlerini listele"
+h_opt_set = "-u ya da -x ile birlikte bir ayarın değerini ver; birden çok kez kullanılabilir"
 h_opt_yes = "onay isteyen işlemleri (hesap silme gibi) onayla"
 h_opt_apply = "ön ayar dosyasındaki adımları sırayla uygula"
 h_opt_info = "ön ayar dosyasının içeriğini göster; uygulama"
@@ -78,7 +83,11 @@ h_opt_skip = "-t ile: bu adımları atla (virgülle ayrılmış)"
 h_sec_steps = "ADIM:"
 h_sec_steps_body = """\
 Sihirbazın sol menüsündeki numara (ör. 2) ya da kısa ad (ör. yerel-hesaplar). \
-Hepsini görmek için: tiha -l\
+Hepsini görmek için: tiha -l\n\
+\n\
+EYLEM, adımın sayfasındaki düğmenin adıdır (ör. log-sunucusunu-test-et). Bir \
+adımın eylemlerini -x ADIM ya da -a ADIM listeler. Düğme formdaki ayarları \
+kullanıyorsa onlar -d ile verilir; geri alınamaz eylemler -e ister.\
 """
 h_sec_values = "Değerler:"
 h_sec_values_body = """\
@@ -94,9 +103,14 @@ bir boşluk koyarsanız bash onu geçmişe yazmaz (HISTCONTROL=ignorespace ise).
 """
 h_sec_auth = "Yetki:"
 h_sec_auth_body = """\
--h, -V ve -l dışındaki seçenekler root yetkisiyle (sudo) ve etapadmin \
-hesabından çalıştırılmalıdır. TiHA tahtaya kurulmaz; kurulu değilken aynı \
-seçenekler bootstrap komutunun sonuna \"bash -s --\" eklenerek verilir.\
+-h, -V, -l ve --sema dışındaki seçenekler root yetkisiyle çalıştırılmalıdır: \
+etapadmin hesabından sudo ile ya da (örneğin bir yönetim sunucusundan SSH \
+ile) doğrudan root oturumundan. Sihirbaz yalnız etapadmin'den açılır. TiHA \
+tahtaya kurulmaz; kurulu değilken aynı seçenekler bootstrap komutunun sonuna \
+\"bash -s --\" eklenerek verilir.\n\
+\n\
+Aynı tahtada aynı anda tek TiHA işlemi (uygulama, geri alma, düğme) \
+çalışır; ikincisi beklemeden 16 ile çıkar.\
 """
 h_sec_examples = "Örnekler:"
 h_ex_gui = "Grafik sihirbazı aç."
@@ -113,11 +127,18 @@ h_ex_ssh = "SSH sunucusunu aç, Samba paylaşımını kapat."
 h_ex_ntp = "Saat dilimini ayarla; diğer zaman ayarları tahtadaki hâliyle kalır."
 h_ex_power = "Tahtanın her gün 17:30'da kendiliğinden kapanmasını sağla."
 h_ex_undo = "Uzaktan uyandırma adımının son uygulamasını geri al."
+h_ex_actions = "{N:m06_remote_syslog}. adımın (Merkezi log sunucusu) sayfasındaki düğmeleri listele."
+h_ex_action_test = "Tahtadaki ayarlı log sunucusuna erişilebildiğini dene (sayfadaki \"Log Sunucusunu Test Et\" düğmesi)."
+h_ex_action_ahenk = "Ahenk teşhis aracını çalıştır; rapor satır satır ekrana basılır."
+h_ex_action_purge = "Bütün PIN anahtarlarını sil. Geri alınamaz olduğu için -e gerekir."
 h_ex_info = "Ön ayar dosyasında hangi adımların, hangi ayarlarla olduğunu göster."
 h_ex_apply = "Ön ayar dosyasındaki bütün adımları sırayla uygula."
 h_ex_apply_skip = "Aynısını yap, ama son adımı (İmaj öncesi temizlik) atla."
 h_ex_apply_only = "Ön ayardan yalnız zaman senkronizasyonu ve dinamik hostname adımlarını uygula."
 h_ex_nocolor = "Yardımı renksiz olarak bir dosyaya kaydet."
+h_ex_schema = "Bütün adımların form tanımını dosyaya kaydet (yönetim aracı formu bundan çizer)."
+h_ex_json_params = "Uzaktaki bir tahtanın {N:m06_remote_syslog}. adımdaki şu anki değerlerini JSON olarak al."
+h_ex_values = "Root parolasını standart girdiden ver: parola komut satırında (ps çıktısında) görünmez."
 h_ex_bootstrap = "TiHA tahtada yokken indirip adımları listele (diğer seçenekler de böyle verilir)."
 h_sec_exit = "Çıkış durumu:"
 h_exit_0 = "başarılı"
@@ -129,6 +150,8 @@ h_exit_11 = "tanımsız adım"
 h_exit_12 = "geçersiz ayar ya da değer"
 h_exit_13 = "onay gerekiyor (-e verilmedi)"
 h_exit_14 = "geri alınacak uygulama yok"
+h_exit_16 = "bu tahtada başka bir TiHA işlemi sürüyor"
+h_exit_15 = "eylem bu tahtada kullanılamaz (ör. donanım desteklenmiyor, silinecek bir şey yok)"
 h_exit_64 = "hatalı kullanım"
 h_report_bugs = "Hata bildirimi ve kaynak kod: <https://github.com/enseitankado/tiha>"
 usage_error_hint = "Ayrıntılı bilgi için: {prog} -h"
@@ -139,8 +162,12 @@ err_unrecognized = "tanınmayan seçenek: {arg}{extra}"
 err_needs_value = "{arg} bir değer bekliyor{extra}"
 err_no_value = "{arg} değer almaz (verilen: {extra})"
 err_ambiguous = "belirsiz seçenek: {arg} (olası: {extra})"
-one_action = "-a, -o, -u ve -g seçeneklerinden yalnız biri verilebilir"
-set_needs_run = "-d yalnız -u ile birlikte kullanılabilir"
+one_action = "-a, -o, -u, -g ve -x seçeneklerinden yalnız biri verilebilir"
+set_needs_run = "-d yalnız -u ya da -x ile birlikte kullanılabilir"
+values_needs_run = "--degerler yalnız -u ya da -x ile birlikte kullanılabilir"
+values_read_error = "tiha: --degerler okunamadı: {error}"
+values_not_object = "tiha: --degerler bir JSON nesnesi olmalı; anahtarlar ayar adları, değerler metin (ör. root_password)"
+action_too_many = "-x en fazla iki argüman alır: ADIM [EYLEM] (fazlası: {extra})"
 no_action = "bir işlem seçin (ör. -l, -a ADIM, -u ADIM)"
 unknown_step = "tiha: tanımsız adım: {ref} (adımları görmek için: tiha -l)"
 bad_set = "tiha: -d değeri ANAHTAR=DEĞER biçiminde olmalı: {item}"
@@ -160,6 +187,13 @@ params_empty = "(boş)"
 params_options = "Seçenekler: {options}"
 params_current = "Şu anki / varsayılan değer: {value}"
 params_hint = "Uygulamak için: sudo tiha -u {num} -d ANAHTAR=DEĞER ..."
+actions_title = "Eylemler (sayfadaki düğmeler):"
+actions_needs_yes = "onay ister: -e"
+actions_unavailable = "bu tahtada şu an kullanılamaz"
+actions_hint = "Çalıştırmak için: sudo tiha -x {num} EYLEM"
+actions_none = "tiha: '{step}' adımında komut satırından çalıştırılacak bir eylem yok."
+unknown_action = "tiha: '{step}' adımında '{action}' eylemi yok. Eylemler: {actions}"
+action_unavailable = "tiha: '{action}' bu tahtada şu an kullanılamaz (arayüzde de düğme gizli)."
 type_bool = "evet/hayır"
 type_text = "metin"
 type_password = "parola"
@@ -173,8 +207,8 @@ preview_title = "önizleme — uygulanmadı"
 undo_title = "geri alma"
 undo_unsupported = "tiha: '{step}' adımı geri alınamaz."
 undo_nothing = "tiha: '{step}' adımının geri alınacak bir uygulaması yok."
-undo_prompt_choice_no = "Onay verilmedi (-y yok): güvenli seçenekle devam ediliyor."
-undo_prompt_choice_yes = "-y verildi: onaylı seçenekle devam ediliyor."
+undo_prompt_choice_no = "Onay verilmedi (-e yok): güvenli seçenekle devam ediliyor."
+undo_prompt_choice_yes = "-e verildi: onaylı seçenekle devam ediliyor."
 list_title = "TiHA {version} — adımlar (sihirbazın sol menüsündeki numaralarla)"
 preset_read_error = "tiha: ön ayar dosyası okunamadı: {error}"
 info_title = "Ön ayar dosyasının içeriği"
@@ -738,6 +772,12 @@ save_report_title = "Raporu kaydet"
 # Çekirdek yardımcılar ve rapor
 # ==========================================================================
 
+[core.oplock]
+what_apply = "uygula: {title}"
+what_undo = "geri al: {title}"
+what_action = "{title}: {label}"
+busy = "Bu tahtada başka bir TiHA işlemi sürüyor ({holder}). O bitince yeniden deneyin."
+
 [core.module]
 unexpected_error = "Beklenmeyen hata: {error}"
 
@@ -1156,6 +1196,10 @@ hesap için PIN anahtarı tanımlamanız gerekir.\
 """
 
 [m01.params.root_password]
+remote_warning = """\
+Root parolası değişir. Yönetim aracı bu tahtaya root parolasıyla \
+bağlanıyorsa kayıtlı parolayı da güncelleyin; yoksa bağlantı kopar.\
+"""
 label = "Yeni root parolası (isteğe bağlı)"
 help = "Teknik ekibin tahtaya yönetici olarak bağlanacağı parola. Tahta kurtarma (recovery) kipinde açılırsa kabuk da bu parolayı ister. [[ankamon]] tahtalara SSH ile bu parolayla root olarak bağlanır; Ankamon'un Ayarlar'ındaki SSH parolası bununla aynı olmalıdır. Boş bırakılabilir."
 
@@ -1709,6 +1753,13 @@ ve ogretmen kalır.\
 only_defaults = "  Sistemde yalnız varsayılan kullanıcılar mevcut (etapadmin, ogrenci, ogretmen)."
 
 [m03.apply]
+shared_invalid = "Ortak PIN anahtarları okunamadı; hiçbir şey değiştirilmedi."
+shared_not_json = "Ortak anahtarlar geçerli JSON değil: {error}"
+shared_not_object = "Ortak anahtarlar bir JSON nesnesi olmalı: kullanıcı adı → anahtar."
+shared_bad_entries = "Şu kayıtların anahtarı geçerli bir PIN anahtarı değil (Base32, en az 16 karakter): {users}"
+shared_synced = "Ortak anahtarlar uygulandı: {count} hesabın anahtarı ortak değerle eşitlendi."
+shared_board_only = "Ortak listede olmayan, bu tahtaya özgü anahtarlar: {users}"
+summary_shared = "Ortak anahtar: {synced} hesap eşitlendi, {board_only} anahtar bu tahtaya özgü."
 other_teachers_start = "Sistemdeki diğer öğretmen hesapları ({count}) için PIN anahtarı:"
 other_teacher_created = "  + {user}: anahtar üretildi"
 other_teacher_kept = "  = {user}: anahtarı zaten var, korundu"
@@ -1996,6 +2047,16 @@ değişmez, telefondaki kayıt geçerli kalır. Hesabın adı soyadı da \
 değiştirilmez.\
 """
 
+[m03.params.shared_pin_secrets]
+label = "Ortak PIN anahtarları (yönetim aracından)"
+help = """\
+Yalnız komut satırı / yönetim araçları içindir; sihirbazda görünmez. \
+/etc/otp-secrets.json biçiminde bir JSON nesnesi (kullanıcı adı → anahtar). \
+Verilirse bu tahtada anahtar alacak hesaplar rastgele anahtar yerine buradaki \
+anahtarı alır; böylece bir öğretmenin tek PIN kartı birden çok tahtada geçer. \
+Hesabın bu tahtadaki anahtarı farklıysa ortak değerle değiştirilir.\
+"""
+
 [m03.params.make_group_pin]
 label = "Ogretmenler grubu için ortak PIN oluştur"
 help = """\
@@ -2266,6 +2327,10 @@ note = "Bu hesaplarda parola olmayacak; QR çalışmadığında giriş için PIN
 # ==========================================================================
 
 [m04]
+remote_undo_warning = """\
+Geri alma, SSH sunucusunu TiHA kurduysa paketiyle birlikte kaldırır: tahtaya \
+SSH ile bir daha bağlanılamaz.\
+"""
 title = "SSH & Samba"
 sidebar_title = "SSH & Samba"
 apply_hint = "SSH sunucusu ve dosya paylaşımı birlikte açılıp kapatılır."
@@ -2285,6 +2350,10 @@ yönetim istasyonlarıyla sınırlamanız tavsiye edilir.\
 """
 
 [m04.params.enable_ssh]
+remote_warning = """\
+SSH sunucusu kapatılır: yönetim aracı bu tahtaya SSH ile bir daha \
+bağlanamaz (tahtaya gidip yeniden açmak gerekir).\
+"""
 label = "SSH sunucusu — yalnız root ve etapadmin"
 help = """\
 Kutu işaretlenip uygulanırsa openssh-server kurulur ve root için uzak \
@@ -4850,6 +4919,13 @@ yazılamayabilir; öyleyse parolayı bu adımda yeniden belirleyin.\
 # ==========================================================================
 
 [m10]
+remote_warning = """\
+Bu adım yalnız imajı alınacak kaynak tahtada çalıştırılır. Kurulu bir \
+tahtada makine kimliğini ve SSH sunucu anahtarlarını siler, günlükleri ve \
+oturum izlerini temizler: tahta sonraki açılışta yeni kimlik ve yeni SSH \
+anahtarı üretir, yönetim aracının bu tahta için kayıtlı SSH anahtarı artık \
+uyuşmaz. Geri alınamaz.\
+"""
 title = "İmaj öncesi temizlik"
 sidebar_title = "İmaj öncesi temizlik"
 apply_hint = "Son adım: tekil kimlikler ve izler temizlenir — imaj alınabilir."
