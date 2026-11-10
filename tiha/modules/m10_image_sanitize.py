@@ -614,6 +614,11 @@ class ImageSanitizeModule(Module):
         if apply_log.install_sender(_local_macs()):
             ops.append(t("m10.apply.apply_log_sender",
                          count=apply_log.entry_count(), path=apply_log.APPLY_LOG_FILE))
+            from ..core.private_files import user_desktop_dir
+            desktop_copy = user_desktop_dir(apply_log.DESKTOP_COPY_USER) / \
+                apply_log.SOURCE_MAC_FILE.name
+            if desktop_copy.exists():
+                ops.append(t("m10.apply.source_mac_copy", path=desktop_copy))
         else:
             ops.append(t("m10.apply.apply_log_sender_failed"))
 

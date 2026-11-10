@@ -38,6 +38,10 @@ APPLY_LOG_FILE = VAR_ROOT / "apply-log.jsonl"
 # klonun MAC'leriyle değiştirdiği için gönderici ayrı bir kopya kullanır.
 SOURCE_MAC_FILE = STATE_DIR / "imaged-mac-apply-log"
 SENT_MARKER = VAR_ROOT / "apply-log.sent"
+# Kaynak MAC dosyasının etapadmin'in Masaüstü'ndeki kopyası: imajla
+# klonlara da gider; bir tahtanın hangi kaynaktan klonlandığı root
+# yetkisi olmadan görülebilir.
+DESKTOP_COPY_USER = "etapadmin"
 SENDER_SCRIPT = Path("/usr/local/sbin/tiha-apply-log-send.py")
 SENDER_SERVICE = Path("/etc/systemd/system/tiha-apply-log-send.service")
 SYSLOG_TAG = "tiha"
@@ -400,6 +404,33 @@ WantedBy=multi-user.target
 """
 
 
+def copy_source_macs_to_desktop() -> Path | None:
+    """Kaynak MAC dosyasını etapadmin'in Masaüstü'ne kopyalar (aynı adla).
+
+    Sahibi etapadmin, herkes okuyabilir (MAC gizli bilgi değil). Kopya
+    yazılan yolu döner; etapadmin ya da kaynak dosya yoksa None.
+    """
+    import os
+    import pwd
+
+    from .private_files import user_desktop_dir
+
+    try:
+        account = pwd.getpwnam(DESKTOP_COPY_USER)
+        content = SOURCE_MAC_FILE.read_bytes()
+    except (KeyError, OSError):
+        return None
+    target = user_desktop_dir(DESKTOP_COPY_USER) / SOURCE_MAC_FILE.name
+    try:
+        target.write_bytes(content)
+        os.chown(target, account.pw_uid, account.pw_gid)
+        target.chmod(0o644)
+    except OSError as exc:
+        log.warning("Kaynak MAC kopyası Masaüstü'ne yazılamadı (%s): %s", target, exc)
+        return None
+    return target
+
+
 def install_sender(source_macs: list[str]) -> bool:
     """Gönderici servisi kurar ve kaynak tahtanın MAC'lerini imzalar.
 
@@ -413,6 +444,7 @@ def install_sender(source_macs: list[str]) -> bool:
     try:
         SOURCE_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
         SOURCE_MAC_FILE.write_text("\n".join(source_macs) + "\n", encoding="utf-8")
+        copy_source_macs_to_desktop()
         SENT_MARKER.unlink(missing_ok=True)
         SENT_MARKER.with_name(SENT_MARKER.name + ".local").unlink(missing_ok=True)
         script = (

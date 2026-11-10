@@ -62,12 +62,15 @@ def user_ids() -> tuple[int, int] | None:
     return owner_ids()
 
 
-def user_desktop_dir() -> Path:
-    """Çalıştıran kullanıcının Masaüstü klasörü (XDG ayarından; yoksa
-    Masaüstü/Desktop, o da yoksa ev dizini)."""
-    ids = user_ids()
+def user_desktop_dir(user: str | None = None) -> Path:
+    """Masaüstü klasörü (XDG ayarından; yoksa Masaüstü/Desktop, o da yoksa
+    ev dizini). ``user`` verilmezse TiHA'yı çalıştıran kullanıcınınki."""
     try:
-        home = Path(pwd.getpwuid(ids[0]).pw_dir) if ids else Path.home()
+        if user:
+            home = Path(pwd.getpwnam(user).pw_dir)
+        else:
+            ids = user_ids()
+            home = Path(pwd.getpwuid(ids[0]).pw_dir) if ids else Path.home()
     except KeyError:
         home = Path.home()
     try:
