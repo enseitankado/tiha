@@ -1211,8 +1211,8 @@ help = "Tahtada yerel yönetim işleri için kullanılacak parola. Boş bırakı
 label = "Öğretmen parolası (isteğe bağlı)"
 help = """\
 Ortak ogretmen hesabının parolası. Bu hesap, parolası bilinen tek sınırlı \
-hesaptır: açılış parola temizliği ona dokunmaz ve ogretmenler grubuna \
-(dolayısıyla ortak grup PIN'ine) alınmaz. Tahtanın pili bitip saati \
+hesaptır: açılış parola temizliği ona dokunmaz ve hiçbir öğretmen ya da \
+branş grubuna (dolayısıyla branşların ortak PIN'ine) alınmaz. Tahtanın pili bitip saati \
 kayarsa PIN kodları çalışmaz; internet yoksa EBA QR ile de girilemez. O \
 durumda tahtaya etapadmin (sistem yöneticisi) dışında parolayla \
 girilebilecek tek hesap budur. Bu yüzden bir parola belirlemeniz önerilir; \
@@ -1248,9 +1248,12 @@ branşı elle de ekleyebilirsiniz. Onayladığınızda seçim burada listelenir.
 Tahtada hesabı olan branşlar zaten listede gelir. Bir branşı buradaki ✕ \
 ile ya da penceredeki işaretini kaldırarak listeden çıkarabilirsiniz.\n\
 \n\
-Hesaplar ev dizinleriyle açılır, ogretmenler grubuna eklenir, oturum \
+Hesaplar ev dizinleriyle açılır, branslar grubuna eklenir, oturum \
 ekranında branş adıyla listelenir ve parola kilitli olur; "PIN \
-anahtarları" adımıyla giriş kısayolları üretilebilir. Hesabı olan bir \
+anahtarları" adımında her branşa kendi PIN anahtarı, bütün branşların \
+ortak kullanacağı brans_ortak (Branş Ortak) PIN anahtarı üretilebilir. \
+brans_ortak koduyla bir branş başka bir branşın hesabında da oturum \
+açabilir; kişisel öğretmen hesaplarında bu kod geçmez. Hesabı olan bir \
 branşı listeden çıkarıp uygularsanız o hesap ev dizini ve PIN \
 anahtarıyla silinir (önce onay sorulur).\
 """
@@ -1375,7 +1378,7 @@ branch_create_failed = "  ✗ {user} eklenemedi"
 branches_title = "Branş hesapları:"
 branches_created = "  Yeni açılan ({count}): {users}"
 branches_skipped = "  Zaten vardı ({count}): {users}"
-branches_grouped = "  ogretmenler grubuna eklenen ({count}): {users}"
+branches_grouped = "  branslar grubuna eklenen ({count}): {users}"
 branches_deleting = "İşareti kaldırılan {count} branş hesabı ev dizini ve PIN anahtarıyla siliniyor…"
 branch_delete_failed = "  ✗ {user} silinemedi"
 branches_deleted = "Silinen branş hesapları ({count}, ev dizinleriyle): {users}"
@@ -1491,12 +1494,12 @@ Yedek hesap sayısını 0 yaptığınız için {count} yedek öğretmen hesabın
 """
 branches_created = """\
 {school} için {count} branş hesabı açtınız ({users}). Hesaplar ev diziniyle, \
-parolasız (kilitli) açıldı, ogretmenler grubuna eklendi ve giriş ekranında \
+parolasız (kilitli) açıldı, branslar grubuna eklendi ve giriş ekranında \
 branş adıyla görünür; bu hesaplara PIN anahtarı adımında üretilen kodlarla \
-girilir.\
+(branşın kendi kodu ya da brans_ortak) girilir.\
 """
 branches_kept = """\
-{count} branş hesabı zaten vardı ({users}); yeniden açılmadı, ogretmenler \
+{count} branş hesabı zaten vardı ({users}); yeniden açılmadı, branslar \
 grubunda olmaları sağlandı.\
 """
 branches_deleted = """\
@@ -1522,7 +1525,8 @@ test_student = "Giriş ekranında öğrenci hesabının artık görünmediğini 
 test_reserve_purged = "Giriş ekranında yedek öğretmen hesaplarının (ogretmen1 …) artık görünmediğini doğrulayın."
 test_branches = """\
 Giriş ekranında branş hesaplarının branş adıyla göründüğünü ve terminalde \
-`id {user}` çıktısında ogretmenler grubunun bulunduğunu doğrulayın.\
+`id {user}` çıktısında branslar grubunun bulunduğunu, ogretmenler grubunun \
+bulunmadığını doğrulayın.\
 """
 test_branches_deleted = "Giriş ekranında sildiğiniz branş hesaplarının ({users}) artık görünmediğini doğrulayın."
 note_admins_one = """\
@@ -1690,11 +1694,15 @@ kodu ve USB ile giriş ancak bundan sonra kullanılabilir. Kişisel hesabı \
 henüz oluşmamış bir öğretmen, EBA QR çalışmadığında (internet yok, uygulama \
 ya da altyapı sorunu) tahtaya yalnızca ortak hesapla girebilir. Bu durum \
 için kullanım politikanıza göre ya ortak hesabın parolasını paylaşın \
-(sınıfta yazılırken öğrenciler de görebilir) ya da 'Ortak öğretmen hesabı \
-(ogretmen) için de PIN üret' seçeneğiyle ortak hesaba PIN anahtarı \
-tanımlayın. Not: ogretmenler grubu ortak PIN'i ortak ogretmen hesabında \
-geçmez; yalnız gruba üye kişisel ve yedek (ogretmen1, ogretmen2 …) \
-hesaplarda geçer.\n\
+(sınıfta yazılırken öğrenciler de görebilir) ya da 'Öğretmen hesapları \
+için de PIN üret' seçeneğiyle ortak hesaba PIN anahtarı tanımlayın.\n\
+\n\
+Ortak PIN yalnız branş hesapları içindir: brans_ortak (Branş Ortak) \
+anahtarı branslar grubundaki bütün branş hesaplarında geçer; bir branş \
+bu kodla başka bir branşın hesabında da oturum açabilir. Kişisel ve yedek \
+öğretmen hesapları, ortak ogretmen ve etapadmin için ortak PIN \
+üretilmez; eski sürümlerin ürettiği ogretmenler grubu ortak PIN'i \
+(@ogretmenler) adım uygulanınca silinir.\n\
 \n\
 Geri alma ile varsayılan kullanıcılar (etapadmin, ogrenci, ogretmen) \
 dışındakiler silinir.\
@@ -1736,6 +1744,10 @@ hiç giremez. Anahtar üretmek için aşağıdaki listeye adlarını yazın.\
 group_secrets = """\
 Grup PIN anahtarları (kullanıcı hesabı gerektirmez; gruba üye tüm hesaplarda \
 geçerli): {keys}\
+"""
+group_retired = """\
+\u0020\u0020{keys} artık üretilmiyor; adımı uyguladığınızda silinir ve \
+kişisel öğretmen hesaplarına ortak kodla girilemez.\
 """
 orphans = "Sistemde hesabı kalmayan PIN kayıtları ({count} adet — hesap silinmiş olabilir): {users}"
 orphans_hint = """\
@@ -1779,8 +1791,11 @@ Otomatik grup ekleme servisi kuruldu — EBA QR ile sonradan acilan ogretmen \
 hesaplari da gruba dahil edilecek.\
 """
 group_create_failed_pin = "'{group}' grubu olusturulamadi; grup-PIN akisi iptal edildi."
-group_pin_kept = "Mevcut ortak grup-PIN korundu: {key} — telefonlardaki anahtar geçerli kalir."
-group_pin_created = "Ortak grup-PIN uretildi: {key}"
+group_pin_kept = "Mevcut ortak PIN korundu: {key} — telefonlardaki anahtar geçerli kalır."
+group_pin_created = "Branşların ortak PIN'i üretildi: {key}"
+group_pin_retired = "Artık kullanılmayan ogretmenler grubu ortak PIN'i silindi: {keys} — kişisel öğretmen hesaplarına ortak kodla girilemez."
+branch_pin_no_accounts = "Tahtada branş hesabı yok; brans_ortak PIN'i üretilmedi."
+branches_regrouped = "Branş hesapları {group} grubuna alındı, ogretmenler grubundan çıkarıldı: {users}"
 changed_warning = "UYARI: {count} hesabin PIN anahtari DEGISTI."
 changed_hint = "Bu hesaplarin telefonundaki eski kayit artik calismaz; yeni kagidi teslim edin."
 none_generated = "Hiç PIN anahtarı üretilemedi."
@@ -1794,7 +1809,6 @@ greeter_updating = "Greeter cache güncellemesi yapılıyor..."
 greeter_updated = "✓ Greeter cache güncellendi"
 greeter_not_needed = "{count} kullanıcı var — greeter cache gerekli değil (limit: {limit})"
 display_admin = "Sistem Yöneticisi (etapadmin)"
-display_group = "Ogretmenler grubu — ORTAK PIN"
 paper_written = "🖨️ Yazdırılabilir PIN anahtarı kağıdı ({count} anahtar): {path}"
 paper_header = "🖨️ Yazdırılabilir öğretmen PIN anahtarı kağıdı — sistemdeki {count} anahtarın tamamı:"
 paper_print_hint = "  Tarayıcıda açıp Ctrl+P ile yazdırın veya PDF kaydedin."
@@ -1807,6 +1821,8 @@ summary_greeter_ok = "Greeter cache güncellendi ve otomatik çalıştırma ayar
 summary_greeter_failed = "Greeter cache kurulumu tamamlanamadı."
 summary_grouped = "{count} hesap {group} grubuna eklendi."
 summary_auto_group = "Yeni öğretmen hesabı → ogretmenler grubu servis kuruldu."
+summary_branch_pin = "Branşların ortak PIN'i (brans_ortak) üretildi."
+summary_retired = "ogretmenler grubunun ortak PIN'i silindi."
 changed_dialog = """\
 Bu adımda {count} hesabın PIN anahtarı DEĞİŞTİ:\n\
 \n\
@@ -1864,6 +1880,12 @@ Grup: <code>{group}</code> — bu PIN anahtarı, gruba üye tüm öğretmen \
 hesaplarına giriş için geçerlidir.\
 """
 group_display = "{group} grubu — ORTAK PIN"
+branch_group_display = "Branş Ortak — ORTAK PIN"
+branch_group_line = """\
+Hesap adı: <code>{label}</code> — bu PIN anahtarı tahtadaki bütün branş \
+hesaplarına giriş için geçerlidir; bir branş bu kodla başka bir branşın \
+hesabında da oturum açabilir. Kişisel öğretmen hesaplarında geçmez.\
+"""
 no_account = "{user} (sistemde hesap yok)"
 kind_branch = "ortak kullanım branş hesabı"
 kind_personal = "kişisel hesap"
@@ -1884,10 +1906,10 @@ budur; parolası "Yerel hesaplar" adımında belirlediğiniz öğretmen \
 parolasıdır. Bu PIN yalnız bu hesaba giriş sağlar.\
 """
 warn_group = """\
-Bu anahtar okuldaki bütün tahtalarda herhangi bir öğretmen ya da branş \
-hesabı adına oturum açmayı sağlar. Sızarsa okuldaki bütün tahtalardaki \
-bütün hesaplar risk altına girer; bütün klon tahtalara yeni anahtar \
-kaydetmek, tahta sayısına bağlı olarak ciddi bir bilgi işlem yükü getirir.\
+Bu anahtar okuldaki bütün tahtalarda herhangi bir branş hesabı adına \
+oturum açmayı sağlar. Sızarsa okuldaki bütün tahtalardaki bütün branş \
+hesapları risk altına girer; bütün klon tahtalara yeni anahtar kaydetmek, \
+tahta sayısına bağlı olarak ciddi bir bilgi işlem yükü getirir.\
 """
 save_image = "Resim olarak kaydet"
 save_image_warning = """\
@@ -1909,7 +1931,7 @@ Uygulamada <em>\"+ Anahtar ekle\"</em> &gt; <em>\"QR kodu tara\"</em>'yı \
 seçip bu karttaki QR kodu taratın. QR okunamazsa <em>\"Anahtarı manuel gir\"</em> \
 ile yukarıdaki anahtarı yazın.\
 """
-group_step_label = "Hesap adı olarak <em>istediğiniz</em> bir etiket yazın (örn. <code>Sınıf-PIN</code>)."
+group_step_label = "QR kodu taratırsanız hesap adı <code>{label}</code> olarak gelir; elle girerken de bu adı yazın."
 group_step_save = """\
 Kaydedin. Bu PIN anahtarından üretilen 6 haneli PIN, tahtada \
 <strong>{group}</strong> grubuna üye herhangi bir hesabın giriş ekranında \
@@ -1949,7 +1971,7 @@ saving = "PIN anahtarı kâğıdı kaydediliyor… ({done}/{total} resim)"
 saved = """\
 PIN anahtarı kâğıdı kaydedildi: {path}\n\n\
 Klasörde HTML kâğıt ve {count} kart resmi var: ortak hesaplar (etapadmin, \
-ogretmen, ogrenci) ve grup PIN'i ana klasörde, kişisel ve yedek öğretmen \
+ogretmen, ogrenci) ve branşların ortak PIN'i (brans_ortak) ana klasörde, kişisel ve yedek öğretmen \
 hesapları "ogretmenler", branş hesapları "branslar" alt klasöründe. Klasör \
 ve dosyalar yalnız sizin hesabınıza açık. Anahtarlar gizlidir; dosyaları öğretmenlere \
 özelden iletin ve işiniz bitince bu bilgisayardan silin ya da güvenli bir \
@@ -2017,7 +2039,13 @@ help = """\
 önemlidir; harf atlanması veya küçük bir yazım farkı sonrasında öğretmenin \
 PIN koduyla oturum açamamasına neden olur. Alan boş bırakılabilir; yalnızca \
 yedek hesap üretmek de mümkündür. Örnek satırlar tıklayıp yazmaya \
-başladığınızda silinir.\
+başladığınızda silinir.\n\
+\n\
+Bu listedeki öğretmenlerin hesabı oluşturulmaz, yalnızca PIN anahtarları \
+tanımlanır. Hesap, öğretmen o tahtaya ilk kez EBA QR ile giriş yaptığında \
+o tahtada oluşur. Bundan sonra öğretmen bu tahtada, önceden dağıtılan PIN \
+anahtarını kullanarak giriş yapabilir. Kişisel öğretmen hesapları için \
+ortak PIN üretilmez.\
 """
 placeholder = """\
 AYŞE YILMAZ\n\
@@ -2057,22 +2085,24 @@ anahtarı alır; böylece bir öğretmenin tek PIN kartı birden çok tahtada ge
 Hesabın bu tahtadaki anahtarı farklıysa ortak değerle değiştirilir.\
 """
 
-[m03.params.make_group_pin]
-label = "Ogretmenler grubu için ortak PIN oluştur"
+[m03.params.make_branch_pin]
+label = "Branşlar için ortak PIN oluştur (brans_ortak)"
 help = """\
-İşaretlenirse ogretmenler grubuna özel bir '@ogretmenler' PIN anahtarı \
-üretilir; bu tek PIN gruba üye bütün hesaplarda giriş için geçer ve PIN \
-kâğıdında en başta ayrı bir 'ORTAK PIN' kartı olarak çıkar. Zaten bir ortak \
-PIN varsa korunur, yenilenmez.\n\
+İşaretlenirse branş hesaplarının ortak kullanacağı brans_ortak (Branş \
+Ortak) PIN anahtarı üretilir ve PIN kâğıdında en başta ayrı bir kart \
+olarak çıkar. Bu tek kod branslar grubundaki bütün branş hesaplarında \
+geçer: bir branş brans_ortak koduyla başka bir branşın hesabında da \
+oturum açabilir. Zaten bir brans_ortak anahtarı varsa korunur, \
+yenilenmez. Tahtada branş hesabı yoksa üretilmez; branş hesapları \
+"Yerel hesaplar" adımında açılır.\n\
 \n\
-Gruba dahil olanlar: etapadmin ve ortak ogretmen hesabı hariç bütün \
-öğretmen hesapları ogretmenler grubunun üyesidir — yedek hesaplar \
-(ogretmen1, ogretmen2…), branş hesapları ve EBA QR ile açılan kişisel \
-hesaplar. TiHA bu hesapları gruba her uygulamada kendisi ekler; EBA QR ile \
-sonradan açılan hesaplar da tahtaya kurulan küçük bir servisle gruba \
-otomatik girer.\n\
+Kişisel öğretmen hesapları (EBA QR ile açılanlar), yedek hesaplar \
+(ogretmen1, ogretmen2…), ortak ogretmen ve etapadmin için ortak PIN \
+üretilmez; bu hesaplara yalnız kendi PIN'leriyle girilir. Eski sürümlerin \
+ürettiği ogretmenler grubu ortak PIN'i (@ogretmenler) adım uygulanınca \
+silinir.\n\
 \n\
-Herkes aynı kodu kullandığı için tek tek öğretmen PIN'lerinden daha zayıf \
+Bütün branşlar aynı kodu kullandığı için tek tek PIN'lerden daha zayıf \
 bir önlemdir; kâğıdı dikkatle saklayın.\
 """
 
@@ -2144,12 +2174,19 @@ preserved = """\
 telefonlarındaki kayıtlar geçerli kalıyor.\
 """
 group_new = """\
-ogretmenler grubu için ortak PIN anahtarı oluşturdunuz; bu kod gruba üye \
-bütün öğretmen hesaplarında (EBA QR ile açılanlar, yedek ve branş hesapları) \
-geçerli, ortak ogretmen ve etapadmin hesaplarında geçmez.\
+Branşların ortak kullanacağı brans_ortak (Branş Ortak) PIN anahtarını \
+oluşturdunuz; bu kod branslar grubundaki bütün branş hesaplarında geçerli, \
+kişisel ve yedek öğretmen hesaplarında, ortak ogretmen ve etapadmin \
+hesaplarında geçmez.\
 """
-group_kept = "ogretmenler grubu için ortak PIN'in açık kalmasını seçtiniz; mevcut ortak anahtar korundu."
-grouped = "{count} öğretmen hesabının (yedek ve branş hesapları dahil) ogretmenler grubunda olmasını sağladınız."
+group_kept = "Branşların ortak PIN'inin (brans_ortak) açık kalmasını seçtiniz; mevcut anahtar korundu."
+grouped = "{count} öğretmen hesabının (yedek ve EBA QR ile açılan hesaplar) ogretmenler grubunda olmasını sağladınız."
+branch_grouped = "{count} branş hesabını ({users}) branslar grubuna aldınız; branş hesapları ogretmenler grubunda değil."
+retired = """\
+Eski sürümün ürettiği ogretmenler grubu ortak PIN'ini (@ogretmenler) \
+sildiniz; kişisel öğretmen hesaplarına artık ortak kodla girilemez. Bu \
+kartı dağıttıysanız öğretmenlere artık geçmediğini bildirin.\
+"""
 ungrouped = """\
 {users} hesabını ogretmenler grubundan çıkardınız; grup PIN'i artık bu \
 hesaplarda geçmiyor.\
@@ -2218,9 +2255,9 @@ test_other_teachers = "Branş ya da EBA QR ile açılmış bir hesaba (ör. {use
 test_etapadmin = "etapadmin'e hem PIN ile hem de parolayla girilebildiğini doğrulayın."
 test_ogretmen = "Ortak öğretmen hesabına (ogretmen) PIN ile girin."
 test_group = """\
-Kâğıttaki ORTAK PIN kartını okutup bir yedek, branş ya da kişisel öğretmen \
-hesabına ortak kodla girin; ortak ogretmen hesabında bu kodun REDDEDİLDİĞİNİ \
-doğrulayın.\
+Kâğıttaki brans_ortak kartını okutup iki farklı branş hesabına ortak kodla \
+girin; bir yedek ya da kişisel öğretmen hesabında ve ortak ogretmen \
+hesabında bu kodun REDDEDİLDİĞİNİ doğrulayın.\
 """
 test_auto_group = """\
 Klonda EBA QR ile yeni bir öğretmen girişi yaptıktan sonra bu hesabın \
@@ -2235,7 +2272,7 @@ PIN anahtarları imajla birlikte bütün klonlara aynen kopyalanır; bu bilinçl
 bir tasarım. Tek bir tahtadan ya da kâğıttan sızan anahtar bütün tahtaları \
 etkiler.\
 """
-note_group_weak = "Ortak PIN, kişisel PIN'lerden daha zayıf bir önlemdir: gruptaki herkes aynı kodu kullanır."
+note_group_weak = "brans_ortak, branşların kendi PIN'lerinden daha zayıf bir önlemdir: bütün branşlar aynı kodu kullanır."
 
 # ==========================================================================
 # Adım 5: QR Parola Diyaloğu (m13_password_dialog)
@@ -5188,8 +5225,9 @@ günlükleri ve (oturum açtıysanız) önbellekleri imaja girer.\
 manual = "Bu madde elle denenmeli; makineden doğrulanamıyor."
 check_error = "Denetim çalıştırılamadı: {error}"
 account_missing = "{user} hesabı bu tahtada yok."
-not_in_group = "{user} hesabı ogretmenler grubunda değil."
-branch_ok = "{user} hesabı var ve ogretmenler grubunda. Giriş ekranındaki görünümü elle kontrol edin."
+not_in_group = "{user} hesabı {group} grubunda değil."
+branch_in_teachers = "{user} branş hesabı ogretmenler grubunda; branş hesapları yalnız branslar grubunda olmalı."
+branch_ok = "{user} hesabı var ve branslar grubunda. Giriş ekranındaki görünümü elle kontrol edin."
 still_exist = "Silinmiş olması gereken hesaplar hâlâ var: {users}"
 all_deleted = "Hesaplar yok: {users}"
 pw_not_set = "{user} hesabının parolası tanımlı değil (durum: {state})."
@@ -5216,9 +5254,10 @@ extra_left = "Varsayılanlar dışında hesaplar var: {users}"
 only_defaults = "Yalnız etapadmin, ogretmen ve ogrenci hesapları var."
 greeter_missing = "Giriş ekranı önbelleği betiği kurulu değil."
 greeter_ok = "Giriş ekranı önbelleği kurulu. Listeyi yeniden başlattıktan sonra elle kontrol edin."
-group_missing = "ogretmenler grubu yok."
-ogretmen_in_group = "Ortak ogretmen hesabı ogretmenler grubunda; grup PIN'i orada da geçer."
-group_pin_ok = "Grup PIN anahtarı var; grupta {count} hesap var, ortak ogretmen hesabı grupta değil. Ortak kodla girişi elle deneyin."
+group_missing = "branslar grubu yok."
+ogretmen_in_group = "{user} hesabı branslar grubunda; brans_ortak kodu orada da geçer."
+retired_group_pin = "Eski ogretmenler grubu ortak PIN'i (@ogretmenler) hâlâ var; kişisel öğretmen hesaplarına ortak kodla girilebilir."
+group_pin_ok = "brans_ortak anahtarı var; branslar grubunda {count} hesap var, ortak ogretmen ve etapadmin grupta değil. Ortak kodla girişi elle deneyin."
 ntp_not_synced = "Saat eşitlenmemiş (saat dilimi: {tz})."
 ntp_synced = "Saat NTP ile eşitlenmiş (saat dilimi: {tz})."
 tz_wrong = "Saat dilimi {tz}; beklenen {expected}."

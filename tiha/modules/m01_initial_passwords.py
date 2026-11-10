@@ -780,7 +780,7 @@ class InitialPasswordsModule(Module):
                     if progress:
                         progress(t("m01.apply.reserve_create_failed", user=username))
             # Yedek hesaplar da öğretmen hesabıdır: ogretmenler grubuna
-            # girer ('@ogretmenler' ortak PIN'i yalnız üyelerde çalışır).
+            # girer (EBA QR ile açılan kişisel hesaplarla aynı grup).
             from .m03_otp_secrets import ensure_ogretmenler_group, OGRETMENLER_GROUP
             if ensure_ogretmenler_group():
                 for uname in created_reserve + skipped_reserve:
@@ -799,8 +799,10 @@ class InitialPasswordsModule(Module):
         # bir yerel hesap açılır. Kullanıcı adı MEB verisinden türetilir
         # (Türkçe → ASCII, boşluk → _). Görünen ad (GECOS) branşın
         # orijinal etiketidir — greeter ekranında böyle listelenir.
-        # Seçili her hesabın ev dizini olur ve ogretmenler grubuna girer
-        # (grup PIN'i ve öğretmen ayrıcalıkları). Listede görünüp işareti
+        # Seçili her hesabın ev dizini olur ve branslar grubuna girer
+        # (branşların ortak PIN'i brans_ortak yalnız bu grupta geçer).
+        # Eski sürümler branşları ogretmenler grubuna ekliyordu; o üyelik
+        # kaldırılır. Listede görünüp işareti
         # kaldırılan branşın hesabı varsa ev dizini ve PIN anahtarıyla
         # silinir (pre_apply_check onay alır).
         created_branches: list[str] = []
@@ -810,7 +812,9 @@ class InitialPasswordsModule(Module):
         failed_branch_deletes: list[str] = []
         bdata = _branch_sel
         if bdata.get("branches"):
-            from .m03_otp_secrets import create_user, ensure_ogretmenler_group, OGRETMENLER_GROUP
+            from .m03_otp_secrets import (
+                BRANSLAR_GROUP, OGRETMENLER_GROUP, create_user, ensure_branslar_group,
+            )
             from ..core.meb_data import branch_gecos, branch_to_username
             branches = bdata.get("branches") or []
             if progress:
@@ -818,7 +822,7 @@ class InitialPasswordsModule(Module):
                     "m01.apply.branches_preparing",
                     count=len(branches),
                 ))
-            group_ok = ensure_ogretmenler_group()
+            group_ok = ensure_branslar_group()
             for label in branches:
                 uname = branch_to_username(label)
                 if not uname:
@@ -838,13 +842,15 @@ class InitialPasswordsModule(Module):
                         ))
                     continue
                 _ensure_home(uname)
-                if group_ok and not _in_group(uname, OGRETMENLER_GROUP):
-                    r = run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, uname])
+                if group_ok and not _in_group(uname, BRANSLAR_GROUP):
+                    r = run_cmd(["usermod", "-a", "-G", BRANSLAR_GROUP, uname])
                     if r.ok:
                         grouped_branches.append(uname)
                     else:
-                        log.warning("'%s' ogretmenler grubuna eklenemedi: %s",
-                                    uname, r.stderr.strip())
+                        log.warning("'%s' %s grubuna eklenemedi: %s",
+                                    uname, BRANSLAR_GROUP, r.stderr.strip())
+                if _in_group(uname, OGRETMENLER_GROUP):
+                    run_cmd(["gpasswd", "-d", uname, OGRETMENLER_GROUP], check=False)
 
         if _branch_delete:
             from .m03_otp_secrets import kill_user_processes

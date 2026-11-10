@@ -155,14 +155,14 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m03.params.include_other_teachers.help"),
         },
         {
-            "key": "make_group_pin",
-            "label": t("m03.params.make_group_pin.label"),
+            "key": "make_branch_pin",
+            "label": t("m03.params.make_branch_pin.label"),
             "type": "bool",
             "required": False,
             "default": "True",
             # PAM grup-PIN'i yalnız gruba üye kullanıcılara kabul ediyor;
-            # öğretmen hesapları her uygulamada gruba alınır.
-            "help": t("m03.params.make_group_pin.help"),
+            # branş hesapları her uygulamada branslar grubuna alınır.
+            "help": t("m03.params.make_branch_pin.help"),
         },
         {
             # Yalnız makine arayüzü (sihirbazda çizilmez): yönetim aracı

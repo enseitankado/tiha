@@ -130,7 +130,7 @@ MIN_USERS_FOR_CACHE = 50
 
 # Varsayılan sistem kullanıcıları (işletim sistemi kurulumunda gelir)
 DEFAULT_SYSTEM_USERS = {"etapadmin", "ogrenci", "ogretmen"}
-# ogretmenler grubuna (ve dolayısıyla grup PIN'ine) hiç girmemesi gereken
+# Öğretmen gruplarına (ve dolayısıyla grup PIN'lerine) hiç girmemesi gereken
 # hesaplar: yönetici ve ortak öğretmen hesabı. Ortak ogretmen hesabı,
 # parolası bilinen tek sınırlı hesaptır (pil bitip PIN'ler çalışmazsa ve
 # QR için internet yoksa girilebilen yedek yol); grup PIN'i ona geçmemeli.
@@ -282,25 +282,53 @@ EBA_STANDARD_GROUPS = (
     "bluetooth", "scanner", "netdev", "dip", "lpadmin",
 )
 
-# eta-otp-lock/pam_otp.py `@ogretmenler` gibi grup-OTP secret'larını
-# destekliyor. Bu grup Pardus ETAP kurulumunda default gelmiyor;
-# TiHA gerekirse kendisi oluşturur (idempotent).
+# Öğretmen hesaplarının grubu: yedek hesaplar ve EBA QR ile açılan
+# kişisel hesaplar. Pardus ETAP kurulumunda gelmiyor; TiHA gerekirse
+# kendisi oluşturur (idempotent). Bu grubun ortak PIN'i yok.
 OGRETMENLER_GROUP = "ogretmenler"
+
+# Branş hesaplarının grubu ve ortak PIN'i. eta-otp-lock (pam_otp.py) bir
+# "@<grup>" anahtarını o gruba üye her hesapta kabul eder: brans_ortak
+# kartıyla bir branş başka bir branşın hesabına da girebilir. Kişisel
+# öğretmen hesapları bu grupta değildir, ortak kod onlarda geçmez.
+BRANSLAR_GROUP = "branslar"
+BRANCH_GROUP_KEY = f"@{BRANSLAR_GROUP}"
+# Grup anahtarlarının telefondaki uygulamada ve kâğıtta görünen adı.
+GROUP_PIN_LABELS = {BRANCH_GROUP_KEY: "brans_ortak"}
+# Artık üretilmeyen grup anahtarları: adım uygulanınca silinir. ogretmenler
+# grubunun ortak PIN'i bütün kişisel öğretmen hesaplarına giriş veriyordu.
+RETIRED_GROUP_KEYS = ("@ogretmenler",)
+
+
+def ensure_group(name: str) -> bool:
+    """``name`` grubunu garantiler; yoksa groupadd çağırır.
+    Zaten varsa dokunmaz."""
+    check = run_cmd(["getent", "group", name], check=False)
+    if check.ok:
+        return True
+    add = run_cmd(["groupadd", name], check=False)
+    if add.ok:
+        log.info("'%s' grubu oluşturuldu.", name)
+        return True
+    log.warning("'%s' grubu oluşturulamadı: %s", name, add.stderr.strip())
+    return False
 
 
 def ensure_ogretmenler_group() -> bool:
-    """`ogretmenler` grubunu garantiler; yoksa groupadd çağırır.
-    Zaten varsa dokunmaz."""
-    check = run_cmd(["getent", "group", OGRETMENLER_GROUP], check=False)
-    if check.ok:
-        return True
-    add = run_cmd(["groupadd", OGRETMENLER_GROUP], check=False)
-    if add.ok:
-        log.info("'%s' grubu oluşturuldu.", OGRETMENLER_GROUP)
-        return True
-    log.warning("'%s' grubu oluşturulamadı: %s",
-                OGRETMENLER_GROUP, add.stderr.strip())
-    return False
+    return ensure_group(OGRETMENLER_GROUP)
+
+
+def ensure_branslar_group() -> bool:
+    return ensure_group(BRANSLAR_GROUP)
+
+
+def group_members(name: str) -> set[str]:
+    """Grubun ek üyeleri; grup yoksa boş küme."""
+    import grp as _grp
+    try:
+        return set(_grp.getgrnam(name).gr_mem)
+    except KeyError:
+        return set()
 
 
 # EBA QR ile yeni açılan öğretmen hesaplarını `ogretmenler` grubuna
@@ -316,15 +344,18 @@ AUTO_GROUP_SCRIPT_CONTENT = """#!/bin/bash
 # TiHA — EBA QR ile yeni açılan öğretmen hesabını ogretmenler grubuna ekler.
 # /etc/passwd her değiştiğinde tetiklenir. Sadece UID >= 1000 ve
 # ogretmenler grubunda olmayan hesapları hedefler; sistem hesaplarına
-# (etapadmin, ogrenci, ogretmen, root, nobody vb.) dokunmaz.
+# (etapadmin, ogrenci, ogretmen, root, nobody vb.) ve TiHA'nın açtığı
+# branş hesaplarına (ad alanında tiha-brans; onlar branslar grubunda)
+# dokunmaz.
 set -eu
 EXCLUDE="etapadmin ogrenci ogretmen root nobody guest"
-while IFS=: read -r user _ uid _ _ _ _; do
+while IFS=: read -r user _ uid _ gecos _ _; do
     [ "$uid" -ge 1000 ] || continue
     [ "$uid" -lt 60000 ] || continue
     for skip in $EXCLUDE; do
         [ "$user" = "$skip" ] && continue 2
     done
+    case "$gecos" in *tiha-brans*) continue ;; esac
     # Zaten gruba üye mi?
     if id -nG "$user" 2>/dev/null | tr ' ' '\\n' | grep -qx ogretmenler; then
         continue
@@ -497,7 +528,7 @@ def save_secrets(secrets: dict[str, str]) -> None:
     os.chown(OTP_SECRETS_FILE, 0, 0)
 
 
-# eta-otp-lock grup anahtarlarının ön eki: '@ogretmenler' gibi bir kayıt
+# eta-otp-lock grup anahtarlarının ön eki: '@branslar' gibi bir kayıt
 # bir kullanıcıya değil, o gruba üye herkese aittir.
 GROUP_SECRET_PREFIX = "@"
 
@@ -525,13 +556,13 @@ def orphan_secret_users(secrets, existing_users) -> list[str]:
 # Silme/listeleme çıktılarında en başta görünmesi gereken kayıtlar.
 # Bunlar tek bir öğretmene değil tahtanın tamamına ait ortak/yönetici
 # anahtarlarıdır; bir listede gözden kaçmamaları gerekir.
-PRIORITY_SECRET_USERS = ("@ogretmenler", "ogretmen", "etapadmin")
+PRIORITY_SECRET_USERS = (BRANCH_GROUP_KEY, "@ogretmenler", "ogretmen", "etapadmin")
 
 
 def order_secret_users(users) -> list[str]:
     """Ortak ve yönetici anahtarlarını başa alan sıralama.
 
-    Önce ``@ogretmenler`` (grup ortak PIN'i), ``ogretmen`` (ortak hesap)
+    Önce grup ortak PIN'leri (``@branslar``; eski ``@ogretmenler``), ``ogretmen`` (ortak hesap)
     ve ``etapadmin`` (sistem yöneticisi) — hangileri varsa bu sırayla.
     Kalanlar alfabetik. Yüzlerce öğretmenlik bir listede bu üçünün
     arada kaybolmaması için.
@@ -574,12 +605,12 @@ def harden_secret_store(state_dir: Path) -> int:
 
 
 # PIN kâğıdında en başta durması gereken, sızması en ağır sonuç doğuran
-# anahtarlar: grup ortak PIN'i, sistem yöneticisi, ortak öğretmen hesabı.
-PAPER_PRIORITY = ("@ogretmenler", "etapadmin", "ogretmen")
+# anahtarlar: branşların ortak PIN'i, sistem yöneticisi, ortak öğretmen hesabı.
+PAPER_PRIORITY = (BRANCH_GROUP_KEY, "etapadmin", "ogretmen")
 
 
 def paper_order(users) -> list[str]:
-    """Kâğıt sırası: grup PIN'i ve etapadmin başta, sonra ortak hesap,
+    """Kâğıt sırası: branşların ortak PIN'i ve etapadmin başta, sonra ortak hesap,
     kalanlar alfabetik."""
     present = set(users)
     head = [u for u in PAPER_PRIORITY if u in present]
@@ -599,6 +630,24 @@ def _branch_usernames() -> set[str]:
     except Exception as exc:  # veri dosyası yok/bozuk: tür eki yazılmaz
         log.debug("Branş listesi okunamadı: %s", exc)
     return names
+
+
+def branch_accounts_on_board() -> list[str]:
+    """Tahtadaki branş hesapları: TiHA'nın ad alanına tiha-brans yazdığı
+    hesaplar ve adı bir MEB branşından türeyen hesaplar."""
+    import pwd as _pwd
+    from ..core.meb_data import BRANCH_GECOS_TAG
+
+    known = _branch_usernames()
+    found = []
+    for p in _pwd.getpwall():
+        if not 1000 <= p.pw_uid < 60000 or p.pw_name in DEFAULT_SYSTEM_USERS:
+            continue
+        fields = p.pw_gecos.split(",")
+        tagged = len(fields) >= 5 and fields[4].strip() == BRANCH_GECOS_TAG
+        if tagged or p.pw_name in known:
+            found.append(p.pw_name)
+    return sorted(found)
 
 
 # Kart resimleri kaydedilirken alt dizinler: ortak hesaplar ve grup PIN'i
@@ -637,6 +686,8 @@ def _paper_display_name(user: str, display_of: dict[str, str]) -> str:
     """
     if user in display_of:
         return display_of[user]
+    if user == BRANCH_GROUP_KEY:
+        return t("m03.paper.branch_group_display")
     if user.startswith("@"):
         return t("m03.paper.group_display", group=user[1:])
 
@@ -654,7 +705,9 @@ def _paper_filename_slug(
 ) -> str:
     """PIN anahtarı kağıdı PNG dosyasının adı.
 
-    - Grup: ``pin-anahtari-<grup>-ortak.png`` (ör. ogretmenler → ortak).
+    - Grup: ``pin-anahtari-<uygulamadaki ad>.png`` (@branslar →
+      pin-anahtari-brans-ortak); adı tanımsız grupta
+      ``pin-anahtari-<grup>-ortak.png``.
     - Branş: ``pin-anahtari-brans-<ingilizce>.png`` (MEB tablosundan
       İngilizce karşılık; yoksa Türkçe transliterasyon).
     - Kişisel/yedek: ``pin-anahtari-<ad-soyad>.png`` (GECOS adından
@@ -673,6 +726,8 @@ def _paper_filename_slug(
         return t
 
     if is_group:
+        if user in GROUP_PIN_LABELS:
+            return f"pin-anahtari-{_slug(GROUP_PIN_LABELS[user])}"
         name = user.lstrip("@") or "grup"
         return f"pin-anahtari-{_slug(name)}-ortak"
 
@@ -702,9 +757,12 @@ def _paper_filename_slug(
 
 
 def otpauth_url(username: str, secret: str) -> str:
-    """Google Authenticator/Authy vb.'in kabul ettiği otpauth:// URL'si."""
+    """Google Authenticator/Authy vb.'in kabul ettiği otpauth:// URL'si.
+
+    Grup anahtarları uygulamada kendi adlarıyla görünür (@branslar →
+    brans_ortak)."""
     issuer_enc = quote(OTP_ISSUER)
-    user_enc = quote(f"{OTP_ISSUER}:{username}")
+    user_enc = quote(f"{OTP_ISSUER}:{GROUP_PIN_LABELS.get(username, username)}")
     return (
         f"otpauth://totp/{user_enc}?secret={secret}"
         f"&issuer={issuer_enc}&digits=6&period=30"
@@ -918,11 +976,7 @@ def get_extra_users() -> list[str]:
 
 def _excluded_group_members() -> list[str]:
     """ogretmenler grubunda bulunmaması gerektiği hâlde üye olan hesaplar."""
-    import grp as _grp
-    try:
-        members = set(_grp.getgrnam(OGRETMENLER_GROUP).gr_mem)
-    except KeyError:
-        return []
+    members = group_members(OGRETMENLER_GROUP)
     return [u for u in GROUP_EXCLUDED_USERS if u in members]
 
 
@@ -968,7 +1022,7 @@ def reset_to_default_users(
 
     # PIN kayıtlarına burada dokunulmaz. Eskiden yalnız varsayılan
     # hesapların kayıtları bırakılıyordu; bu, onay metninin "korunur"
-    # dediği grup anahtarını (@ogretmenler) ve silinemeyen hesapların
+    # dediği grup anahtarını (@branslar) ve silinemeyen hesapların
     # anahtarlarını da siliyordu. Karşılığı kalmayan kayıtları çağıran
     # (remove_extra_users_action) hemen ardından orphan_secret_users
     # kuralıyla temizler: grup anahtarları ve varsayılan hesaplar korunur.
@@ -1075,7 +1129,11 @@ class OTPSecretsModule(Module):
             lines.append(t("m03.preview.missing_otp_hint"))
             lines.append("")
         if group_secrets:
-            lines.append(t("m03.preview.group_secrets", keys=", ".join(group_secrets)))
+            lines.append(t("m03.preview.group_secrets", keys=", ".join(
+                GROUP_PIN_LABELS.get(k, k) for k in group_secrets)))
+            retired = [k for k in group_secrets if k in RETIRED_GROUP_KEYS]
+            if retired:
+                lines.append(t("m03.preview.group_retired", keys=", ".join(retired)))
             lines.append("")
         if orphan_secrets:
             lines.append(t(
@@ -1109,8 +1167,11 @@ class OTPSecretsModule(Module):
         include_etapadmin: bool = str(
             params.get("include_etapadmin", "False")
         ).lower() in ("true", "1", "yes", "on")
-        make_group_pin: bool = str(
-            params.get("make_group_pin", "False")
+        # Branş hesaplarının ortak PIN'i (@branslar, kâğıtta brans_ortak).
+        # Eski "ogretmenler grubu için ortak PIN" kutusu (make_group_pin)
+        # okunmaz: o anahtar artık üretilmiyor.
+        make_branch_pin: bool = str(
+            params.get("make_branch_pin", "False")
         ).lower() in ("true", "1", "yes", "on")
         # Sistemdeki öğretmen hesapları (ortak ogretmen hesabı, EBA QR ile
         # açılanlar, branş hesapları…) için de PIN. Varsayılan açık; eski
@@ -1242,20 +1303,20 @@ class OTPSecretsModule(Module):
         requested_users |= set(other_teachers)
         preserved_users = sorted(requested_users & keep_users)
 
-        # ===== ogretmenler grubu =====================================
-        # Grup üyeliği artık yedek hesap sayısına bağlı değil: bu adımın
-        # yönettiği bütün öğretmen hesapları (listeden gelenler + yedek
-        # hesaplar) gruba alınır ve gelecekte EBA QR ile açılacaklar için
-        # izleyici servis kurulur.
-        group_key = f"@{OGRETMENLER_GROUP}"
+        # ===== Gruplar ==============================================
+        # ogretmenler: yedek hesaplar ve EBA QR ile açılan kişisel hesaplar
+        # (sonradan açılanlar izleyici servisle). Bu grubun ortak PIN'i yok.
+        # branslar: branş hesapları; ortak PIN'i @branslar (brans_ortak).
+        # Branş hesapları ogretmenler grubunda olmaz; eski sürümler onları
+        # da ekliyordu, üyelik kaldırılır.
+        branch_accounts = set(branch_accounts_on_board())
         group_secret_is_new = False
         grouped_users: list[str] = []
         ungrouped_users: list[str] = []
+        branch_grouped: list[str] = []
+        branch_ungrouped: list[str] = []
         auto_group_service_installed = False
 
-        # Öğretmen hesaplarının gruba üyeliği seçenek değil: '@ogretmenler'
-        # ortak PIN'i yalnız gruba üye hesaplarda çalışır ve EBA QR ile
-        # açılan hesaplar gruba kendiliğinden girmez.
         if not ensure_ogretmenler_group():
             if progress:
                 progress("\n" + t(
@@ -1263,18 +1324,15 @@ class OTPSecretsModule(Module):
                     group=OGRETMENLER_GROUP,
                 ))
         else:
-            # PIN kutusundan bağımsız: tahtadaki bütün kişisel hesaplar
-            # (EBA QR, branş, yedek) öğretmen hesabıdır, gruba girer.
             targets = sorted(
-                requested_users | set(reserve_usernames) | set(get_extra_users())
+                (requested_users | set(reserve_usernames) | set(get_extra_users()))
+                - branch_accounts
             )
             if progress:
                 progress("\n" + t("m03.apply.adding_to_group", group=OGRETMENLER_GROUP))
             for u in targets:
-                # etapadmin bir öğretmen hesabı değil; ortak PIN'in
-                # yönetici hesabına da geçmesi istenmez. Ortak ogretmen
-                # hesabı da gruba girmez: grup PIN'i ortak hesapta
-                # geçmemeli (otomatik grup servisi de onu hariç tutar).
+                # etapadmin bir öğretmen hesabı değil; ortak ogretmen hesabı
+                # da gruba girmez (otomatik grup servisi de onu hariç tutar).
                 if u in GROUP_EXCLUDED_USERS or not user_exists(u):
                     continue
                 run_cmd(["usermod", "-a", "-G", OGRETMENLER_GROUP, u], check=False)
@@ -1289,31 +1347,67 @@ class OTPSecretsModule(Module):
                     ungrouped_users.append(u)
                     if progress:
                         progress(t("m03.apply.removed_from_group", user=u))
+            for u in sorted(branch_accounts & group_members(OGRETMENLER_GROUP)):
+                if run_cmd(["gpasswd", "-d", u, OGRETMENLER_GROUP], check=False).ok:
+                    branch_ungrouped.append(u)
             # Sonradan EBA QR ile açılacak hesaplar için izleyici servis
             if install_auto_group_service():
                 auto_group_service_installed = True
                 if progress:
                     progress("\n" + t("m03.apply.auto_group_installed"))
 
-        if make_group_pin:
-            if not ensure_ogretmenler_group():
+        branch_group_ok = False
+        if branch_accounts:
+            branch_group_ok = ensure_branslar_group()
+            if not branch_group_ok:
                 if progress:
                     progress("\n" + t(
-                        "m03.apply.group_create_failed_pin",
-                        group=OGRETMENLER_GROUP,
+                        "m03.apply.group_create_failed_membership",
+                        group=BRANSLAR_GROUP,
                     ))
-            elif group_key in after_secrets:
-                # Mevcut grup-PIN'i yenilemek telefonlardaki anahtarı
+            else:
+                members = group_members(BRANSLAR_GROUP)
+                for u in sorted(branch_accounts - members):
+                    if run_cmd(["usermod", "-a", "-G", BRANSLAR_GROUP, u], check=False).ok:
+                        branch_grouped.append(u)
+                if (branch_grouped or branch_ungrouped) and progress:
+                    progress("\n" + t(
+                        "m03.apply.branches_regrouped", group=BRANSLAR_GROUP,
+                        users=", ".join(sorted(set(branch_grouped) | set(branch_ungrouped))),
+                    ))
+
+        if make_branch_pin:
+            if not branch_accounts:
+                if progress:
+                    progress("\n" + t("m03.apply.branch_pin_no_accounts"))
+            elif not branch_group_ok:
+                if progress:
+                    progress("\n" + t(
+                        "m03.apply.group_create_failed_pin", group=BRANSLAR_GROUP,
+                    ))
+            elif BRANCH_GROUP_KEY in after_secrets:
+                # Mevcut ortak PIN'i yenilemek telefonlardaki anahtarı
                 # geçersiz kılardı; koruyoruz.
                 if progress:
-                    progress("\n" + t("m03.apply.group_pin_kept", key=group_key))
+                    progress("\n" + t("m03.apply.group_pin_kept",
+                                       key=GROUP_PIN_LABELS[BRANCH_GROUP_KEY]))
             else:
-                after_secrets[group_key] = pyotp.random_base32()
+                after_secrets[BRANCH_GROUP_KEY] = pyotp.random_base32()
                 save_secrets(after_secrets)
                 group_secret_is_new = True
                 if progress:
-                    progress("\n" + t("m03.apply.group_pin_created", key=group_key))
+                    progress("\n" + t("m03.apply.group_pin_created",
+                                       key=GROUP_PIN_LABELS[BRANCH_GROUP_KEY]))
 
+        # Artık üretilmeyen grup PIN'leri (ogretmenler): kişisel öğretmen
+        # hesaplarına ortak kodla girilmesin.
+        retired_keys = [k for k in RETIRED_GROUP_KEYS if k in after_secrets]
+        if retired_keys:
+            for k in retired_keys:
+                del after_secrets[k]
+            save_secrets(after_secrets)
+            if progress:
+                progress("\n" + t("m03.apply.group_pin_retired", keys=", ".join(retired_keys)))
 
         # ===== Ortak anahtarlar ======================================
         # Bu turda anahtarı olacak her hesap için ortak değer varsa o
@@ -1359,15 +1453,15 @@ class OTPSecretsModule(Module):
             progress("!" * 60)
 
         if (not new_users and not group_secret_is_new and not preserved_users
-                and not shared_synced):
+                and not shared_synced and not retired_keys):
             return ApplyResult(
                 False,
                 t("m03.apply.none_generated"),
                 details=t("m03.apply.none_generated_details", count=len(after_secrets)),
             )
         # Grup secret'ı da PIN kartı listesine dahil et
-        if group_secret_is_new and group_key not in new_users:
-            new_users.append(group_key)
+        if group_secret_is_new and BRANCH_GROUP_KEY not in new_users:
+            new_users.append(BRANCH_GROUP_KEY)
 
         # Greeter cache kontrolü ve kurulumu
         total_users = count_regular_users()
@@ -1422,8 +1516,8 @@ class OTPSecretsModule(Module):
                     continue
                 display_of[u] = name
         # Grup-PIN kartı için özel etiket
-        if group_key in new_users:
-            display_of[group_key] = t("m03.apply.display_group")
+        if BRANCH_GROUP_KEY in new_users:
+            display_of[BRANCH_GROUP_KEY] = t("m03.paper.branch_group_display")
 
         # Rapor
         report_lines: list[str] = []
@@ -1510,6 +1604,10 @@ class OTPSecretsModule(Module):
             ))
         if auto_group_service_installed:
             summary_parts.append(t("m03.apply.summary_auto_group"))
+        if group_secret_is_new:
+            summary_parts.append(t("m03.apply.summary_branch_pin"))
+        if retired_keys:
+            summary_parts.append(t("m03.apply.summary_retired"))
         if shared_map:
             summary_parts.append(t("m03.apply.summary_shared", synced=len(shared_synced),
                                    board_only=len(board_only)))
@@ -1545,6 +1643,13 @@ class OTPSecretsModule(Module):
                 "changed_users": changed_users,
                 "grouped_users": grouped_users,
                 "ungrouped_users": ungrouped_users,
+                # branslar grubuna alınan / ogretmenler grubundan çıkarılan
+                # branş hesapları.
+                "branch_grouped": branch_grouped,
+                "branch_ungrouped": branch_ungrouped,
+                "branch_pin": bool(make_branch_pin and BRANCH_GROUP_KEY in after_secrets),
+                # Silinen eski grup PIN'leri (@ogretmenler).
+                "retired_group_keys": retired_keys,
                 "used_tool": bool(cli_script),
                 "greeter_cache_applied": greeter_cache_applied,
                 "total_users": total_users,
@@ -1714,7 +1819,7 @@ class OTPSecretsModule(Module):
             kind_html = f' <span class="kind">({_esc(kind)})</span>' if kind else ""
             # Sızması bütün tahtaları etkileyen anahtarlar: kısa uyarı.
             warn_key = {
-                "@ogretmenler": "warn_group",
+                BRANCH_GROUP_KEY: "warn_group",
                 "etapadmin": "warn_admin",
                 # Parolası bilinen tek sınırlı hesap: yedek giriş yolu.
                 "ogretmen": "warn_ogretmen",
@@ -1743,14 +1848,16 @@ class OTPSecretsModule(Module):
             is_group = user.startswith("@")
             if is_group:
                 group_esc = _esc(user[1:])
-                user_line = (
-                    '<div class="user">'
-                    f'{t("m03.paper.group_line", group=group_esc)}</div>'
-                )
+                group_line = (t("m03.paper.branch_group_line",
+                                label=_esc(GROUP_PIN_LABELS[user]))
+                              if user == BRANCH_GROUP_KEY
+                              else t("m03.paper.group_line", group=group_esc))
+                user_line = f'<div class="user">{group_line}</div>'
                 steps = [
                     t("m03.paper.step_install"),
                     t("m03.paper.group_step_scan"),
-                    t("m03.paper.group_step_label"),
+                    t("m03.paper.group_step_label",
+                      label=_esc(GROUP_PIN_LABELS.get(user, user[1:]))),
                     t("m03.paper.step_type"),
                     t("m03.paper.group_step_save", group=group_esc),
                 ]
@@ -1778,7 +1885,7 @@ class OTPSecretsModule(Module):
                 "title": display,
                 "kind": kind,
                 "new": is_new,
-                "user_line": re.sub(r"<[^>]+>", "", t("m03.paper.group_line", group=user[1:])
+                "user_line": re.sub(r"<[^>]+>", "", group_line
                                     if is_group else t("m03.paper.user_line", user=user)),
                 "warn": t("m03.paper." + warn_key) if warn_key else "",
                 "key": grouped,

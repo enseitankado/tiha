@@ -53,7 +53,7 @@ Raporda, günce dosyasında ve eylem kaydında hiçbir parola geçmez.
 | Sistem güncellemesi | uygulandı, eksik ana depo satırları eklendi, tanınmayan Pardus sürümünde depo ayarlarına dokunulmadı / başarısız |
 | Kullanıcı parolaları | hangi parolalar atandı ya da atanamadı (root, etapadmin, ogretmen), öğretmen parolası hesap yokluğundan uygulanmadı, anahtarlıklar kenara alındı, yedek hesap açıldı ya da zaten vardı, yedek hesap sayısı 0'a çekilince mevcut yedekler silindi, branş hesabı açıldı / zaten vardı / işareti kaldırılınca silindi (okul türüyle), ortak hesap silindi, öğrenci hesabı düğmeyle silindi, "Fazladan hesapları sil" düğmesi |
 | Her açılışta parola temizliği | uygulandı (yedek ve branş hesapları dahil) |
-| Öğretmen PIN anahtarları | eta-otp-cli ya da dahili yol, öğretmen listesi, yedek hesaplar, etapadmin/ogretmen için üretildi ya da korundu, "Öğretmen hesapları için de PIN üret" ile tahtadaki diğer öğretmen hesapları (EBA QR, branş) ya da bu seçeneğin kapalı olması, yeni/korunan anahtar sayısı, grup PIN'i oluşturuldu ya da korundu, öğretmen hesaplarının gruba alınması, otomatik grup servisi, giriş ekranı önbelleği (≥50 kullanıcı), değişen anahtar, PIN'lerin üretimden sonra silinmesi, fazladan hesap silme ve karşılığı kalmayan anahtarların temizlenmesi, gruptan çıkarılan hesaplar (ogretmen, etapadmin) |
+| Öğretmen PIN anahtarları | eta-otp-cli ya da dahili yol, öğretmen listesi, yedek hesaplar, etapadmin/ogretmen için üretildi ya da korundu, "Öğretmen hesapları için de PIN üret" ile tahtadaki diğer öğretmen hesapları (EBA QR, branş) ya da bu seçeneğin kapalı olması, yeni/korunan anahtar sayısı, branşların ortak PIN'i (brans_ortak) oluşturuldu ya da korundu, eski ogretmenler grubu ortak PIN'inin silinmesi, öğretmen hesaplarının ogretmenler, branş hesaplarının branslar grubuna alınması, otomatik grup servisi, giriş ekranı önbelleği (≥50 kullanıcı), değişen anahtar, PIN'lerin üretimden sonra silinmesi, fazladan hesap silme ve karşılığı kalmayan anahtarların temizlenmesi, gruptan çıkarılan hesaplar (ogretmen, etapadmin) |
 | EBA QR parola diyaloğu | kapatıldı / zaten kapalıydı |
 | SSH sunucusu | paket kuruldu / zaten kuruluydu |
 | Dosya sunucusu | paket kuruldu ya da vardı, kullanıcı root ya da başka |
@@ -118,7 +118,7 @@ YAPTIKLARINIZ
   • etapadmin hesabının eski parolayla şifreli kalan anahtarlık dosyalarını kenara aldınız; ilk girişte yeni parolayla yenisi oluşacak.
   • 3 yedek öğretmen hesabı oluşturdunuz (ogretmen1 – ogretmen3). Hesaplar ev diziniyle, parolasız (kilitli) açıldı ve ogretmenler grubuna eklendi; bu hesaplara PIN anahtarı adımında üretilen kodlarla girilir.
   • Öğrenci (ogrenci) hesabını ev diziniyle birlikte sildiniz.
-  • Ortaokul için 2 branş hesabı açtınız (matematik ve turkce). Hesaplar ev diziniyle, parolasız (kilitli) açıldı, ogretmenler grubuna eklendi ve giriş ekranında branş adıyla görünür; bu hesaplara PIN anahtarı adımında üretilen kodlarla girilir.
+  • Ortaokul için 2 branş hesabı açtınız (matematik ve turkce). Hesaplar ev diziniyle, parolasız (kilitli) açıldı, branslar grubuna eklendi ve giriş ekranında branş adıyla görünür; bu hesaplara PIN anahtarı adımında üretilen kodlarla (branşın kendi kodu ya da brans_ortak) girilir.
   ! root ve etapadmin parolaları bütün klonlarda aynı olacak ve geri okunamaz. Parolayı güvenli bir yerde saklayın; unutulursa her tahtada ayrı ayrı erişim sorunu yaşanır.
 ■ Her açılışta parola temizliği
   • Her açılışta etapadmin dışındaki tüm yerel hesapların (ortak öğretmen/öğrenci, yedek, branş ve kişisel öğretmen hesapları) parolasını rastgele bir değere çeviren açılış servisini kurdunuz. Bu hesaplara artık yalnız EBA QR, PIN ya da USB bellek ile girilebilir.
@@ -130,8 +130,8 @@ YAPTIKLARINIZ
   • Ortak öğretmen hesabı (ogretmen) için de PIN anahtarı ürettiniz.
   • Tahtada zaten açılmış 2 öğretmen hesabını (EBA QR ile açılanlar ve branş hesapları) da PIN listesine aldınız; bunlardan 2 tanesine yeni anahtar üretildi, anahtarı olanlarınki korundu.
   • Toplam 9 yeni PIN anahtarı üretildi ve imaja girecek.
-  • ogretmenler grubu için ortak PIN anahtarı oluşturdunuz; bu kod gruba üye bütün öğretmen hesaplarında (EBA QR ile açılanlar, yedek ve branş hesapları) geçerli, ortak ogretmen ve etapadmin hesaplarında geçmez.
-  • 5 öğretmen hesabının (yedek ve branş hesapları dahil) ogretmenler grubunda olmasını sağladınız.
+  • Branşların ortak kullanacağı brans_ortak (Branş Ortak) PIN anahtarını oluşturdunuz; bu kod branslar grubundaki bütün branş hesaplarında geçerli, kişisel ve yedek öğretmen hesaplarında, ortak ogretmen ve etapadmin hesaplarında geçmez.
+  • 3 öğretmen hesabının (yedek ve EBA QR ile açılan hesaplar) ogretmenler grubunda olmasını sağladınız.
   • EBA QR ile sonradan açılacak öğretmen hesaplarını ogretmenler grubuna kendiliğinden ekleyen servisi etkinleştirdiniz.
   • Tüm anahtarları QR kodlarıyla içeren yazdırılabilir PIN kâğıdı üretildi; öğretmenlere yalnızca özelden teslim edin.
   ! PIN anahtarları imajla birlikte bütün klonlara aynen kopyalanır; bu bilinçli bir tasarım. Tek bir tahtadan ya da kâğıttan sızan anahtar bütün tahtaları etkiler.
@@ -205,7 +205,7 @@ KLON TAHTADA DENEYİN
   ☐ Klonu yeniden başlatıp giriş ekranında etapadmin ile yeni parolayla oturum açın; "giriş anahtarlığınızın parolası uyuşmuyor" uyarısı çıkmamalı.
   ☐ Klonda bir terminalde `su -` ile yeni root parolasını deneyin.
   ☐ Giriş ekranında yedek öğretmen hesaplarının göründüğünü doğrulayın. Terminalde `id ogretmen1` çıktısında audio, video, plugdev gibi cihaz gruplarıyla birlikte ogretmenler grubunun da bulunduğunu kontrol edin.
-  ☐ Giriş ekranında branş hesaplarının branş adıyla göründüğünü ve terminalde `id matematik` çıktısında ogretmenler grubunun bulunduğunu doğrulayın.
+  ☐ Giriş ekranında branş hesaplarının branş adıyla göründüğünü ve terminalde `id matematik` çıktısında branslar grubunun bulunduğunu, ogretmenler grubunun bulunmadığını doğrulayın.
   ☐ Giriş ekranında öğrenci hesabının artık görünmediğini doğrulayın.
 ■ Her açılışta parola temizliği
   ☐ Klonu yeniden başlatın; etapadmin ile parolayla girebildiğinizi doğrulayın (bu hesaba dokunulmaz).
@@ -220,7 +220,7 @@ KLON TAHTADA DENEYİN
   ☐ Branş ya da EBA QR ile açılmış bir hesaba (ör. matematik) PIN ile girin.
   ☐ etapadmin'e hem PIN ile hem de parolayla girilebildiğini doğrulayın.
   ☐ Ortak öğretmen hesabına (ogretmen) PIN ile girin.
-  ☐ Kâğıttaki ORTAK PIN kartını okutup bir yedek, branş ya da kişisel öğretmen hesabına ortak kodla girin; ortak ogretmen hesabında bu kodun REDDEDİLDİĞİNİ doğrulayın.
+  ☐ Kâğıttaki brans_ortak kartını okutup iki farklı branş hesabına ortak kodla girin; bir yedek ya da kişisel öğretmen hesabında ve ortak ogretmen hesabında bu kodun REDDEDİLDİĞİNİ doğrulayın.
   ☐ Klonda EBA QR ile yeni bir öğretmen girişi yaptıktan sonra bu hesabın ogretmenler grubuna eklendiğini doğrulayın (terminalde `id <kullanıcı>`).
 ■ EBA QR parola diyalogu
   ☐ Klonda o tahtaya daha önce hiç girmemiş bir öğretmenle EBA QR ile ilk girişi yapın; masaüstü açıldığında parola tanımlama penceresi çıkmamalı.

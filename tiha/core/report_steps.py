@@ -291,13 +291,23 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
     if preserved:
         rep.done.append(t("m03.report.preserved", count=len(preserved)))
 
-    group_new = "@ogretmenler" in created
+    # brans_ortak (@branslar). Eski kayıtlardaki @ogretmenler / make_group_pin
+    # anlatılmaz: o anahtar artık üretilmiyor, adım uygulanınca siliniyor.
+    group_new = "@branslar" in created
+    group_on = group_new or bool(d.get("branch_pin"))
     if group_new:
         rep.done.append(t("m03.report.group_new"))
-    elif ctx.flag("make_group_pin"):
+    elif group_on:
         rep.done.append(t("m03.report.group_kept"))
+    if d.get("retired_group_keys"):
+        rep.notes.append(t("m03.report.retired"))
     if grouped:
         rep.done.append(t("m03.report.grouped", count=len(grouped)))
+    branch_moved = sorted({str(u) for u in (d.get("branch_grouped") or [])}
+                          | {str(u) for u in (d.get("branch_ungrouped") or [])})
+    if branch_moved:
+        rep.done.append(t("m03.report.branch_grouped", count=len(branch_moved),
+                          users=_join(branch_moved)))
     if d.get("ungrouped_users"):
         rep.done.append(t("m03.report.ungrouped",
                           users=_join([str(u) for u in d["ungrouped_users"]])))
@@ -342,14 +352,14 @@ def narrate_m03(ctx: StepContext, rep: StepReport) -> None:
         rep.tests.append(t("m03.report.test_etapadmin"))
     if "ogretmen" in created or "ogretmen" in preserved:
         rep.tests.append(t("m03.report.test_ogretmen"))
-    if group_new or ctx.flag("make_group_pin"):
+    if group_on:
         rep.tests.append(t("m03.report.test_group"))
     if d.get("auto_group_service_installed"):
         rep.tests.append(t("m03.report.test_auto_group"))
     if d.get("greeter_cache_applied"):
         rep.tests.append(t("m03.report.test_greeter"))
     rep.notes.append(t("m03.report.note_copied"))
-    if group_new or ctx.flag("make_group_pin"):
+    if group_on:
         rep.notes.append(t("m03.report.note_group_weak"))
 
 

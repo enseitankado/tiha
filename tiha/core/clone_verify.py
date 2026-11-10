@@ -213,8 +213,11 @@ def _branches(p):
     user = p.get("user", "").strip()
     if not _user(user):
         return FAIL, M("account_missing", user=user)
-    if "ogretmenler" not in _groups(user):
-        return FAIL, M("not_in_group", user=user)
+    groups = _groups(user)
+    if "branslar" not in groups:
+        return FAIL, M("not_in_group", user=user, group="branslar")
+    if "ogretmenler" in groups:
+        return FAIL, M("branch_in_teachers", user=user)
     return PARTIAL, M("branch_ok", user=user)
 
 
@@ -341,14 +344,20 @@ def _greeter(_p):
 
 
 def _group_pin(_p):
-    if "@ogretmenler" not in _secrets():
-        return FAIL, M("no_secret_for", user="@ogretmenler")
+    """brans_ortak (@branslar) var, yalnız branş hesaplarında geçer; eski
+    ogretmenler grubu ortak PIN'i kalmamış."""
+    secrets = _secrets()
+    if "@ogretmenler" in secrets:
+        return FAIL, M("retired_group_pin")
+    if "@branslar" not in secrets:
+        return FAIL, M("no_secret_for", user="brans_ortak")
     try:
-        members = grp.getgrnam("ogretmenler").gr_mem
+        members = grp.getgrnam("branslar").gr_mem
     except KeyError:
         return FAIL, M("group_missing")
-    if "ogretmen" in members:
-        return FAIL, M("ogretmen_in_group")
+    for user in ("ogretmen", "etapadmin"):
+        if user in members:
+            return FAIL, M("ogretmen_in_group", user=user)
     return PARTIAL, M("group_pin_ok", count=len(members))
 
 
