@@ -1987,6 +1987,7 @@ failed = "PIN anahtarı kâğıdı kaydedilemedi: {error}"
 
 [m03.buttons]
 purge_all = "Tüm PIN Anahtarlarını Sil ({count} anahtar)"
+export_keys = "PIN Anahtarlarını Dışarı Aktar ({count} anahtar)"
 remove_extra = "Fazladan Hesapları Sil ({accounts} hesap, {keys} anahtar)"
 
 [m03.purge]
@@ -2105,6 +2106,20 @@ silinir.\n\
 Bütün branşlar aynı kodu kullandığı için tek tek PIN'lerden daha zayıf \
 bir önlemdir; kâğıdı dikkatle saklayın.\
 """
+
+[m03.params.export_keys]
+label = "PIN Anahtarlarını Dışarı Aktar"
+help = """\
+Adımı yeniden uygulamadan, sistemdeki bütün PIN anahtarlarının yazdırılabilir \
+kâğıdını (HTML) ve her anahtarın telefona uygun kart resmini seçtiğiniz \
+klasöre kaydeder; adım uygulandıktan sonraki kaydın aynısıdır. Anahtarlara \
+dokunulmaz.\
+"""
+
+[m03.export_keys]
+none = "Dışa aktarılacak PIN anahtarı yok."
+failed = "PIN anahtarı kâğıdı oluşturulamadı; ayrıntı TiHA günlüğünde."
+done = "{count} PIN anahtarının kâğıdı ve kart resimleri dışa aktarılıyor."
 
 [m03.params.purge_all_secrets]
 label = "Tüm PIN Anahtarlarını Sil"

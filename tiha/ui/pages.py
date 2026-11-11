@@ -1832,8 +1832,15 @@ class ModulePage(Gtk.Box):
         """Başka bir programı açan düğme eylemini doğrudan çalıştırır."""
         for child in self.result_holder.get_children():
             self.result_holder.remove(child)
+        import inspect
+
+        fn = getattr(self.module, action)
+        # Pencere açan eylemler (ör. PIN anahtarlarını dışa aktar) kendi
+        # pencerelerini sihirbazın üstünde açsın diye üst pencereyi alır.
+        kwargs = ({"parent": self.get_toplevel()}
+                  if "parent" in inspect.signature(fn).parameters else {})
         try:
-            result = getattr(self.module, action)()
+            result = fn(**kwargs)
         except Exception as exc:  # noqa: BLE001
             log.exception("Düğme eylemi başarısız: %s", action)
             result = ApplyResult(False, t("ui.pages.unexpected_error", error=exc))

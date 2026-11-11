@@ -2366,6 +2366,34 @@ class OTPSecretsModule(Module):
         """
         return count_reserve_accounts()
 
+    def export_keys_action(self, params: dict | None = None, parent=None) -> ApplyResult:
+        """Sistemdeki PIN anahtarlarının kâğıdını ve kart resimlerini, adımı
+        uygulamadan dışa aktarır.
+
+        Adım uygulandıktan sonraki akışın aynısı: HTML kâğıt ve her anahtarın
+        kart resmi üretilir, kayıt penceresiyle seçilen klasöre yazılır
+        (ortak hesaplar ana klasörde, öğretmenler ve branşlar alt
+        klasörlerde). Anahtarlara dokunulmaz.
+        """
+        secrets = load_secrets()
+        if not secrets:
+            return ApplyResult(False, t("m03.export_keys.none"))
+        self._write_printable_paper(
+            all_users=sorted(secrets),
+            new_users=set(),
+            secrets=secrets,
+            display_of={},
+            state_dir=self.ensure_state_dir(),
+        )
+        if not getattr(self, "_last_paper", None):
+            return ApplyResult(False, t("m03.export_keys.failed"))
+        self.after_apply_ui(None, parent)
+        return ApplyResult(True, t("m03.export_keys.done", count=len(secrets)))
+
+    def label_export_keys(self) -> str:
+        """'PIN Anahtarlarını Dışarı Aktar' düğmesinin etiketi (anahtar sayısıyla)."""
+        return t("m03.buttons.export_keys", count=len(load_secrets()))
+
     def can_purge_secrets(self) -> bool:
         """'Tüm PIN anahtarlarını sil' düğmesi görünsün mü?"""
         return bool(load_secrets())

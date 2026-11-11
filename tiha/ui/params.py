@@ -177,6 +177,19 @@ PARAMS_SCHEMA: dict[str, list[dict]] = {
             "help": t("m03.params.shared_pin_secrets.help"),
         },
         {
+            # Adımı uygulamadan, mevcut anahtarların kâğıdını ve kart
+            # resimlerini kayıt penceresiyle dışa aktarır (masaüstü işi:
+            # komut satırında yok).
+            "key": "export_keys",
+            "label": t("m03.params.export_keys.label"),
+            "label_from": "label_export_keys",
+            "type": "button",
+            "action": "export_keys_action",
+            "launch": True,
+            "visible_when": "can_purge_secrets",
+            "help": t("m03.params.export_keys.help"),
+        },
+        {
             "key": "purge_all_secrets",
             "label": t("m03.params.purge_all_secrets.label"),
             "label_from": "label_purge_all_secrets",
