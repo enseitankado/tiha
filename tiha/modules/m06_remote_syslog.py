@@ -56,7 +56,7 @@ from pathlib import Path
 from ..core.i18n import t
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module
-from ..core import smartmon_collector
+from ..core import log_watch, smartmon_collector
 from ..core.paths import RSYSLOG_CONF
 from ..core.utils import run_cmd
 
@@ -623,6 +623,101 @@ class RemoteSyslogModule(Module):
         """Kurulu servis hangi adresi dinliyor? Boşsa ":9100" varsayılanı."""
         return _read_node_exporter_listen() or ":9100"
 
+    # --- Ulaşılamazsa ntfy ile haber ver ---------------------------------
+
+    def ntfy_watch_active(self) -> str:
+        return "True" if log_watch.is_installed() else "False"
+
+    def current_ntfy_topic(self) -> str:
+        return log_watch.current_config().get("topic", "")
+
+    def current_ntfy_server(self) -> str:
+        return log_watch.current_config().get("server", log_watch.DEFAULT_SERVER)
+
+    def current_ntfy_threshold(self) -> str:
+        return str(log_watch.current_config().get("threshold_min",
+                                                  log_watch.DEFAULT_THRESHOLD_MIN))
+
+    def _run_watch_script(self, args: list[str], progress=None) -> ApplyResult:
+        """Teşhis betiğini çalıştırıp çıktısını akıtır (kurulu değilse geçici
+        bir kopyasıyla)."""
+        import tempfile
+
+        from ..core.utils import run_cmd_stream
+
+        tmp = None
+        script = log_watch.WATCH_SCRIPT
+        if not script.exists():
+            with tempfile.NamedTemporaryFile("w", suffix="_log_watch.py", delete=False) as fh:
+                tmp = Path(fh.name)
+            log_watch.write_script(tmp)
+            script = tmp
+        try:
+            res = run_cmd_stream(["python3", str(script), *args], progress=progress, timeout=180)
+        finally:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
+        return res
+
+    def diagnose_log_server_action(self, params: dict | None = None, progress=None) -> ApplyResult:
+        """Log sunucusuna erişimi şimdi teşhis eder ve sonucu gösterir (göndermez)."""
+        if not RSYSLOG_CONF.exists():
+            return ApplyResult(False, t("m06.test.no_config", path=RSYSLOG_CONF))
+        if progress:
+            progress(t("m06.ntfy.diagnosing"))
+        res = self._run_watch_script(["--diagnose"], progress)
+        return ApplyResult(res.ok, t("m06.ntfy.diagnosed") if res.ok
+                           else t("m06.ntfy.diagnose_failed"),
+                           copyable=res.stdout or "", output_streamed=True)
+
+    def send_log_diagnosis_action(self, params: dict | None = None, progress=None) -> ApplyResult:
+        """Teşhisi hemen ntfy konusuna gönderir (deneme; günlük sınır sayılmaz)."""
+        import json as _json
+        import tempfile
+
+        if not RSYSLOG_CONF.exists():
+            return ApplyResult(False, t("m06.test.no_config", path=RSYSLOG_CONF))
+        params = params or {}
+        cfg = dict(log_watch.current_config())
+        topic = (params.get("ntfy_topic") or "").strip() or cfg.get("topic", "")
+        if not topic:
+            return ApplyResult(False, t("m06.ntfy.no_topic"))
+        if not log_watch.valid_topic(topic):
+            return ApplyResult(False, t("m06.ntfy.bad_topic", topic=topic))
+        cfg["topic"] = topic
+        server = (params.get("ntfy_server") or "").strip()
+        if server:
+            cfg["server"] = server
+        token = (params.get("ntfy_token") or "").strip()
+        if token:
+            cfg["token"] = token
+        # Formdaki (henüz uygulanmamış olabilecek) ayarlarla geçici yapılandırma.
+        with tempfile.NamedTemporaryFile("w", suffix="_watch.json", delete=False) as fh:
+            _json.dump(cfg, fh)
+            cfg_path = Path(fh.name)
+        cfg_path.chmod(0o600)
+        tmp_script = None
+        try:
+            from ..core.utils import run_cmd_stream
+
+            with tempfile.NamedTemporaryFile("w", suffix="_log_watch.py", delete=False) as fh:
+                tmp_script = Path(fh.name)
+            log_watch.write_script(tmp_script)
+            text = tmp_script.read_text(encoding="utf-8").replace(
+                f'CONFIG = Path("{log_watch.WATCH_CONFIG}")', f'CONFIG = Path("{cfg_path}")', 1)
+            tmp_script.write_text(text, encoding="utf-8")
+            if progress:
+                progress(t("m06.ntfy.sending", topic=topic))
+            res = run_cmd_stream(["python3", str(tmp_script), "--send"],
+                                 progress=progress, timeout=180)
+        finally:
+            cfg_path.unlink(missing_ok=True)
+            if tmp_script is not None:
+                tmp_script.unlink(missing_ok=True)
+        return ApplyResult(res.ok, t("m06.ntfy.sent", topic=topic) if res.ok
+                           else t("m06.ntfy.send_failed"),
+                           copyable=res.stdout or "", output_streamed=True)
+
     def snoopy_active(self) -> str:
         """Komut kaydı kutusunun durumu: snoopy çalışıyorsa açık; adım hiç
         uygulanmamışsa önerilen değer (açık); yoksa son uygulamadaki seçim."""
@@ -684,6 +779,13 @@ class RemoteSyslogModule(Module):
             if prof:
                 lines.append(t("m06.preview.profile", profile=prof['label']))
         lines.append(t("m06.preview.queue_dir", path=RSYSLOG_QUEUE_DIR))
+        watch = log_watch.current_config() if log_watch.is_installed() else {}
+        lines.append(
+            t("m06.ntfy.preview_on", topic=watch.get("topic", "?"),
+              server=watch.get("server", log_watch.DEFAULT_SERVER),
+              minutes=watch.get("threshold_min", log_watch.DEFAULT_THRESHOLD_MIN))
+            if watch else t("m06.ntfy.preview_off")
+        )
         if queue_files:
             lines.append(t(
                 "m06.preview.queue_pending", count=len(queue_files), size=total_size,
@@ -719,6 +821,14 @@ class RemoteSyslogModule(Module):
         install_snoopy = str(
             params.get("install_snoopy", "False")
         ).lower() in ("true", "1", "yes", "on")
+        ntfy_watch = str(params.get("ntfy_watch", "False")).lower() in ("true", "1", "yes", "on")
+        ntfy_topic = (params.get("ntfy_topic") or "").strip()
+        ntfy_server = (params.get("ntfy_server") or log_watch.DEFAULT_SERVER).strip()
+        if ntfy_watch:
+            if ntfy_topic and not log_watch.valid_topic(ntfy_topic):
+                return ApplyResult(False, t("m06.ntfy.bad_topic", topic=ntfy_topic))
+            if not ntfy_server.startswith(("http://", "https://")):
+                return ApplyResult(False, t("m06.ntfy.bad_server", server=ntfy_server))
         if not host:
             return ApplyResult(False, t("m06.apply.no_host"))
 
@@ -886,6 +996,27 @@ class RemoteSyslogModule(Module):
                 snoopy_by_tiha = False
             snoopy_state = t("m06.apply.state_skipped")
 
+        # Ulaşılamazsa ntfy ile haber ver: konu boşsa rastgele üretilir,
+        # jeton boşsa kurulu olanı korunur.
+        if ntfy_watch:
+            existing = log_watch.current_config()
+            topic = ntfy_topic or existing.get("topic") or log_watch.new_topic()
+            token = (params.get("ntfy_token") or "").strip() or existing.get("token", "")
+            try:
+                threshold = max(15, int(params.get("ntfy_threshold") or log_watch.DEFAULT_THRESHOLD_MIN))
+            except ValueError:
+                threshold = log_watch.DEFAULT_THRESHOLD_MIN
+            if log_watch.install(topic, ntfy_server, token, threshold):
+                ntfy_state = t("m06.ntfy.state_on", topic=topic, server=ntfy_server,
+                               minutes=threshold)
+                if progress:
+                    progress(t("m06.ntfy.installed", topic=topic))
+            else:
+                ntfy_state = t("m06.ntfy.state_failed")
+        else:
+            log_watch.remove()
+            ntfy_state = t("m06.apply.state_skipped")
+
         # rsyslog'u yeniden başlat
         restart = run_cmd(["systemctl", "restart", "rsyslog"])
         if not restart.ok:
@@ -931,10 +1062,11 @@ class RemoteSyslogModule(Module):
                            else t("m06.extra.heartbeat_on",
                                   minutes=HEARTBEAT_INTERVAL // 60)),
                 snoopy=snoopy_state,
-            ),
+            ) + "\n" + t("m06.ntfy.details_line", state=ntfy_state),
             data={
                 "snoopy_installed_by_tiha": snoopy_by_tiha,
                 "install_snoopy": install_snoopy,
+                "ntfy_watch": ntfy_watch,
                 "install_smart_monitoring": install_smart,
                 "install_node_exporter": install_node_exporter,
                 "purged_extras": purged_extras,
@@ -1029,6 +1161,9 @@ class RemoteSyslogModule(Module):
         removed_files = 0
         cleaned_queue = False
 
+        # Ulaşılamazsa ntfy ile haber veren izleyici kaldırılır.
+        ntfy_removed = log_watch.remove()
+
         # Komut kaydı: TiHA kurduysa paket kaldırılır, değilse eski ayar döner.
         snoopy_removed = False
         if data.get("snoopy_installed_by_tiha") or (
@@ -1068,6 +1203,8 @@ class RemoteSyslogModule(Module):
 
         # Sonuç raporu
         summary_parts = []
+        if ntfy_removed:
+            summary_parts.append(t("m06.ntfy.undo_removed"))
         if snoopy_removed:
             summary_parts.append(t("m06.snoopy.undo_removed"))
         if removed_files > 0:

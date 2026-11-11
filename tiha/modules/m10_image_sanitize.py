@@ -677,6 +677,10 @@ class ImageSanitizeModule(Module):
         # yeniden yazılmaz. snoopy komut kayıtları auth.log'da, günlükte
         # ve gönderilmemiş kuyrukta durur; üçü de aşağıda silinir.
         rsyslog_was_active = _stop_rsyslog()
+        # ntfy izleyicisinin kesinti sayacı ve son gönderim zamanı: her klon
+        # kendi sayacıyla başlasın (kaynak tahtanınki klonu susturmasın).
+        from ..core import log_watch
+        log_watch.reset_state()
         n = _purge_rsyslog_state()
         if n:
             ops.append(t("m10.apply.remote_queue", count=n))
