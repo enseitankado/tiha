@@ -45,8 +45,10 @@ MAX_BODY_BYTES = 3500
 
 
 def new_topic() -> str:
-    """Tahmin edilemeyen bir konu adı (ntfy: harf, rakam, - ve _)."""
-    return "tiha-" + secrets.token_hex(12)
+    """Kısa ama tahmin edilemeyen bir konu adı: "tiha-" + 10 küçük harf ya
+    da rakam (~51 bit rastgelelik; ntfy: harf, rakam, - ve _)."""
+    alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+    return "tiha-" + "".join(secrets.choice(alphabet) for _ in range(10))
 
 
 def board_topic() -> str:
