@@ -434,7 +434,11 @@ _STEP_ALIASES: dict[str, str] = {
     "otomatik-ahenk-kaydi": "m12_ahenk_reset",   # v0.1.79'da "Ahenk" oldu
 }
 # (adım kimliği, eski eylem adı) -> düğmenin şemadaki anahtarı.
-_ACTION_ALIASES: dict[tuple[str, str], str] = {}
+_ACTION_ALIASES: dict[tuple[str, str], str] = {
+    # "Log Sunucusunu Test Et" düğmesi "Şimdi teşhis et"in içine alındı.
+    ("m06_remote_syslog", "log-sunucusunu-test-et"): "diagnose_log_server",
+    ("m06_remote_syslog", "test-log-server"): "diagnose_log_server",
+}
 
 
 def resolve_step(ref: str):
@@ -647,7 +651,7 @@ _PORTABLE_FIELD_KEYS = (
     "key", "type", "label", "help", "help_more", "required", "default", "options",
     "min", "max", "step", "placeholder", "hint", "enable_when_field", "enable_when_any",
     "enables", "locked", "allowed_chars", "remote_warning", "remote_warning_when",
-    "machine_only",
+    "machine_only", "visible_when_field",
 )
 
 
@@ -727,6 +731,10 @@ def _action_schema(field: dict) -> dict:
     out = {"name": action_slug(field), "key": field["key"], "label": field.get("label", ""),
            "help": field.get("help", ""), "destructive": field.get("style") == "destructive",
            "board_dependent": bool(field.get("visible_when") or field.get("label_from"))}
+    if field.get("beside"):
+        # Kendi satırı yok: adı verilen alanın sağında, aynı satırda durur
+        # (açıklaması ipucu olarak). Alan gizliyse düğme de gizlidir.
+        out["beside"] = field["beside"]
     # Düğme de bir form satırıdır (ad sütununda etiket, kontrol sütununda
     # düğme); açıklamanın gösterimi alanlarla aynı kuralla (fields[].view).
     view = _field_view(field)

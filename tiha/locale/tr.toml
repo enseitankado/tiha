@@ -2720,10 +2720,10 @@ kurduğu snoopy kaldırılır.\
 label = "Sunucuya ulaşılamazsa haber ver (ntfy)"
 help = """\
 Tahta merkezi log sunucusuna ulaşamazsa yönetici bundan haberdar olmaz. Bu \
-seçenek açıkken tahta 15 dakikada bir sunucuyu dener; aşağıdaki süreden \
-uzun ulaşamazsa nedenini kendisi teşhis eder (log servisi, ağ bağlantısı, \
-ad çözümü / mDNS, yönlendirme, sunucunun yanıtı, güvenlik duvarı) ve \
-sonucu internet üzerinden ntfy konusuna kısa bir bildirim olarak gönderir. \
+seçenek açıkken tahta 15 dakikada bir sunucuyu dener; 60 dakika boyunca \
+ulaşamazsa nedenini kendisi teşhis eder (log servisi, ağ bağlantısı, ad \
+çözümü / mDNS, yönlendirme, sunucunun yanıtı, güvenlik duvarı) ve sonucu \
+internet üzerinden ntfy.sh'deki konuya kısa bir bildirim olarak gönderir. \
 Telefonunuza ntfy uygulamasını kurup konuya abone olursanız bildirim \
 telefona düşer. Tahta başına günde en fazla bir bildirim gider; sorun \
 düzelince bildirim gönderilmez.\
@@ -2732,35 +2732,23 @@ help_more = """\
 Bildirimde yalnız ağ ve servis durumu bulunur (tahtanın adı, MAC ve IP \
 adresi, sunucu adresi, teşhis ve öneri); kullanıcı adı, komut ya da log \
 içeriği gönderilmez. ntfy.sh'de konu adını bilen herkes bildirimleri \
-okuyabilir: konu adını boş bırakırsanız TiHA tahmin edilemeyen bir ad \
-üretir, onu paylaşmayın. Okuldaki bütün tahtalar için aynı konuyu \
-kullanabilirsiniz; başlıkta tahtanın adı yazar. Bildirimin gidebilmesi \
-için tahtanın internete çıkabilmesi gerekir; MEB filtresi ntfy.sh'yi \
-engelliyorsa kendi ntfy sunucunuzun adresini yazın. Sunucu kapandığında \
+okuyabilir: konu adı tahmin edilemeyen rastgele bir değerle gelir, onu \
+yalnız bildirimi alacak kişilerle paylaşın. Değer tahtada saklanır ve siz \
+değiştirmedikçe aynı kalır; imajla bütün klonlara aynı gider, böylece \
+okuldaki bütün tahtalar tek konuya yazar (başlıkta tahtanın adı yazar). \
+Bildirimin gidebilmesi için tahtanın internete çıkabilmesi gerekir; MEB \
+filtresi ntfy.sh'yi engelliyorsa bildirim gitmez. Sunucu kapandığında \
 birçok tahta aynı anda yazmasın diye gönderim rastgele 10 dakikaya kadar \
 geciktirilir.\
 """
 
 [m06.params.ntfy_topic]
 label = "ntfy konusu"
-placeholder = "boş bırakılırsa rastgele üretilir"
-help = "Bildirimlerin gönderileceği konu adı (harf, rakam, - ve _). Boş bırakılırsa tahmin edilemeyen bir ad üretilir."
-
-[m06.params.ntfy_server]
-label = "ntfy sunucusu"
-help = "Varsayılan https://ntfy.sh. Kendi ntfy sunucunuz varsa adresini yazın."
-
-[m06.params.ntfy_token]
-label = "ntfy erişim jetonu (isteğe bağlı)"
-help = "Konu erişim denetimliyse jeton. Boş bırakılırsa kurulu jeton korunur."
-
-[m06.params.ntfy_threshold]
-label = "Bildirim için bekleme (dakika)"
-help = "Sunucuya bu kadar süre ulaşılamazsa bildirim gönderilir."
+help = "Bildirimlerin gönderileceği ntfy.sh konusu (harf, rakam, - ve _). Rastgele üretilip tahtada saklanır; değiştirmedikçe aynı kalır."
 
 [m06.params.diagnose_log_server]
 label = "Şimdi teşhis et"
-help = "Log sunucusuna neden ulaşılamadığını şimdi teşhis eder ve sonucu gösterir; bildirim göndermez."
+help = "Yukarıda yazılan sunucuya şimdi erişilebiliyor mu bakar; ulaşılıyorsa bir deneme kaydı gönderir, ulaşılamıyorsa nedenini teşhis eder. Bildirim göndermez."
 
 [m06.params.send_log_diagnosis]
 label = "Teşhisi ntfy ile gönder"
@@ -2770,14 +2758,12 @@ confirm_message = "Tahtanın adı, ağ bilgileri ve teşhis sonucu ntfy konusuna
 
 [m06.ntfy]
 bad_topic = "Geçersiz ntfy konusu: {topic} (yalnız harf, rakam, - ve _; en çok 64 karakter)."
-bad_server = "ntfy sunucusu http:// ya da https:// ile başlamalı: {server}"
-no_topic = "ntfy konusu yok: önce bir konu yazın ya da bildirimi açıp adımı uygulayın."
 installed = "Sunucuya ulaşılamazsa ntfy bildirimi etkin; konu: {topic}"
-state_on = "etkin — konu {topic} ({server}), {minutes} dakika ulaşılamazsa, günde en çok bir bildirim"
+state_on = "etkin — ntfy.sh konusu {topic}, {minutes} dakika ulaşılamazsa, günde en çok bir bildirim"
 state_failed = "kurulamadı"
 details_line = "ntfy bildirimi        : {state}"
 undo_removed = "ntfy bildirimi kaldırıldı"
-preview_on = "ntfy bildirimi       : açık — konu {topic} ({server}), {minutes} dk ulaşılamazsa"
+preview_on = "ntfy bildirimi       : açık — ntfy.sh konusu {topic}, {minutes} dk ulaşılamazsa"
 preview_off = "ntfy bildirimi       : kapalı"
 diagnosing = "Log sunucusuna erişim teşhis ediliyor (en çok bir dakika)..."
 diagnosed = "Teşhis tamamlandı."

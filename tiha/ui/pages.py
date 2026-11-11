@@ -533,6 +533,7 @@ class ModulePage(Gtk.Box):
         self._conditional_field_widgets: dict[str, list[Gtk.Widget]] = {}
         # Uzun açıklamalar: "?" balonu ile sayfa içi metin arasında seçim.
         self._help_rows: list[dict] = []
+        self._row_widgets: dict[str, list[Gtk.Widget]] = {}
         self._help_column_width = _HELP_COLUMN_WIDTH
         self._build()
         # Önceki oturumda uygulanmış mı? Varsa "geri al" banner'ı göster.
@@ -706,9 +707,17 @@ class ModulePage(Gtk.Box):
                         row_spacing=layout.FORM_ROW_SPACING)
         grid.get_style_context().add_class("tiha-form")
         row_idx = 0
+        # Bir alanın yanında (aynı satırda, sağında) duran düğmeler: şemada
+        # "beside": "<alan anahtarı>". Kendi satırları yoktur.
+        beside: dict[str, list[dict]] = {}
+        for f in schema:
+            if f.get("type") == "button" and f.get("beside"):
+                beside.setdefault(f["beside"], []).append(f)
         for field in schema:
             # Yalnız komut satırı / yönetim araçları için alan: çizilmez.
             if field.get("machine_only"):
+                continue
+            if field.get("type") == "button" and field.get("beside"):
                 continue
             # Bölüm başlığı: değer taşımaz, iki sütuna yayılan kalın etiket.
             if field.get("type") == "heading":
@@ -755,7 +764,8 @@ class ModulePage(Gtk.Box):
             help_text = _help_full_text(field)
             cell: Gtk.Widget = widget
             dot: Gtk.Widget | None = None
-            if help_text:
+            side_buttons = beside.get(field.get("key"), [])
+            if help_text or side_buttons:
                 if kind == "bool":
                     # "?" onay kutusunun hemen yanında dursun, satır sonunda değil.
                     widget.set_hexpand(False)
@@ -763,12 +773,20 @@ class ModulePage(Gtk.Box):
                 cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
                                spacing=layout.HELP_BUTTON_SPACING)
                 cell.pack_start(widget, widget.get_hexpand(), True, 0)
+                for side in side_buttons:
+                    side_btn = self._make_button(side)
+                    side_btn.set_valign(Gtk.Align.CENTER)
+                    if side.get("help"):
+                        side_btn.set_tooltip_text(_help_plain(side["help"]))
+                    cell.pack_start(side_btn, False, False, 0)
+            if help_text:
                 dot = _help_bubble_button(field["label"], help_text)
                 if kind == "textarea":
                     # Çok satırlı kutuda "?" üst satır hizasında dursun.
                     dot.set_valign(Gtk.Align.START)
                     dot.set_margin_top(layout.HELP_BUTTON_TEXTAREA_MARGIN_TOP)
                 cell.pack_start(dot, False, False, 0)
+            if cell is not widget:
                 cell.set_hexpand(widget.get_hexpand())
                 cell.set_halign(widget.get_halign())
                 widget.set_halign(Gtk.Align.FILL if widget.get_hexpand() else Gtk.Align.START)
@@ -823,6 +841,8 @@ class ModulePage(Gtk.Box):
                     "bubble": None,
                 })
 
+            # Onay kutusuna göre anlık gizlenen satır (visible_when_field).
+            self._row_widgets[field["key"]] = row_widgets
             if gate:
                 self._conditional_field_widgets[field["key"]] = row_widgets
                 if not initial_visible:
@@ -982,6 +1002,21 @@ class ModulePage(Gtk.Box):
             widget = self._fields.get(field_key)
             if widget:
                 widget.set_sensitive(is_active)
+
+        # Şemada "visible_when_field": "<onay kutusu>" olan satırlar kutu
+        # işaretliyken görünür, değilken bütünüyle gizlenir.
+        shown_changed = False
+        for f in params_schema.get(self.module.id) or []:
+            if f.get("visible_when_field") != checkbox_key:
+                continue
+            for w in getattr(self, "_row_widgets", {}).get(f.get("key"), ()):
+                w.set_no_show_all(not is_active)
+                w.set_visible(is_active)
+                if is_active:
+                    w.show_all()
+                shown_changed = True
+        if shown_changed and hasattr(self, "_help_rows"):
+            self._apply_help_modes()
 
         # Genel şema mekanizması: bir alanın schema'sında
         # ``enable_when_field: "<checkbox_key>"`` varsa, ilgili checkbox

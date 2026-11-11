@@ -33,6 +33,9 @@ WATCH_SERVICE = Path("/etc/systemd/system/tiha-log-watch.service")
 WATCH_TIMER = Path("/etc/systemd/system/tiha-log-watch.timer")
 WATCH_CONFIG = ETC_ROOT / "log-watch.json"
 WATCH_STATE = VAR_ROOT / "log-watch-state.json"
+# Bu tahtanın ntfy konusu: ilk kez gerektiğinde rastgele üretilir ve burada
+# saklanır; değiştirilmedikçe hep aynıdır, imajla klonlara da aynı gider.
+TOPIC_FILE = ETC_ROOT / "ntfy-topic"
 
 DEFAULT_SERVER = "https://ntfy.sh"
 DEFAULT_THRESHOLD_MIN = 60
@@ -44,6 +47,32 @@ MAX_BODY_BYTES = 3500
 def new_topic() -> str:
     """Tahmin edilemeyen bir konu adı (ntfy: harf, rakam, - ve _)."""
     return "tiha-" + secrets.token_hex(12)
+
+
+def board_topic() -> str:
+    """Bu tahtanın konusu: kurulu ayardaki, yoksa saklanmış, o da yoksa yeni
+    üretilip saklanan rastgele ad."""
+    topic = current_config().get("topic", "")
+    if valid_topic(topic):
+        return topic
+    try:
+        saved = TOPIC_FILE.read_text(encoding="utf-8").strip()
+        if valid_topic(saved):
+            return saved
+    except OSError:
+        pass
+    topic = new_topic()
+    save_topic(topic)
+    return topic
+
+
+def save_topic(topic: str) -> None:
+    try:
+        TOPIC_FILE.parent.mkdir(parents=True, exist_ok=True)
+        TOPIC_FILE.write_text(topic + "\n", encoding="utf-8")
+        TOPIC_FILE.chmod(0o600)
+    except OSError as exc:
+        log.warning("ntfy konusu saklanamadı: %s", exc)
 
 
 def valid_topic(topic: str) -> bool:
@@ -83,14 +112,14 @@ def write_script(path: Path = WATCH_SCRIPT) -> Path:
     return path
 
 
-def install(topic: str, server: str, token: str, threshold_min: int) -> bool:
+def install(topic: str, server: str = DEFAULT_SERVER,
+            threshold_min: int = DEFAULT_THRESHOLD_MIN) -> bool:
     """Betiği, ayarı ve zamanlayıcıyı kurar. Durum sıfırlanır."""
     from .utils import run_cmd
 
     config = {"topic": topic, "server": server.rstrip("/") or DEFAULT_SERVER,
               "threshold_min": int(threshold_min)}
-    if token:
-        config["token"] = token
+    save_topic(topic)
     try:
         write_script()
         WATCH_CONFIG.parent.mkdir(parents=True, exist_ok=True)
@@ -219,7 +248,20 @@ def save_state(state):
         pass
 
 
-def target():
+def arg(argv, name):
+    if name in argv:
+        i = argv.index(name)
+        if i + 1 < len(argv):
+            return argv[i + 1]
+    return None
+
+
+def target(argv=()):
+    # Sihirbazdaki teşhis düğmesi formdaki (henüz uygulanmamış olabilecek)
+    # adresi verir; yoksa kurulu rsyslog yapılandırması okunur.
+    if arg(argv, "--host"):
+        return {"host": arg(argv, "--host"), "port": int(arg(argv, "--port") or 514),
+                "proto": (arg(argv, "--proto") or "tcp").lower(), "profile": "form"}
     try:
         text = RSYSLOG.read_text(encoding="utf-8")
     except OSError:
@@ -364,6 +406,22 @@ def queue_state():
     return len(files), size, oldest
 
 
+def send_test_record(ip, port, proto):
+    """Sunucuya bir deneme log kaydı gönderir (RFC 3164, user.notice)."""
+    msg = (f"<13>{datetime.now().strftime('%b %d %H:%M:%S')} {socket.gethostname()} "
+           f"tiha-teshis: TiHA teşhis deneme kaydı").encode("utf-8")
+    try:
+        if proto == "tcp":
+            with socket.create_connection((ip, port), timeout=5) as s:
+                s.sendall(msg + b"\n")
+        else:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.sendto(msg, (ip, port))
+        return True
+    except OSError:
+        return False
+
+
 def reachable(tgt):
     """Zamanlayıcının hızlı denetimi: sunucuya ulaşılıyor mu?"""
     ips = resolve_getent(tgt["host"])
@@ -471,16 +529,34 @@ def diagnose(tgt, down_since=None):
                                                  "güvenlik duvarı her şeyi düşürüyor.")
                     advice = "Sunucunun açık olduğunu ve adresini denetleyin; aradaki ağı ve filtreyi kontrol edin."
                 elif res == "ok":
-                    code, reason = "RSYSLOG TAKILDI", (f"{ip}:{port}/tcp açık ama rsyslog iletimi "
-                                                       "ilerlemiyor (eski adrese kilitlenmiş olabilir).")
-                    advice = "Tahtada: sudo systemctl restart rsyslog"
+                    # Kuyruk ve "askıda" bilgisi kurulu iletim hedefine aittir;
+                    # formda başka bir sunucu deneniyorsa yargıya katılmaz.
+                    installed = target()
+                    same_target = bool(installed and installed["host"] == host
+                                       and installed["port"] == port)
+                    stale = bool(same_target and q and time.time() - q[2] > 1800)
+                    if stale or (same_target and r_susp):
+                        code, reason = "RSYSLOG TAKILDI", (
+                            f"{ip}:{port}/tcp açık ama rsyslog iletimi ilerlemiyor (bekleyen "
+                            "kuyruk eskiyor; eski adrese kilitlenmiş olabilir).")
+                        advice = "Tahtada: sudo systemctl restart rsyslog"
+                    else:
+                        sent = send_test_record(ip, port, "tcp")
+                        code, reason = "TAMAM", (f"{ip}:{port}/tcp açık, sunucuya ulaşılıyor."
+                                                 + (" Deneme kaydı gönderildi (tiha-teshis)."
+                                                    if sent else ""))
+                        advice = ("Deneme kaydı sunucunun log ekranında görünüyorsa iletim "
+                                  "çalışıyor." if sent else "Sorun görünmüyor.")
                 else:
                     code, reason = "AĞ", f"{ip}:{port}/tcp bağlantı hatası: {res.split(':', 1)[-1]}"
                     advice = "Ağ yolunu denetleyin."
             else:
-                code, reason = "UDP", (f"{host} çözülüyor ve yanıt veriyor; UDP'de iletimin "
-                                       "ulaştığı doğrulanamaz.")
-                advice = "Sunucuda 514/udp alıcısını denetleyin ya da TCP'ye geçin."
+                sent = send_test_record(ip, port, "udp")
+                code, reason = "UDP", (f"{host} çözülüyor ve yanıt veriyor"
+                                       + ("; deneme kaydı gönderildi (tiha-teshis)" if sent else "")
+                                       + ". UDP'de kaydın ulaştığı doğrulanamaz.")
+                advice = ("Deneme kaydı sunucunun log ekranında görünmüyorsa sunucuda "
+                          f"{port}/udp alıcısını denetleyin ya da TCP'ye geçin.")
         if detail.get("conflict"):
             reason += f" Dikkat: {host} birden çok IP'ye çözülüyor ({', '.join(ips)}): ad çakışması."
 
@@ -529,8 +605,12 @@ def diagnose(tgt, down_since=None):
     if len(body.encode("utf-8")) > MAX_BODY:
         body = body.encode("utf-8")[:MAX_BODY].decode("utf-8", "ignore")
     since = f" {hhmm(time.time() - down_since)}'dır" if down_since else ""
-    title = f"{hostname}: {host} log sunucusuna{since} ulaşılamıyor ({code})"
-    priority = 4 if code in ("AD", "SUNUCU YOK", "YANIT YOK", "YEREL", "AĞ") else 3
+    if code == "TAMAM":
+        title = f"{hostname}: {host} log sunucusuna ulaşılıyor (TAMAM)"
+    else:
+        title = f"{hostname}: {host} log sunucusuna{since} ulaşılamıyor ({code})"
+    priority = (4 if code in ("AD", "SUNUCU YOK", "YANIT YOK", "YEREL", "AĞ")
+                else 2 if code == "TAMAM" else 3)
     return code, title[:200], body, priority
 
 
@@ -541,8 +621,6 @@ def send(cfg, title, body, priority):
     req = urllib.request.Request(server, data=payload, method="POST",
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "tiha-log-watch"})
-    if cfg.get("token"):
-        req.add_header("Authorization", f"Bearer {cfg['token']}")
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return 200 <= resp.status < 300, f"HTTP {resp.status}"
@@ -557,7 +635,7 @@ def note(msg):
 
 
 def main(argv):
-    tgt = target()
+    tgt = target(argv)
     if tgt is None:
         print("Merkezi log sunucusu ayarlı değil (/etc/rsyslog.d/90-tiha-remote.conf yok).")
         return 0 if "--diagnose" not in argv else 1
@@ -566,7 +644,7 @@ def main(argv):
 
     if "--diagnose" in argv or "--send" in argv:
         down = state.get("down_since")
-        code, title, body, prio = diagnose(tgt, down)
+        code, title, body, prio = diagnose(tgt, down if tgt.get("profile") != "form" else None)
         print(title)
         print()
         print(body)

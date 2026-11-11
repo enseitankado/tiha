@@ -629,14 +629,9 @@ class RemoteSyslogModule(Module):
         return "True" if log_watch.is_installed() else "False"
 
     def current_ntfy_topic(self) -> str:
-        return log_watch.current_config().get("topic", "")
-
-    def current_ntfy_server(self) -> str:
-        return log_watch.current_config().get("server", log_watch.DEFAULT_SERVER)
-
-    def current_ntfy_threshold(self) -> str:
-        return str(log_watch.current_config().get("threshold_min",
-                                                  log_watch.DEFAULT_THRESHOLD_MIN))
+        """Konu kutusu: tahtanın rastgele ama kalıcı konusu (ilk açılışta
+        üretilip saklanır; değiştirilmedikçe aynı)."""
+        return log_watch.board_topic()
 
     def _run_watch_script(self, args: list[str], progress=None) -> ApplyResult:
         """Teşhis betiğini çalıştırıp çıktısını akıtır (kurulu değilse geçici
@@ -660,12 +655,20 @@ class RemoteSyslogModule(Module):
         return res
 
     def diagnose_log_server_action(self, params: dict | None = None, progress=None) -> ApplyResult:
-        """Log sunucusuna erişimi şimdi teşhis eder ve sonucu gösterir (göndermez)."""
-        if not RSYSLOG_CONF.exists():
-            return ApplyResult(False, t("m06.test.no_config", path=RSYSLOG_CONF))
+        """Formdaki log sunucusuna erişimi şimdi teşhis eder; ulaşılıyorsa
+        sunucuya bir deneme kaydı gönderir (eski "Log Sunucusunu Test Et").
+        ntfy'ye göndermez."""
+        params = params or {}
+        args = ["--diagnose"]
+        host = (params.get("syslog_host") or "").strip()
+        if host:
+            args += ["--host", host, "--port", str(params.get("syslog_port") or 514),
+                     "--proto", (params.get("syslog_proto") or "tcp").strip().lower()]
+        elif not RSYSLOG_CONF.exists():
+            return ApplyResult(False, t("m06.apply.no_host"))
         if progress:
             progress(t("m06.ntfy.diagnosing"))
-        res = self._run_watch_script(["--diagnose"], progress)
+        res = self._run_watch_script(args, progress)
         return ApplyResult(res.ok, t("m06.ntfy.diagnosed") if res.ok
                            else t("m06.ntfy.diagnose_failed"),
                            copyable=res.stdout or "", output_streamed=True)
@@ -679,18 +682,15 @@ class RemoteSyslogModule(Module):
             return ApplyResult(False, t("m06.test.no_config", path=RSYSLOG_CONF))
         params = params or {}
         cfg = dict(log_watch.current_config())
-        topic = (params.get("ntfy_topic") or "").strip() or cfg.get("topic", "")
-        if not topic:
-            return ApplyResult(False, t("m06.ntfy.no_topic"))
+        topic = (params.get("ntfy_topic") or "").strip() or log_watch.board_topic()
         if not log_watch.valid_topic(topic):
             return ApplyResult(False, t("m06.ntfy.bad_topic", topic=topic))
         cfg["topic"] = topic
-        server = (params.get("ntfy_server") or "").strip()
-        if server:
-            cfg["server"] = server
-        token = (params.get("ntfy_token") or "").strip()
-        if token:
-            cfg["token"] = token
+        cfg.setdefault("server", log_watch.DEFAULT_SERVER)
+        # Yalnız geliştirme sınaması için başka bir ntfy sunucusu.
+        import os
+        if os.environ.get("TIHA_NTFY_SERVER"):
+            cfg["server"] = os.environ["TIHA_NTFY_SERVER"]
         # Formdaki (henüz uygulanmamış olabilecek) ayarlarla geçici yapılandırma.
         with tempfile.NamedTemporaryFile("w", suffix="_watch.json", delete=False) as fh:
             _json.dump(cfg, fh)
@@ -782,7 +782,6 @@ class RemoteSyslogModule(Module):
         watch = log_watch.current_config() if log_watch.is_installed() else {}
         lines.append(
             t("m06.ntfy.preview_on", topic=watch.get("topic", "?"),
-              server=watch.get("server", log_watch.DEFAULT_SERVER),
               minutes=watch.get("threshold_min", log_watch.DEFAULT_THRESHOLD_MIN))
             if watch else t("m06.ntfy.preview_off")
         )
@@ -823,12 +822,8 @@ class RemoteSyslogModule(Module):
         ).lower() in ("true", "1", "yes", "on")
         ntfy_watch = str(params.get("ntfy_watch", "False")).lower() in ("true", "1", "yes", "on")
         ntfy_topic = (params.get("ntfy_topic") or "").strip()
-        ntfy_server = (params.get("ntfy_server") or log_watch.DEFAULT_SERVER).strip()
-        if ntfy_watch:
-            if ntfy_topic and not log_watch.valid_topic(ntfy_topic):
-                return ApplyResult(False, t("m06.ntfy.bad_topic", topic=ntfy_topic))
-            if not ntfy_server.startswith(("http://", "https://")):
-                return ApplyResult(False, t("m06.ntfy.bad_server", server=ntfy_server))
+        if ntfy_watch and ntfy_topic and not log_watch.valid_topic(ntfy_topic):
+            return ApplyResult(False, t("m06.ntfy.bad_topic", topic=ntfy_topic))
         if not host:
             return ApplyResult(False, t("m06.apply.no_host"))
 
@@ -996,19 +991,13 @@ class RemoteSyslogModule(Module):
                 snoopy_by_tiha = False
             snoopy_state = t("m06.apply.state_skipped")
 
-        # Ulaşılamazsa ntfy ile haber ver: konu boşsa rastgele üretilir,
-        # jeton boşsa kurulu olanı korunur.
+        # Ulaşılamazsa ntfy ile haber ver (ntfy.sh, 60 dakika). Konu boşsa
+        # tahtanın saklı rastgele konusu kullanılır.
         if ntfy_watch:
-            existing = log_watch.current_config()
-            topic = ntfy_topic or existing.get("topic") or log_watch.new_topic()
-            token = (params.get("ntfy_token") or "").strip() or existing.get("token", "")
-            try:
-                threshold = max(15, int(params.get("ntfy_threshold") or log_watch.DEFAULT_THRESHOLD_MIN))
-            except ValueError:
-                threshold = log_watch.DEFAULT_THRESHOLD_MIN
-            if log_watch.install(topic, ntfy_server, token, threshold):
-                ntfy_state = t("m06.ntfy.state_on", topic=topic, server=ntfy_server,
-                               minutes=threshold)
+            topic = ntfy_topic or log_watch.board_topic()
+            if log_watch.install(topic):
+                ntfy_state = t("m06.ntfy.state_on", topic=topic,
+                               minutes=log_watch.DEFAULT_THRESHOLD_MIN)
                 if progress:
                     progress(t("m06.ntfy.installed", topic=topic))
             else:

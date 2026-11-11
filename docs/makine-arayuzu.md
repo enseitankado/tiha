@@ -91,6 +91,7 @@ alınıp önbelleğe konabilir.
 | `enable_when_field` | Bu ayar, adı verilen onay kutusu işaretliyken etkindir. |
 | `enable_when_any` | Listedeki onay kutularından en az biri işaretliyken etkindir. |
 | `enables` | Bu onay kutusu listedeki ayarları etkinleştirir. |
+| `visible_when_field` | Bu ayarın satırı, adı verilen onay kutusu işaretliyken **görünür**, değilken bütünüyle gizlenir (yanındaki düğmeler dahil). |
 | `locked` | Kullanıcı değiştiremez (bilgi amaçlı). |
 | `allowed_chars` | İzinli karakterler (düzenli ifade karakter sınıfı içeriği, ör. `A-Za-hj-z0-9`). |
 | `remote_warning`, `remote_warning_when` | Bu ayar `remote_warning_when` değerini alırsa (`*`: boş olmayan herhangi bir değer) uyarı gösterilmeli. Ör. `enable_ssh=False` SSH'yi kapatır; `root_password` verilirse root parolası değişir. |
@@ -126,6 +127,7 @@ alınıp önbelleğe konabilir.
 | `confirm` | `{title, message}`: çalıştırmadan önce sorulacak soru; tahtada `-e` olmadan çalışmaz. |
 | `board_dependent` | Bazı tahtalarda kullanılamaz ya da etiketi değişir (`-a --json`). |
 | `output_window` | Çıktı penceresinin sihirbazdaki boyutu `[genişlik, yükseklik]` (yoksa `presentation.output_window.default_size`). |
+| `beside` | Doluysa düğmenin kendi satırı yoktur: adı verilen ayarın kontrolünün sağında, aynı satırda durur; açıklaması ipucu olarak gösterilir. O ayar gizliyse düğme de gizlidir. |
 | `row_buttons` | Sayfada bu düğmenin sağında, **aynı satırda** duran ek düğmeler (ör. Ahenk'te "ETA Kayıt'ı aç"). `desktop_only: true` olan tahtanın ekranında program açar, uzaktan gösterilmemeli. |
 | `output_window_buttons` | `row_buttons`'ın eski adı; aynı içerik. Önceki belgede yanlışlıkla "çıktı penceresinin altında" diye anlatılmıştı. |
 | `view` | Düğme de bir form satırıdır: ad sütununda `label`, kontrol sütununda düğme. Açıklamanın gösterimi alanlardaki gibi: `help_mode`, `help_lines`, `help_display`, `help_bubble_text`, `help_button`; `style: destructive` kırmızı düğme. |

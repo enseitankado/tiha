@@ -8,7 +8,7 @@
       "tum-pin-anahtarlarini-sil": "purge_all_secrets"
     },
     "m06_remote_syslog": {
-      "log-sunucusunu-test-et": "test_log_server",
+      "log-sunucusunu-test-et": "diagnose_log_server",
       "simdi-teshis-et": "diagnose_log_server",
       "teshisi-ntfy-ile-gonder": "send_log_diagnosis"
     },
