@@ -153,10 +153,7 @@ def _help_markup(text: str) -> str:
     return markup.replace("[[/dikkat]]", "</span>")
 
 
-def _help_plain(text: str) -> str:
-    """İşaretleri çıkarılmış düz metin (satır ölçümü için)."""
-    return (text.replace("[[ankamon]]", "Ankamon")
-            .replace("[[dikkat]]", "").replace("[[/dikkat]]", ""))
+_help_plain = layout.help_plain
 
 
 def _open_url_as_desktop_user(url: str) -> None:
@@ -195,23 +192,17 @@ def _help_label(text: str, *, klass: str = "tiha-rationale") -> Gtk.Label:
     return lbl
 
 
-def _help_full_text(field: dict) -> str:
-    """Alanın balonda gösterilecek açıklaması (ek "Ayrıntılar" dahil)."""
-    parts = [field.get("help") or "", field.get("help_more") or ""]
-    return "\n\n".join(p.strip() for p in parts if p.strip())
+_help_full_text = layout.help_full_text
 
 
 def _help_line_count(text: str, width: int = 0) -> int:
-    """Açıklamanın verilen genişlikte (9 pt) kaç satır tuttuğu."""
+    """Açıklamanın verilen genişlikte kaç satır tuttuğu (ölçüm kuralı
+    ui/layout.py'de; makine arayüzü de aynısını kullanır). Yazı tipi
+    ailesi masaüstününkidir."""
     settings = Gtk.Settings.get_default()
-    font_name = settings.get_property("gtk-font-name") if settings else "Sans 10"
-    font = Pango.FontDescription.from_string(font_name or "Sans 10")
-    font.set_size(9 * Pango.SCALE)
-    layout = Gtk.Label().create_pango_layout(_help_plain(text))
-    layout.set_font_description(font)
-    layout.set_width((width or _HELP_COLUMN_WIDTH) * Pango.SCALE)
-    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
-    return layout.get_line_count()
+    font_name = (settings.get_property("gtk-font-name") if settings else "") or ""
+    family = Pango.FontDescription.from_string(font_name).get_family() or layout.HELP_FONT_FAMILY
+    return layout.measure_help_lines(text, width or _HELP_COLUMN_WIDTH, family)
 
 
 def _help_bubble_button(title: str, text: str) -> Gtk.Button:
@@ -225,15 +216,15 @@ def _help_bubble_button(title: str, text: str) -> Gtk.Button:
     popover = Gtk.Popover.new(btn)
     popover.set_position(Gtk.PositionType.BOTTOM)
     popover.get_style_context().add_class("tiha-help-popover")
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=layout.HELP_POPOVER_SPACING)
     heading = Gtk.Label(label=title, xalign=0)
     heading.get_style_context().add_class("tiha-help-popover-title")
     heading.set_line_wrap(True)
-    heading.set_max_width_chars(56)
+    heading.set_max_width_chars(layout.HELP_POPOVER_TITLE_MAX_CHARS)
     box.pack_start(heading, False, False, 0)
     body = _help_label(text, klass="tiha-help-popover-body")
-    body.set_max_width_chars(64)
-    body.set_width_chars(48)
+    body.set_max_width_chars(layout.HELP_POPOVER_BODY_MAX_CHARS)
+    body.set_width_chars(layout.HELP_POPOVER_BODY_MIN_CHARS)
     box.pack_start(body, False, False, 0)
     box.show_all()
     popover.add(box)
@@ -769,13 +760,14 @@ class ModulePage(Gtk.Box):
                     # "?" onay kutusunun hemen yanında dursun, satır sonunda değil.
                     widget.set_hexpand(False)
                     widget.set_halign(Gtk.Align.START)
-                cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
+                               spacing=layout.HELP_BUTTON_SPACING)
                 cell.pack_start(widget, widget.get_hexpand(), True, 0)
                 dot = _help_bubble_button(field["label"], help_text)
                 if kind == "textarea":
                     # Çok satırlı kutuda "?" üst satır hizasında dursun.
                     dot.set_valign(Gtk.Align.START)
-                    dot.set_margin_top(4)
+                    dot.set_margin_top(layout.HELP_BUTTON_TEXTAREA_MARGIN_TOP)
                 cell.pack_start(dot, False, False, 0)
                 cell.set_hexpand(widget.get_hexpand())
                 cell.set_halign(widget.get_halign())
@@ -824,6 +816,7 @@ class ModulePage(Gtk.Box):
                     "text": help_text,
                     # Ek "Ayrıntılar" metni olan açıklama zaten uzundur.
                     "always": bool(field.get("help_more")),
+                    "field": field,
                     "label": label,
                     "dot": dot,
                     "inline": inline,
@@ -867,8 +860,10 @@ class ModulePage(Gtk.Box):
         """Her açıklamayı sütun genişliğinde ölçer: 2 satırı aşan "?"
         balonuna, kısa olan alanın altına."""
         for row in self._help_rows:
-            bubble = row["always"] or _help_line_count(
-                row["text"], self._help_column_width) > layout.HELP_BUBBLE_OVER_LINES
+            # Karar kuralı ui/layout.py'de (makine arayüzü de aynısını yayımlar).
+            bubble = layout.help_display(
+                row["field"], _help_line_count(row["text"], self._help_column_width),
+            ) == "bubble"
             # Şartlı gizlenen satırda (visible_when) açıklama da gizli kalır.
             row_visible = not row["label"].get_no_show_all()
             row["bubble"] = bubble
@@ -1222,21 +1217,21 @@ class ModulePage(Gtk.Box):
             destroy_with_parent=True,
         )
         dlg.add_button(t("ui.main.close"), Gtk.ResponseType.CLOSE)
-        dlg.set_default_size(680, 520)
+        dlg.set_default_size(*layout.RATIONALE_DIALOG_SIZE)
 
         content = dlg.get_content_area()
         heading = _wrapping_label(self.module.title, klass="tiha-heading")
         heading.set_margin_top(14)
-        heading.set_margin_start(18)
-        heading.set_margin_end(18)
+        heading.set_margin_start(layout.RATIONALE_DIALOG_MARGIN)
+        heading.set_margin_end(layout.RATIONALE_DIALOG_MARGIN)
         content.pack_start(heading, False, False, 0)
 
         body = self._rationale_box()
         body.get_style_context().add_class("tiha-rationale-dialog")
         body.set_margin_top(8)
         body.set_margin_bottom(14)
-        body.set_margin_start(18)
-        body.set_margin_end(18)
+        body.set_margin_start(layout.RATIONALE_DIALOG_MARGIN)
+        body.set_margin_end(layout.RATIONALE_DIALOG_MARGIN)
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)

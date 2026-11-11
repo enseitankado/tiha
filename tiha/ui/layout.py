@@ -17,10 +17,28 @@ from pathlib import Path
 # Form ad sütununun genişliği (karakter).
 FORM_LABEL_CHARS = 26
 # Uzun alan açıklamaları sayfa yerine "?" balonunda gösterilir; satır sayısı
-# bu genişlikte (piksel, varsayılan pencerede açıklama sütunu) ölçülür.
-HELP_COLUMN_WIDTH = 580
+# bu genişlikte ölçülür: varsayılan pencerede (1100×820) ad sütunu
+# FORM_LABEL_CHARS genişliğindeyken kontrol/açıklama sütunu (piksel).
+# Sihirbaz pencere yerleşince gerçek genişlikle yeniden ölçer.
+HELP_COLUMN_WIDTH = 597
 # Bundan fazla satır tutan açıklama balona taşınır.
 HELP_BUBBLE_OVER_LINES = 2
+# Açıklama yazısı: satır sayısı bu yazı tipiyle ölçülür. Aile, sihirbazda
+# masaüstünün yazı tipinden alınır (ETAP'ta Ubuntu); boyut sabittir.
+HELP_FONT_FAMILY = "Ubuntu"
+HELP_FONT_PT = 9
+# "?" düğmesi ile kontrol arasındaki boşluk; çok satırlı kutuda üst boşluk.
+HELP_BUTTON_SPACING = 8
+HELP_BUTTON_TEXTAREA_MARGIN_TOP = 4
+# Açıklama balonu (popover): başlık ve gövde genişlik sınırları (karakter),
+# başlık ile gövde arası boşluk (piksel).
+HELP_POPOVER_TITLE_MAX_CHARS = 56
+HELP_POPOVER_BODY_MAX_CHARS = 64
+HELP_POPOVER_BODY_MIN_CHARS = 48
+HELP_POPOVER_SPACING = 6
+# Adım açıklamasının "?" penceresi: boyut ve kenar boşluğu (piksel).
+RATIONALE_DIALOG_SIZE = (680, 520)
+RATIONALE_DIALOG_MARGIN = 18
 # Kısa değer alan form kutularının varsayılan genişliği (karakter). Bu türler
 # satır boyunca uzamaz, sola yaslanır; alan başına şemadaki "width" ile
 # değiştirilir. 0: doğal genişlik. Burada olmayan türler satırı doldurur.
@@ -87,6 +105,54 @@ WIDGETS = {
 }
 
 
+def help_plain(text: str) -> str:
+    """Açıklamanın işaretleri çıkarılmış düz metni (satır ölçümü için)."""
+    return (text.replace("[[ankamon]]", "Ankamon")
+            .replace("[[dikkat]]", "").replace("[[/dikkat]]", ""))
+
+
+def help_full_text(field: dict) -> str:
+    """Balonda gösterilen metin: help + boş satır + help_more."""
+    parts = [field.get("help") or "", field.get("help_more") or ""]
+    return "\n\n".join(p.strip() for p in parts if p.strip())
+
+
+def measure_help_lines(text: str, width_px: int = HELP_COLUMN_WIDTH,
+                       family: str = HELP_FONT_FAMILY) -> int:
+    """Açıklamanın verilen genişlikte kaç satır tuttuğu (Pango; ekran
+    gerektirmez). Sihirbaz ve makine arayüzü aynı ölçümü kullanır."""
+    import gi
+
+    gi.require_version("Pango", "1.0")
+    gi.require_version("PangoCairo", "1.0")
+    import cairo
+    from gi.repository import Pango, PangoCairo
+
+    ctx = cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1))
+    layout = PangoCairo.create_layout(ctx)
+    font = Pango.FontDescription.from_string(family or HELP_FONT_FAMILY)
+    font.set_size(HELP_FONT_PT * Pango.SCALE)
+    layout.set_font_description(font)
+    layout.set_width(int(width_px) * Pango.SCALE)
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+    layout.set_text(help_plain(text), -1)
+    return layout.get_line_count()
+
+
+def help_display(field: dict, lines: int) -> str | None:
+    """Alanın açıklaması nerede görünür ("inline" | "bubble" | "folded").
+
+    Ek "Ayrıntılar" metni (help_more) olan ya da HELP_BUBBLE_OVER_LINES
+    satırı aşan açıklama "?" balonunda; kısa açıklama alanın altında,
+    alan "help_folded" ise kapalı bir katlayıcıda. Açıklama yoksa None.
+    """
+    if not (field.get("help") or field.get("help_more")):
+        return None
+    if field.get("help_more") or lines > HELP_BUBBLE_OVER_LINES:
+        return "bubble"
+    return "folded" if field.get("help_folded") else "inline"
+
+
 def count_sentences(text: str) -> int:
     """Cümle sayısını yaklaşık sayar (. ! ? ile biten dizeler)."""
     if not text:
@@ -118,6 +184,10 @@ STYLE_ROLES = {
     "preview_box": ".tiha-preview-box",
     "help_button": ".tiha-help-btn",
     "help_dot": ".tiha-form button.tiha-help-dot",
+    "help_popover": "popover.tiha-help-popover",
+    "help_popover_title": "popover.tiha-help-popover label.tiha-help-popover-title",
+    "help_popover_body": "popover.tiha-help-popover label.tiha-help-popover-body",
+    "preview_expander": "expander.tiha-preview-expander > title > label",
     "step_active": "row.tiha-step-active",
     "step_done": "row.tiha-step-done",
     "step_failed": "row.tiha-step-failed",

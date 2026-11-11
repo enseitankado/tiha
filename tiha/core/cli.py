@@ -670,15 +670,35 @@ def _field_view(field: dict) -> dict:
         view["show_toggle"] = field.get("show_toggle", True)
         view["strength_meter"] = bool(field.get("strength_below"))
     if field.get("help"):
-        # "folded": açıklama kapalı bir "Açıklama" katlayıcısında. "auto":
-        # HELP_BUBBLE_OVER_LINES satırı aşarsa "?" balonunda, yoksa altında.
-        # "bubble": her zaman "?" balonunda (ek "Ayrıntılar" metni varsa).
+        # Kural (ui/layout.help_display): "bubble" her zaman "?" balonunda (ek
+        # "Ayrıntılar" metni var); "auto" HELP_BUBBLE_OVER_LINES satırı aşarsa
+        # balonda, aşmazsa alanın altında; "folded" aşarsa balonda, aşmazsa
+        # alanın altında kapalı bir "Açıklama" katlayıcısında.
         if field.get("help_more"):
             view["help_mode"] = "bubble"
         elif field.get("help_folded"):
             view["help_mode"] = "folded"
         else:
             view["help_mode"] = "auto"
+        # Kuralın varsayılan pencerede (presentation.form.help_measure)
+        # TiHA'nın kendi ölçümüyle çözülmüş hâli: yönetim aracı ölçmeden
+        # kullanabilir.
+        try:
+            lines = layout.measure_help_lines(layout.help_full_text(field))
+        except Exception as exc:  # noqa: BLE001 — Pango yoksa çözülmeden kalır
+            log.warning("Açıklama ölçülemedi (%s): %s", field.get("key"), exc)
+            lines = None
+        if lines is not None:
+            view["help_lines"] = lines
+            view["help_display"] = layout.help_display(field, lines)
+        view["help_bubble_text"] = layout.help_full_text(field)
+        # "?" düğmesinin yeri (balonda gösterildiğinde).
+        adjacent = kind == "bool" or kind in layout.COMPACT_FIELD_WIDTHS
+        button = {"side": "after_control", "adjacent": adjacent,
+                  "valign": "top" if kind == "textarea" else "center"}
+        if kind == "textarea":
+            button["margin_top_px"] = layout.HELP_BUTTON_TEXTAREA_MARGIN_TOP
+        view["help_button"] = button
     if field.get("help_more"):
         view["help_more_label"] = field.get("help_more_label") or t("ui.pages.help_more_expander")
     if field.get("style"):
@@ -707,6 +727,12 @@ def _action_schema(field: dict) -> dict:
     out = {"name": action_slug(field), "key": field["key"], "label": field.get("label", ""),
            "help": field.get("help", ""), "destructive": field.get("style") == "destructive",
            "board_dependent": bool(field.get("visible_when") or field.get("label_from"))}
+    # Düğme de bir form satırıdır (ad sütununda etiket, kontrol sütununda
+    # düğme); açıklamanın gösterimi alanlarla aynı kuralla (fields[].view).
+    view = _field_view(field)
+    out["view"] = {k: view[k] for k in (
+        "widget", "help_mode", "help_lines", "help_display", "help_bubble_text",
+        "help_button", "style") if k in view}
     if field.get("confirm"):
         out["confirm"] = {"title": field["confirm"].get("title", ""),
                           "message": field["confirm"].get("message", "")}
@@ -716,8 +742,10 @@ def _action_schema(field: dict) -> dict:
     extras = [{"label": e.get("label", ""), "desktop_only": bool(e.get("launch"))}
               for e in field.get("extra_buttons") or []]
     if extras:
-        # Çıktı penceresinin altındaki ek düğmeler. desktop_only: tahtanın
-        # ekranında bir program açar; uzaktan anlamı yok.
+        # Sayfada bu düğmenin sağında, aynı satırda duran ek düğmeler.
+        # desktop_only: tahtanın ekranında bir program açar; uzaktan anlamı yok.
+        out["row_buttons"] = extras
+        # Eski ad (protokol 1 ile yayımlandı); row_buttons ile aynı.
         out["output_window_buttons"] = extras
     return out
 
@@ -734,13 +762,29 @@ def _presentation() -> dict:
         "page": {"margin_px": layout.PAGE_MARGIN, "row_spacing_px": layout.PAGE_ROW_SPACING},
         "heading": {"rationale_inline_max_sentences": layout.RATIONALE_INLINE_MAX_SENTENCES,
                     "rationale_dialog_button": "?",
-                    "rationale_dialog_tip": t("ui.pages.rationale_toggle_tip")},
+                    "rationale_dialog_tip": t("ui.pages.rationale_toggle_tip"),
+                    # Adımın view.rationale_mode'u "dialog" ise: başlığın
+                    # sağında "?" düğmesi; tıklanınca açıklama bu pencerede.
+                    "rationale_dialog": {
+                        "button": {"text": "?", "style": "help_button",
+                                   "side": "after_title", "spacing_px": 8,
+                                   "valign": "center",
+                                   "tooltip": t("ui.pages.rationale_toggle_tip")},
+                        "modal": True,
+                        "title": "{step.title}",
+                        "size_px": list(layout.RATIONALE_DIALOG_SIZE),
+                        "margin_px": layout.RATIONALE_DIALOG_MARGIN,
+                        "content": ["heading (step.title, heading stili)",
+                                    "rationale (rationale stili, dikey kaydırmalı)",
+                                    "doc_url bağlantısı (varsa, doc_label metniyle)"],
+                        "close_button": t("ui.main.close"),
+                    }},
         "experimental_banner": {"text": t("ui.pages.experimental_banner"),
                                 "style": "banner_warning"},
         "notice": {"styles": {"warning": "banner_warning", "info": "banner_info"}},
         "preview": {"title": t("ui.pages.preview_expander"), "collapsed": True,
                     "monospace": True, "max_height_px": layout.LONG_TEXT_HEIGHT,
-                    "style": "preview"},
+                    "style": "preview", "title_style": "preview_expander"},
         "form": {
             "columns": ["label", "control"],
             "label_width_chars": layout.FORM_LABEL_CHARS,
@@ -755,6 +799,48 @@ def _presentation() -> dict:
             "compact_widths_chars": dict(layout.COMPACT_FIELD_WIDTHS),
             "long_text_height_px": layout.LONG_TEXT_HEIGHT,
             "help_markers": layout.HELP_MARKERS,
+            # Açıklama satır sayısının ölçüm kuralı (view.help_lines bununla
+            # hesaplanır). Sihirbaz, pencere yerleşince gerçek sütun
+            # genişliğiyle yeniden ölçer: geniş pencerede daha az balon olur.
+            "help_measure": {
+                "font_family": layout.HELP_FONT_FAMILY,
+                "font_size_pt": layout.HELP_FONT_PT,
+                "width_px": layout.HELP_COLUMN_WIDTH,
+                "wrap": "word_char",
+                "text": "help_bubble_text, işaretler düz metne çevrilmiş ([[ankamon]] → Ankamon)",
+                "bubble_over_lines": layout.HELP_BUBBLE_OVER_LINES,
+                "dpi": 96,
+            },
+            # help_display "inline" / "folded": açıklama kontrol sütununda,
+            # kontrolün altındaki satırda.
+            "help_inline": {
+                "position": "control sütunu, kontrolün altındaki satır",
+                "style": "rationale",
+                "folded_label": t("ui.pages.help_expander"),
+                "folded_collapsed": True,
+            },
+            # help_display "bubble": kontrolün yanında "?" düğmesi, açıklama
+            # tıklanınca balonda. Düğmenin yeri alan başına view.help_button'da.
+            "help_bubble": {
+                "button": {"text": "?", "style": "help_dot", "size_px": 20,
+                           "shape": "circle", "spacing_px": layout.HELP_BUTTON_SPACING,
+                           "tooltip": t("ui.pages.help_bubble_tip")},
+                "popover": {
+                    "anchor": "help button", "position": "bottom", "arrow": True,
+                    "modal": True,
+                    "close_on": ["outside_click", "button_click", "escape"],
+                    "title": "{field.label}", "title_style": "help_popover_title",
+                    "title_max_width_chars": layout.HELP_POPOVER_TITLE_MAX_CHARS,
+                    "body": "{field.view.help_bubble_text}", "body_style": "help_popover_body",
+                    "body_min_width_chars": layout.HELP_POPOVER_BODY_MIN_CHARS,
+                    "body_max_width_chars": layout.HELP_POPOVER_BODY_MAX_CHARS,
+                    "spacing_px": layout.HELP_POPOVER_SPACING,
+                    "style": "help_popover",
+                    # Balonda help_more ayrı bir katlayıcı değildir; metnin
+                    # devamıdır (boş satırla ayrılır).
+                    "help_more_folded": False,
+                },
+            },
         },
         "previous_apply": {"text": t("ui.pages.previous_apply", when="{when}", summary="{summary}"),
                            "when_format": "%d.%m.%Y %H:%M",

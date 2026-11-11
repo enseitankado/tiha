@@ -81,7 +81,7 @@ alınıp önbelleğe konabilir.
 |---|---|
 | `key` | Ayarın adı; `-d key=değer` ve `--degerler` bununla verilir. |
 | `type` | `bool`, `text`, `password`, `number`, `spin`, `select`, `textarea`, `branch_accounts`, `file`; görsel öğeler `heading` (yalnız başlık: `label`) ve `readonly` (değiştirilemez bilgi). |
-| `label`, `help`, `help_more` | Etiket ve yardım. `help_more` katlanır ayrıntıdır. Metinlerde `[[ad]]` TiHA'nın bağlantı işaretidir (ör. `[[ankamon]]`); düz metin olarak göstermek yeterli. |
+| `label`, `help`, `help_more` | Etiket ve yardım. `help_more` katlanır ayrıntıdır. Metinlerdeki `[[ankamon]]` ve `[[dikkat]]…[[/dikkat]]` işaretleri `presentation.form.help_markers`'a göre bağlantıya ve kırmızı yazıya çevrilir. Nerede ve nasıl gösterileceği `view`'da (aşağıda). |
 | `default` | Şemadaki varsayılan. Tahtanın gerçek değeri `-a --json` ile alınır. |
 | `options` | `select` için geçerli değerler (değer = görünen metin). |
 | `min`, `max`, `step` | `spin` sınırları. |
@@ -109,8 +109,12 @@ alınıp önbelleğe konabilir.
 | `height_px`, `monospace` | Çok satırlı kutunun yüksekliği; eş aralıklı yazı. |
 | `show_toggle` | Parola kutusunda göz simgesiyle göster/gizle. |
 | `strength_meter` | Parola kutusunun altında yazarken güç göstergesi (`presentation.password_strength`). |
-| `help_mode` | `auto`: açıklama `presentation.form.help_bubble_over_lines` satırı aşarsa alanın yanındaki "?" balonunda, aşmazsa alanın altında; `bubble`: her zaman balonda; `folded`: alanın altında kapalı bir katlayıcıda (`presentation.form.help_folded_label`). |
-| `help_more_label` | `help_more` katlayıcısının başlığı. |
+| `help_mode` | Kural: `bubble` her zaman "?" balonunda (alanın `help_more`'u var); `auto` açıklama `presentation.form.help_bubble_over_lines` satırı aşarsa balonda, aşmazsa alanın altında; `folded` aşarsa balonda, aşmazsa alanın altında kapalı bir katlayıcıda (`presentation.form.help_inline.folded_label`). |
+| `help_lines` | Açıklamanın (`help_bubble_text`) `presentation.form.help_measure` kuralıyla ölçülmüş satır sayısı. |
+| `help_display` | Kuralın TiHA'nın kendi ölçümüyle çözülmüş hâli: `inline`, `folded` ya da `bubble`. **Yönetim aracı ölçmeden bunu kullanabilir.** Varsayılan pencerede sihirbazın çizdiğiyle aynıdır. |
+| `help_bubble_text` | Balonda gösterilen metin: `help`, boş satır, `help_more`. Balonda `help_more` ayrı bir katlayıcı değildir. |
+| `help_button` | "?" düğmesinin yeri: `side` (`after_control`: kontrolün sağında), `adjacent` (`true`: kontrolün hemen yanında, `presentation.form.help_bubble.button.spacing_px` aralıkla; `false`: kontrol satırı doldurur, "?" satırın sağ ucunda), `valign` (`center` ya da `top`), `margin_top_px` (çok satırlı kutuda). Onay kutusu satırı doldurmaz, "?" kutunun hemen yanındadır. |
+| `help_more_label` | `help_more` katlayıcısının başlığı (yalnız açıklama balonda değilken). |
 | `style` | `destructive`: kırmızı/tehlikeli işlem düğmesi. |
 
 ### Düğme (`actions[]`)
@@ -122,7 +126,9 @@ alınıp önbelleğe konabilir.
 | `confirm` | `{title, message}`: çalıştırmadan önce sorulacak soru; tahtada `-e` olmadan çalışmaz. |
 | `board_dependent` | Bazı tahtalarda kullanılamaz ya da etiketi değişir (`-a --json`). |
 | `output_window` | Çıktı penceresinin sihirbazdaki boyutu `[genişlik, yükseklik]` (yoksa `presentation.output_window.default_size`). |
-| `output_window_buttons` | Çıktı penceresinin altındaki ek düğmeler; `desktop_only: true` olan tahtanın ekranında program açar, uzaktan gösterilmemeli. |
+| `row_buttons` | Sayfada bu düğmenin sağında, **aynı satırda** duran ek düğmeler (ör. Ahenk'te "ETA Kayıt'ı aç"). `desktop_only: true` olan tahtanın ekranında program açar, uzaktan gösterilmemeli. |
+| `output_window_buttons` | `row_buttons`'ın eski adı; aynı içerik. Önceki belgede yanlışlıkla "çıktı penceresinin altında" diye anlatılmıştı. |
+| `view` | Düğme de bir form satırıdır: ad sütununda `label`, kontrol sütununda düğme. Açıklamanın gösterimi alanlardaki gibi: `help_mode`, `help_lines`, `help_display`, `help_bubble_text`, `help_button`; `style: destructive` kırmızı düğme. |
 
 ### Görünüş (`presentation`)
 
@@ -134,19 +140,72 @@ arayüz metinleri ve renkler. Değerler sihirbazın kendi kullandığı kaynakta
 |---|---|
 | `page_order` | Sayfadaki bölümlerin yukarıdan aşağı sırası: başlık, deneysel adım şeridi, tahtaya özgü not, açıklama, "Mevcut durum", form, sonuç, alt düğme çubuğu. |
 | `page` | Sayfa kenar boşluğu ve bölümler arası boşluk (piksel). |
-| `heading` | Açıklama kaç cümleyi aşınca "?" penceresine taşınır; düğmenin metni ve ipucu. |
+| `heading` | Açıklama kaç cümleyi aşınca "?" penceresine taşınır; düğmenin metni ve ipucu. `rationale_dialog`: başlığın sağındaki "?" düğmesinin yeri ve stili, açılan pencerenin başlığı (`{step.title}`), boyutu, kenar boşluğu, içeriği ve kapat düğmesi. |
 | `experimental_banner` | `experimental: true` adımların başlık altı uyarı şeridi metni. |
 | `notice` | `-a`'daki `notice.kind` → stil (`warning`, `info`). |
-| `preview` | "Mevcut durum" katlayıcısı: başlığı, kapalı başlar, eş aralıklı, en fazla yükseklik. |
-| `form` | İki sütunlu ızgara (ad, kontrol): ad sütunu genişliği (karakter), aralıklar, açıklama balonu kuralı, tür başına varsayılan kutu genişlikleri, açıklama metnindeki işaretler (`help_markers`: `[[ankamon]]` bağlantı, `[[dikkat]]…[[/dikkat]]` kırmızı uyarı). |
+| `preview` | "Mevcut durum" katlayıcısı: başlığı (`title_style`), kapalı başlar (`collapsed`), eş aralıklı, en fazla yükseklik. |
+| `form` | İki sütunlu ızgara (ad, kontrol): ad sütunu genişliği (karakter), aralıklar, tür başına varsayılan kutu genişlikleri, açıklama metnindeki işaretler (`help_markers`: `[[ankamon]]` bağlantı, `[[dikkat]]…[[/dikkat]]` kırmızı uyarı). Açıklama gösterimi: `help_measure` (satır ölçüm kuralı), `help_inline` (sayfadaki ya da katlanmış açıklama), `help_bubble` ("?" düğmesi ve balon). Ayrıntı: "Açıklama ve yardım öğelerini çizmek". |
 | `previous_apply` | "Daha önce uygulandı" şeridinin metni (`{when}` `when_format` ile biçimlenir, `{summary}`) ve geri al düğmesi. |
 | `sidebar` | Sol menüdeki adım işaretleri: `-l --json`'daki `status.state` → `mark` (✓, ⚠ ya da boş), stil rolü ve ipucu (`{summary}`). |
 | `action_bar` | Alt çubuktaki düğmeler (Geri, Uygula, İleri) ve Uygula'nın yanındaki ipucu (`{hint}` = adımın `apply_hint`'i). |
 | `password_strength` | Güç göstergesinin metni, 0–4 puan etiketleri ve renkleri. Puanı TiHA hesaplar; makine arayüzü yalnız görünüşü verir. |
 | `output_window` | Canlı çıktı penceresi: varsayılan boyut, eş aralıklı, "çalışıyor" metni. |
-| `styles` | Rol → CSS özellikleri: `heading`, `rationale` (açıklama/yardım yazısı), `form_section`, `banner_info`, `banner_warning`, `apply_hint`, `result_ok`, `result_fail`, `preview`, `preview_box`, `help_button`, `help_dot`, `step_active`, `step_done`, `step_failed`, `sidebar`. Değerler web CSS'idir; sistem teması renkleri `var(--theme-fg-color)`, `var(--theme-selected-bg-color)` gibi değişkenlerle gelir, okuyan taraf kendi temasından tanımlar. |
+| `styles` | Rol → CSS özellikleri: `heading`, `rationale` (açıklama/yardım yazısı), `form_section`, `banner_info`, `banner_warning`, `apply_hint`, `result_ok`, `result_fail`, `preview`, `preview_box`, `preview_expander` ("Mevcut durum" başlığı), `help_button` (başlıktaki "?"), `help_dot` (alanın yanındaki "?"), `help_popover`, `help_popover_title`, `help_popover_body` (açıklama balonu), `step_active`, `step_done`, `step_failed`, `sidebar`. Değerler web CSS'idir; sistem teması renkleri `var(--theme-fg-color)`, `var(--theme-selected-bg-color)` gibi değişkenlerle gelir, okuyan taraf kendi temasından tanımlar. |
 
 Diğer alanlardaki `style` adları (`banner_warning`, `rationale` …) `styles` içindeki rollere işaret eder.
+
+### Açıklama ve yardım öğelerini çizmek
+
+Sihirbazda bilgi üç yerde durur. Yönetim aracı aşağıdaki kurallarla aynısını çizebilir; bütün
+ölçüler ve metinler `--sema`'dan gelir.
+
+**1. Adım açıklaması (`steps[].rationale`)**
+
+- `view.rationale_mode` `inline` ise başlığın altında, `rationale` stiliyle sayfada.
+- `dialog` ise sayfada görünmez. Başlığın sağında, dikeyde ortalı bir "?" düğmesi durur
+  (`presentation.heading.rationale_dialog.button`, stil `help_button`, ipucu `tooltip`).
+  Tıklanınca kipli bir pencere açılır: başlığı adımın adı, boyutu `size_px`, kenar boşluğu
+  `margin_px`. İçinde yukarıdan aşağı adım adı (`heading`), kaydırılabilir açıklama ve varsa
+  `doc_url` bağlantısı (`doc_label` metniyle) yer alır, altta tek bir kapat düğmesi
+  (`close_button`) bulunur.
+
+**2. "Mevcut durum" (`-o` çıktısı)**
+
+Açıklamadan sonra, formdan önce gelir. `presentation.preview.title` başlıklı bir katlayıcıdır,
+**kapalı başlar** (`collapsed: true`). Açılınca içerik eş aralıklı, en çok `max_height_px`
+yüksekliğinde kaydırılabilir bir kutuda gösterilir; `steps[].view.preview_tabular` ise satırlar
+kaydırılmaz.
+
+**3. Alan ve düğme açıklamaları (`fields[]`, `actions[]`)**
+
+Her satırın `view.help_display` değerine göre:
+
+| `help_display` | Çizim |
+|---|---|
+| `inline` | Açıklama kontrol sütununda, kontrolün altındaki satırda, `rationale` stiliyle. Alanın `help_more`'u varsa (bu durumda zaten `bubble` olur) gösterilmez. |
+| `folded` | Kontrolün altında, `help_inline.folded_label` başlıklı, kapalı bir katlayıcı; içinde açıklama. |
+| `bubble` | Sayfada açıklama satırı yok. Kontrolün yanında yuvarlak bir "?" düğmesi (`help_bubble.button`: 20 px daire, stil `help_dot`, ipucu `tooltip`); yeri `view.help_button`. Tıklanınca düğmenin **altında**, oku düğmeyi gösteren bir balon açılır (`help_bubble.popover`): üstte alanın `label`'ı (`help_popover_title`), altında `view.help_bubble_text` (`help_popover_body`). Dışarı tıklayınca, Esc'e ya da "?"a yeniden basınca kapanır. |
+| yok | Alanın açıklaması yok. |
+
+Metindeki `[[ankamon]]` ve `[[dikkat]]…[[/dikkat]]` işaretleri `presentation.form.help_markers`'a
+göre bağlantıya ve kırmızı yazıya çevrilir. Kırmızı uyarının içindeki bağlantı mavi kalır.
+
+`help_display` varsayılan pencereye (1100×820) göre çözülmüştür. Sihirbaz pencere yerleşince açıklama
+sütununun gerçek genişliğiyle yeniden ölçer, yani geniş pencerede bazı açıklamalar balondan sayfaya
+iner. Yönetim aracı farklı genişlikte çiziyorsa `help_mode` ve `help_measure` ile aynı kararı kendisi
+verebilir:
+
+```text
+satır = help_bubble_text'in, işaretler düz metne çevrilmiş hâlinin
+        font_family font_size_pt yazıyla, width_px genişlikte, word_char kaydırmayla satır sayısı
+help_mode bubble                → bubble
+satır > bubble_over_lines       → bubble
+help_mode folded                → folded
+diğer                           → inline
+```
+
+Görünürlük: `-a --json`'da `available: false` olan alan ya da düğme açıklamasıyla birlikte hiç
+çizilmez. `enable_when_field` ile pasifleşen alanın "?" düğmesi tıklanabilir kalır.
 
 ## Olaylar: `--json`
 
