@@ -5064,7 +5064,9 @@ başlatırsanız sistem yeni bir kimlik ve SSH anahtarları üretir ve bunlar \
 imajla bütün klonlara gider. Bu yüzden kaynak tahtanın ağ kartı adresleri \
 imzalanır; bir klon ilk açıldığında bu adreslerin hiçbirini taşımadığını \
 görür ve kendi makine kimliğini ve SSH anahtarlarını üretir. Kaynak tahta \
-kaç kez yeniden başlatılırsa başlatılsın ona dokunulmaz. Her zaman yapılır.\
+kaç kez yeniden başlatılırsa başlatılsın ona dokunulmaz. Her zaman yapılır. \
+Klonun ilk açılışında ne yapıldığı klonda /var/lib/tiha/clone-identity.log \
+dosyasında ve "journalctl -t tiha-clone-identity" ile görülür.\
 """
 
 [m10.params.clone_boot_id]

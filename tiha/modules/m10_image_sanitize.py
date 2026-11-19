@@ -82,6 +82,8 @@ IDENTITY_MAC_FILE = STATE_DIR / "imaged-mac-identity"
 IDENTITY_SERVICE = Path("/etc/systemd/system/tiha-clone-identity.service")
 IDENTITY_SCRIPT = Path("/usr/local/sbin/tiha-clone-identity.py")
 IDENTITY_LOG_TAG = "tiha-clone-identity"
+# Klon kimlik servisinin notları (journald yeniden başlarken kaybolmasın).
+IDENTITY_LOG_FILE = STATE_DIR.parent / "clone-identity.log"
 
 REGEN_SSH_SERVICE = Path("/etc/systemd/system/tiha-first-boot-sshkeys.service")
 REGEN_SSH_SCRIPT = Path("/usr/local/sbin/tiha-first-boot-sshkeys.sh")
@@ -199,13 +201,55 @@ from pathlib import Path
 
 MAC_FILE = Path("@@MAC_FILE@@")
 SSH_SENTINEL = Path("@@SSH_SENTINEL@@")
+LOG_FILE = Path("@@LOG_FILE@@")
 TAG = "@@TAG@@"
+# Hiç ağ kartı görünmezse en çok bu kadar beklenir (sürücüler yükleniyor).
 WAIT_SECONDS = 20
+# Kart göründükten sonra kaynak tahtanın adreslerinden biri için ek süre
+# (kaynak tahtada kartlar art arda görünebilir). Klonda bu kadar beklenir.
+GRACE_SECONDS = 3
+
+_notes = []
 
 
 def note(msg):
-    subprocess.run(["logger", "-t", TAG, "--", msg], check=False)
+    """Notu bir dosyaya hemen yazar; sistem günlüğüne en sonda yazılır.
+
+    Kimlik yenilenince journald yeniden başlar ve o ana kadarki kayıtlar
+    eski kimliğin geçici dizininde kalıp kaybolur; notlar bu yüzden
+    yeniden başlatmadan sonra günlüğe basılır (flush_notes).
+    """
+    _notes.append(msg)
     print(f"[{TAG}] {msg}", file=sys.stderr)
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def is_mount_point(path):
+    """Dosyanın üzerine bir şey bağlı mı (systemd'nin geçici machine-id'si)?
+
+    Çekirdeğin bağlama tablosundan okunur; os.path.ismount yalnız aygıt
+    numarasına baktığı için aynı dosya sisteminden bağlamayı kaçırır.
+    """
+    target = os.path.realpath(path)
+    try:
+        with open("/proc/self/mountinfo", encoding="utf-8") as fh:
+            for line in fh:
+                fields = line.split()
+                if len(fields) > 4 and fields[4].replace("\\040", " ") == target:
+                    return True
+    except OSError:
+        pass
+    return os.path.ismount(path)
+
+
+def flush_notes():
+    for msg in _notes:
+        subprocess.run(["logger", "-t", TAG, "--", msg], check=False)
 
 
 def local_macs():
@@ -232,37 +276,61 @@ def main():
         saved = {ln.strip().lower() for ln in MAC_FILE.read_text().split() if ln.strip()}
     except OSError:
         return 0
-    # Ağ kartları sürücüleri yüklenince görünür; biraz bekle.
+    # Ağ kartları sürücüleri yüklenince görünür: önce herhangi bir kart
+    # görünene kadar (en çok WAIT_SECONDS), sonra kaynak tahtanın
+    # adreslerinden biri için kısa bir ek süre beklenir. Eskiden kaynak
+    # adresi görünene kadar beklendiği için klonun ilk açılışı hep 20 sn
+    # uzuyordu.
     deadline = time.monotonic() + WAIT_SECONDS
     mine = local_macs()
-    while not (mine & saved) and time.monotonic() < deadline:
-        time.sleep(1)
+    while not mine and time.monotonic() < deadline:
+        time.sleep(0.5)
         mine = local_macs()
+    if mine and not (mine & saved):
+        grace = time.monotonic() + GRACE_SECONDS
+        while not (mine & saved) and time.monotonic() < grace:
+            time.sleep(0.5)
+            mine = local_macs()
     if not mine:
         note("Ağ kartı bulunamadı; bu açılışta atlanıyor.")
+        flush_notes()
         return 0
     if mine & saved:
-        note("MAC eşleşti; kaynak tahta ya da kimliği zaten yenilenmiş klon.")
+        # Her açılışta olur (kaynak tahta ya da yenilenmiş klon): dosyaya
+        # yazılmaz, yalnız günlüğe.
+        subprocess.run(["logger", "-t", TAG, "--",
+                        "MAC eşleşti; kaynak tahta ya da kimliği zaten yenilenmiş klon."],
+                       check=False)
         return 0
 
     note(f"Klon tespit edildi ({', '.join(sorted(mine))}); kimlik yenileniyor.")
     mid = Path("/etc/machine-id")
-    if os.path.ismount(mid):
+    if is_mount_point(mid):
         # İmajda machine-id boştu: systemd bu açılış için zaten yeni ve
-        # benzersiz bir kimlik üretti (sonra kendisi kaydeder).
-        note("machine-id bu açılışta systemd tarafından yeni üretilmiş.")
+        # benzersiz bir kimlik üretip dosyanın üzerine bağladı; bu servis
+        # systemd-machine-id-commit'ten önce çalıştığı için bağlama hâlâ
+        # yerinde. Kimliği systemd'nin kendisi diske yazar; ikincisi
+        # üretilmez.
+        note("machine-id bu açılışta systemd tarafından yeni üretilmiş; dokunulmadı.")
     else:
         tmp = mid.with_name("machine-id.tiha")
         tmp.write_text(uuid.uuid4().hex + "\n")
         tmp.chmod(0o444)
-        os.replace(tmp, mid)
-        dbus = Path("/var/lib/dbus/machine-id")
-        if dbus.exists() and not dbus.is_symlink():
-            dbus.write_text(mid.read_text())
-        # journald kimliği açılışta okur; kayıtlar yeni kimliğin dizinine
-        # yazılsın (journalctl yalnız bu tahtanın kimliğini okur).
-        subprocess.run(["systemctl", "restart", "systemd-journald.service"], check=False)
-        note("machine-id yeniden üretildi.")
+        try:
+            os.replace(tmp, mid)
+        except OSError as exc:
+            # Üzerine bir şey bağlıysa (tanınamayan geçici kimlik) yazılamaz;
+            # o durumda kimlik zaten bu açılışta üretilmiştir.
+            tmp.unlink(missing_ok=True)
+            note(f"machine-id yazılamadı ({exc.strerror}); bu açılışın kimliği korunuyor.")
+        else:
+            dbus = Path("/var/lib/dbus/machine-id")
+            if dbus.exists() and not dbus.is_symlink():
+                dbus.write_text(mid.read_text())
+            # journald kimliği açılışta okur; kayıtlar yeni kimliğin dizinine
+            # yazılsın (journalctl yalnız bu tahtanın kimliğini okur).
+            subprocess.run(["systemctl", "restart", "systemd-journald.service"], check=False)
+            note("machine-id yeniden üretildi.")
 
     for key in Path("/etc/ssh").glob("ssh_host_*"):
         key.unlink(missing_ok=True)
@@ -273,6 +341,7 @@ def main():
         MAC_FILE.write_text("\n".join(sorted(mine)) + "\n")
     except OSError as exc:
         note(f"İmza güncellenemedi: {exc}")
+    flush_notes()
     return 0
 
 
@@ -284,7 +353,10 @@ IDENTITY_SERVICE_CONTENT = f"""[Unit]
 Description=TiHA — Klonun ilk açılışında makine kimliğini yenile
 DefaultDependencies=no
 After=local-fs.target systemd-journald.service systemd-udev-trigger.service
-Before=sysinit.target systemd-journal-flush.service {REGEN_SSH_SERVICE.name} ssh.service
+# systemd-machine-id-commit'ten önce: imajda machine-id boşsa systemd'nin
+# bu açılışta ürettiği kimlik hâlâ geçici bağlamadır ve tanınır; yoksa
+# commit önce çalışıp kimliği diske yazar, servis ikinci bir kimlik üretirdi.
+Before=sysinit.target systemd-journal-flush.service systemd-machine-id-commit.service {REGEN_SSH_SERVICE.name} ssh.service
 ConditionPathExists={IDENTITY_MAC_FILE}
 
 [Service]
@@ -324,11 +396,14 @@ def _install_clone_identity() -> bool:
         return False
     IDENTITY_MAC_FILE.parent.mkdir(parents=True, exist_ok=True)
     IDENTITY_MAC_FILE.write_text("\n".join(macs) + "\n", encoding="utf-8")
+    # Bu tahta bir klonken yazılmış notlar yeni imaja taşınmasın.
+    _rm(IDENTITY_LOG_FILE)
     script = (
         IDENTITY_SCRIPT_CONTENT
         .replace("@@MAC_FILE@@", str(IDENTITY_MAC_FILE))
         .replace("@@SSH_SENTINEL@@", str(REGEN_SSH_SENTINEL))
         .replace("@@TAG@@", IDENTITY_LOG_TAG)
+        .replace("@@LOG_FILE@@", str(IDENTITY_LOG_FILE))
     )
     IDENTITY_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
     IDENTITY_SCRIPT.write_text(script, encoding="utf-8")
