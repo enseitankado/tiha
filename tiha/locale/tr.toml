@@ -5066,7 +5066,12 @@ imzalanır; bir klon ilk açıldığında bu adreslerin hiçbirini taşımadığ
 görür ve kendi makine kimliğini ve SSH anahtarlarını üretir. Kaynak tahta \
 kaç kez yeniden başlatılırsa başlatılsın ona dokunulmaz. Her zaman yapılır. \
 Klonun ilk açılışında ne yapıldığı klonda /var/lib/tiha/clone-identity.log \
-dosyasında ve "journalctl -t tiha-clone-identity" ile görülür.\
+dosyasında ve "journalctl -t tiha-clone-identity" ile görülür. Ayrıca klonun \
+ilk açılışında giriş ekranında bir pencere açılır: ilk açılışta yapılan \
+işleri (makine kimliği, SSH anahtarları, tahta adı, Ahenk kaydı, BIOS \
+parolası, TiHA kaydının gönderilmesi gibi) sonuçlarıyla canlı gösterir, \
+hepsi bitince 5 saniye geri sayıp kendiliğinden kapanır. Kaynak tahtada ve \
+klonun sonraki açılışlarında açılmaz.\
 """
 
 [m10.params.clone_boot_id]
@@ -5225,6 +5230,39 @@ finishing = "Sanitizasyon tamamlanıyor, disk kullanımı hesaplanıyor..."
 freed_unknown = "ölçülemedi"
 done = "İmaj öncesi temizlik tamamlandı; ~{freed} alan boşaltıldı."
 detail_item = "• {item}"
+
+first_boot_notice = "Klonun ilk açılışında yapılanlar giriş ekranında bir pencerede canlı gösterilecek; hepsi bitince pencere 5 saniye geri sayıp kapanır ({path})"
+first_boot_notice_failed = "Klonun ilk açılış penceresi kurulamadı; ilk açılışta yapılanlar yalnız sistem günlüğünde görülecek"
+
+[m10.notice]
+window_title = "TiHA: Tahtanın ilk açılışı"
+eyebrow = "TiHA · Tahta İmaj Hazırlık Aracı"
+headline = "Tahtanın ilk açılış hazırlığı"
+subtitle = "Bu tahta bir imajdan kuruldu. Ağdaki diğer tahtalardan ayrılabilmesi için aşağıdaki işlemler yapılıyor; bitince pencere kendiliğinden kapanır."
+pending = "Bekliyor"
+running = "Sürüyor"
+ok = "Tamam"
+failed = "Hata"
+skipped = "Gerekmedi"
+background = "Arka planda sürüyor"
+progress = "{done} / {total} işlem tamamlandı"
+working = "İşlemler sürüyor…"
+all_done = "Bütün işlemler tamamlandı."
+done_with_errors = "İşlemler bitti; {count} işlemde hata var. Ayrıntı sistem günlüğünde."
+closing = "{seconds} sn içinde kapanacak"
+close = "Kapat"
+hostname_detail = "Tahtanın adı: {name}"
+
+[m10.notice.unit]
+identity = "Makine kimliğinin yenilenmesi"
+ssh_keys = "SSH anahtarlarının üretilmesi"
+hostname = "Tahta adının belirlenmesi"
+password_wipe = "Hesap parolalarının temizlenmesi"
+ahenk = "Ahenk (Lider) kaydı"
+bios = "BIOS yönetici parolası"
+wake_on_lan = "Uzaktan uyandırma ayarı"
+greeter_cache = "Giriş ekranı kullanıcı listesi"
+apply_log = "TiHA işlem kaydının gönderilmesi"
 
 [m10.undo]
 not_supported = "Bu işlem geri alınamaz."

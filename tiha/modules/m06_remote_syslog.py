@@ -761,9 +761,8 @@ class RemoteSyslogModule(Module):
                 total_size += qf.stat().st_size
             except OSError:
                 pass
-        hostname_setup_done = Path(
-            "/etc/systemd/system/tiha-first-boot-hostname.service"
-        ).exists()
+        from .m08_hostname import FIRST_BOOT_SERVICE as HOSTNAME_SERVICE
+        hostname_setup_done = HOSTNAME_SERVICE.exists()
 
         lines: list[str] = []
         lines.append(

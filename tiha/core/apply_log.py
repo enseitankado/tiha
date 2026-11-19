@@ -390,7 +390,7 @@ if __name__ == "__main__":
 SENDER_SERVICE_CONTENT = f"""[Unit]
 Description=TiHA — Klonun ilk açılışında TiHA uygulama kaydını sistem günlüğüne yaz ve Tiha-Mon'a ulaştır
 Wants=network-online.target
-After=network-online.target tiha-first-boot-hostname.service tiha-clone-identity.service
+After=network-online.target tiha-hostname.service tiha-clone-identity.service
 ConditionPathExists={SOURCE_MAC_FILE}
 ConditionPathExists=!{SENT_MARKER}
 

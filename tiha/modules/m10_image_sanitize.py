@@ -57,7 +57,7 @@ from ..core.image_info import IMAGE_INFO_FILE, write_image_info
 from ..core.keyring import purge_keyrings
 from ..core.logger import get_logger
 from ..core.module import ApplyResult, Module, ProgressCallback
-from ..core import apply_log
+from ..core import apply_log, first_boot_notice
 from ..core.paths import STATE_DIR
 from ..core.undo import Journal
 from ..core.utils import run_cmd
@@ -202,6 +202,8 @@ from pathlib import Path
 MAC_FILE = Path("@@MAC_FILE@@")
 SSH_SENTINEL = Path("@@SSH_SENTINEL@@")
 LOG_FILE = Path("@@LOG_FILE@@")
+# İlk açılış penceresinin işareti (geçici dosya sistemi; yalnız bu açılış).
+NOTICE_MARKER = Path("@@NOTICE_MARKER@@")
 TAG = "@@TAG@@"
 # Hiç ağ kartı görünmezse en çok bu kadar beklenir (sürücüler yükleniyor).
 WAIT_SECONDS = 20
@@ -304,6 +306,11 @@ def main():
         return 0
 
     note(f"Klon tespit edildi ({', '.join(sorted(mine))}); kimlik yenileniyor.")
+    try:
+        NOTICE_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        NOTICE_MARKER.touch()
+    except OSError:
+        pass
     mid = Path("/etc/machine-id")
     if is_mount_point(mid):
         # İmajda machine-id boştu: systemd bu açılış için zaten yeni ve
@@ -404,6 +411,7 @@ def _install_clone_identity() -> bool:
         .replace("@@SSH_SENTINEL@@", str(REGEN_SSH_SENTINEL))
         .replace("@@TAG@@", IDENTITY_LOG_TAG)
         .replace("@@LOG_FILE@@", str(IDENTITY_LOG_FILE))
+        .replace("@@NOTICE_MARKER@@", str(first_boot_notice.CLONE_MARKER))
     )
     IDENTITY_SCRIPT.parent.mkdir(parents=True, exist_ok=True)
     IDENTITY_SCRIPT.write_text(script, encoding="utf-8")
@@ -683,6 +691,12 @@ class ImageSanitizeModule(Module):
             ops.append(t("m10.apply.clone_identity", path=IDENTITY_SERVICE))
         else:
             ops.append(t("m10.apply.clone_identity_failed"))
+
+        # Klonun ilk açılışında yapılanları ekranda gösteren pencere.
+        if first_boot_notice.install():
+            ops.append(t("m10.apply.first_boot_notice", path=first_boot_notice.NOTICE_SERVICE))
+        else:
+            ops.append(t("m10.apply.first_boot_notice_failed"))
 
         # TiHA uygulama kaydı klonun ilk açılışında Tiha-Mon'a gönderilir
         # (kaynak tahtada gönderilmez; bkz. core/apply_log).

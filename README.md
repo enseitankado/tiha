@@ -31,6 +31,8 @@ flowchart LR
     E --> H["Lider'de<br/>kendi kaydı"]
 ```
 
+Klonun ilk açılışında giriş ekranında bir pencere açılır: arka planda yapılan bu işleri sonuçlarıyla canlı gösterir ve hepsi bitince 5 saniye geri sayıp kapanır.
+
 Sihirbaz her adımda ne yapacağını anlatır, onayınızı alır ve sonucu gösterir. Adımların çoğu geri alınabilir. Son sayfadaki rapor, imaja neyin girdiğini ve klon tahtada neyin denenmesi gerektiğini listeler.
 
 ## Adımlar
