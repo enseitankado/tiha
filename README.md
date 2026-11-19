@@ -54,6 +54,10 @@ Sihirbaz her adımda ne yapacağını anlatır, onayınızı alır ve sonucu gö
 
 Her adımın ayrıntısı ve uyarıları [kullanım kılavuzunda](docs/kilavuz.md#adımlar).
 
+8. adımın kapanma uyarısı, kimse oturum açmamışken giriş ekranında da görünür. Geri sayımı kullanıcı "10 dakika ertele" ile durdurabilir:
+
+<a href="docs/images/bonus-greeter-countdown.png"><img src="docs/images/bonus-greeter-countdown.png" alt="Giriş ekranında otomatik kapanma geri sayımı" width="55%"></a>
+
 ## Başlamadan önce
 
 - İmaj öncesi temizliği en sona bırakın; ondan sonra uygulanan her adım temizliğin tekrarını gerektirir.
